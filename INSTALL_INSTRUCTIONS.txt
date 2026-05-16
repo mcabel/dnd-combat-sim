@@ -1,0 +1,145 @@
+============================================================
+
+------------------------------------------------------------
+ 8. PROJECT DOCS
+------------------------------------------------------------
+
+  task.md             →  ./task.md           (phase/task tracker — update each session)
+  INSTALL_INSTRUCTIONS.txt → ./INSTALL_INSTRUCTIONS.txt
+  summaries/          →  ./summaries/        (session logs)
+    summary-2026-05-01.md  →  ./summaries/summary-2026-05-01.md
+
+ D&D 5e Combat Sim — Install Instructions
+============================================================
+
+PROJECT ROOT
+  Your local project root is wherever you cloned / created the folder.
+  Example: /home/arestia/dnd-combat-sim/
+
+All paths below are relative to that root.
+
+------------------------------------------------------------
+ 1. ROOT-LEVEL CONFIG FILES (place at project root)
+------------------------------------------------------------
+
+  package.json          →  ./package.json
+  tsconfig.json         →  ./tsconfig.json
+
+------------------------------------------------------------
+ 2. BESTIARY DATA (your monster JSON files go here)
+------------------------------------------------------------
+
+  bestiaryData/         →  ./bestiaryData/
+    bestiary-dmg.json   →  ./bestiaryData/bestiary-dmg.json
+
+  When you add more 5etools-format bestiary files, drop them
+  into ./bestiaryData/ — the loader picks up all *.json files
+  automatically. Summon-type creatures (no usable CR) are
+  skipped and reported at load time.
+
+------------------------------------------------------------
+ 3. SOURCE FILES
+------------------------------------------------------------
+
+  src/types/
+    core.ts             →  ./src/types/core.ts
+
+  src/parser/
+    fivetools.ts        →  ./src/parser/fivetools.ts
+    index.ts            →  ./src/parser/index.ts
+    pc.ts               →  ./src/parser/pc.ts          (added this session)
+
+  src/engine/
+    movement.ts         →  ./src/engine/movement.ts
+    utils.ts            →  ./src/engine/utils.ts
+    combat.ts           →  ./src/engine/combat.ts
+
+  src/ai/
+    targeting.ts        →  ./src/ai/targeting.ts
+    actions.ts          →  ./src/ai/actions.ts
+    planner.ts          →  ./src/ai/planner.ts
+
+  src/data/
+    loader.ts           →  ./src/data/loader.ts
+
+  src/test/
+    parser.test.ts      →  ./src/test/parser.test.ts
+    engine.test.ts      →  ./src/test/engine.test.ts
+    ai.test.ts          →  ./src/test/ai.test.ts
+    combat.test.ts      →  ./src/test/combat.test.ts
+    pc.test.ts          →  ./src/test/pc.test.ts
+    integration.test.ts →  ./src/test/integration.test.ts
+
+------------------------------------------------------------
+ 4. FIRST-TIME SETUP
+------------------------------------------------------------
+
+  $ cd /home/arestia/dnd-combat-sim
+  $ npm install
+
+  This installs: typescript, ts-node, @types/node
+  (all devDependencies — no runtime deps)
+
+------------------------------------------------------------
+ 5. RUNNING TESTS
+------------------------------------------------------------
+
+  $ npx ts-node src/test/parser.test.ts       # 101 tests (deterministic)
+  $ npx ts-node src/test/engine.test.ts       #  71 tests (deterministic)
+  $ npx ts-node src/test/ai.test.ts           #  26 tests (deterministic)
+  $ npx ts-node src/test/combat.test.ts       #  44-59 tests (probabilistic loops)
+  $ npx ts-node src/test/pc.test.ts           # 248 tests (deterministic)
+  $ npx ts-node src/test/integration.test.ts  #  26 tests (stable, 20+ run verified)
+
+  Run all at once (session health check):
+  $ for f in src/test/*.test.ts; do echo -n "$(basename $f): "; npx ts-node $f 2>&1 | grep "Results:"; done
+
+------------------------------------------------------------
+ 6. USING THE LOADER IN YOUR OWN CODE
+------------------------------------------------------------
+
+  import { loadBestiaryDir, printLoadSummary } from './src/data/loader';
+  import { spawnMonster }                       from './src/parser/fivetools';
+  import { runCombat, makeFlatBattlefield }     from './src/engine/combat';
+  import { rollInitiative }                     from './src/engine/utils';
+
+  const result   = loadBestiaryDir('./bestiaryData');
+  printLoadSummary(result);
+
+  const goblin   = spawnMonster(result.bestiary, 'Goblin', {x:3,y:3,z:0});
+  const fighter  = pcToCombatant(pcData, {x:0,y:0,z:0});   // see src/parser/pc.ts
+
+  const bf       = makeFlatBattlefield(20, 20, [goblin, fighter]);
+  const init     = rollInitiative(bf);
+  const log      = runCombat(bf, init, { verbose: true });
+
+------------------------------------------------------------
+ 7. NOTES ON SPECIAL CREATURES
+------------------------------------------------------------
+
+  Summon-type / companion / mount creatures
+    Creatures with no numeric CR are excluded from the main
+    bestiary by loadBestiaryDir(). Examples: Giant Fly,
+    Avatar of Death (Deck of Many Things).
+    To use them anyway, spawn with monsterToCombatant() directly
+    and pass hpOverride for creatures with "special" HP:
+
+      const flyRaw = { ...rawEntry };
+      const fly = monsterToCombatant(flyRaw, pos, 'defend', 'enemy', 19);
+      //                                           ↑ profile  ↑ faction ↑ HP override
+
+  The 'defend' AI profile
+    Creatures spawned with aiProfile: 'defend' only attack if
+    an enemy enters melee reach — they never pursue or dash.
+    This is for creatures whose lore explicitly states they
+    defend unless commanded (e.g. Giant Fly per magic item rules).
+    It is NOT applied automatically based on INT score —
+    a T-Rex (INT 2) still uses 'attackNearest'.
+
+  Commanded creatures (future)
+    A monster with a minion can issue a verbal command by
+    changing minion.aiProfile at the start of their turn.
+    No action cost required (per magic item RAW). This will
+    be wired into the engine in a future session.
+
+============================================================

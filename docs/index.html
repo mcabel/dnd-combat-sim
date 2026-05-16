@@ -1,0 +1,927 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+<meta name="theme-color" content="#0d0d0f"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<title>DnD Agent</title>
+<link rel="manifest" href="manifest.json"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;900&family=IBM+Plex+Mono:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+:root {
+  --bg:       #0d0d0f;
+  --surface:  #141418;
+  --border:   #2a2a35;
+  --accent:   #c8973a;
+  --accent2:  #7c5cbf;
+  --text:     #e8e4d8;
+  --muted:    #6b6878;
+  --danger:   #c0392b;
+  --success:  #27ae60;
+  --mono:     'IBM Plex Mono', monospace;
+  --serif:    'Cinzel', serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--mono); overflow-x: hidden; }
+
+/* --- layout --- */
+.app { display: flex; flex-direction: column; min-height: 100dvh; max-width: 680px; margin: 0 auto; padding: 0 16px 32px; }
+
+/* --- header --- */
+header { padding: 24px 0 20px; display: flex; align-items: center; gap: 14px; border-bottom: 1px solid var(--border); margin-bottom: 24px; }
+.logo { width: 40px; height: 40px; flex-shrink: 0; }
+header h1 { font-family: var(--serif); font-size: 18px; font-weight: 600; letter-spacing: 0.08em; color: var(--accent); }
+header p  { font-size: 11px; color: var(--muted); margin-top: 2px; letter-spacing: 0.04em; }
+
+/* --- cards --- */
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; margin-bottom: 16px; }
+.card-title { font-family: var(--serif); font-size: 11px; letter-spacing: 0.15em; color: var(--muted); text-transform: uppercase; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+.card-title::before { content: ''; display: block; width: 3px; height: 12px; background: var(--accent); border-radius: 2px; }
+
+/* --- form elements --- */
+label { display: block; font-size: 11px; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 6px; margin-top: 14px; }
+label:first-of-type { margin-top: 0; }
+input, textarea, select {
+  width: 100%; background: var(--bg); border: 1px solid var(--border);
+  border-radius: 6px; color: var(--text); font-family: var(--mono);
+  font-size: 13px; padding: 10px 12px; outline: none;
+  transition: border-color 0.2s;
+}
+input:focus, textarea:focus, select:focus { border-color: var(--accent); }
+textarea { resize: vertical; min-height: 80px; line-height: 1.5; }
+.token-wrap { position: relative; }
+.token-wrap input { padding-right: 70px; }
+.token-eye { position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+  background: none; border: none; color: var(--muted); cursor: pointer;
+  font-size: 12px; font-family: var(--mono); padding: 4px 6px; }
+.token-eye:hover { color: var(--text); }
+
+/* --- status badge --- */
+.status-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 12px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex-shrink: 0; transition: background 0.3s; }
+.dot.ok      { background: var(--success); box-shadow: 0 0 6px var(--success); }
+.dot.err     { background: var(--danger);  box-shadow: 0 0 6px var(--danger); }
+.dot.loading { background: var(--accent);  animation: pulse 1s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+/* --- buttons --- */
+.btn-row { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+button {
+  font-family: var(--mono); font-size: 12px; letter-spacing: 0.05em;
+  padding: 10px 18px; border-radius: 6px; cursor: pointer;
+  border: 1px solid var(--border); background: transparent;
+  color: var(--text); transition: all 0.15s; white-space: nowrap;
+}
+button:hover  { border-color: var(--accent); color: var(--accent); }
+button:active { transform: scale(0.97); }
+button.primary { background: var(--accent); border-color: var(--accent); color: #0d0d0f; font-weight: 500; }
+button.primary:hover { background: #d4a84d; border-color: #d4a84d; color: #0d0d0f; }
+button.danger  { border-color: var(--danger); color: var(--danger); }
+button.danger:hover  { background: rgba(192,57,43,0.12); }
+button.purple  { border-color: var(--accent2); color: var(--accent2); }
+button.purple:hover  { background: rgba(124,92,191,0.12); }
+button:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+
+/* --- session info box --- */
+.info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+.info-cell { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; }
+.info-cell .lbl { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+.info-cell .val { font-size: 14px; color: var(--text); margin-top: 3px; font-weight: 500; }
+.info-cell .val.accent { color: var(--accent); }
+.info-cell .val.good   { color: var(--success); }
+
+/* --- prompt output --- */
+.prompt-box {
+  background: var(--bg); border: 1px solid var(--accent); border-radius: 8px;
+  padding: 16px; font-size: 12px; line-height: 1.7; white-space: pre-wrap;
+  word-break: break-word; position: relative; margin-top: 14px;
+  max-height: 320px; overflow-y: auto;
+}
+.prompt-box .kw  { color: var(--accent); }
+.prompt-box .val { color: #a8d8a8; }
+.copy-flash { position: absolute; top: 10px; right: 10px; background: var(--success);
+  color: #fff; font-size: 11px; padding: 4px 10px; border-radius: 4px;
+  opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+.copy-flash.show { opacity: 1; }
+
+/* --- log --- */
+.log { background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+  padding: 12px; font-size: 11px; line-height: 1.8; max-height: 200px;
+  overflow-y: auto; color: var(--muted); margin-top: 12px; }
+.log .ok  { color: var(--success); }
+.log .err { color: var(--danger); }
+.log .acc { color: var(--accent); }
+
+/* --- tabs --- */
+.tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
+.tab { font-family: var(--mono); font-size: 12px; padding: 10px 18px; cursor: pointer;
+  border: none; background: none; color: var(--muted); border-bottom: 2px solid transparent;
+  transition: all 0.2s; letter-spacing: 0.04em; }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab:hover:not(.active) { color: var(--text); }
+.panel { display: none; }
+.panel.active { display: block; }
+
+/* --- file list --- */
+.file-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.file-item { display: flex; align-items: center; justify-content: space-between;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+  padding: 8px 12px; font-size: 12px; }
+.file-item .fname { color: var(--accent); font-family: var(--mono); }
+.file-item .fpath { color: var(--muted); font-size: 11px; }
+.file-item button { padding: 4px 10px; font-size: 11px; margin: 0; }
+
+/* --- progress bar --- */
+.progress { height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; margin-top: 10px; }
+.progress-fill { height: 100%; background: var(--accent); border-radius: 2px;
+  width: 0%; transition: width 0.4s ease; }
+
+/* --- toast --- */
+#toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(80px);
+  background: var(--surface); border: 1px solid var(--accent); border-radius: 8px;
+  padding: 12px 20px; font-size: 13px; color: var(--text); z-index: 999;
+  transition: transform 0.3s ease; white-space: nowrap; }
+#toast.show { transform: translateX(-50%) translateY(0); }
+
+
+/* --- checkboxes --- */
+.auto-opts { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+.chk-label { display: flex; align-items: center; gap: 10px; font-size: 12px;
+  color: var(--muted); cursor: pointer; text-transform: none; letter-spacing: 0; margin: 0; }
+.chk-label input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent);
+  cursor: pointer; flex-shrink: 0; background: var(--bg); }
+.chk-label:hover { color: var(--text); }
+
+/* --- reminder banner --- */
+.reminder-box { display: flex; align-items: flex-start; gap: 12px; margin-top: 14px;
+  background: rgba(200,151,58,0.08); border: 1px solid rgba(200,151,58,0.35);
+  border-radius: 8px; padding: 12px 14px; }
+.reminder-icon { font-size: 20px; flex-shrink: 0; margin-top: 1px; }
+.reminder-title { font-size: 13px; font-weight: 500; color: var(--accent); margin-bottom: 3px; }
+.reminder-sub { font-size: 11px; color: var(--muted); line-height: 1.5; }
+
+/* --- scrollbar --- */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header>
+    <svg class="logo" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <polygon points="20,2 38,12 38,28 20,38 2,28 2,12" fill="#1a1a20" stroke="#c8973a" stroke-width="1.5"/>
+      <text x="20" y="26" text-anchor="middle" font-family="serif" font-size="16" font-weight="bold" fill="#c8973a">d20</text>
+    </svg>
+    <div>
+      <h1>D&amp;D Combat Sim Agent</h1>
+      <p>Session manager · GitHub sync · Prompt builder</p>
+    </div>
+  </header>
+
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('session')">Session</button>
+    <button class="tab" onclick="switchTab('config')">Config</button>
+    <button class="tab" onclick="switchTab('push')">Push Files</button>
+    <button class="tab" onclick="switchTab('revoke')">Token</button>
+  </div>
+
+  <!-- SESSION TAB -->
+  <div id="tab-session" class="panel active">
+
+    <div class="card">
+      <div class="card-title">Repo status</div>
+      <div class="info-grid" id="repoInfo">
+        <div class="info-cell"><div class="lbl">Repo</div><div class="val" id="ri-repo">—</div></div>
+        <div class="info-cell"><div class="lbl">Last commit</div><div class="val accent" id="ri-sha">—</div></div>
+        <div class="info-cell"><div class="lbl">Tests</div><div class="val good" id="ri-tests">858 passing</div></div>
+        <div class="info-cell"><div class="lbl">Phase</div><div class="val accent" id="ri-phase">6 ✅ → 7</div></div>
+      </div>
+      <div class="status-row">
+        <div class="dot" id="statusDot"></div>
+        <span id="statusMsg" style="color:var(--muted);font-size:12px">Not checked</span>
+      </div>
+
+      <div class="auto-opts">
+        <label class="chk-label"><input type="checkbox" id="optDownload" checked onchange="saveOpts()"> Auto-download repo zip</label>
+        <label class="chk-label"><input type="checkbox" id="optOverwrite" checked onchange="saveOpts()"> Overwrite if zip already downloaded</label>
+        <label class="chk-label"><input type="checkbox" id="optAutoBuild" checked onchange="saveOpts()"> Auto-build &amp; copy prompt to clipboard</label>
+      </div>
+
+      <div id="attachReminder" style="display:none">
+        <div class="reminder-box">
+          <span class="reminder-icon">📎</span>
+          <div>
+            <div class="reminder-title">Remember to attach the zip</div>
+            <div class="reminder-sub">The repo zip was downloaded to your Downloads folder — drag it into the Claude chat window alongside your prompt.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="primary" onclick="checkRepo()">Check repo</button>
+        <button onclick="fetchLastSummary()">Load latest summary</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Build Claude start prompt</div>
+      <label>Next task / focus</label>
+      <textarea id="nextTask" rows="2" placeholder="e.g. Phase 4.9 — death saving throws">Phase 7 — start with Phase 4 rules completeness (death saves first, task 4.9).</textarea>
+      <div class="btn-row">
+        <button class="primary" onclick="buildPrompt()">⚔ Build prompt</button>
+        <button onclick="clearPrompt()">Clear</button>
+      </div>
+      <div id="promptOut" style="display:none">
+        <div class="prompt-box" id="promptText"></div>
+        <div class="copy-flash" id="copyFlash">Copied!</div>
+        <div class="btn-row" style="margin-top:10px">
+          <button class="primary" onclick="copyPrompt()">📋 Copy to clipboard</button>
+          <button class="purple" onclick="openClaude()">Open Claude ↗</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Session summary viewer</div>
+      <div id="summaryContent" class="log" style="min-height:60px;color:var(--muted);font-style:italic">
+        Click "Load latest summary" above to view handoff notes.
+      </div>
+    </div>
+
+  </div>
+
+  <!-- CONFIG TAB -->
+  <div id="tab-config" class="panel">
+    <div class="card">
+      <div class="card-title">GitHub settings</div>
+      <label>Personal Access Token</label>
+      <div class="token-wrap">
+        <input type="password" id="cfgToken" placeholder="ghp_..." />
+        <button class="token-eye" onclick="toggleToken()">show</button>
+      </div>
+      <label>Repository (owner/name)</label>
+      <input type="text" id="cfgRepo" placeholder="mcabel/dnd-combat-sim"/>
+      <label>Branch</label>
+      <input type="text" id="cfgBranch" placeholder="main"/>
+      <label>Local project path (for shell commands)</label>
+      <input type="text" id="cfgLocal" placeholder="/home/arestia/dnd-combat-sim"/>
+      <div class="btn-row" style="margin-top:16px">
+        <button class="primary" onclick="saveConfig()">Save config</button>
+        <button onclick="loadDefaults()">Restore defaults</button>
+      </div>
+      <div class="log" id="cfgLog" style="margin-top:12px;min-height:32px"></div>
+    </div>
+  </div>
+
+  <!-- PUSH FILES TAB -->
+  <div id="tab-push" class="panel">
+    <div class="card">
+      <div class="card-title">Auto-push session files to GitHub</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.6">
+        Drop the zip Claude gave you. Files are routed to the correct repo paths and pushed via GitHub API — no terminal needed.
+      </p>
+      <label>Drop session zip</label>
+      <div id="dropzone" style="border:2px dashed var(--border);border-radius:8px;padding:32px;text-align:center;cursor:pointer;transition:border-color 0.2s;margin-bottom:12px"
+           onclick="document.getElementById('zipInput').click()"
+           ondragover="event.preventDefault();this.style.borderColor='var(--accent)'"
+           ondragleave="this.style.borderColor='var(--border)'"
+           ondrop="handleDrop(event)">
+        <div style="font-size:28px;margin-bottom:8px">📦</div>
+        <div style="font-size:13px;color:var(--muted)">Tap or drag zip here</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px" id="dropLabel">No file selected</div>
+      </div>
+      <input type="file" id="zipInput" accept=".zip" style="display:none" onchange="handleZipSelect(this.files[0])"/>
+
+      <div id="fileList" class="file-list" style="display:none"></div>
+
+      <div class="progress" id="pushProgress" style="display:none"><div class="progress-fill" id="pushFill"></div></div>
+
+      <div class="btn-row" style="margin-top:14px">
+        <button class="primary" id="pushBtn" onclick="pushFiles()" disabled>Push to GitHub</button>
+        <button onclick="clearFiles()">Clear</button>
+      </div>
+      <div class="log" id="pushLog" style="margin-top:12px"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Shell command fallback</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:10px">If API push fails, use this — auto-generated from your config.</p>
+      <div class="prompt-box" id="shellCmd" style="font-size:11px"></div>
+      <div class="btn-row" style="margin-top:10px">
+        <button onclick="copyShell()">📋 Copy shell command</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOKEN TAB -->
+  <div id="tab-revoke" class="panel">
+    <div class="card">
+      <div class="card-title">Token health check</div>
+      <div class="status-row" style="margin-bottom:14px">
+        <div class="dot" id="tokenDot"></div>
+        <span id="tokenStatus" style="font-size:12px;color:var(--muted)">Not checked</span>
+      </div>
+      <div class="btn-row">
+        <button onclick="checkToken()">Check token</button>
+        <button class="danger" onclick="confirmRevoke()">Revoke token</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Auto-revoke scripts</div>
+      <label>Bash — revoke on demand</label>
+      <div class="prompt-box" id="revokeScript" style="font-size:11px"></div>
+      <div class="btn-row" style="margin-top:8px">
+        <button onclick="copyRevoke()">📋 Copy script</button>
+      </div>
+      <label style="margin-top:16px">Add to .bashrc / .zshrc — revoke on shell exit</label>
+      <div class="prompt-box" id="trapScript" style="font-size:11px"></div>
+      <div class="btn-row" style="margin-top:8px">
+        <button onclick="copyTrap()">📋 Copy trap</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ── Config ────────────────────────────────────────────────────────────────
+const DEFAULTS = {
+  token:  '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',
+  repo:   'mcabel/dnd-combat-sim',
+  branch: 'main',
+  local:  '/home/arestia/dnd-combat-sim',
+};
+
+function cfg() {
+  return {
+    token:  localStorage.getItem('gh_token')  || DEFAULTS.token,
+    repo:   localStorage.getItem('gh_repo')   || DEFAULTS.repo,
+    branch: localStorage.getItem('gh_branch') || DEFAULTS.branch,
+    local:  localStorage.getItem('gh_local')  || DEFAULTS.local,
+  };
+}
+
+function saveConfig() {
+  localStorage.setItem('gh_token',  document.getElementById('cfgToken').value.trim()  || DEFAULTS.token);
+  localStorage.setItem('gh_repo',   document.getElementById('cfgRepo').value.trim()   || DEFAULTS.repo);
+  localStorage.setItem('gh_branch', document.getElementById('cfgBranch').value.trim() || DEFAULTS.branch);
+  localStorage.setItem('gh_local',  document.getElementById('cfgLocal').value.trim()  || DEFAULTS.local);
+  log('cfgLog', '✓ Config saved', 'ok');
+  updateScripts();
+  toast('Config saved');
+}
+
+function loadDefaults() {
+  document.getElementById('cfgToken').value  = DEFAULTS.token;
+  document.getElementById('cfgRepo').value   = DEFAULTS.repo;
+  document.getElementById('cfgBranch').value = DEFAULTS.branch;
+  document.getElementById('cfgLocal').value  = DEFAULTS.local;
+  log('cfgLog', 'Defaults loaded — click Save to apply', 'acc');
+}
+
+function populateConfigFields() {
+  const c = cfg();
+  document.getElementById('cfgToken').value  = c.token;
+  document.getElementById('cfgRepo').value   = c.repo;
+  document.getElementById('cfgBranch').value = c.branch;
+  document.getElementById('cfgLocal').value  = c.local;
+}
+
+// ── Tabs ──────────────────────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach((t,i) => {
+    const names = ['session','config','push','revoke'];
+    t.classList.toggle('active', names[i] === name);
+  });
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  if (name === 'push') updateShellCmd();
+  if (name === 'revoke') updateScripts();
+  if (name === 'config') populateConfigFields();
+}
+
+// ── GitHub API ────────────────────────────────────────────────────────────
+const GH = 'https://api.github.com';
+
+async function ghFetch(path, opts = {}) {
+  const c = cfg();
+  const isWrite = opts.method && opts.method !== 'GET';
+  const headers = {
+    'Authorization': 'token ' + c.token,   // classic PATs need "token" not "Bearer"
+    'Accept': 'application/vnd.github.v3+json',
+    ...(isWrite ? { 'Content-Type': 'application/json' } : {}), // only on writes
+    ...(opts.headers || {}),
+  };
+  try {
+    const res = await fetch(GH + path, { ...opts, headers });
+    return res;
+  } catch(e) {
+    // Enrich network errors with a clearer message
+    const msg = e.message || 'Network error';
+    if (msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
+      throw new Error('Cannot reach GitHub API. Check your internet connection and that your token is valid.');
+    }
+    throw e;
+  }
+}
+
+// Lightweight token check without triggering CORS preflight
+async function pingToken() {
+  const c = cfg();
+  if (!c.token || c.token.length < 10) return { ok: false, msg: 'No token set — go to Config tab' };
+  try {
+    const res = await fetch(GH + '/user', {
+      headers: { 'Authorization': 'token ' + c.token, 'Accept': 'application/vnd.github.v3+json' }
+    });
+    if (res.status === 401) return { ok: false, msg: 'Token invalid or expired (401) — update in Config tab' };
+    if (res.status === 403) return { ok: false, msg: 'Token lacks repo scope (403) — create new token with repo access' };
+    if (!res.ok)            return { ok: false, msg: 'GitHub error: HTTP ' + res.status };
+    const d = await res.json();
+    return { ok: true, msg: 'Token valid — @' + d.login };
+  } catch(e) {
+    return { ok: false, msg: 'Network error — are you online?' };
+  }
+}
+
+async function checkRepo() {
+  setDot('statusDot', 'loading'); setMsg('statusMsg', 'Verifying token…');
+  document.getElementById('attachReminder').style.display = 'none';
+  const c = cfg();
+
+  // Step 1: quick token check with clear error messages
+  const ping = await pingToken();
+  if (!ping.ok) {
+    setDot('statusDot', 'err'); setMsg('statusMsg', ping.msg);
+    return;
+  }
+  setMsg('statusMsg', ping.msg + ' · Checking repo…');
+
+  try {
+    const res = await ghFetch('/repos/' + c.repo);
+    if (!res.ok) throw new Error('Repo not found or no access (HTTP ' + res.status + ')');
+    const data = await res.json();
+    document.getElementById('ri-repo').textContent = data.full_name;
+
+    const commits = await ghFetch('/repos/' + c.repo + '/commits?per_page=1');
+    if (commits.ok) {
+      const cd = await commits.json();
+      const sha = cd[0].sha.slice(0,7);
+      const msg = cd[0].commit.message.split('\n')[0].slice(0,30);
+      document.getElementById('ri-sha').textContent = sha + ' — ' + msg;
+    }
+    setDot('statusDot', 'ok'); setMsg('statusMsg', 'Repo accessible ✓');
+
+    // Auto-download zip
+    if (document.getElementById('optDownload').checked) {
+      setMsg('statusMsg', 'Opening zip download…');
+      downloadRepoZip(c); // not awaited — it's a browser redirect now
+      await new Promise(r => setTimeout(r, 600)); // brief pause for UX
+    }
+
+    // Auto-build + copy prompt
+    if (document.getElementById('optAutoBuild').checked) {
+      buildPrompt();
+      const text = document.getElementById('promptText').textContent;
+      await copyToClipboard(text);
+      setMsg('statusMsg', 'Repo ✓ · Zip downloaded · Prompt copied to clipboard');
+      toast('Prompt copied! Attach zip when you paste.');
+    } else {
+      setMsg('statusMsg', 'Repo accessible ✓' + (document.getElementById('optDownload').checked ? ' · Zip downloaded' : ''));
+    }
+
+    // Show reminder if zip was downloaded
+    if (document.getElementById('optDownload').checked) {
+      document.getElementById('attachReminder').style.display = 'block';
+    }
+
+  } catch(e) {
+    setDot('statusDot', 'err'); setMsg('statusMsg', 'Error: ' + e.message);
+  }
+}
+
+async function downloadRepoZip(c) {
+  const overwrite = document.getElementById('optOverwrite').checked;
+  const zipName = c.repo.split('/')[1] + '-main.zip';
+  const name = overwrite ? zipName : zipName.replace('.zip', '-' + Date.now() + '.zip');
+
+  // Use github.com/archive direct URL — works without CORS issues on Android
+  // This triggers a normal browser download, no fetch needed
+  const directUrl = 'https://github.com/' + c.repo + '/archive/refs/heads/' + c.branch + '.zip';
+  const a = document.createElement('a');
+  a.href = directUrl;
+  a.download = name;
+  a.target = '_blank'; // open in new tab on Android if download attribute is ignored
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+async function fetchLastSummary() {
+  const el = document.getElementById('summaryContent');
+  el.innerHTML = '<span style="color:var(--accent)">Fetching summaries…</span>';
+  try {
+    const c = cfg();
+    const res = await ghFetch('/repos/' + c.repo + '/contents/summaries');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const files = await res.json();
+    const summaries = files.filter(f => f.name.startsWith('summary-')).sort((a,b) => b.name.localeCompare(a.name));
+    if (!summaries.length) { el.textContent = 'No summaries found.'; return; }
+    const latest = summaries[0];
+    const content = await ghFetch('/repos/' + c.repo + '/contents/summaries/' + latest.name);
+    const cd = await content.json();
+    const text = atob(cd.content.replace(/\n/g, ''));
+    el.innerHTML = '<span style="color:var(--accent)">' + esc(latest.name) + '</span>\n\n' + esc(text);
+    toast('Loaded ' + latest.name);
+  } catch(e) {
+    el.innerHTML = '<span style="color:var(--danger)">Error: ' + esc(e.message) + '</span>';
+  }
+}
+
+// ── Prompt builder ────────────────────────────────────────────────────────
+function buildPrompt() {
+  const c = cfg();
+  const task = document.getElementById('nextTask').value.trim() || 'Continue from where the last session left off.';
+  const prompt =
+`Continue dnd-combat-sim.
+Repo: https://github.com/${c.repo}
+Token: ${c.token}
+Last session summary: fetch from repo summaries/ folder (latest file).
+Next task: ${task}
+
+Upload the repo zip (Code → Download ZIP from GitHub), then begin. Start by reading task.md and the latest summary in summaries/.`;
+
+  document.getElementById('promptText').textContent = prompt;
+  document.getElementById('promptOut').style.display = 'block';
+}
+
+function clearPrompt() {
+  document.getElementById('promptOut').style.display = 'none';
+}
+
+function copyPrompt() {
+  const text = document.getElementById('promptText').textContent;
+  copyToClipboard(text).then(() => {
+    const f = document.getElementById('copyFlash');
+    f.classList.add('show');
+    setTimeout(() => f.classList.remove('show'), 1800);
+    toast('Prompt copied!');
+  });
+}
+
+function openClaude() {
+  window.open('https://claude.ai', '_blank');
+}
+
+// ── File routing map ──────────────────────────────────────────────────────
+const ROUTE_MAP = [
+  { match: /html_report\.test\.ts$/,   dest: 'src/test/' },
+  { match: /\.test\.ts$/,              dest: 'src/test/' },
+  { match: /html_report\.ts$/,         dest: 'src/scenarios/' },
+  { match: /^(report|simulate|encounter|presets|multiencounter)\.ts$/, dest: 'src/scenarios/' },
+  { match: /^index\.ts$/,              dest: 'src/' },
+  { match: /^task\.md$/,               dest: '' },
+  { match: /^summary-.+\.md$/,         dest: 'summaries/' },
+  { match: /^INSTALL/,                 dest: '' },
+  { match: /\.ts$/,                    dest: 'src/' },
+  { match: /\.md$/,                    dest: '' },
+];
+
+function routeFile(name) {
+  for (const r of ROUTE_MAP) {
+    if (r.match.test(name)) return r.dest;
+  }
+  return null;
+}
+
+// ── Zip handling ──────────────────────────────────────────────────────────
+let pendingFiles = []; // { name, dest, content (Uint8Array) }
+
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('dropzone').style.borderColor = 'var(--border)';
+  const file = e.dataTransfer.files[0];
+  if (file) handleZipSelect(file);
+}
+
+function handleZipSelect(file) {
+  if (!file) return;
+  document.getElementById('dropLabel').textContent = file.name;
+  loadZip(file);
+}
+
+async function loadZip(file) {
+  // Use JSZip loaded from CDN
+  if (!window.JSZip) {
+    log('pushLog', 'Loading JSZip…', 'acc');
+    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js');
+  }
+  pendingFiles = [];
+  document.getElementById('fileList').style.display = 'none';
+  log('pushLog', 'Reading zip…', 'acc');
+
+  try {
+    const buf = await file.arrayBuffer();
+    const zip = await JSZip.loadAsync(buf);
+    const entries = [];
+    zip.forEach((path, entry) => { if (!entry.dir) entries.push({ path, entry }); });
+
+    for (const { path, entry } of entries) {
+      const name = path.split('/').pop();
+      const dest = routeFile(name);
+      if (dest === null) continue; // skip unknown
+      const content = await entry.async('uint8array');
+      pendingFiles.push({ name, fullPath: dest + name, dest, content });
+    }
+
+    renderFileList();
+    updateShellCmd();
+    document.getElementById('pushBtn').disabled = pendingFiles.length === 0;
+    log('pushLog', `Found ${pendingFiles.length} file(s) to push`, 'ok');
+  } catch(e) {
+    log('pushLog', 'Zip error: ' + e.message, 'err');
+  }
+}
+
+function renderFileList() {
+  const el = document.getElementById('fileList');
+  if (!pendingFiles.length) { el.style.display = 'none'; return; }
+  el.style.display = 'flex';
+  el.innerHTML = pendingFiles.map((f, i) => `
+    <div class="file-item">
+      <div>
+        <div class="fname">${esc(f.name)}</div>
+        <div class="fpath">→ ${esc(f.fullPath)}</div>
+      </div>
+      <button onclick="removeFile(${i})">✕</button>
+    </div>`).join('');
+}
+
+function removeFile(i) {
+  pendingFiles.splice(i, 1);
+  renderFileList();
+  document.getElementById('pushBtn').disabled = pendingFiles.length === 0;
+}
+
+function clearFiles() {
+  pendingFiles = [];
+  document.getElementById('fileList').style.display = 'none';
+  document.getElementById('dropLabel').textContent = 'No file selected';
+  document.getElementById('pushBtn').disabled = true;
+  document.getElementById('pushLog').innerHTML = '';
+  document.getElementById('pushProgress').style.display = 'none';
+}
+
+// ── GitHub API push ───────────────────────────────────────────────────────
+async function pushFiles() {
+  if (!pendingFiles.length) return;
+  const c = cfg();
+  document.getElementById('pushBtn').disabled = true;
+  document.getElementById('pushProgress').style.display = 'block';
+  const fill = document.getElementById('pushFill');
+  log('pushLog', `Pushing ${pendingFiles.length} file(s) to ${c.repo}…`, 'acc');
+
+  let ok = 0, fail = 0;
+  for (let i = 0; i < pendingFiles.length; i++) {
+    const f = pendingFiles[i];
+    fill.style.width = Math.round(((i) / pendingFiles.length) * 100) + '%';
+
+    try {
+      // Get current SHA if file exists (needed for update)
+      let sha = null;
+      const existing = await ghFetch(`/repos/${c.repo}/contents/${f.fullPath}`);
+      if (existing.ok) {
+        const ed = await existing.json();
+        sha = ed.sha;
+      }
+
+      const b64 = uint8ToBase64(f.content);
+      const body = {
+        message: `Session sync: update ${f.fullPath}`,
+        content: b64,
+        branch: c.branch,
+        ...(sha ? { sha } : {}),
+      };
+
+      const res = await ghFetch(`/repos/${c.repo}/contents/${f.fullPath}`, {
+        method: 'PUT',
+        body: JSON.stringify(body),
+      });
+
+      if (res.ok) {
+        log('pushLog', `✓ ${f.fullPath}`, 'ok');
+        ok++;
+      } else {
+        const err = await res.json();
+        log('pushLog', `✗ ${f.name}: ${err.message}`, 'err');
+        fail++;
+      }
+    } catch(e) {
+      log('pushLog', `✗ ${f.name}: ${e.message}`, 'err');
+      fail++;
+    }
+  }
+
+  fill.style.width = '100%';
+  log('pushLog', `Done — ${ok} pushed, ${fail} failed`, ok > 0 && fail === 0 ? 'ok' : 'acc');
+  toast(ok + ' file(s) pushed to GitHub');
+  document.getElementById('pushBtn').disabled = false;
+}
+
+function uint8ToBase64(bytes) {
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
+}
+
+// ── Shell command builder ─────────────────────────────────────────────────
+function updateShellCmd() {
+  const c = cfg();
+  const fileArgs = pendingFiles.length
+    ? pendingFiles.map(f => `  cp "$SRC/${esc(f.name)}" "$REPO/${esc(f.fullPath)}"`).join(' && \\\n')
+    : '  # (load a zip first to generate file copy commands)';
+
+  const cmd =
+`SRC=~/Downloads/dnd-session-tmp && \\
+REPO=${c.local} && \\
+${fileArgs} && \\
+cd "$REPO" && \\
+git add -A && \\
+git commit -m "Session sync $(date +%Y-%m-%d)" && \\
+git push origin ${c.branch} && \\
+echo "✓ Done"`;
+
+  document.getElementById('shellCmd').textContent = cmd;
+}
+
+function copyShell() {
+  const text = document.getElementById('shellCmd').textContent;
+  copyToClipboard(text).then(() => toast('Shell command copied!'));
+}
+
+// ── Token tab ─────────────────────────────────────────────────────────────
+async function checkToken() {
+  setDot('tokenDot', 'loading');
+  document.getElementById('tokenStatus').textContent = 'Checking…';
+  try {
+    const res = await ghFetch('/user');
+    if (res.ok) {
+      const d = await res.json();
+      setDot('tokenDot', 'ok');
+      document.getElementById('tokenStatus').textContent = 'Valid — @' + d.login + ' (' + d.name + ')';
+    } else {
+      setDot('tokenDot', 'err');
+      document.getElementById('tokenStatus').textContent = 'Invalid or expired (HTTP ' + res.status + ')';
+    }
+  } catch(e) {
+    setDot('tokenDot', 'err');
+    document.getElementById('tokenStatus').textContent = 'Network error';
+  }
+}
+
+function confirmRevoke() {
+  if (confirm('Revoke this token? You will need a new one after this.')) revokeToken();
+}
+
+async function revokeToken() {
+  try {
+    const res = await ghFetch('/installation/token', { method: 'DELETE' });
+    if (res.status === 204) {
+      setDot('tokenDot', 'err');
+      document.getElementById('tokenStatus').textContent = 'Token revoked ✓';
+      toast('Token revoked');
+    } else {
+      document.getElementById('tokenStatus').textContent =
+        'Classic PATs must be deleted at github.com/settings/tokens';
+      window.open('https://github.com/settings/tokens', '_blank');
+    }
+  } catch(e) {
+    document.getElementById('tokenStatus').textContent = 'Error: ' + e.message;
+  }
+}
+
+function updateScripts() {
+  const tok = cfg().token;
+  document.getElementById('revokeScript').textContent =
+`#!/bin/bash
+TOKEN="${tok}"
+curl -s -X DELETE \\
+  -H "Authorization: Bearer $TOKEN" \\
+  https://api.github.com/installation/token
+# For classic PATs: visit github.com/settings/tokens`;
+
+  document.getElementById('trapScript').textContent =
+`# Add to ~/.zshrc or ~/.bashrc
+export GH_SESSION_TOKEN="${tok}"
+function _revoke_gh() {
+  [ -n "$GH_SESSION_TOKEN" ] && \\
+  curl -s -X DELETE \\
+    -H "Authorization: Bearer $GH_SESSION_TOKEN" \\
+    https://api.github.com/installation/token
+}
+trap _revoke_gh EXIT`;
+}
+
+function copyRevoke() { copyToClipboard(document.getElementById('revokeScript').textContent).then(() => toast('Revoke script copied!')); }
+function copyTrap()   { copyToClipboard(document.getElementById('trapScript').textContent).then(() => toast('Trap script copied!')); }
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+function toggleToken() {
+  const el = document.getElementById('cfgToken');
+  el.type = el.type === 'password' ? 'text' : 'password';
+}
+
+function setDot(id, state) { const d = document.getElementById(id); d.className = 'dot ' + state; }
+function setMsg(id, msg)   { document.getElementById(id).textContent = msg; }
+
+function log(targetId, msg, cls = '') {
+  const el = document.getElementById(targetId);
+  const line = document.createElement('div');
+  line.className = cls;
+  line.textContent = msg;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+}
+
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2200);
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function loadScript(src) {
+  return new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = src; s.onload = res; s.onerror = rej;
+    document.head.appendChild(s);
+  });
+}
+
+// ── Service worker ────────────────────────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+
+// ── Clipboard helper — works on Android (document not focused issue) ────────
+// Strategy: try modern API first; fall back to execCommand which works
+// synchronously without needing document focus.
+function copyToClipboard(text) {
+  // Method 1: modern async API (works when document is focused)
+  if (navigator.clipboard && document.hasFocus()) {
+    return navigator.clipboard.writeText(text).catch(() => execCommandCopy(text));
+  }
+  // Method 2: synchronous execCommand fallback (Android, no-focus contexts)
+  return Promise.resolve(execCommandCopy(text));
+}
+
+function execCommandCopy(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0';
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  try {
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    return ok;
+  } catch(e) {
+    document.body.removeChild(ta);
+    return false;
+  }
+}
+
+// ── Options persistence ───────────────────────────────────────────────────
+function saveOpts() {
+  localStorage.setItem('opt_download',  document.getElementById('optDownload').checked);
+  localStorage.setItem('opt_overwrite', document.getElementById('optOverwrite').checked);
+  localStorage.setItem('opt_autobuild', document.getElementById('optAutoBuild').checked);
+}
+
+function loadOpts() {
+  const get = (k, def) => { const v = localStorage.getItem(k); return v === null ? def : v === 'true'; };
+  document.getElementById('optDownload').checked  = get('opt_download',  true);
+  document.getElementById('optOverwrite').checked = get('opt_overwrite', true);
+  document.getElementById('optAutoBuild').checked = get('opt_autobuild', true);
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────
+populateConfigFields();
+loadOpts();
+updateScripts();
+updateShellCmd();
+</script>
+</body>
+</html>

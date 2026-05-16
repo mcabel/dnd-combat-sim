@@ -1,0 +1,15 @@
+{
+  "name": "dnd-combat-sim",
+  "version": "0.1.0",
+  "description": "D&D 5e 2014 combat AI simulation engine",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "test:parser": "ts-node src/test/parser.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.39",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  }
+}
