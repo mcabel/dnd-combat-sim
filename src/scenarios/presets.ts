@@ -264,19 +264,86 @@ export const PRESETS: Preset[] = [
     }),
   },
 
-  // ---- Presets that require additional bestiary files ----
-  // Uncomment as you add files to bestiaryData/:
+  // ---- Presets using MM bestiary (available after bestiary-mm-2014.json added) ----
 
-  // {
-  //   id: 'party4-vs-goblin-band',
-  //   name: 'Party of 4 vs 4 Goblins',
-  //   description: 'Classic CR 1/4 encounter. Goblins use Nimble Escape (bonus disengage).',
-  //   build: () => ({
-  //     party:   [ pc('Fighter',0), pc('Rogue',2), pc('Cleric',4), pc('Wizard',6) ],
-  //     enemies: [ monster('Goblin',1,10), monster('Goblin',3,10),
-  //                monster('Goblin',5,10), monster('Goblin',7,10) ],
-  //   }),
-  // },
+  {
+    id: 'party4-vs-goblin-band',
+    name: 'Party of 4 vs 4 Goblins',
+    description: 'Classic CR 1/4 encounter. Goblins have Nimble Escape. ' +
+                 'Good action economy test — each Goblin can disengage as bonus action.',
+    build: () => ({
+      party:   [ pc('Fighter',0), pc('Rogue',2), pc('Cleric',4), pc('Wizard',6) ],
+      enemies: [
+        monster('Goblin',1,10,'smart'), monster('Goblin',3,10,'smart'),
+        monster('Goblin',5,10,'smart'), monster('Goblin',7,10,'smart'),
+      ],
+    }),
+  },
+
+  {
+    id: 'party4-vs-wolf-pack',
+    name: 'Party of 4 vs Wolf Pack',
+    description: 'Wolves have Pack Tactics (advantage when ally adjacent to target). ' +
+                 'Classic CR 1/4 encounter testing the Pack Tactics mechanic.',
+    build: () => ({
+      party:   [ pc('Fighter',0), pc('Barbarian',2), pc('Druid',4), pc('Ranger',6) ],
+      enemies: [
+        monster('Wolf',1,10,'attackNearest'), monster('Wolf',3,10,'attackNearest'),
+        monster('Wolf',5,10,'attackNearest'), monster('Wolf',7,10,'attackNearest'),
+      ],
+    }),
+  },
+
+  {
+    id: 'party4-vs-skeletons',
+    name: 'Party of 4 vs 4 Skeletons',
+    description: 'Undead encounter. Skeletons are CR 1/4, vulnerable to bludgeoning. ' +
+                 'Cleric Sacred Flame (radiant) is effective.',
+    build: () => ({
+      party:   [ pc('Fighter',0), pc('Cleric',2), pc('Paladin',4), pc('Ranger',6) ],
+      enemies: [
+        monster('Skeleton',1,10,'attackNearest'), monster('Skeleton',3,10,'attackNearest'),
+        monster('Skeleton',5,10,'attackNearest'), monster('Skeleton',7,10,'attackNearest'),
+      ],
+    }),
+  },
+
+  {
+    id: 'party4-vs-zombies',
+    name: 'Party of 4 vs 4 Zombies',
+    description: 'Zombies have Undead Fortitude (CON save to drop to 1 HP instead of 0). ' +
+                 'Tests sustained damage vs. the save mechanic.',
+    build: () => ({
+      party:   [ pc('Fighter',0), pc('Barbarian',2), pc('Cleric',4), pc('Warlock',6) ],
+      enemies: [
+        monster('Zombie',1,10,'attackNearest'), monster('Zombie',3,10,'attackNearest'),
+        monster('Zombie',5,10,'attackNearest'), monster('Zombie',7,10,'attackNearest'),
+      ],
+    }),
+  },
+
+  {
+    id: 'fighter-vs-orc',
+    name: 'Fighter vs Orc (1v1 classic)',
+    description: 'Level-1 Fighter vs an Orc (CR 1/2). Aggressive Orcs attack on sight. ' +
+                 'Expect ~50/50 — a real fight for a fresh character.',
+    build: () => ({
+      party:   [ pc('Fighter', 0) ],
+      enemies: [ monster('Orc', 1, 8, 'smart') ],
+    }),
+  },
+
+  {
+    id: 'full-party-vs-ogre',
+    name: 'Full Party of 4 vs Ogre (CR 2)',
+    description: 'Standard "hard" encounter for level 1. Ogre has 59 HP and +6 to hit. ' +
+                 'Party needs coordination to survive.',
+    build: () => ({
+      party: [ pc('Fighter',0), pc('Cleric',2), pc('Rogue',4), pc('Wizard',6) ],
+      enemies: [ monster('Ogre', 3, 10, 'attackNearest') ],
+      mapWidth: 12,
+    }),
+  },
 
 ];
 
