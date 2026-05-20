@@ -1,20 +1,35 @@
 #!/usr/bin/env ts-node
 // ============================================================
 // D&D 5e Combat Sim — CLI
-// Usage: npx ts-node src/index.ts [preset-id] [--runs N] [--verbose] [--output file.html]
+// Usage: npx ts-node src/index.ts [preset-id] [options]
+//
+// Options:
+//   --runs N              Number of simulations (default 100)
+//   --verbose             Show one example fight in detail
+//   --output file.html    Save HTML report
+//   --mount <cls> <name>  Mount a PC class on a named creature (from summon registry)
+//                         e.g. --mount Paladin Warhorse
 //
 // Examples:
-//   npx ts-node src/index.ts                              # list presets
-//   npx ts-node src/index.ts fighter-vs-larva             # run with defaults (100 runs)
-//   npx ts-node src/index.ts party4-vs-3larva --runs 500
-//   npx ts-node src/index.ts all12-vs-larva --runs 50 --verbose
-//   npx ts-node src/index.ts fighter-vs-larva --output report.html
+//   npx ts-node src/index.ts                                    # list presets
+//   npx ts-node src/index.ts fighter-vs-larva --runs 200
+//   npx ts-node src/index.ts party4-vs-goblin-band --runs 500 --output goblins.html
+//   npx ts-node src/index.ts fighter-vs-larva --mount Fighter Warhorse
 // ============================================================
 
 import { PRESETS, getPreset } from './scenarios/presets';
 import { simulate }            from './scenarios/simulate';
 import { printReport, summaryLine } from './scenarios/report';
 import { saveHTMLReport }      from './scenarios/html_report';
+import { getSummonEntry }      from './summons/registry';
+import { spawnSummon }         from './summons/spawner';
+import { setupMount }          from './summons/mount';
+import { loadBestiaryDir }     from './data/loader';
+import { loadPCStatBlocks, spawnPC, RawPCEntry } from './parser/pc';
+import { buildEncounter }      from './scenarios/encounter';
+import { makeFlatBattlefield } from './engine/combat';
+import * as path from 'path';
+import * as fs   from 'fs';
 
 // ---- Parse args ---------------------------------------------
 
@@ -25,6 +40,9 @@ const runs       = runsArg !== -1 ? parseInt(args[runsArg + 1], 10) : 100;
 const verbose    = args.includes('--verbose');
 const outputIdx  = args.indexOf('--output');
 const outputFile = outputIdx !== -1 ? args[outputIdx + 1] : null;
+const mountIdx   = args.indexOf('--mount');
+const mountClass = mountIdx !== -1 ? args[mountIdx + 1] : null;   // e.g. 'Paladin'
+const mountName  = mountIdx !== -1 ? args[mountIdx + 2] : null;   // e.g. 'Warhorse'
 
 // ---- No preset → list all -----------------------------------
 
@@ -40,7 +58,17 @@ if (!presetId) {
     console.log();
   }
 
-  console.log('Usage: npx ts-node src/index.ts <preset-id> [--runs N] [--verbose] [--output file.html]\n');
+  // Also list available mounts
+  const { SUMMON_REGISTRY } = require('./summons/registry');
+  const mounts = SUMMON_REGISTRY.filter((e: any) => e.canBeMounted);
+  if (mounts.length > 0) {
+    console.log('Available mounts (use with --mount <PCClass> <MountName>):');
+    for (const m of mounts) {
+      console.log(`  ${m.name.padEnd(18)} [${m.role}] trueCR ${m.trueCR}  ${m.notes.substring(0,55)}…`);
+    }
+    console.log();
+  }
+  console.log('Usage: npx ts-node src/index.ts <preset-id> [--runs N] [--verbose] [--output file.html] [--mount PCClass MountName]\n');
   process.exit(0);
 }
 
@@ -70,8 +98,44 @@ if (verbose) {
   console.log(`\nExample fight: winner=${exLog.winner} rounds=${exLog.rounds}\n`);
 }
 
+// ---- Optional --mount setup --------------------------------
+if (mountClass && mountName) {
+  const entry = getSummonEntry(mountName);
+  if (!entry) {
+    console.error(`\nError: "${mountName}" not found in summon registry.\n`);
+    console.error('Run without a preset to list available mounts.\n');
+    process.exit(1);
+  }
+  if (!entry.canBeMounted) {
+    console.error(`\nError: "${mountName}" cannot be mounted (canBeMounted: false).\n`);
+    process.exit(1);
+  }
+  console.log(`Mount: ${mountClass} will ride ${mountName} (${entry.role}, trueCR ${entry.trueCR})\n`);
+}
+
 // Run simulation
 const spec   = preset.build();
+
+// Apply mount if requested — mutate the spec's party for each run
+if (mountClass && mountName) {
+  const bestiaryResult = loadBestiaryDir(path.join(__dirname, '../bestiaryData'));
+  const rider = spec.party.find(c => c.name.toLowerCase().includes(mountClass.toLowerCase()));
+  if (!rider) {
+    console.error(`\nError: No "${mountClass}" found in preset party. Available: ${spec.party.map(c => c.name).join(', ')}\n`);
+    process.exit(1);
+  }
+  const mount = spawnSummon(bestiaryResult.bestiary, mountName!, { faction: 'party' });
+  if (!mount) {
+    console.error(`\nError: "${mountName}" not found in bestiaryData/. Download its bestiary JSON and add it.\n`);
+    process.exit(1);
+  }
+  // Add mount to party — encounter builder + simulate() will reset and re-setup each run
+  spec.party.push(mount);
+  // Record the rider-mount pair for post-build setup
+  (spec as any).__mountPair = { riderId: rider.id, mountId: mount.id };
+  console.log(`  ${rider.name} [${rider.id}] will mount ${mount.name} [${mount.id}]`);
+}
+
 const result = simulate(spec, { runs, maxRounds: 50, logEvery: verbose ? runs : 0 });
 
 printReport(result, preset.name);

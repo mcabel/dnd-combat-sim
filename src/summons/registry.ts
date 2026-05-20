@@ -192,6 +192,153 @@ export const SUMMON_REGISTRY: SummonEntry[] = [
   //   notes: 'Conjure Animals. Pack Tactics. Knock Prone on hit (STR DC 11).',
   // },
 
+  // ----------------------------------------------------------
+  // Combat Mounts — party-side, CAN attack, CAN be ridden
+  // These are true combat_mount role: they fight AND carry riders
+  // ----------------------------------------------------------
+
+  {
+    name: 'Warhorse',
+    estimatedCR: 0.5,
+    trueCR: 0.5,           // Has Hooves attack — genuinely fights
+    source: 'other',
+    role: 'combat_mount',
+    canAttack: true,       // Hooves: +6, 2d6+4 bludgeoning
+    canBeMounted: true,
+    hp: { type: 'fixed', value: 19 },    // CR 1/2, avg 19 HP
+    defaultProfile: 'attackNearest',
+    obeysVerbalCommands: true,
+    commandedProfile: 'smart',
+    notes: 'Standard warhorse (MM). Hooves attack +6 to hit, 2d6+4 bludgeoning. ' +
+           'Used by Paladins and mounted fighters. Counts as combat_mount — ' +
+           'it actively participates in combat, not just mobility.',
+  },
+
+  {
+    name: 'Giant Eagle',
+    estimatedCR: 1,
+    trueCR: 1,             // Full CR 1 combat capability
+    source: 'other',
+    role: 'combat_mount',
+    canAttack: true,       // Talons + Beak attacks
+    canBeMounted: true,
+    hp: { type: 'fixed', value: 26 },
+    defaultProfile: 'smart',
+    obeysVerbalCommands: true,
+    commandedProfile: 'smart',
+    notes: 'Giant Eagle (MM). Understands Common/Auran. Talons +5, Beak +5. ' +
+           'Fly speed 80ft. Frequently used as mount for Small/Medium creatures.',
+  },
+
+  {
+    name: 'Hippogriff',
+    estimatedCR: 1,
+    trueCR: 1,
+    source: 'other',
+    role: 'combat_mount',
+    canAttack: true,       // Claws + Beak attacks
+    canBeMounted: true,
+    hp: { type: 'fixed', value: 19 },
+    defaultProfile: 'attackNearest',
+    obeysVerbalCommands: true,
+    commandedProfile: 'attackNearest',
+    notes: 'Hippogriff (MM). Claws +5, Beak +5. Fly speed 60ft. ' +
+           'Must be trained — treat as obeying commands once tamed.',
+  },
+
+  // ----------------------------------------------------------
+  // Friendly Mounts — party-side, limited or no attacks, CAN be ridden
+  // These provide mobility but minimal combat contribution
+  // ----------------------------------------------------------
+
+  {
+    name: 'Riding Horse',
+    estimatedCR: 0.25,
+    trueCR: 0.25,          // Has Hooves but rarely fights
+    source: 'other',
+    role: 'friendly_mount',
+    canAttack: true,       // Hooves: +4, 2d4+2, but not designed for combat
+    canBeMounted: true,
+    hp: { type: 'fixed', value: 13 },
+    defaultProfile: 'defend',   // Flees by default — not a warhorse
+    obeysVerbalCommands: true,
+    commandedProfile: 'attackNearest',
+    notes: 'Riding Horse (MM). Hooves +4, 2d4+2. Not trained for combat — ' +
+           'uses defend profile (flees unless commanded). Speed 60ft ground. ' +
+           'trueCR 0.25 but effective combat contribution close to 0 on defend profile.',
+  },
+
+  {
+    name: 'Mule',
+    estimatedCR: 0.125,
+    trueCR: 0.125,
+    source: 'other',
+    role: 'friendly_mount',
+    canAttack: true,       // Hooves: +2, 1d4+1, minimal
+    canBeMounted: true,
+    hp: { type: 'fixed', value: 11 },
+    defaultProfile: 'defend',
+    obeysVerbalCommands: true,
+    commandedProfile: 'attackNearest',
+    notes: 'Mule (MM). Pack animal. Hooves +2, minimal damage. ' +
+           'Primarily useful for carrying capacity, not combat. Speed 40ft.',
+  },
+
+  {
+    name: 'Camel',
+    estimatedCR: 0.125,
+    trueCR: 0.125,
+    source: 'other',
+    role: 'friendly_mount',
+    canAttack: true,       // Bite: +4, 2d4+2
+    canBeMounted: true,
+    hp: { type: 'fixed', value: 15 },
+    defaultProfile: 'defend',
+    obeysVerbalCommands: true,
+    commandedProfile: 'attackNearest',
+    notes: 'Camel (MM). Bite +4, 2d4+2. Desert transport. ' +
+           'More resilient than a riding horse (15 HP). Speed 50ft.',
+  },
+
+  // ----------------------------------------------------------
+  // Familiars — party-side, cannot attack (rules), provide utility
+  // ----------------------------------------------------------
+
+  {
+    name: 'Owl',
+    estimatedCR: 0,
+    trueCR: 0,             // Cannot attack in familiar form
+    source: 'spell',
+    role: 'familiar',
+    canAttack: false,      // Find Familiar: familiar cannot attack
+    canBeMounted: false,
+    hp: { type: 'fixed', value: 1 },
+    defaultProfile: 'defend',
+    obeysVerbalCommands: true,
+    commandedProfile: 'defend',   // Familiar never attacks — Help action only
+    notes: 'Owl familiar (Find Familiar, PHB p.240). Cannot attack in familiar form. ' +
+           'Flies to any location, delivers touch spells, shares senses with caster. ' +
+           'Uses Help action to grant advantage to caster next attack roll. ' +
+           'Flyby trait: no opportunity attacks. HP 1 — extremely fragile.',
+  },
+
+  {
+    name: 'Cat',
+    estimatedCR: 0,
+    trueCR: 0,
+    source: 'spell',
+    role: 'familiar',
+    canAttack: false,
+    canBeMounted: false,
+    hp: { type: 'fixed', value: 2 },
+    defaultProfile: 'defend',
+    obeysVerbalCommands: true,
+    commandedProfile: 'defend',
+    notes: 'Cat familiar (Find Familiar, PHB p.240). Cannot attack in familiar form. ' +
+           'Keen smell and hearing. Uses Help action only.',
+  },
+
+
 ];
 
 // ---- Registry helpers ---------------------------------------

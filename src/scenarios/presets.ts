@@ -345,6 +345,77 @@ export const PRESETS: Preset[] = [
     }),
   },
 
+  // ---- Mounted combat presets ----
+
+  {
+    id: 'paladin-on-warhorse-vs-goblins',
+    name: 'Paladin on Warhorse vs 3 Goblins',
+    description: 'Level-1 Paladin mounted on a Warhorse vs 3 Goblins. ' +
+                 'Classic knightly charge scenario. Warhorse contributes Hooves attacks. ' +
+                 'Run with: npx ts-node src/index.ts paladin-on-warhorse-vs-goblins',
+    build: () => {
+      const { monsterToCombatant, loadBestiaryJson } = require('../parser/fivetools');
+      const { setupMount } = require('../summons/mount');
+      const fs   = require('fs');
+      const path = require('path');
+
+      const bPaths = [
+        path.join(__dirname, '../../bestiaryData/bestiary-mm-2014.json'),
+        path.join(__dirname, '../../bestiaryData/bestiary-mm.json'),
+      ].filter((p: string) => fs.existsSync(p));
+      if (bPaths.length === 0) throw new Error('MM bestiary not found in bestiaryData/');
+
+      const fullMap = loadBestiaryJson(JSON.parse(fs.readFileSync(bPaths[0], 'utf-8')));
+
+      const paladin   = pc('Paladin', 0);
+      const warhorseRaw = fullMap.get('warhorse');
+      if (!warhorseRaw) throw new Error('Warhorse not in bestiary');
+      const warhorse  = monsterToCombatant(warhorseRaw, { x: 0, y: 0, z: 0 }, 'smart', 'enemy', 19);
+      warhorse.faction = 'party';
+
+      return {
+        party:   [ paladin, warhorse ],
+        enemies: [
+          monster('Goblin', 2, 10, 'smart'),
+          monster('Goblin', 4, 10, 'smart'),
+          monster('Goblin', 6, 10, 'smart'),
+        ],
+      };
+    },
+  },
+
+  {
+    id: 'fighter-on-warhorse-vs-orc',
+    name: 'Fighter on Warhorse vs Orc (mounted 1v1)',
+    description: 'Fighter mounted on Warhorse vs Orc. ' +
+                 'Compare with fighter-vs-orc to see mounted combat advantage. ' +
+                 '(Without mount: ~53% party wins. With Warhorse: much higher.)',
+    build: () => {
+      const { monsterToCombatant, loadBestiaryJson } = require('../parser/fivetools');
+      const fs   = require('fs');
+      const path = require('path');
+
+      const bPaths = [
+        path.join(__dirname, '../../bestiaryData/bestiary-mm-2014.json'),
+        path.join(__dirname, '../../bestiaryData/bestiary-mm.json'),
+      ].filter((p: string) => fs.existsSync(p));
+      if (bPaths.length === 0) throw new Error('MM bestiary not found');
+
+      const fullMap = loadBestiaryJson(JSON.parse(fs.readFileSync(bPaths[0], 'utf-8')));
+      const fighter   = pc('Fighter', 0);
+      const warhorseRaw = fullMap.get('warhorse');
+      if (!warhorseRaw) throw new Error('Warhorse not in bestiary');
+      const warhorse  = monsterToCombatant(warhorseRaw, { x: 0, y: 0, z: 0 }, 'attackNearest', 'enemy', 19);
+      warhorse.faction = 'party';
+
+      return {
+        party:   [ fighter, warhorse ],
+        enemies: [ monster('Orc', 1, 8, 'smart') ],
+      };
+    },
+  },
+
+
 ];
 
 /** Get a preset by ID. Throws if not found. */
