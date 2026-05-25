@@ -50,6 +50,7 @@ function makeDyingPC(overrides: Partial<Combatant> = {}): Combatant {
     usedSneakAttackThisTurn: false,
     mountedOn: null,
     carriedBy: null,
+    independentMount: false,
     ...overrides,
   } as Combatant;
 }
@@ -76,6 +77,7 @@ function makeMonster(overrides: Partial<Combatant> = {}): Combatant {
     usedSneakAttackThisTurn: false,
     mountedOn: null,
     carriedBy: null,
+    independentMount: false,
     ...overrides,
   } as Combatant;
 }

@@ -207,8 +207,12 @@ export interface Combatant {
   // A combatant can be a controlled mount OR a rider — never both simultaneously.
   mountedOn: string | null;    // ID of the mount this rider is on
   carriedBy: string | null;    // ID of the rider currently mounted on this creature
-  // While carriedBy is set, the mount: skips its own action/bonus action,
-  // contributes its movement pool to the rider, and takes up its Z elevation.
+  //
+  // independentMount: when true, the mount acts on its OWN initiative and can attack.
+  //   The rider must explicitly grant independence (rare — trained war animals).
+  //   Default false: controlled mount — can only Dash, Disengage, or Dodge.
+  //   PHB p.198: "A controlled mount can take only the Dash, Disengage, or Dodge action."
+  independentMount: boolean;   // false = controlled (default); true = acts independently
 
   // Per-turn flags (reset by engine at start of each turn)
   usedSneakAttackThisTurn: boolean;  // Rogue: once per turn only

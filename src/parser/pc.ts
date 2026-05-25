@@ -349,6 +349,7 @@ export function pcToCombatant(
     deathSaves: { successes: 0, failures: 0 },   // PCs always have death saves
     mountedOn: null,
     carriedBy: null,
+    independentMount: false,
     tempHP: 0,
     resources: buildResources(raw),
     usedSneakAttackThisTurn: false,

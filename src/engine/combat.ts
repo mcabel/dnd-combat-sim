@@ -23,7 +23,8 @@ import {
 } from './movement';
 import { planTurn, planLegendaryAction, shouldTakeOpportunityAttack } from '../ai/planner';
 import { shouldSmite, applyDivineSmite } from '../ai/resources';
-import { isControlledMount, mountDeathRiderCheck } from '../summons/mount';
+import { isControlledMount, mountDeathRiderCheck, isIndependentMount } from '../summons/mount';
+import { getSummonEntry }                           from '../summons/registry';
 import { rollGrappleContest, rollShoveContest } from './utils';
 
 // ---- Combat log ---------------------------------------------
@@ -612,13 +613,49 @@ export function runCombat(
         continue; // monster or already-handled
       }
 
-      // Controlled mount: skip its own action/bonus action this turn
-      // (rider uses the mount's movement pool directly)
+      // ── Mount turn handling (PHB p.198) ─────────────────────
       if (isControlledMount(actor)) {
-        // Mount still refreshes its movement pool for the rider to use
+        // Refresh movement pool — rider draws from this
         actor.budget.movementFt = actor.flySpeed ?? actor.speed;
-        // Skip to next combatant — mount takes no independent action
-        continue;
+
+        if (isIndependentMount(actor)) {
+          // ── INDEPENDENT MOUNT: full turn (attacks, any action) ──
+          // Rider has explicitly granted independence (grantIndependence(mount)).
+          // Mount uses its own initiative slot, can attack, etc.
+          // Falls through to normal turn planning below.
+        } else {
+          // ── CONTROLLED MOUNT (DEFAULT): Dash, Disengage, or Dodge only ──
+          // PHB p.198: "A controlled mount can take only the Dash, Disengage,
+          // or Dodge action." Mount CANNOT attack in this mode.
+          //
+          // AI choice: if rider is in melee range of enemies → Disengage (safe escape)
+          //            otherwise → Dash (close gap / extra movement for rider)
+          resetBudget(actor);
+          actor.usedSneakAttackThisTurn = false;
+          actor.budget.movementFt = actor.flySpeed ?? actor.speed;
+
+          const rider = battlefield.combatants.get(actor.carriedBy!);
+          const adjEnemies = rider
+            ? [...battlefield.combatants.values()].filter(c =>
+                c.faction !== rider.faction && !c.isDead && !c.isUnconscious &&
+                Math.max(Math.abs(c.pos.x - actor.pos.x), Math.abs(c.pos.y - actor.pos.y)) <= 1
+              ).length
+            : 0;
+
+          if (adjEnemies > 0) {
+            // Disengage: rider can move away safely
+            log(state, 'disengage', actor.id,
+              `${actor.name} (controlled mount) Disengages — rider can move freely`, undefined);
+            state.disengagedThisTurn.add(actor.id);
+            (actor as any).usedDisengage = true;
+          } else {
+            // Dash: doubles effective movement for the rider this turn
+            log(state, 'dash', actor.id,
+              `${actor.name} (controlled mount) Dashes — +${actor.speed}ft movement pool`, undefined);
+            actor.budget.movementFt += actor.flySpeed ?? actor.speed;
+          }
+          continue; // controlled mount turn ends here
+        }
       }
 
       // Reset per-turn flags

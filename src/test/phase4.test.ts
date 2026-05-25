@@ -55,6 +55,7 @@ function makeC(o: Partial<Combatant> = {}): Combatant {
     perception: { targets: new Map() },
     mountedOn: null,
     carriedBy: null,
+    independentMount: false,
     isDead: false, isUnconscious: false,
     ...o,
   };

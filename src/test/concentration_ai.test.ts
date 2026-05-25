@@ -43,7 +43,7 @@ function makeC(o: Partial<Combatant> = {}): Combatant {
               reactionUsed: false, freeObjectUsed: false },
     conditions: new Set(), concentration: null, deathSaves: null,
     tempHP: 0, resources: null, usedSneakAttackThisTurn: false,
-    mountedOn: null, carriedBy: null,
+    mountedOn: null, carriedBy: null, independentMount: false,
     aiProfile: 'smart', perception: { targets: new Map() },
     isDead: false, isUnconscious: false,
     ...o,

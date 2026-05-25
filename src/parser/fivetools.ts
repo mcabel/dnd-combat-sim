@@ -398,6 +398,7 @@ export function monsterToCombatant(
     deathSaves: null,
     mountedOn: null,
     carriedBy: null,
+    independentMount: false,
     tempHP: 0,
     resources: null,
     usedSneakAttackThisTurn: false,

@@ -131,3 +131,49 @@ export function setupMount(
   // Give rider access to mount's fly speed
   // The engine will use mount.budget.movementFt for the rider's movement
 }
+
+// ---- Mount control mode (PHB p.198) -------------------------
+
+/**
+ * Set whether a mount acts independently or is controlled by the rider.
+ *
+ * CONTROLLED (default, independentMount=false):
+ *   - Mount can ONLY: Dash, Disengage, or Dodge on its turn
+ *   - Rider effectively gets free movement (mount Dashes) or free Disengage
+ *   - Mount movement pool is shared with rider
+ *   - Mount cannot attack
+ *
+ * INDEPENDENT (independentMount=true):
+ *   - Mount acts on its own initiative slot
+ *   - Mount can attack, cast spells, use any of its actions
+ *   - Mount movement is its own (rider still moves with it physically)
+ *   - Requires rider to explicitly grant independence (trained war animal)
+ *
+ * PHB p.198: "A controlled mount can take only the Dash, Disengage,
+ * or Dodge action."
+ */
+export function setMountMode(mount: Combatant, independent: boolean): void {
+  mount.independentMount = independent;
+}
+
+/** True if this mount acts on its own turn (attacks, full actions). */
+export function isIndependentMount(mount: Combatant): boolean {
+  return mount.carriedBy !== null && mount.independentMount === true;
+}
+
+/**
+ * Grant a mount independence — it will act on its own initiative.
+ * Use for trained war mounts (Warhorse, Giant Eagle, Hippogriff).
+ */
+export function grantIndependence(mount: Combatant): void {
+  setMountMode(mount, true);
+}
+
+/**
+ * Return a mount to controlled mode (Dash/Disengage/Dodge only).
+ * This is the DEFAULT for all mounts.
+ */
+export function controlMount(mount: Combatant): void {
+  setMountMode(mount, false);
+}
+
