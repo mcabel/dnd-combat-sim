@@ -10,11 +10,11 @@
 <!-- HOW TO USE: Check off items as done. At session end, move completed items to the
      relevant summary-[date].md and update the "Last completed" pointer below. -->
 
-**Last completed:** Session 15 — Phase 7.2 concentration AI complete (requiresConcentration on Action type, parser detection, AI guards, 33 tests)
-**Prev last completed:** Phase 4.9 COMPLETE — Death saving throws (combat fixes + 57 tests)
-**Next session starts at:** Phase 7.3 — Level scaling framework (PC stat blocks lv 2-5, needs JSON data from user) (casters avoid recasting concentration spells; smart enemies target concentrators)
-**Prev next:** Phase 4.1 — Concentration tracking
-**Test total:** 871 passing, 0 failed across 14 suites
+**Last completed:** Session 20 — Phase 7.7 import fix (import bug in planner.ts fixed, livingAlliesOf added)
+**Prev last completed:** Session 19 — Phase 7.6 controlled/independent mounts (PHB p.198, 953 tests)
+**Next session starts at:** ST-2 — Familiar Help action integration test (requires type infrastructure)
+**Prev next:** Phase 7.3 — Level scaling framework (PC stat blocks lv 2-5, needs JSON data from user)
+**Test total:** 888 passing, 0 failed across 15 suites
 
 ---
 

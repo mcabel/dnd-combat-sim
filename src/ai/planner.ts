@@ -15,7 +15,7 @@ import {
 import { selectAction, selfPreserveDecision, selectLegendaryAction } from './actions';
 import {
   canReach, bestAdjacentPos, bestRangedPosition,
-  adjacentEnemyCount, livingEnemiesOf
+  adjacentEnemyCount, livingEnemiesOf, livingAlliesOf
 } from '../engine/movement';
 
 // ---- Empty plan helper --------------------------------------
