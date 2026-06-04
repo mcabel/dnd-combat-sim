@@ -350,9 +350,12 @@ export function pcToCombatant(
     mountedOn: null,
     carriedBy: null,
     independentMount: false,
+    role: 'regular',
+    bonded: null,
     tempHP: 0,
     resources: buildResources(raw),
     usedSneakAttackThisTurn: false,
+    helpedThisTurn: false,
     isDead:        false,
     isUnconscious: false,
   };

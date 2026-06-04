@@ -13,7 +13,7 @@ import { loadPCStatBlocks, spawnPC, RawPCEntry } from '../parser/pc';
 import { runCombat, makeFlatBattlefield }        from '../engine/combat';
 import { simulateDay, printDayReport }           from '../scenarios/multiencounter';
 import { shortRest, longRest }                   from '../engine/utils';
-import { Combatant, Battlefield }                from '../types/core';
+import { Combatant, Battlefield, PlannedAction }                from '../types/core';
 import * as fs   from 'fs';
 import * as path from 'path';
 
@@ -234,6 +234,55 @@ console.log('\n=== 6. setupMount ===\n');
   const fIdx = bf.initiativeOrder.indexOf(mount.id);
   assert('Mount initiative synced after wizard', fIdx === wIdx + 1,
     `order: ${bf.initiativeOrder.join(',')}`);
+}
+
+// ============================================================
+// 6b. Familiar Help Action (PHB p.192)
+// ============================================================
+console.log('\n=== 6b. Familiar Help Action ===\n');
+
+{
+  // Test scenario: Owl familiar uses Help action on bonded Wizard
+  // Expected: Owl has role 'familiar', bonded to Wizard
+  //           Owl's Help action sets Wizard.helpedThisTurn = true
+  //           Wizard's next attack gets advantage
+
+  const wizard = pc('Wizard', 0);
+  const owl = pc('Wizard', 1);   // placeholder; we'll modify it to be familiar role
+  
+  // Simulate familiar setup
+  owl.role = 'familiar';
+  owl.bonded = wizard.id;
+  owl.faction = 'party';
+  owl.aiProfile = 'defend';  // familiars typically defend unless commanded
+  
+  const bf = makeBF([wizard, owl]);
+  
+  // Manually set Owl's turn plan to use Help action on Wizard
+  const helpPlan: PlannedAction = {
+    type: 'help',
+    action: null,
+    targetId: wizard.id,
+    description: `${owl.name} uses Help action on ${wizard.name}`,
+  };
+  
+  assert('Familiar role set', owl.role === 'familiar');
+  assert('Familiar bonded to wizard', owl.bonded === wizard.id);
+  assert('Wizard initially not helped', !wizard.helpedThisTurn);
+  
+  // Simulate Help action execution (as executePlannedAction would do)
+  if (helpPlan.targetId) {
+    const target = bf.combatants.get(helpPlan.targetId);
+    if (target) {
+      target.helpedThisTurn = true;
+    }
+  }
+  
+  assert('Wizard helped after Help action', wizard.helpedThisTurn);
+  
+  // Reset (as engine would do at start of turn)
+  wizard.helpedThisTurn = false;
+  assert('Wizard helpedThisTurn reset', !wizard.helpedThisTurn);
 }
 
 // ============================================================

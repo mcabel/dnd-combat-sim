@@ -45,9 +45,12 @@ function makeC(overrides: Partial<Combatant> = {}): Combatant {
     mountedOn: null,
     carriedBy: null,
     independentMount: false,
+    role: 'regular',
+    bonded: null,
     resources: null,
     tempHP: 0,
     usedSneakAttackThisTurn: false,
+    helpedThisTurn: false,
     isDead: false, isUnconscious: false,
     ...overrides,
   };

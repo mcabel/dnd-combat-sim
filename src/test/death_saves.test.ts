@@ -48,9 +48,12 @@ function makeDyingPC(overrides: Partial<Combatant> = {}): Combatant {
     savingThrowProficiencies: new Set(),
     resources: null,
     usedSneakAttackThisTurn: false,
+    helpedThisTurn: false,
     mountedOn: null,
     carriedBy: null,
     independentMount: false,
+    role: 'regular',
+    bonded: null,
     ...overrides,
   } as Combatant;
 }
@@ -75,9 +78,12 @@ function makeMonster(overrides: Partial<Combatant> = {}): Combatant {
     savingThrowProficiencies: new Set(),
     resources: null,
     usedSneakAttackThisTurn: false,
+    helpedThisTurn: false,
     mountedOn: null,
     carriedBy: null,
     independentMount: false,
+    role: 'regular',
+    bonded: null,
     ...overrides,
   } as Combatant;
 }

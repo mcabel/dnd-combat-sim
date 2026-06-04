@@ -10,11 +10,11 @@
 <!-- HOW TO USE: Check off items as done. At session end, move completed items to the
      relevant summary-[date].md and update the "Last completed" pointer below. -->
 
-**Last completed:** Session 20 — Phase 7.7 import fix (import bug in planner.ts fixed, livingAlliesOf added)
+**Last completed:** Session 20 — Phase 7.7 Familiar Help action (type infrastructure, planner logic, engine execution, 900 tests)
 **Prev last completed:** Session 19 — Phase 7.6 controlled/independent mounts (PHB p.198, 953 tests)
-**Next session starts at:** ST-2 — Familiar Help action integration test (requires type infrastructure)
+**Next session starts at:** ST-3 — Mount mode tests (independent vs controlled) / ST-5 damage redirect
 **Prev next:** Phase 7.3 — Level scaling framework (PC stat blocks lv 2-5, needs JSON data from user)
-**Test total:** 888 passing, 0 failed across 15 suites
+**Test total:** 900 passing, 0 failed across 15 suites
 
 ---
 

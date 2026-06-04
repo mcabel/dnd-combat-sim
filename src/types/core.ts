@@ -214,8 +214,13 @@ export interface Combatant {
   //   PHB p.198: "A controlled mount can take only the Dash, Disengage, or Dodge action."
   independentMount: boolean;   // false = controlled (default); true = acts independently
 
+  // Familiar / companion bonding
+  role: 'familiar' | 'mount' | 'companion' | 'regular';  // creature type/role
+  bonded: string | null;       // ID of bonded caster (for familiars) or bonded companion owner
+
   // Per-turn flags (reset by engine at start of each turn)
   usedSneakAttackThisTurn: boolean;  // Rogue: once per turn only
+  helpedThisTurn: boolean;     // Familiar/ally used Help action this turn; grants advantage to next attack
 
   // Flags
   isDead: boolean;

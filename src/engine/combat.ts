@@ -150,10 +150,10 @@ function resolveAttack(
     return;
   }
 
-  // Standard attack roll — include Pack Tactics advantage and Prone modifier
+  // Standard attack roll — include Pack Tactics advantage, Prone modifier, and Help action
   const advState = resolveAttackAdvantage(attacker, target, action.attackType);
   const { advantage: baseAdv, disadvantage } = advState;
-  const advantage = baseAdv || packTacticsAdvantage;
+  const advantage = baseAdv || packTacticsAdvantage || attacker.helpedThisTurn;
   const result = rollAttack(action.hitBonus ?? 0, advantage, disadvantage);
   const hits = isCritOverride ?? attackHits(result.roll, result.total, target.ac);
 
@@ -418,7 +418,17 @@ function executePlannedAction(
       break;
     }
 
-    case 'help':
+    case 'help': {
+      // PHB p.192: Help action grants advantage to one allied attack roll before your next turn
+      if (plan.targetId) {
+        const target = bf.combatants.get(plan.targetId);
+        if (target) {
+          target.helpedThisTurn = true;
+        }
+      }
+      log(state, 'action', actor.id, plan.description);
+      break;
+    }
     case 'hide':
     case 'ready':
     case 'secondWind':
@@ -632,6 +642,7 @@ export function runCombat(
           //            otherwise → Dash (close gap / extra movement for rider)
           resetBudget(actor);
           actor.usedSneakAttackThisTurn = false;
+          actor.helpedThisTurn = false;
           actor.budget.movementFt = actor.flySpeed ?? actor.speed;
 
           const rider = battlefield.combatants.get(actor.carriedBy!);
@@ -660,6 +671,7 @@ export function runCombat(
 
       // Reset per-turn flags
       actor.usedSneakAttackThisTurn = false;
+      actor.helpedThisTurn = false;
 
       // 4.12 Commanded creatures: allow external profile override each turn.
       // A controller (commander) can call bf.pendingCommands.get(actorId) to

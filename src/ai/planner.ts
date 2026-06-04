@@ -234,6 +234,35 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
     }
   }
 
+  // === FAMILIAR HELP ACTION ===
+  // Familiars (role: 'familiar') use Help to grant advantage to bonded caster's next attack.
+  // Help is an action that targets one ally whose attack you can see before the end of your turn.
+  if (self.role === 'familiar' && self.bonded) {
+    const bonded = battlefield.combatants.get(self.bonded);
+    const allies = livingAlliesOf(self, battlefield);
+    
+    // Only use Help if bonded ally is present, healthy, and in melee range
+    if (bonded && allies.includes(bonded)) {
+      const distToBonded = Math.max(
+        Math.abs(bonded.pos.x - self.pos.x),
+        Math.abs(bonded.pos.y - self.pos.y),
+        Math.abs(bonded.pos.z - self.pos.z)
+      );
+      
+      // If bonded caster is healthy and within 5ft (melee help range), use Help action
+      if (distToBonded <= 1 && bonded.currentHP >= bonded.maxHP * 0.5) {
+        plan.targetId = bonded.id;
+        plan.action = {
+          type: 'help',
+          action: null,
+          targetId: bonded.id,
+          description: `${self.name} uses Help action on ${bonded.name}`,
+        };
+        return plan;
+      }
+    }
+  }
+
   // === DEFEND PROFILE (explicitly passive creatures) ===
   // Only creatures whose stat block or lore says "defends unless commanded"
   // are spawned with aiProfile: 'defend' (e.g. Giant Fly from Ebony Fly figurine).
