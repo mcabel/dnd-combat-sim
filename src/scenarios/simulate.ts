@@ -28,6 +28,8 @@ export interface RunResult {
 export interface CombatantStats {
   id:   string;
   name: string;
+  /** 'party' or 'enemy' */
+  side: 'party' | 'enemy';
   /** Fraction of runs this combatant survived */
   survivalRate:  number;
   /** Average damage dealt per run */
@@ -154,6 +156,7 @@ export function simulate(
 
   // Aggregate per-combatant stats
   const allOriginal = [...origParty, ...origEnemies] as Combatant[];
+  const partyIds    = new Set(origParty.map(c => c.id));
   const combatantStats: CombatantStats[] = allOriginal.map(orig => {
     let totalDmg = 0, totalHp = 0, survived = 0;
 
@@ -166,6 +169,7 @@ export function simulate(
     return {
       id:             orig.id,
       name:           orig.name,
+      side:           partyIds.has(orig.id) ? 'party' : 'enemy',
       survivalRate:   survived / runs,
       avgDamageDealt: totalDmg / runs,
       avgHpRemaining: totalHp / runs,

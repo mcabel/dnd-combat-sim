@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>D&D Combat Simulator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;900&family=IBM+Plex+Mono:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+:root {
+  --bg:      #0d0d0f;
+  --surface: #141418;
+  --border:  #2a2a35;
+  --accent:  #c8973a;
+  --accent2: #7c5cbf;
+  --text:    #e8e4d8;
+  --muted:   #6b6878;
+  --danger:  #c0392b;
+  --success: #27ae60;
+  --mono:    'IBM Plex Mono', monospace;
+  --serif:   'Cinzel', serif;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { min-height: 100%; background: var(--bg); color: var(--text); font-family: var(--mono); }
+
+.app { max-width: 700px; margin: 0 auto; padding: 0 16px 48px; }
+
+/* Header */
+header { padding: 24px 0 20px; display: flex; align-items: center; gap: 14px; border-bottom: 1px solid var(--border); margin-bottom: 24px; }
+.logo-svg { width: 38px; height: 38px; flex-shrink: 0; }
+header h1 { font-family: var(--serif); font-size: 17px; font-weight: 600; letter-spacing: 0.08em; color: var(--accent); }
+header p  { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+/* Cards */
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; margin-bottom: 14px; }
+.card-title { font-family: var(--serif); font-size: 11px; letter-spacing: 0.15em; color: var(--muted); text-transform: uppercase; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+.card-title::before { content: ''; display: block; width: 3px; height: 12px; background: var(--accent); border-radius: 2px; flex-shrink: 0; }
+
+/* Form elements */
+select, input[type=text], input[type=url], input[type=number] {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+  color: var(--text); font-family: var(--mono); font-size: 13px;
+  padding: 8px 10px; outline: none; transition: border-color 0.15s;
+}
+select:focus, input:focus { border-color: var(--accent); }
+select option { background: var(--bg); }
+
+/* Buttons */
+button {
+  font-family: var(--mono); font-size: 12px; letter-spacing: 0.05em;
+  padding: 8px 14px; border-radius: 6px; cursor: pointer;
+  border: 1px solid var(--border); background: transparent;
+  color: var(--text); transition: all 0.15s; white-space: nowrap;
+}
+button:hover  { border-color: var(--accent); color: var(--accent); }
+button:active { transform: scale(0.97); }
+button.primary {
+  background: var(--accent); border-color: var(--accent);
+  color: #0d0d0f; font-weight: 500; padding: 12px 28px;
+  font-size: 13px; width: 100%;
+}
+button.primary:hover { background: #d4a44a; border-color: #d4a44a; color: #0d0d0f; }
+button.primary:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+button.ghost-danger { border-color: transparent; color: var(--muted); padding: 6px 8px; font-size: 13px; }
+button.ghost-danger:hover { color: var(--danger); border-color: transparent; }
+button.tab { border-radius: 4px; padding: 6px 12px; font-size: 11px; color: var(--muted); border-color: transparent; }
+button.tab.active { color: var(--accent); border-color: var(--accent); background: transparent; }
+button.preset-btn {
+  font-size: 11px; padding: 6px 10px; border-radius: 5px; text-align: left;
+  color: var(--muted); border-color: var(--border);
+}
+button.preset-btn:hover { color: var(--accent); border-color: var(--accent); }
+button.trial-btn { padding: 7px 14px; font-size: 12px; color: var(--muted); }
+button.trial-btn.active { color: var(--accent); border-color: var(--accent); }
+
+/* Connection status */
+.conn-row { display: flex; align-items: center; gap: 10px; }
+.conn-row input { flex: 1; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
+.dot.ok  { background: var(--success); box-shadow: 0 0 5px var(--success); }
+.dot.err { background: var(--danger);  box-shadow: 0 0 5px var(--danger); }
+.dot.loading { background: var(--accent); animation: pulse 0.9s infinite; }
+.conn-label { font-size: 11px; color: var(--muted); }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+/* Rows (party / enemy) */
+.row-list { display: flex; flex-direction: column; gap: 8px; }
+.combatant-row { display: flex; align-items: center; gap: 8px; }
+.combatant-row select { flex: 1; }
+.combatant-row input[type=number] { width: 58px; }
+.add-btn { margin-top: 10px; font-size: 12px; color: var(--muted); border-style: dashed; width: 100%; padding: 8px; }
+.add-btn:hover { color: var(--accent); border-color: var(--accent); }
+
+/* Presets grid */
+.preset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 6px; }
+
+/* Trial selector */
+.trial-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.trial-label { font-size: 11px; color: var(--muted); margin-right: 4px; }
+
+/* Results */
+#results { display: none; }
+.summary-text { font-size: 14px; color: var(--text); margin-bottom: 16px; line-height: 1.5; }
+
+.win-bar-wrap { margin-bottom: 16px; }
+.win-bar-labels { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-bottom: 5px; }
+.win-bar { display: flex; height: 20px; border-radius: 6px; overflow: hidden; border: 1px solid var(--border); }
+.win-bar .party   { background: var(--success); }
+.win-bar .draw    { background: var(--muted);   }
+.win-bar .enemy   { background: var(--danger);  }
+
+.stats-row { display: flex; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
+.stat-box { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; flex: 1; min-width: 100px; }
+.stat-box .val { font-family: var(--serif); font-size: 20px; color: var(--accent); font-weight: 600; }
+.stat-box .lbl { font-size: 10px; color: var(--muted); margin-top: 2px; letter-spacing: 0.08em; text-transform: uppercase; }
+
+/* Combatant table */
+.ctable { width: 100%; border-collapse: collapse; font-size: 12px; }
+.ctable th { text-align: left; color: var(--muted); font-weight: 400; letter-spacing: 0.08em; text-transform: uppercase; font-size: 10px; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+.ctable td { padding: 8px 8px; border-bottom: 1px solid var(--border); }
+.ctable tr:last-child td { border-bottom: none; }
+.ctable tr:hover td { background: rgba(200,151,58,0.04); }
+.badge { display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 10px; font-weight: 500; }
+.badge.party   { background: rgba(39,174,96,0.15);  color: #5de39a; }
+.badge.enemy   { background: rgba(192,57,43,0.15);  color: #e87070; }
+.badge-bar { display: flex; align-items: center; gap: 6px; }
+.badge-bar .fill { height: 6px; border-radius: 3px; background: var(--accent); }
+.badge-bar .fill.low { background: var(--danger); }
+.badge-bar .fill.mid { background: #e0a838; }
+.badge-bar .fill.high { background: var(--success); }
+
+/* Run button container */
+.run-wrap { margin: 4px 0 16px; }
+
+/* Error banner */
+.err-banner { background: rgba(192,57,43,0.12); border: 1px solid rgba(192,57,43,0.35); border-radius: 8px; padding: 12px 16px; font-size: 12px; color: #e87070; margin-bottom: 14px; display: none; }
+
+/* Spinner */
+.spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(13,13,15,0.3); border-top-color: #0d0d0f; border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 6px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Datalist hint */
+input[list] { -webkit-appearance: none; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- Header -->
+  <header>
+    <svg class="logo-svg" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <polygon points="20,2 38,34 2,34" stroke="#c8973a" stroke-width="2" fill="none"/>
+      <polygon points="20,10 32,30 8,30" stroke="#c8973a" stroke-width="1" fill="rgba(200,151,58,0.06)"/>
+      <circle cx="20" cy="20" r="3" fill="#c8973a"/>
+    </svg>
+    <div>
+      <h1>D&amp;D Combat Simulator</h1>
+      <p>PHB 2014 · MM 2014 · SAC v2.7</p>
+    </div>
+  </header>
+
+  <!-- Server Connection -->
+  <div class="card" id="conn-card">
+    <div class="card-title">Server</div>
+    <div class="conn-row">
+      <input type="url" id="server-url" value="http://localhost:3000" placeholder="http://localhost:3000"/>
+      <button onclick="connect()">Connect</button>
+      <span class="dot" id="conn-dot"></span>
+      <span class="conn-label" id="conn-label">Not connected</span>
+    </div>
+  </div>
+
+  <!-- Error Banner -->
+  <div class="err-banner" id="err-banner"></div>
+
+  <!-- Presets -->
+  <div class="card" id="presets-card" style="display:none">
+    <div class="card-title">Presets</div>
+    <div class="preset-grid" id="preset-grid"></div>
+  </div>
+
+  <!-- Party Builder -->
+  <div class="card">
+    <div class="card-title">Party</div>
+    <div class="row-list" id="party-list"></div>
+    <button class="add-btn" onclick="addPartyRow()">+ Add PC</button>
+  </div>
+
+  <!-- Enemy Builder -->
+  <div class="card">
+    <div class="card-title">Enemies</div>
+    <div class="row-list" id="enemy-list"></div>
+    <button class="add-btn" onclick="addEnemyRow()">+ Add Enemy</button>
+    <datalist id="monster-list"></datalist>
+  </div>
+
+  <!-- Settings -->
+  <div class="card">
+    <div class="card-title">Simulation</div>
+    <div class="trial-row">
+      <span class="trial-label">Trials:</span>
+      <button class="trial-btn" onclick="setTrials(20)">20</button>
+      <button class="trial-btn active" onclick="setTrials(100)">100</button>
+      <button class="trial-btn" onclick="setTrials(200)">200</button>
+      <button class="trial-btn" onclick="setTrials(500)">500</button>
+    </div>
+  </div>
+
+  <!-- Run -->
+  <div class="run-wrap">
+    <button class="primary" id="run-btn" onclick="runSim()" disabled>Connect to server first</button>
+  </div>
+
+  <!-- Results -->
+  <div id="results">
+    <div class="card">
+      <div class="card-title">Results</div>
+      <div class="summary-text" id="summary-text"></div>
+
+      <div class="win-bar-wrap">
+        <div class="win-bar-labels">
+          <span id="party-pct">Party 0%</span>
+          <span id="draw-pct">Draw 0%</span>
+          <span id="enemy-pct">Enemies 0%</span>
+        </div>
+        <div class="win-bar" id="win-bar">
+          <div class="party" id="bar-party" style="width:0%"></div>
+          <div class="draw"  id="bar-draw"  style="width:0%"></div>
+          <div class="enemy" id="bar-enemy" style="width:0%"></div>
+        </div>
+      </div>
+
+      <div class="stats-row">
+        <div class="stat-box">
+          <div class="val" id="stat-avg">—</div>
+          <div class="lbl">Avg Rounds</div>
+        </div>
+        <div class="stat-box">
+          <div class="val" id="stat-min">—</div>
+          <div class="lbl">Min Rounds</div>
+        </div>
+        <div class="stat-box">
+          <div class="val" id="stat-max">—</div>
+          <div class="lbl">Max Rounds</div>
+        </div>
+        <div class="stat-box">
+          <div class="val" id="stat-runs">—</div>
+          <div class="lbl">Runs</div>
+        </div>
+      </div>
+
+      <table class="ctable" id="ctable">
+        <thead>
+          <tr>
+            <th>Combatant</th>
+            <th>Side</th>
+            <th>Survived</th>
+            <th>Avg Dmg Dealt</th>
+            <th>Avg HP Left</th>
+          </tr>
+        </thead>
+        <tbody id="ctable-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div><!-- .app -->
+<script>
+// ── State ──────────────────────────────────────────────────
+const S = {
+  url:      'http://localhost:3000',
+  connected: false,
+  classes:  [],
+  monsters: [],
+  presets:  [],
+  trials:   100,
+  party:    [
+    { cls: 'fighter', ai: 'smart' },
+    { cls: 'rogue',   ai: 'smart' },
+    { cls: 'cleric',  ai: 'smart' },
+    { cls: 'wizard',  ai: 'smart' },
+  ],
+  enemies:  [
+    { name: 'Goblin', count: 4, ai: 'attackNearest' },
+  ],
+};
+
+const AI_OPTS = [
+  ['smart',         'Tactical'],
+  ['attackNearest', 'Nearest'],
+  ['attackWeakest', 'Weakest'],
+];
+
+// ── Boot ──────────────────────────────────────────────────
+window.addEventListener('load', () => {
+  document.getElementById('server-url').value = S.url;
+  renderParty();
+  renderEnemies();
+  connect();
+});
+
+// ── Connection ────────────────────────────────────────────
+async function connect() {
+  const input = document.getElementById('server-url');
+  S.url = input.value.replace(/\/$/, '');
+  setConnStatus('loading', 'Connecting…');
+
+  try {
+    const [health, classes, monsters, presets] = await Promise.all([
+      api('/api/health'),
+      api('/api/classes'),
+      api('/api/monsters'),
+      api('/api/presets'),
+    ]);
+    S.classes  = classes.classes;
+    S.monsters = monsters.monsters;
+    S.presets  = presets.presets;
+    S.connected = true;
+    setConnStatus('ok', `Connected · ${S.monsters.length} monsters`);
+    populateMonsterDatalist();
+    renderPresets();
+    document.getElementById('presets-card').style.display = '';
+    document.getElementById('run-btn').disabled = false;
+    document.getElementById('run-btn').textContent = '▶  Run Simulation';
+    // Re-render rows so class selects are populated
+    renderParty();
+    renderEnemies();
+  } catch (e) {
+    S.connected = false;
+    setConnStatus('err', 'Cannot reach server');
+    document.getElementById('run-btn').disabled = true;
+    document.getElementById('run-btn').textContent = 'Connect to server first';
+  }
+}
+
+function setConnStatus(state, label) {
+  const dot = document.getElementById('conn-dot');
+  const lbl = document.getElementById('conn-label');
+  dot.className = 'dot ' + state;
+  lbl.textContent = label;
+}
+
+async function api(path, opts) {
+  const res = await fetch(S.url + path, opts);
+  if (!res.ok) {
+    const d = await res.json().catch(() => ({}));
+    throw new Error(d.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+// ── Monster datalist ───────────────────────────────────────
+function populateMonsterDatalist() {
+  const dl = document.getElementById('monster-list');
+  dl.innerHTML = S.monsters
+    .map(m => `<option value="${esc(m.name)}">CR ${m.cr} · ${m.type}</option>`)
+    .join('');
+}
+
+// ── Presets ───────────────────────────────────────────────
+function renderPresets() {
+  const grid = document.getElementById('preset-grid');
+  grid.innerHTML = S.presets.map(p =>
+    `<button class="preset-btn" onclick="loadPreset('${esc(p.id)}')" title="${esc(p.description)}">${esc(p.name)}</button>`
+  ).join('');
+}
+
+async function loadPreset(id) {
+  const p = S.presets.find(x => x.id === id);
+  if (!p) return;
+  showErr('');
+
+  // Run it directly
+  setRunning(true);
+  try {
+    const result = await api('/api/simulate/preset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, trials: S.trials }),
+    });
+    showResults(result);
+  } catch (e) {
+    showErr(e.message);
+  } finally {
+    setRunning(false);
+  }
+}
+
+// ── Party Builder ─────────────────────────────────────────
+function renderParty() {
+  const list = document.getElementById('party-list');
+  list.innerHTML = S.party.map((row, i) => `
+    <div class="combatant-row">
+      <select onchange="S.party[${i}].cls=this.value">
+        ${classOptions(row.cls)}
+      </select>
+      <select onchange="S.party[${i}].ai=this.value" title="AI Profile">
+        ${aiOptions(row.ai)}
+      </select>
+      <button class="ghost-danger" onclick="removeParty(${i})" title="Remove">✕</button>
+    </div>
+  `).join('');
+}
+
+function addPartyRow() {
+  if (S.party.length >= 8) return;
+  S.party.push({ cls: S.classes[0] || 'fighter', ai: 'smart' });
+  renderParty();
+}
+
+function removeParty(i) {
+  if (S.party.length <= 1) return;
+  S.party.splice(i, 1);
+  renderParty();
+}
+
+// ── Enemy Builder ─────────────────────────────────────────
+function renderEnemies() {
+  const list = document.getElementById('enemy-list');
+  list.innerHTML = S.enemies.map((row, i) => `
+    <div class="combatant-row">
+      <input type="text" list="monster-list" value="${esc(row.name)}"
+        onchange="S.enemies[${i}].name=this.value"
+        placeholder="Monster name…" style="flex:1"/>
+      <input type="number" value="${row.count}" min="1" max="20"
+        onchange="S.enemies[${i}].count=Math.max(1,Math.min(20,+this.value))"
+        title="Count" style="width:54px"/>
+      <select onchange="S.enemies[${i}].ai=this.value" title="AI Profile">
+        ${aiOptions(row.ai)}
+      </select>
+      <button class="ghost-danger" onclick="removeEnemy(${i})" title="Remove">✕</button>
+    </div>
+  `).join('');
+}
+
+function addEnemyRow() {
+  if (S.enemies.length >= 8) return;
+  const def = S.monsters.length ? S.monsters[0].name : 'Goblin';
+  S.enemies.push({ name: def, count: 1, ai: 'attackNearest' });
+  renderEnemies();
+}
+
+function removeEnemy(i) {
+  if (S.enemies.length <= 1) return;
+  S.enemies.splice(i, 1);
+  renderEnemies();
+}
+
+// ── Trial selector ────────────────────────────────────────
+function setTrials(n) {
+  S.trials = n;
+  document.querySelectorAll('.trial-btn').forEach(b => {
+    b.classList.toggle('active', +b.textContent === n);
+  });
+}
+
+// ── Run Simulation ────────────────────────────────────────
+async function runSim() {
+  if (!S.connected) return;
+  showErr('');
+
+  const body = {
+    party:   S.party.map(r  => ({ cls: r.cls,  aiProfile: r.ai })),
+    enemies: S.enemies.map(r => ({ name: r.name, count: r.count, aiProfile: r.ai })),
+    trials:  S.trials,
+  };
+
+  setRunning(true);
+  try {
+    const result = await api('/api/simulate', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(body),
+    });
+    showResults(result);
+  } catch (e) {
+    showErr(e.message);
+  } finally {
+    setRunning(false);
+  }
+}
+
+function setRunning(on) {
+  const btn = document.getElementById('run-btn');
+  btn.disabled = on;
+  btn.innerHTML = on
+    ? '<span class="spinner"></span>Running…'
+    : '▶  Run Simulation';
+}
+
+// ── Results ───────────────────────────────────────────────
+function showResults(r) {
+  document.getElementById('results').style.display = '';
+
+  document.getElementById('summary-text').textContent = r.summary;
+
+  const pw = Math.round(r.partyWinRate * 100);
+  const dw = Math.round(r.drawRate     * 100);
+  const ew = Math.round(r.enemyWinRate * 100);
+
+  document.getElementById('party-pct').textContent = `Party ${pw}%`;
+  document.getElementById('draw-pct').textContent  = `Draw ${dw}%`;
+  document.getElementById('enemy-pct').textContent = `Enemies ${ew}%`;
+  document.getElementById('bar-party').style.width = pw + '%';
+  document.getElementById('bar-draw').style.width  = dw + '%';
+  document.getElementById('bar-enemy').style.width = ew + '%';
+
+  document.getElementById('stat-avg').textContent  = r.avgRounds.toFixed(1);
+  document.getElementById('stat-min').textContent  = r.minRounds;
+  document.getElementById('stat-max').textContent  = r.maxRounds;
+  document.getElementById('stat-runs').textContent = r.runs;
+
+  const tbody = document.getElementById('ctable-body');
+  tbody.innerHTML = (r.combatantStats || []).map(c => {
+    const side   = c.side === 'party' ? 'party' : 'enemy';
+    const srvPct = Math.round((c.survivalRate || 0) * 100);
+    const fillCls = srvPct >= 70 ? 'high' : srvPct >= 35 ? 'mid' : 'low';
+    const dmgDealt = typeof c.avgDamageDealt  === 'number' ? c.avgDamageDealt.toFixed(1)  : '—';
+    const hpLeft   = typeof c.avgHpRemaining  === 'number' ? c.avgHpRemaining.toFixed(1)  : '—';
+    return `<tr>
+      <td>${esc(c.name)}</td>
+      <td><span class="badge ${side}">${side}</span></td>
+      <td>
+        <div class="badge-bar">
+          <div class="fill ${fillCls}" style="width:${srvPct}px; max-width:80px;"></div>
+          <span style="font-size:11px;color:var(--muted)">${srvPct}%</span>
+        </div>
+      </td>
+      <td>${dmgDealt}</td>
+      <td>${hpLeft}</td>
+    </tr>`;
+  }).join('');
+
+  // Scroll to results
+  document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function showErr(msg) {
+  const el = document.getElementById('err-banner');
+  if (!msg) { el.style.display = 'none'; return; }
+  el.style.display = '';
+  el.textContent = '⚠  ' + msg;
+}
+
+// ── Option helpers ────────────────────────────────────────
+function classOptions(selected) {
+  const opts = S.classes.length ? S.classes : [
+    'barbarian','bard','cleric','druid','fighter','monk',
+    'paladin','ranger','rogue','sorcerer','warlock','wizard'
+  ];
+  return opts.map(c =>
+    `<option value="${c}" ${c === selected ? 'selected' : ''}>${cap(c)}</option>`
+  ).join('');
+}
+
+function aiOptions(selected) {
+  return AI_OPTS.map(([v, l]) =>
+    `<option value="${v}" ${v === selected ? 'selected' : ''}>${l}</option>`
+  ).join('');
+}
+
+function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+function esc(s) {
+  return String(s ?? '')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>
