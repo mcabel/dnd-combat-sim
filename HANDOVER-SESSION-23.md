@@ -11,141 +11,143 @@
 - Username: mcabel
 
 ## Current State
-- **GitHub:** https://github.com/mcabel/dnd-combat-sim (commit `567587f`)
-- **Tests:** 1043 passing, 0 failed (16 suites — 1021 baseline + 22 new server tests)
+- **GitHub:** https://github.com/mcabel/dnd-combat-sim (commit `ec4029c`)
+- **Tests:** 1049 passing, 0 failed (16 suites — previous 1043 + 6 new server tests)
 - **Branch:** main (detached HEAD workflow — always push `HEAD:main`)
 
 ---
 
-## What Was Done in Session 22
+## What Was Done in Session 22 (continued)
 
-### Phase 8-A: Express API Server (`src/server.ts`) ✅ COMPLETE
+### Phase 8-D: Round Distribution Histogram ✅ COMPLETE
 
-Express HTTP server wrapping the simulation engine. Run with:
-```bash
-npx ts-node src/server.ts [--port 3000]
-```
-Opens UI at: `http://localhost:3000/simulator.html`
+**simulate.ts:**
+- Added `roundDistribution: Record<number, number>` to `SimulationResult` interface
+- `roundDist` tallied in the run loop: `roundDist[result.rounds] = (roundDist[result.rounds] ?? 0) + 1`
+- Returned as `roundDistribution: roundDist` in result object
 
-**Routes:**
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/health` | Liveness check — `{ status: 'ok', timestamp }` |
-| GET | `/api/classes` | All 12 PC classes sorted alphabetically |
-| GET | `/api/monsters` | All monsters; filterable by `?maxCr=N` |
-| GET | `/api/presets` | Named presets: `{ id, name, description }` |
-| POST | `/api/simulate` | Custom encounter → `ApiSimResult` |
-| POST | `/api/simulate/preset` | Preset by ID → `ApiSimResult` |
+**server.ts:**
+- `roundDistribution` added to `ApiSimResult` interface
+- Passed through in both `POST /api/simulate` and `POST /api/simulate/preset` responses
 
-**`ApiSimResult` shape (JSON-serialisable):**
-```typescript
-{
-  runs, partyWinRate, enemyWinRate, drawRate,
-  avgRounds, minRounds, maxRounds,
-  combatantStats: CombatantStats[],  // now includes side: 'party'|'enemy'
-  summary: string   // e.g. "Contested — party wins 45%, enemies 55%."
-}
-```
+**simulator.html:**
+- `drawHistogram(dist)` function: renders a CSS bar chart with hover tooltips
+- Bars are proportional to count/maxCount across the 56px chart height
+- X-axis fills in missing round counts with zeros for a continuous display
+- Step logic for x-axis labels: every 1, 2, or 5 rounds depending on range
 
-**POST /api/simulate body:**
-```json
-{
-  "party":   [{ "cls": "fighter", "aiProfile": "smart" }],
-  "enemies": [{ "name": "Goblin", "count": 3, "aiProfile": "attackNearest" }],
-  "trials":  100
-}
-```
-- `trials` capped at 500
-- `count` capped at 20
-- Returns 400 on unknown class or monster name
-- CORS: `*` (handled inline in middleware, not via route — Express 5 path-to-regexp fix)
-- Monster names are **lowercase** in the bestiary (e.g. `"goblin"`, not `"Goblin"` — the API accepts both because `spawnMonster` does case-insensitive lookup)
+### Phase 8-E: Monster CR Filter ✅ COMPLETE
 
-**Key implementation notes:**
-- Bestiary and PC data loaded lazily on first request (singleton pattern)
-- `express` and `@types/express` added to dependencies
-- CORS preflight handled in middleware (`req.method === 'OPTIONS'` → 204), not via `app.options('*')` which breaks Express 5's path-to-regexp
+**simulator.html:**
+- Max CR `<select>` in the Enemies card section header (right-aligned)
+- Options: All / CR 0 / 1/8 / 1/4 / 1/2 / 1 / 2 / 5 / 10
+- `setCrFilter(val)` fetches `/api/monsters?maxCr=${val}` and repopulates `<datalist>`
+- Connection status label updates to show active filter and monster count
 
-### simulate.ts change: `CombatantStats.side` ✅
-Added `side: 'party' | 'enemy'` field derived from `origParty` ID set.
-- Backward-compatible — no existing tests reference `side`
-- Used by simulator UI to color-code combatant table rows
+### Phase 8-F: Export HTML Report ✅ COMPLETE
 
-### Phase 8-B: Simulator UI (`docs/simulator.html`) ✅ COMPLETE
+**server.ts:**
+- `POST /api/simulate/report` route added
+- Runs the same encounter as `/api/simulate` but calls `generateHTMLReport(result, { title, partyIds })`
+- Title auto-built: `"fighter cleric vs 3x Goblin"` from request body
+- Returns `{ html: string }` — the full standalone report HTML
+- Same validation (400 on bad class/monster, 400 on empty party/enemies)
 
-Standalone HTML/CSS/JS frontend matching the existing dark/gold D&D aesthetic.
+**simulator.html:**
+- "Export Report" button in results card header (right-aligned, ghost style)
+- `exportReport()`: POSTs current party+enemies config to `/api/simulate/report`
+- Opens returned HTML in a new tab via `window.open()` + `win.document.write(html)`
+- Button disabled and shows "Exporting…" while in flight
 
-**Features:**
-- Server URL configurator with connection status dot
-- **Presets grid** — click any preset to run it immediately at current trial count
-- **Party builder** — class select + AI profile per PC, add/remove rows (max 8)
-- **Enemy builder** — text input with `<datalist>` autocomplete from API, count, AI profile (max 8 rows, 20 per enemy)
-- **Trial selector** — button group: 20 / 100 / 200 / 500
-- **Run button** — disabled until connected
-- **Results panel:**
-  - Summary sentence (e.g. "Enemies dominate — party wins only 5% of fights.")
-  - Win-rate bar (green party | grey draw | red enemy)
-  - Stat boxes: Avg Rounds, Min Rounds, Max Rounds, Runs
-  - Per-combatant table: Name, Side badge, Survival % bar, Avg Dmg Dealt, Avg HP Left
+### Test Fixtures Fixed
+- `html_report.test.ts`:
+  - `makeStats()` now accepts `side: 'party'|'enemy'` param (default 'party') — fixes TS2741
+  - `makeResult()` now includes `roundDistribution: { 2:10, 3:25, 4:30, 5:20, 6:10, 7:5 }` — fixes TS2322
 
-### Phase 8-C: Server Tests (`src/test/server.test.ts`) ✅ COMPLETE
-22 tests, all passing. Covers:
-- health, classes, monsters (with maxCr filter + sort order), presets
-- simulate: result shape, win-rate sum, side field, trial cap, validation errors
-- simulate/preset: valid, missing id, unknown id
-- CORS header presence
+### New Tests (server.test.ts, 6 added → 28 total)
+- `roundDistribution` is present, keys numeric, values positive
+- `roundDistribution` counts sum exactly to trial count
+- `simulate/preset` also returns `roundDistribution`
+- `simulate/report` returns `{ html }` string starting with `<!DOCTYPE html>`
+- `simulate/report` 400 on empty party
+- `simulate/report` 400 on unknown monster
 
 ---
 
-## NOT YET DONE — Next Session Options
+## NOT YET DONE — Next Session Priority
 
-### Phase 8 Polish (RECOMMENDED NEXT)
-The UI works end-to-end. Possible improvements:
+### Phase 8 — Remaining Polish
 
-**8-D: Results improvement — round distribution histogram**
-- Add a bar chart showing how often each round count occurred across trials
-- Data is available in `runResults` but not currently surfaced by the API
-- Requires adding a `roundDistribution: Record<number, number>` to `ApiSimResult`
-- Server change: tally `result.totalRounds` per run → histogram object
+**8-G: Encounter difficulty label (RECOMMENDED NEXT)**
+The server currently returns a plain `summary` string. A richer difficulty signal would be useful:
+- Map partyWinRate to a D&D difficulty label: Trivial / Easy / Medium / Hard / Deadly / TPK
+- Add `difficulty: string` field to `ApiSimResult`
+- Display as a coloured badge next to the summary text in the UI
+- Thresholds (suggested, tunable): Trivial ≥ 90% / Easy ≥ 70% / Medium ≥ 45% / Hard ≥ 25% / Deadly ≥ 10% / TPK < 10%
 
-**8-E: Monster CR filter in UI**
-- The UI's enemy datalist has all 450 monsters; a CR filter dropdown (CR 0 / 1/4 / 1/2 / 1 / 2 / Any) would narrow it to relevant monsters
-- Pure frontend change — use `?maxCr=` param to reload datalist on filter change
+**8-H: Party-level resource depletion tracking (FUTURE / COMPLEX)**
+The current sim resets HP and spell slots between runs. A "day simulation" mode
+would chain multiple encounters per adventuring day, tracking cumulative resource drain.
+This touches the trial system architecture described in earlier sessions.
+Flag for Sonnet if tackling this — it's a larger design change.
 
-**8-F: Export results to HTML report**
-- Add "Export Report" button that calls `POST /api/simulate` and opens the existing `generateHtmlReport()` output in a new tab
-- Requires a new server route: `POST /api/simulate/report` → returns HTML string
-
-### ST-5: Damage Redirect (DEFERRED — user will provide research)
-PHB p.198 damage redirect between rider and mount. Not yet researched; skip until user confirms the rule text and expected behaviour.
+### ST-5: Damage Redirect (DEFERRED)
+User will provide PHB rule text. Do not implement until confirmed.
 
 ### Phase 8.2: Multi-level PCs (FUTURE)
 When user provides lv2–lv5 stat block JSON files.
 
 ---
 
-## Key Architecture Notes (Session 22)
+## Key Architecture Notes (Session 22 continued)
 
-### New files:
-- `src/server.ts` — Express API server (exportable `app` for testing)
-- `docs/simulator.html` — simulation UI
-- `src/test/server.test.ts` — 22 API tests
+### New/modified files this sub-session:
+- `src/scenarios/simulate.ts` — `roundDistribution` in `SimulationResult`
+- `src/server.ts` — `roundDistribution` in `ApiSimResult`; new `POST /api/simulate/report` route
+- `docs/simulator.html` — histogram (8-D), CR filter (8-E), export (8-F)
+- `src/test/server.test.ts` — 6 new tests (28 total)
+- `src/test/html_report.test.ts` — fixture fixes for `side` and `roundDistribution`
 
-### Modified:
-- `src/scenarios/simulate.ts` — `CombatantStats.side` added
-- `package.json` / `package-lock.json` — express + @types/express added
+### `SimulationResult` shape (current):
+```typescript
+{
+  runs, partyWinRate, enemyWinRate, drawRate,
+  avgRounds, minRounds, maxRounds,
+  combatantStats: CombatantStats[],   // includes side: 'party'|'enemy'
+  roundDistribution: Record<number, number>,
+  runResults: RunResult[],
+}
+```
 
-### Express 5 gotcha:
-`app.options('*', ...)` throws `PathError` (path-to-regexp v8 change).
-Fix: handle OPTIONS inside the CORS `app.use()` middleware instead.
+### `ApiSimResult` shape (current):
+```typescript
+{
+  runs, partyWinRate, enemyWinRate, drawRate,
+  avgRounds, minRounds, maxRounds,
+  combatantStats: CombatantStats[],
+  roundDistribution: Record<number, number>,
+  summary: string,
+}
+```
+
+### Server routes (complete list):
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/health` | Liveness |
+| GET | `/api/classes` | 12 PC classes |
+| GET | `/api/monsters[?maxCr=N]` | Monsters, filterable |
+| GET | `/api/presets` | Named presets |
+| POST | `/api/simulate` | Custom → ApiSimResult |
+| POST | `/api/simulate/preset` | Preset by id → ApiSimResult |
+| POST | `/api/simulate/report` | Custom → `{ html: string }` |
 
 ---
 
-## Test Baseline (1043 total, 0 failed)
+## Test Baseline (1049 total, 0 failed)
 | Suite | Count |
 |-------|-------|
 | ai.test.ts | 26 |
-| combat.test.ts | ~50* |
+| combat.test.ts | ~48–50* |
 | concentration_ai.test.ts | 33 |
 | death_saves.test.ts | 57 |
 | engine.test.ts | 71 |
@@ -158,23 +160,11 @@ Fix: handle OPTIONS inside the CORS `app.use()` middleware instead.
 | phase4.test.ts | 54 |
 | resources.test.ts | 72 |
 | scenario.test.ts | 94 |
-| server.test.ts | 22 |
+| server.test.ts | 28 |
 | summons.test.ts | 51 |
-| **Total** | **~1043** |
+| **Total** | **~1049** |
 
-*combat.test.ts: probabilistic tests; always 0 failed.
-
----
-
-## Key Files
-- `SPECIAL_INSTRUCTIONS.md` — design rules, architecture (READ FIRST)
-- `task.md` — phase status
-- `src/server.ts` — HTTP API server (new)
-- `docs/simulator.html` — simulation frontend (new)
-- `src/test/server.test.ts` — 22 server tests (new)
-- `src/scenarios/simulate.ts` — CombatantStats.side added
-- `src/types/core.ts` — Combatant interface
-- `src/engine/combat.ts` — combat resolution
+*combat.test.ts: probabilistic conditional tests; always 0 failed.
 
 ---
 
@@ -191,17 +181,17 @@ done
 ```bash
 export TS_NODE_COMPILER_OPTIONS='{"lib":["ES2020","DOM"],"types":["node"]}'
 npx ts-node src/server.ts
-# Open http://localhost:3000/simulator.html
+# Open: http://localhost:3000/simulator.html
 ```
 
 ## Git Workflow
 ```bash
 git add -A
 git commit -m "Session 23: <description>"
-git push origin HEAD:main
+git push https://mcabel:<PAT>@github.com/mcabel/dnd-combat-sim.git HEAD:main
 ```
 
 ## Notes for Session 23
-- **Most impactful next step:** Phase 8-D (round distribution histogram) or 8-E (CR filter in UI) — both small, contained changes.
-- ST-5 is blocked on user providing the PHB rule text — do not implement until confirmed.
-- All 1043 tests passing; system stable.
+- **Most impactful next step:** 8-G (difficulty label) — small, contained, high UX value.
+- ST-5 blocked on user research. Do not guess at the rule.
+- All 1049 tests passing; system is stable.
