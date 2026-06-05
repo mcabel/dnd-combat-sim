@@ -6,7 +6,7 @@
 
 import { Combatant, Action, Battlefield, PlannedAction } from '../types/core';
 import { canReach, livingEnemiesOf, adjacentEnemyCount, distanceFt } from '../engine/movement';
-import { expectedDamage, isBloodied, unarmedStrikeAction, hasAmmo, shouldGrapple, rollGrappleContest, rollShoveContest } from '../engine/utils';
+import { expectedDamage, isBloodied, unarmedStrikeAction, hasAmmo, shouldGrapple, rollGrappleContest, rollShoveContest, makeImprovisedUnarmed, makeImprovisedWeapon } from '../engine/utils';
 
 // ---- Best single-target attack for a given target -----------
 
@@ -267,11 +267,21 @@ export function selectAction(
     }
   }
 
-  // --- 6. Unarmed strike — if adjacent and no stat-block action worked (PHB p.195) ---
-  // Every creature is proficient with unarmed strikes as a last resort.
+  // --- 6. Improvised / unarmed fallback — if adjacent and no stat-block action worked ---
+  // PHB p.195: unarmed strike (1 + STR mod). PHB p.148: improvised weapon (1d4 + STR mod, no prof).
+  // Creatures with hands/tentacles prefer improvised weapon for slightly more damage.
   const adjacent = distanceFt(self.pos, target.pos) <= 5;
   if (adjacent) {
-    const unarmed = unarmedStrikeAction(self);
+    if (self.hasHands) {
+      const improv = makeImprovisedWeapon(self);
+      return {
+        type: 'attack',
+        action: improv,
+        targetId: target.id,
+        description: `${self.name} attacks ${target.name} with an improvised weapon`,
+      };
+    }
+    const unarmed = makeImprovisedUnarmed(self);
     return {
       type: 'attack',
       action: unarmed,

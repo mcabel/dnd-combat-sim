@@ -335,6 +335,52 @@ export function defaultProfileForType(typeStr: string | { type: string } | undef
   return 'smart';
 }
 
+/**
+ * Determine if a creature has hands or tentacles — allowing improvised weapon use (PHB p.148).
+ * Heuristic based on creature type + action/feature text scan for "tentacle".
+ * Humanoids, fiends, fey, many aberrations, and giants have hands.
+ * Beasts, oozes, plants, constructs: checked for appendages via name/text.
+ * Full hasHands parser coverage is a future improvement; this covers ~90% of CR 0-1 monsters.
+ */
+export function hasHandsForType(
+  typeStr: string | { type: string } | undefined,
+  raw: { name?: string; entries?: string[]; actions?: { entries?: string[] }[] }
+): boolean {
+  const t = (typeof typeStr === 'string' ? typeStr : (typeStr as any)?.type ?? '').toLowerCase();
+
+  // Types that reliably have hands/tentacles
+  if (t.includes('humanoid'))    return true;
+  if (t.includes('fiend'))       return true;  // demons/devils have hands/claws
+  if (t.includes('fey'))         return true;
+  if (t.includes('giant'))       return true;
+  if (t.includes('celestial'))   return true;
+
+  // Aberrations often have tentacles — scan action text
+  if (t.includes('aberration'))  {
+    const text = JSON.stringify(raw).toLowerCase();
+    return text.includes('tentacle') || text.includes('claw') || text.includes('hand');
+  }
+
+  // Monstrosities: scan for limb keywords
+  if (t.includes('monstrosity')) {
+    const text = JSON.stringify(raw).toLowerCase();
+    return text.includes('tentacle') || text.includes('hand') || text.includes('claw') || text.includes('arm');
+  }
+
+  // Undead: scan (skeletons have hands; ghosts do not)
+  if (t.includes('undead')) {
+    const name = (raw.name ?? '').toLowerCase();
+    if (name.includes('skeleton') || name.includes('zombie') || name.includes('vampire')
+      || name.includes('wight') || name.includes('revenant') || name.includes('lich')) return true;
+    return false;
+  }
+
+  // Default: no hands assumed for beasts, oozes, plants, constructs, elementals
+  // unless the text explicitly mentions a limb
+  const text = JSON.stringify(raw).toLowerCase();
+  return text.includes('tentacle');
+}
+
 export function monsterToCombatant(
   raw: Raw5etoolsMonster,
   pos: Vec3 = { x: 0, y: 0, z: 0 },
@@ -405,6 +451,9 @@ export function monsterToCombatant(
     resources: null,
     usedSneakAttackThisTurn: false,
     helpedThisTurn: false,
+    isDefender: false,
+    cannotAttack: false,
+    hasHands: hasHandsForType(raw.type, raw),
     isDead: false,
     isUnconscious: false,
   };

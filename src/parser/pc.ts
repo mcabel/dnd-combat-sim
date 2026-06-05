@@ -356,6 +356,9 @@ export function pcToCombatant(
     resources: buildResources(raw),
     usedSneakAttackThisTurn: false,
     helpedThisTurn: false,
+    isDefender: false,
+    cannotAttack: false,
+    hasHands: false,
     isDead:        false,
     isUnconscious: false,
   };

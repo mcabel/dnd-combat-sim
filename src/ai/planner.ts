@@ -17,6 +17,7 @@ import {
   canReach, bestAdjacentPos, bestRangedPosition,
   adjacentEnemyCount, livingEnemiesOf, livingAlliesOf
 } from '../engine/movement';
+import { makeImprovisedUnarmed, makeImprovisedWeapon } from '../engine/utils';
 
 // ---- Empty plan helper --------------------------------------
 
@@ -208,6 +209,32 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
     return plan;
   }
 
+  // === DEFENDER MODE ===
+  // Defender creatures may only Dash, Dodge, or Hide. Never attack.
+  // Controlled mounts follow the same restriction via the mount branch in combat.ts,
+  // but explicit isDefender covers non-mount creatures (pack animals, non-combatants, etc.)
+  if (self.isDefender) {
+    plan.action = {
+      type: 'dodge',
+      action: null,
+      targetId: null,
+      description: `${self.name} takes Dodge action (defender mode)`,
+    };
+    return plan;
+  }
+
+  // === CANNOT ATTACK GATE ===
+  // Statblock explicitly prohibits attacking. Creature still takes Dodge as best option.
+  if (self.cannotAttack) {
+    plan.action = {
+      type: 'dodge',
+      action: null,
+      targetId: null,
+      description: `${self.name} takes Dodge action (cannot attack)`,
+    };
+    return plan;
+  }
+
   // === SELF-PRESERVE CHECK (Smart only) ===
   if (self.aiProfile === 'smart') {
     const preserve = selfPreserveDecision(self, battlefield);
@@ -286,7 +313,32 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
   plan.targetId = target.id;
 
   // === SELECT ACTION ===
-  const chosenAction = selectAction(self, target, battlefield);
+  let chosenAction = selectAction(self, target, battlefield);
+
+  // === IMPROVISED ATTACK FALLBACK ===
+  // If the creature has no actions that apply (e.g. statblock with non-attack actions only),
+  // fall back to improvised weapon (hasHands → 1d4+STR, no prof) or unarmed (1+STR, uses prof).
+  // This ensures every non-defender, non-cannotAttack creature can always contribute.
+  if (!chosenAction) {
+    if (self.hasHands) {
+      const improv = makeImprovisedWeapon(self);
+      chosenAction = {
+        type: 'attack',
+        action: improv,
+        targetId: target.id,
+        description: `${self.name} attacks with an improvised weapon`,
+      };
+    } else {
+      const unarmed = makeImprovisedUnarmed(self);
+      chosenAction = {
+        type: 'attack',
+        action: unarmed,
+        targetId: target.id,
+        description: `${self.name} strikes with an unarmed attack`,
+      };
+    }
+  }
+
   plan.action = chosenAction;
 
   // === MOVEMENT ===

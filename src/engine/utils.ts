@@ -3,7 +3,7 @@
 // Core combat math: rolling, damage, conditions, initiative, budget
 // ============================================================
 
-import { Combatant, DiceExpression, Condition, ActionBudget, Battlefield } from '../types/core';
+import { Combatant, Action, DiceExpression, Condition, ActionBudget, Battlefield } from '../types/core';
 
 // ---- Dice rolling -------------------------------------------
 
@@ -421,7 +421,6 @@ export function improvisedMeleeAction(creature: Combatant): Action {
 }
 
 // Needed by unarmedStrikeAction — import Action type
-import { Action } from '../types/core';
 
 // ---- Concentration (PHB p.203) ------------------------------
 
@@ -721,4 +720,103 @@ export function shouldGrapple(
   if (target.flySpeed !== null) return true;
   if (target.speed > 35 && !target.conditions.has('grappled')) return true;
   return false;
+}
+
+// ---- Combat capability checks --------------------------------
+
+/**
+ * Returns true if a combatant has any means to deal damage this turn.
+ * Covers: regular attack/save actions, improvised unarmed (always available
+ * unless isDefender or cannotAttack), and improvised weapons (hasHands).
+ */
+export function canDealDamage(c: Combatant): boolean {
+  if (c.isDead || c.isUnconscious) return false;
+  if (c.cannotAttack) return false;
+  if (c.isDefender) return false;
+  // Any action with an attack roll or save DC → can deal damage
+  if (c.actions.some(a => a.attackType !== null || a.saveDC !== null)) return true;
+  // Fallback: improvised unarmed is always available to non-defender creatures
+  return true;
+}
+
+/**
+ * Returns true if ALL living members of a faction cannot deal damage.
+ * Used for auto-defeat: if a team has no way to attack, they lose.
+ */
+export function teamHasNoAttackCapability(
+  faction: string,
+  combatants: Map<string, Combatant>
+): boolean {
+  const living = [...combatants.values()].filter(
+    c => c.faction === faction && !c.isDead && !c.isUnconscious
+  );
+  if (living.length === 0) return true;
+  return living.every(c => !canDealDamage(c));
+}
+
+/**
+ * Build an improvised unarmed strike Action for any creature.
+ * PHB p.195: unarmed strikes deal 1 + STR modifier bludgeoning damage.
+ * This is the universal fallback — all non-defender, non-cannotAttack creatures.
+ */
+export function makeImprovisedUnarmed(c: Combatant): Action {
+  const strMod = abilityMod(c.str);
+  const prof = proficiencyBonus(c.cr);
+  return {
+    name: 'Unarmed Strike',
+    isMultiattack: false,
+    attackType: 'melee',
+    reach: 5,
+    range: null,
+    hitBonus: strMod + prof,
+    damage: { count: 0, sides: 0, bonus: 1 + strMod, average: 1 + strMod },
+    damageType: 'bludgeoning',
+    saveDC: null,
+    saveAbility: null,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    costType: 'action',
+    legendaryCost: 0,
+    description: `Unarmed strike (1 + STR mod = ${1 + strMod})`,
+  };
+}
+
+/**
+ * Build an improvised weapon Action for creatures with hands or tentacles.
+ * PHB p.148: improvised weapons deal 1d4 damage. No proficiency bonus to hit.
+ */
+export function makeImprovisedWeapon(c: Combatant): Action {
+  const strMod = abilityMod(c.str);
+  return {
+    name: 'Improvised Weapon',
+    isMultiattack: false,
+    attackType: 'melee',
+    reach: 5,
+    range: null,
+    hitBonus: strMod,             // no proficiency (PHB p.148)
+    damage: { count: 1, sides: 4, bonus: strMod, average: 2.5 + strMod },
+    damageType: 'bludgeoning',
+    saveDC: null,
+    saveAbility: null,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    costType: 'action',
+    legendaryCost: 0,
+    description: `Improvised weapon (1d4 + STR mod, no prof)`,
+  };
+}
+
+/**
+ * Returns proficiency bonus for a given CR (or PC level).
+ * PHB p.15 table.
+ */
+export function proficiencyBonus(cr: number | null): number {
+  if (cr === null) return 2; // default for PCs at low level
+  if (cr <= 4)  return 2;
+  if (cr <= 8)  return 3;
+  if (cr <= 12) return 4;
+  if (cr <= 16) return 5;
+  return 6;
 }

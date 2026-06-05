@@ -14,7 +14,8 @@ import {
   isBloodied, addCondition,
   rollConcentrationSave, rollDeathSave,
   applyDamageWithTempHP, hasPackTacticsAdvantage,
-  canSneakAttack, sneakAttackDice
+  canSneakAttack, sneakAttackDice,
+  teamHasNoAttackCapability, canDealDamage, makeImprovisedUnarmed, makeImprovisedWeapon
 } from './utils';
 import {
   chebyshev3D, distanceFt, canReach, estimateMoveCostFt,
@@ -79,6 +80,9 @@ export interface EngineState {
   log: CombatLog;
   // Per-turn flags (reset each turn)
   disengagedThisTurn: Set<string>;   // combatant IDs that used Disengage
+  // Per-round damage tracking (for 10-round no-damage auto-defeat rule)
+  damageThisRound: Map<string, number>;   // faction → total damage dealt this round
+  noDamageRounds: Map<string, number>;    // faction → consecutive rounds with 0 damage
 }
 
 function makeState(battlefield: Battlefield): EngineState {
@@ -86,6 +90,8 @@ function makeState(battlefield: Battlefield): EngineState {
     battlefield,
     log: { events: [], winner: null, rounds: 0 },
     disengagedThisTurn: new Set(),
+    damageThisRound: new Map(),
+    noDamageRounds: new Map(),
   };
 }
 
@@ -224,6 +230,11 @@ function resolveAttack(
     log(state, 'damage', attacker.id,
       `${attacker.name} deals ${dealt} ${action.damageType ?? ''} damage to ${target.name}${isCrit ? ' (CRIT)' : ''}`,
       target.id, dealt);
+    // Track faction damage for 10-round no-damage auto-defeat rule
+    if (dealt > 0) {
+      const prev = state.damageThisRound.get(attacker.faction) ?? 0;
+      state.damageThisRound.set(attacker.faction, prev + dealt);
+    }
     checkDeath(target, state);
   }
 }
@@ -729,6 +740,50 @@ export function runCombat(
         return state.log;
       }
     }
+
+    // ── End-of-round checks ─────────────────────────────────────
+
+    // 1. Auto-defeat: any living team with no attack capability loses immediately.
+    //    Checked after all combatants have taken their turn.
+    const factions = [...new Set(
+      [...battlefield.combatants.values()]
+        .filter(c => !c.isDead && !c.isUnconscious)
+        .map(c => c.faction)
+    )];
+    for (const faction of factions) {
+      if (teamHasNoAttackCapability(faction, battlefield.combatants)) {
+        const winner = faction === 'party' ? 'enemy' : 'party';
+        state.log.winner = winner;
+        state.log.rounds = round;
+        log(state, 'combat_end', 'engine',
+          `${faction} team has no means to attack — auto-defeated in round ${round}!`);
+        if (verbose) console.log(`\n⚔️  ${faction} has no attack capability — defeated!\n`);
+        return state.log;
+      }
+    }
+
+    // 2. No-damage tracking: update consecutive-round counters.
+    //    If any team hits 10 consecutive rounds of 0 damage dealt, they are defeated.
+    for (const faction of factions) {
+      const dmgThisRound = state.damageThisRound.get(faction) ?? 0;
+      if (dmgThisRound === 0) {
+        const prev = state.noDamageRounds.get(faction) ?? 0;
+        state.noDamageRounds.set(faction, prev + 1);
+        if (prev + 1 >= 10) {
+          const winner = faction === 'party' ? 'enemy' : 'party';
+          state.log.winner = winner;
+          state.log.rounds = round;
+          log(state, 'combat_end', 'engine',
+            `${faction} team dealt 0 damage for 10 consecutive rounds — auto-defeated!`);
+          if (verbose) console.log(`\n⚔️  ${faction} has dealt no damage for 10 rounds — defeated!\n`);
+          return state.log;
+        }
+      } else {
+        state.noDamageRounds.set(faction, 0);
+      }
+    }
+    // Reset per-round damage counters
+    state.damageThisRound.clear();
   }
 
   // Hit round cap

@@ -222,6 +222,22 @@ export interface Combatant {
   usedSneakAttackThisTurn: boolean;  // Rogue: once per turn only
   helpedThisTurn: boolean;     // Familiar/ally used Help action this turn; grants advantage to next attack
 
+  // Combat capability flags
+  //
+  // isDefender: creature is in "defender" mode — may only Dash, Dodge, or Hide.
+  //   Never attacks. Set via UI or creature config. Examples: pack animals, non-combatants.
+  //   If all living creatures on a team are defenders (or cannotAttack), team is auto-defeated.
+  isDefender: boolean;
+  //
+  // cannotAttack: statblock explicitly prohibits attacking (e.g. some familiars, pacifist NPCs).
+  //   Distinct from isDefender — cannot be overridden by the user.
+  cannotAttack: boolean;
+  //
+  // hasHands: creature has hands or tentacles → can use improvised weapon (1d4 + STR mod, no prof).
+  //   Creatures without hands still get unarmed strike (1 + STR mod) as fallback.
+  //   Auto-detected by parser; can be set manually.
+  hasHands: boolean;
+
   // Flags
   isDead: boolean;
   isUnconscious: boolean;
@@ -247,6 +263,10 @@ export interface Battlefield {
   // 4.12: Command hook — keyed by minion ID, value is profile to apply this turn
   // Set by a controller before the minion's turn. No action cost per RAW.
   pendingCommands?: Map<string, AIProfile>;
+  // No-damage tracking: consecutive rounds each team dealt 0 damage.
+  // Reset to 0 whenever a team deals ≥1 damage in a round.
+  // At 10 consecutive rounds → team is auto-defeated.
+  noDamageRounds?: Map<string, number>;   // keyed by faction
 }
 
 // ---- TurnPlan (output of AI) --------------------------------

@@ -5,10 +5,11 @@
 
 import {
   mountCreature, dismountCreature, riderMovementFt, spendMountMovement,
-  mountDeathRiderCheck, isControlledMount, syncMountInitiative, setupMount
+  mountDeathRiderCheck, isControlledMount, syncMountInitiative, setupMount,
+  grantIndependence, controlMount
 } from '../summons/mount';
 import { spawnSummon }               from '../summons/spawner';
-import { loadBestiaryJson }          from '../parser/fivetools';
+import { loadBestiaryJson, monsterToCombatant } from '../parser/fivetools';
 import { loadPCStatBlocks, spawnPC, RawPCEntry } from '../parser/pc';
 import { runCombat, makeFlatBattlefield }        from '../engine/combat';
 import { simulateDay, printDayReport }           from '../scenarios/multiencounter';
@@ -213,9 +214,74 @@ console.log('\n=== 5. Controlled mount skips action in engine ===\n');
 }
 
 // ============================================================
-// 6. setupMount convenience function
+// 5b. Combat: independent mount attacks
 // ============================================================
-console.log('\n=== 6. setupMount ===\n');
+console.log('\n=== 5b. Independent mount attacks ===\n');
+
+{
+  const wizard = pc('Wizard', 0);
+  const mount  = fly(0);
+  const larvaRaw = fullBestiaryMap.get('larva');
+  assert('Larva found', larvaRaw !== undefined);
+
+  if (larvaRaw) {
+    // 3 larvas at x:2,3,4 to ensure combat lasts multiple rounds
+    const larva1 = monsterToCombatant(larvaRaw, { x: 2, y: 0, z: 0 }, 'attackNearest');
+    const larva2 = monsterToCombatant(larvaRaw, { x: 3, y: 0, z: 0 }, 'attackNearest');
+    const larva3 = monsterToCombatant(larvaRaw, { x: 4, y: 0, z: 0 }, 'attackNearest');
+
+    // Mount the fly
+    mountCreature(wizard, mount);
+    mount.faction = 'party';
+
+    // Grant independence — mount should now act on its own and can attack
+    grantIndependence(mount);
+    assert('Mount is independent', mount.independentMount === true);
+
+    const all = [wizard, mount, larva1, larva2, larva3];
+    const bf = makeFlatBattlefield(10, 10, all);
+    // Mount goes FIRST so wizard can't kill all enemies before mount acts
+    bf.initiativeOrder = [mount.id, wizard.id, larva1.id, larva2.id, larva3.id];
+
+    const log = runCombat(bf, bf.initiativeOrder, { maxRounds: 15 });
+
+    // Mount (fly) SHOULD have attack or dash events (proves it planned a turn)
+    const flyTurns = log.events.filter(
+      e => (e.type === 'attack_hit' || e.type === 'attack_miss' || e.type === 'attack_crit'
+         || e.type === 'dash')
+        && e.actorId === mount.id
+    );
+    assert('Independent mount took turns', flyTurns.length > 0,
+      `fly turn events: ${flyTurns.length}`);
+
+    // Wizard should still have acted
+    const wizardActions = log.events.filter(
+      e => e.actorId === wizard.id && e.type !== 'move'
+    );
+    assert('Wizard still acted with independent mount', wizardActions.length > 0);
+  }
+}
+
+// ============================================================
+// 5c. Mount mode toggle (controlled ↔ independent)
+// ============================================================
+console.log('\n=== 5c. Mount mode toggle ===\n');
+
+{
+  const mount = fly(0);
+  mount.faction = 'party';
+
+  // Start: controlled (default)
+  assert('Mount starts controlled', mount.independentMount === false);
+
+  // Grant independence
+  grantIndependence(mount);
+  assert('Mount is now independent', mount.independentMount === true);
+
+  // Revert to controlled
+  controlMount(mount);
+  assert('Mount reverted to controlled', mount.independentMount === false);
+}
 
 {
   const wizard = pc('Wizard', 0);
