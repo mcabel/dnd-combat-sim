@@ -11,7 +11,7 @@ import {
 import {
   rollAttack, rollDamage, rollSave, applyDamage, applyHeal,
   resetBudget, spendMovement, attackHits, attackAdvantageState, resolveAttackAdvantage,
-  isBloodied, addCondition,
+  isBloodied, addCondition, removeCondition,
   rollConcentrationSave, rollDeathSave,
   applyDamageWithTempHP, hasPackTacticsAdvantage,
   canSneakAttack, sneakAttackDice,
@@ -26,7 +26,7 @@ import { planTurn, planLegendaryAction, shouldTakeOpportunityAttack } from '../a
 import { shouldSmite, applyDivineSmite } from '../ai/resources';
 import { isControlledMount, mountDeathRiderCheck, isIndependentMount } from '../summons/mount';
 import { getSummonEntry }                           from '../summons/registry';
-import { rollGrappleContest, rollShoveContest } from './utils';
+import { rollGrappleContest, rollShoveContest, canGrappleOrShoveTarget } from './utils';
 
 // ---- Combat log ---------------------------------------------
 
@@ -282,6 +282,22 @@ function checkDeath(target: Combatant, state: EngineState, attacker?: Combatant)
   } else {
     log(state, 'death', target.id, `${target.name} is slain!`, undefined, 0);
   }
+
+  // PHB p.195: grapple ends when either party falls unconscious or dies.
+  // Release any creature this target was grappling.
+  for (const c of state.battlefield.combatants.values()) {
+    if (c.grappledBy === target.id) {
+      removeCondition(c, 'grappled');
+      c.grappledBy = undefined;
+      log(state, 'condition_remove', target.id,
+        `${c.name} is released from ${target.name}'s grapple!`, c.id);
+    }
+  }
+  // Also release any grapple this target was in (in case it gets swept up later)
+  if (target.conditions.has('grappled')) {
+    removeCondition(target, 'grappled');
+    target.grappledBy = undefined;
+  }
 }
 
 // ---- Movement resolution ------------------------------------
@@ -399,10 +415,17 @@ function executePlannedAction(
     case 'grapple': {
       const target = plan.targetId ? bf.combatants.get(plan.targetId) : null;
       if (!target || target.isDead || target.isUnconscious) break;
+      // PHB p.195: can't grapple a target more than 1 size larger
+      if (!canGrappleOrShoveTarget(actor, target)) {
+        log(state, 'action', actor.id,
+          `${actor.name} can't grapple ${target.name} — target is too large!`, target.id);
+        break;
+      }
       log(state, 'action', actor.id, plan.description, plan.targetId ?? undefined);
       const success = rollGrappleContest(actor, target);
       if (success) {
         addCondition(target, 'grappled');
+        target.grappledBy = actor.id;
         log(state, 'condition_add', actor.id,
           `${actor.name} grapples ${target.name}! (speed 0)`, target.id);
       } else {
@@ -415,6 +438,12 @@ function executePlannedAction(
     case 'shove': {
       const target = plan.targetId ? bf.combatants.get(plan.targetId) : null;
       if (!target || target.isDead || target.isUnconscious) break;
+      // PHB p.195: can't shove a target more than 1 size larger
+      if (!canGrappleOrShoveTarget(actor, target)) {
+        log(state, 'action', actor.id,
+          `${actor.name} can't shove ${target.name} — target is too large!`, target.id);
+        break;
+      }
       log(state, 'action', actor.id, plan.description, plan.targetId ?? undefined);
       const success = rollShoveContest(actor, target);
       if (success) {
@@ -425,6 +454,35 @@ function executePlannedAction(
       } else {
         log(state, 'action', actor.id,
           `${actor.name}'s shove attempt on ${target.name} fails.`, target.id);
+      }
+      break;
+    }
+
+    case 'escapeGrapple': {
+      // PHB p.195: grappled creature uses its action to make a contested STR(Athletics)
+      // or DEX(Acrobatics) check vs the grappler's STR(Athletics).
+      // We store the grappler ID in plan.targetId.
+      if (!actor.conditions.has('grappled')) break; // condition already removed
+      const grappler = plan.targetId ? bf.combatants.get(plan.targetId) : null;
+      log(state, 'action', actor.id, plan.description);
+      // If grappler is gone/dead, escape automatically
+      if (!grappler || grappler.isDead || grappler.isUnconscious) {
+        removeCondition(actor, 'grappled');
+        actor.grappledBy = undefined;
+        log(state, 'condition_remove', actor.id,
+          `${actor.name} escapes the grapple — grappler is down!`);
+        break;
+      }
+      // Contested roll: escaper (attacker role) vs grappler (defender role)
+      const escaped = rollGrappleContest(actor, grappler);
+      if (escaped) {
+        removeCondition(actor, 'grappled');
+        actor.grappledBy = undefined;
+        log(state, 'condition_remove', actor.id,
+          `${actor.name} breaks free from ${grappler.name}'s grapple!`);
+      } else {
+        log(state, 'action', actor.id,
+          `${actor.name} fails to escape ${grappler.name}'s grapple.`);
       }
       break;
     }

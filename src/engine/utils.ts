@@ -3,7 +3,7 @@
 // Core combat math: rolling, damage, conditions, initiative, budget
 // ============================================================
 
-import { Combatant, Action, DiceExpression, Condition, ActionBudget, Battlefield } from '../types/core';
+import { Combatant, Action, DiceExpression, Condition, ActionBudget, Battlefield, CreatureSize } from '../types/core';
 
 // ---- Dice rolling -------------------------------------------
 
@@ -676,6 +676,29 @@ export function hasAmmo(c: Combatant, weaponName: string): boolean {
   return !pool || pool.remaining > 0;
 }
 
+// ---- Size helpers (PHB p.6 / p.195) -------------------------
+
+const SIZE_RANK: Record<CreatureSize, number> = {
+  Tiny: 0, Small: 1, Medium: 2, Large: 3, Huge: 4, Gargantuan: 5,
+};
+
+/**
+ * Returns the numeric rank of a creature size (Tiny=0 … Gargantuan=5).
+ * Undefined defaults to 2 (Medium) — safe for all legacy fixtures.
+ */
+export function sizeRank(size?: CreatureSize): number {
+  return size !== undefined ? SIZE_RANK[size] : 2; // default Medium
+}
+
+/**
+ * PHB p.195: A creature can only grapple or shove a target that is
+ * no more than one size larger than itself.
+ * Returns true if the attacker is allowed to attempt the action.
+ */
+export function canGrappleOrShoveTarget(attacker: Combatant, target: Combatant): boolean {
+  return sizeRank(attacker.size) + 1 >= sizeRank(target.size);
+}
+
 // ---- Grapple / Shove (PHB p.195) ---------------------------
 
 /**
@@ -713,6 +736,8 @@ export function shouldGrapple(
   alliesAdjacentToTarget: number
 ): boolean {
   if (attacker.aiProfile !== 'smart') return false;
+  // PHB p.195: can't grapple a target more than 1 size larger
+  if (!canGrappleOrShoveTarget(attacker, target)) return false;
   // Only worth it if attacker has high STR and target is mobile/spellcaster
   const strMod = abilityMod(attacker.str);
   if (strMod < 2) return false; // low STR = low chance of success

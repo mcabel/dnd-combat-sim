@@ -321,8 +321,101 @@ console.log('\n=== 5. Pack Tactics ===\n');
 }
 
 // ============================================================
-// Summary
+// SH-1: Grapple / Shove / Size / Escape tests
 // ============================================================
+import { sizeRank, canGrappleOrShoveTarget, rollGrappleContest } from '../engine/utils';
+import { CreatureSize } from '../types/core';
+import { planTurn } from '../ai/planner';
+
+{
+  console.log('\n── SH-1: Size rank ──');
+  const sizes: CreatureSize[] = ['Tiny','Small','Medium','Large','Huge','Gargantuan'];
+  const ranks = sizes.map(sizeRank);
+  assert('Size rank ascending', JSON.stringify(ranks) === '[0,1,2,3,4,5]');
+  assert('undefined → 2 (Medium)', sizeRank(undefined) === 2);
+}
+
+{
+  console.log('\n── SH-1: canGrappleOrShoveTarget ──');
+  const medium = makeC({ size: 'Medium' });
+  const large  = makeC({ size: 'Large'  });
+  const huge   = makeC({ size: 'Huge'   });
+  const small  = makeC({ size: 'Small'  });
+
+  assert('Medium can grapple Medium',  canGrappleOrShoveTarget(medium, medium));
+  assert('Medium can grapple Large',   canGrappleOrShoveTarget(medium, large));
+  assert('Medium cannot grapple Huge', !canGrappleOrShoveTarget(medium, huge));
+  assert('Small can grapple Medium',   canGrappleOrShoveTarget(small, medium));
+  assert('Small cannot grapple Large', !canGrappleOrShoveTarget(small, large));
+  assert('Huge can grapple Medium',    canGrappleOrShoveTarget(huge, medium));
+}
+
+{
+  console.log('\n── SH-1: Grapple condition applied ──');
+  // Deterministic: override rollGrappleContest by giving attacker overwhelming STR
+  const attacker = makeC({ str: 30, dex: 10, id: 'att', faction: 'party', aiProfile: 'smart' });
+  const defender = makeC({ str: 8,  dex: 8,  id: 'def', faction: 'enemy'  });
+  // rollGrappleContest is probabilistic — run 20 times, expect at least 15 successes
+  let wins = 0;
+  for (let i = 0; i < 20; i++) {
+    defender.conditions = new Set(); // reset each time
+    if (rollGrappleContest(attacker, defender)) wins++;
+  }
+  assert('STR 30 vs STR 8: grapple wins >14/20 runs', wins > 14, `won ${wins}/20`);
+}
+
+{
+  console.log('\n── SH-1: Grapple escape planning (smart AI) ──');
+  const grapplerC = makeC({ id: 'grp', faction: 'enemy',  pos: {x:0,y:0,z:0}, aiProfile: 'smart' });
+  const victim    = makeC({ id: 'vic', faction: 'party', pos: {x:1,y:0,z:0}, aiProfile: 'smart',
+    str: 10, dex: 10 });
+  victim.conditions.add('grappled');
+  victim.grappledBy = grapplerC.id;
+
+  // makeBF helper already exists in this file
+  const bf = makeBF([victim, grapplerC]);
+  victim.budget = { movementFt: 0, actionUsed: false, bonusActionUsed: false, reactionUsed: false, freeObjectUsed: false };
+
+  const plan = planTurn(victim, bf as Battlefield);
+  assert('Grappled smart AI plans escapeGrapple', plan.action?.type === 'escapeGrapple',
+    `got ${plan.action?.type}`);
+  assert('escapeGrapple targetId = grappler id', plan.action?.targetId === grapplerC.id);
+}
+
+{
+  console.log('\n── SH-1: Grapple escape planning (nearest AI) ──');
+  const grapplerN = makeC({ id: 'grp2', faction: 'enemy',  pos: {x:5,y:5,z:0}, aiProfile: 'attackNearest' });
+  const victimN   = makeC({ id: 'vic2', faction: 'party', pos: {x:0,y:0,z:0}, aiProfile: 'attackNearest',
+    str: 10, dex: 10, speed: 30 });
+  victimN.conditions.add('grappled');
+  victimN.grappledBy = grapplerN.id;
+
+  // Enemy is far away, speed=0 due to grapple → nearest AI should escape
+  const bf2 = makeBF([victimN, grapplerN]);
+  victimN.budget = { movementFt: 0, actionUsed: false, bonusActionUsed: false, reactionUsed: false, freeObjectUsed: false };
+
+  const plan2 = planTurn(victimN, bf2 as Battlefield);
+  assert('Grappled nearest AI escapes when enemy out of reach', plan2.action?.type === 'escapeGrapple',
+    `got ${plan2.action?.type}`);
+}
+
+{
+  console.log('\n── SH-1: Auto-release when grappler already gone ──');
+  // grappledBy ID doesn't exist in the battlefield (grappler already dead/removed)
+  const victimG = makeC({ id: 'vic3', faction: 'party', pos: {x:0,y:0,z:0}, aiProfile: 'smart',
+    str: 10, dex: 10 });
+  victimG.conditions.add('grappled');
+  victimG.grappledBy = 'gone-id'; // ID not present in battlefield
+
+  const bf3 = makeBF([victimG]);
+  victimG.budget = { movementFt: 30, actionUsed: false, bonusActionUsed: false, reactionUsed: false, freeObjectUsed: false };
+
+  const plan3 = planTurn(victimG, bf3 as Battlefield);
+  // Should still plan escapeGrapple (combat.ts will auto-clear it)
+  assert('Grappled with gone grappler → escapeGrapple planned', plan3.action?.type === 'escapeGrapple');
+}
+
+
 console.log('\n' + '─'.repeat(45));
 console.log(`Results: ${passed} passed, ${failed} failed`);
 if (failed > 0) { console.error('\nFailed tests above ↑'); process.exit(1); }

@@ -235,6 +235,40 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
     return plan;
   }
 
+  // === GRAPPLE ESCAPE ===
+  // PHB p.195: a grappled creature (speed = 0) may use its action to attempt escape.
+  // Smart AI always escapes; nearest/weakest AI escape only when no melee target is reachable.
+  if (self.conditions.has('grappled') && self.grappledBy) {
+    const grappler = battlefield.combatants.get(self.grappledBy);
+    const shouldEscape = (() => {
+      if (!grappler || grappler.isDead || grappler.isUnconscious) return true; // auto-free
+      if (self.aiProfile === 'smart') return true;
+      // For other profiles: escape if can't reach any enemy (speed is effectively 0)
+      const enemies = [...battlefield.combatants.values()].filter(
+        c => c.faction !== self.faction && !c.isDead && !c.isUnconscious
+      );
+      const inMelee = enemies.some(e => {
+        const dx = Math.abs(e.pos.x - self.pos.x);
+        const dy = Math.abs(e.pos.y - self.pos.y);
+        const dz = Math.abs(e.pos.z - self.pos.z);
+        const dist = Math.max(dx, dy, dz) * 5; // Chebyshev 3D → feet
+        const reach = (self.actions[0]?.range?.normal ?? 5);
+        return dist <= reach;
+      });
+      return !inMelee;
+    })();
+
+    if (shouldEscape) {
+      plan.action = {
+        type: 'escapeGrapple',
+        action: null,
+        targetId: self.grappledBy,
+        description: `${self.name} attempts to escape ${grappler?.name ?? 'the grapple'}!`,
+      };
+      return plan;
+    }
+  }
+
   // === SELF-PRESERVE CHECK (Smart only) ===
   if (self.aiProfile === 'smart') {
     const preserve = selfPreserveDecision(self, battlefield);

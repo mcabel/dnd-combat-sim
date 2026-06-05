@@ -21,6 +21,10 @@ export type Condition =
   | 'petrified' | 'poisoned' | 'prone' | 'restrained'
   | 'stunned' | 'unconscious';
 
+// PHB p.6 / MM p.6 — creature size categories
+// Used for grapple/shove size enforcement (PHB p.195)
+export type CreatureSize = 'Tiny' | 'Small' | 'Medium' | 'Large' | 'Huge' | 'Gargantuan';
+
 export type AbilityScore = 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha';
 
 export type AttackType = 'melee' | 'ranged' | 'spell' | 'save' | 'special';
@@ -238,6 +242,14 @@ export interface Combatant {
   //   Auto-detected by parser; can be set manually.
   hasHands: boolean;
 
+  // Creature size (PHB p.6). Optional — defaults to 'Medium' in all size-check helpers.
+  // Used for grapple/shove enforcement (can't target a creature > 1 size larger, PHB p.195).
+  size?: CreatureSize;
+
+  // If this creature has the 'grappled' condition, grappledBy holds the ID of the grappler.
+  // Cleared when 'grappled' is removed. Used by AI to plan escapeGrapple.
+  grappledBy?: string;
+
   // Flags
   isDead: boolean;
   isUnconscious: boolean;
@@ -284,7 +296,7 @@ export interface TurnPlan {
 export interface PlannedAction {
   type:
     | 'attack' | 'cast' | 'dash' | 'disengage' | 'dodge'
-    | 'help' | 'hide' | 'ready' | 'shove' | 'grapple'
+    | 'help' | 'hide' | 'ready' | 'shove' | 'grapple' | 'escapeGrapple'
     | 'secondWind' | 'rage' | 'layOnHands' | 'bardicInspiration'
     | 'legendary';
   action: Action | null;

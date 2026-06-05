@@ -6,7 +6,7 @@
 
 import { Combatant, Action, Battlefield, PlannedAction } from '../types/core';
 import { canReach, livingEnemiesOf, adjacentEnemyCount, distanceFt } from '../engine/movement';
-import { expectedDamage, isBloodied, unarmedStrikeAction, hasAmmo, shouldGrapple, rollGrappleContest, rollShoveContest, makeImprovisedUnarmed, makeImprovisedWeapon } from '../engine/utils';
+import { expectedDamage, isBloodied, unarmedStrikeAction, hasAmmo, shouldGrapple, rollGrappleContest, rollShoveContest, makeImprovisedUnarmed, makeImprovisedWeapon, canGrappleOrShoveTarget } from '../engine/utils';
 
 // ---- Best single-target attack for a given target -----------
 
@@ -175,7 +175,7 @@ export function selectAction(
   // --- 1.5. Smart: Grapple high-speed/flying targets ---
   // Grapple replaces one attack (or full action for non-multi creatures).
   // Worth doing for flying or very fast targets the group wants pinned.
-  if (isSmart && inMeleeReach) {
+  if (isSmart && inMeleeReach && canGrappleOrShoveTarget(self, target)) {
     if (shouldGrapple(self, target, 0)) {
       return {
         type: 'grapple',
@@ -188,7 +188,7 @@ export function selectAction(
 
   // --- 1.6. Smart: Shove prone vs melee target with allies adjacent ---
   // Knocking a target prone gives all adjacent allies melee advantage.
-  if (isSmart && inMeleeReach) {
+  if (isSmart && inMeleeReach && canGrappleOrShoveTarget(self, target)) {
     const bf_local = (self as any).__battlefield as { combatants: Map<string, import('../types/core').Combatant> } | undefined;
     if (bf_local) {
       const alliesAdj = [...bf_local.combatants.values()].filter(c =>

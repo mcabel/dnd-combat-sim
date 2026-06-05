@@ -13,6 +13,7 @@ import {
   Vec3,
   AIProfile,
   ActionBudget,
+  CreatureSize,
 } from '../types/core';
 
 // ---- 5etools raw shapes (minimal — only what we need) -------
@@ -50,6 +51,7 @@ export interface Raw5etoolsMonster {
   legendary?: RawAction[];
   trait?: RawAction[];
   type?: string | { type: string };
+  size?: string | string[];
 }
 
 // ---- Dice parsing -------------------------------------------
@@ -335,6 +337,25 @@ export function defaultProfileForType(typeStr: string | { type: string } | undef
   return 'smart';
 }
 
+// ---- Size parsing -------------------------------------------
+
+const SIZE_CODE_MAP: Record<string, CreatureSize> = {
+  T: 'Tiny', S: 'Small', M: 'Medium', L: 'Large', H: 'Huge', G: 'Gargantuan',
+};
+
+/**
+ * Parse the 5etools size field (single-letter code array) into CreatureSize.
+ * Examples: ["M"] → 'Medium', ["L"] → 'Large'.
+ * Falls back to 'Medium' for unrecognised codes.
+ */
+export function parseSizeCode(
+  sizeField: string | string[] | undefined
+): CreatureSize {
+  const code = Array.isArray(sizeField) ? sizeField[0] : sizeField;
+  if (!code) return 'Medium';
+  return SIZE_CODE_MAP[code.toUpperCase()] ?? 'Medium';
+}
+
 /**
  * Determine if a creature has hands or tentacles — allowing improvised weapon use (PHB p.148).
  * Heuristic based on creature type + action/feature text scan for "tentacle".
@@ -454,6 +475,7 @@ export function monsterToCombatant(
     isDefender: false,
     cannotAttack: false,
     hasHands: hasHandsForType(raw.type, raw),
+    size: parseSizeCode(raw.size),
     isDead: false,
     isUnconscious: false,
   };
