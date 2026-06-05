@@ -106,7 +106,15 @@ button.export-btn:hover { color: var(--accent); border-color: var(--accent); }
 
 /* Results */
 #results { display: none; }
-.summary-text { font-size: 14px; color: var(--text); margin-bottom: 16px; line-height: 1.5; }
+.summary-row { display: flex; align-items: baseline; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+.summary-text { font-size: 14px; color: var(--text); line-height: 1.5; }
+.diff-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; white-space: nowrap; }
+.diff-badge.trivial { background: rgba(93,227,154,0.15); color: #5de39a; }
+.diff-badge.easy    { background: rgba(39,174,96,0.15);  color: #4caf7d; }
+.diff-badge.medium  { background: rgba(224,168,56,0.15); color: #e0a838; }
+.diff-badge.hard    { background: rgba(230,126,34,0.15); color: #e0843a; }
+.diff-badge.deadly  { background: rgba(192,57,43,0.15);  color: #e87070; }
+.diff-badge.tpk     { background: rgba(192,57,43,0.25);  color: #ff5252; border: 1px solid rgba(192,57,43,0.4); }
 
 .win-bar-wrap { margin-bottom: 16px; }
 .win-bar-labels { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-bottom: 5px; }
@@ -257,7 +265,10 @@ input[list] { -webkit-appearance: none; }
         <div class="card-title">Results</div>
         <button class="export-btn" id="export-btn" onclick="exportReport()" title="Open full HTML report in new tab">Export Report</button>
       </div>
-      <div class="summary-text" id="summary-text"></div>
+      <div class="summary-row">
+        <div class="summary-text" id="summary-text"></div>
+        <span class="diff-badge" id="diff-badge" style="display:none"></span>
+      </div>
 
       <div class="win-bar-wrap">
         <div class="win-bar-labels">
@@ -551,6 +562,16 @@ function showResults(r) {
   document.getElementById('results').style.display = '';
 
   document.getElementById('summary-text').textContent = r.summary;
+
+  // 8-G: Difficulty badge
+  const badge = document.getElementById('diff-badge');
+  if (r.difficulty) {
+    badge.textContent  = r.difficulty;
+    badge.className    = 'diff-badge ' + r.difficulty.toLowerCase();
+    badge.style.display = '';
+  } else {
+    badge.style.display = 'none';
+  }
 
   const pw = Math.round(r.partyWinRate * 100);
   const dw = Math.round(r.drawRate     * 100);

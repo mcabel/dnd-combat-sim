@@ -79,6 +79,8 @@ export interface ApiSimResult {
   roundDistribution: Record<number, number>;
   /** Quick summary sentence for the UI */
   summary:        string;
+  /** Difficulty label derived from partyWinRate */
+  difficulty:     string;
 }
 
 // ---- Request body for POST /api/simulate --------------------
@@ -118,6 +120,16 @@ function buildSummary(r: ApiSimResult): string {
   if (r.partyWinRate >= 0.4)  return `Contested — party wins ${pct}%, enemies ${Math.round(r.enemyWinRate*100)}%.`;
   if (r.enemyWinRate >= 0.7)  return `Enemies dominate — party wins only ${pct}% of fights.`;
   return `Roughly even — party ${pct}% / enemies ${Math.round(r.enemyWinRate*100)}%.`;
+}
+
+// Exported for unit-testing
+export function difficultyLabel(partyWinRate: number): string {
+  if (partyWinRate >= 0.90) return 'Trivial';
+  if (partyWinRate >= 0.70) return 'Easy';
+  if (partyWinRate >= 0.45) return 'Medium';
+  if (partyWinRate >= 0.25) return 'Hard';
+  if (partyWinRate >= 0.10) return 'Deadly';
+  return 'TPK';
 }
 
 // ---- Express app --------------------------------------------
@@ -248,8 +260,10 @@ app.post('/api/simulate', (req: Request, res: Response) => {
       combatantStats:    result.combatantStats,
       roundDistribution: result.roundDistribution,
       summary:           '',
+      difficulty:        '',
     };
-    out.summary = buildSummary(out);
+    out.summary    = buildSummary(out);
+    out.difficulty = difficultyLabel(out.partyWinRate);
 
     return res.json(out);
   } catch (err: any) {
@@ -281,8 +295,10 @@ app.post('/api/simulate/preset', (req: Request, res: Response) => {
       combatantStats:    result.combatantStats,
       roundDistribution: result.roundDistribution,
       summary:           '',
+      difficulty:        '',
     };
-    out.summary = buildSummary(out);
+    out.summary    = buildSummary(out);
+    out.difficulty = difficultyLabel(out.partyWinRate);
 
     return res.json(out);
   } catch (err: any) {

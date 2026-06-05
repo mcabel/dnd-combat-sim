@@ -349,6 +349,61 @@ async function run() {
     assert(status === 400, `Expected 400, got ${status}`);
   });
 
+  // -- difficulty label (8-G) --
+
+  await test('POST /api/simulate returns difficulty string', async () => {
+    const { status, json } = await request(BASE, '/api/simulate', 'POST', {
+      party:   [{ cls: 'fighter', aiProfile: 'smart' }],
+      enemies: [{ name: 'Goblin', count: 1 }],
+      trials:  20,
+    });
+    assert(status === 200, `Expected 200, got ${status}`);
+    assert(typeof json.difficulty === 'string' && json.difficulty.length > 0,
+      `Expected non-empty difficulty string, got: ${JSON.stringify(json.difficulty)}`);
+  });
+
+  await test('POST /api/simulate difficulty is a valid label', async () => {
+    const VALID = new Set(['Trivial', 'Easy', 'Medium', 'Hard', 'Deadly', 'TPK']);
+    const { json } = await request(BASE, '/api/simulate', 'POST', {
+      party:   [{ cls: 'fighter', aiProfile: 'smart' }],
+      enemies: [{ name: 'Goblin', count: 1 }],
+      trials:  20,
+    });
+    assert(VALID.has(json.difficulty),
+      `difficulty "${json.difficulty}" not in valid set [${[...VALID].join(', ')}]`);
+  });
+
+  await test('POST /api/simulate/preset returns difficulty', async () => {
+    const { json } = await request(BASE, '/api/simulate/preset', 'POST', {
+      id: 'fighter-vs-larva', trials: 10,
+    });
+    const VALID = new Set(['Trivial', 'Easy', 'Medium', 'Hard', 'Deadly', 'TPK']);
+    assert(typeof json.difficulty === 'string' && VALID.has(json.difficulty),
+      `preset difficulty invalid: ${JSON.stringify(json.difficulty)}`);
+  });
+
+  await test('difficultyLabel() thresholds are correct', async () => {
+    const { difficultyLabel } = await import('../server');
+    const cases: Array<[number, string]> = [
+      [1.00, 'Trivial'],
+      [0.90, 'Trivial'],
+      [0.89, 'Easy'],
+      [0.70, 'Easy'],
+      [0.69, 'Medium'],
+      [0.45, 'Medium'],
+      [0.44, 'Hard'],
+      [0.25, 'Hard'],
+      [0.24, 'Deadly'],
+      [0.10, 'Deadly'],
+      [0.09, 'TPK'],
+      [0.00, 'TPK'],
+    ];
+    for (const [rate, expected] of cases) {
+      const got = difficultyLabel(rate);
+      assert(got === expected, `difficultyLabel(${rate}) → "${got}", expected "${expected}"`);
+    }
+  });
+
   // ── CORS ──────────────────────────────────────────────────
 
   await test('All responses include CORS header', async () => {
