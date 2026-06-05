@@ -4,6 +4,7 @@
 - Break down large tasks, ask for input when needed
 - Commit to GitHub after each meaningful chunk of work
 - Stop and flag for Sonnet when a task is architecturally complex
+- Stop and flag for Haiku when a task is architecturally simple
 - When fresh chat is optimal: commit, write this handover, stop
 - Future handovers must be self-contained and seamless
 - PAT: stored in your local git credential store — do not paste in files. User provides it verbally at session start.
