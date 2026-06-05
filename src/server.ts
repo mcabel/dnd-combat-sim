@@ -22,6 +22,7 @@ import { loadPCStatBlocks, spawnPC, RawPCEntry }  from './parser/pc';
 import { spawnMonster, Raw5etoolsMonster }         from './parser/fivetools';
 import { PRESETS }                                 from './scenarios/presets';
 import { simulate, CombatantStats }               from './scenarios/simulate';
+import { generateHTMLReport }                         from './scenarios/html_report';
 import { Combatant }                              from './types/core';
 import { EncounterSpec }                          from './scenarios/encounter';
 
@@ -74,6 +75,8 @@ export interface ApiSimResult {
   minRounds:      number;
   maxRounds:      number;
   combatantStats: CombatantStats[];
+  /** Round-count histogram: { 3: 12, 4: 25, … } */
+  roundDistribution: Record<number, number>;
   /** Quick summary sentence for the UI */
   summary:        string;
 }
@@ -242,8 +245,9 @@ app.post('/api/simulate', (req: Request, res: Response) => {
       avgRounds:      result.avgRounds,
       minRounds:      result.minRounds,
       maxRounds:      result.maxRounds,
-      combatantStats: result.combatantStats,
-      summary:        '',
+      combatantStats:    result.combatantStats,
+      roundDistribution: result.roundDistribution,
+      summary:           '',
     };
     out.summary = buildSummary(out);
 
@@ -274,12 +278,66 @@ app.post('/api/simulate/preset', (req: Request, res: Response) => {
       avgRounds:      result.avgRounds,
       minRounds:      result.minRounds,
       maxRounds:      result.maxRounds,
-      combatantStats: result.combatantStats,
-      summary:        '',
+      combatantStats:    result.combatantStats,
+      roundDistribution: result.roundDistribution,
+      summary:           '',
     };
     out.summary = buildSummary(out);
 
     return res.json(out);
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ---- POST /api/simulate/report -----------------------------
+// Runs a custom encounter and returns a standalone HTML report string.
+// The UI opens this in a new browser tab via window.open().
+app.post('/api/simulate/report', (req: Request, res: Response) => {
+  try {
+    const body = req.body as SimulateRequest;
+
+    if (!Array.isArray(body.party) || body.party.length === 0) {
+      return res.status(400).json({ error: 'party must be a non-empty array' });
+    }
+    if (!Array.isArray(body.enemies) || body.enemies.length === 0) {
+      return res.status(400).json({ error: 'enemies must be a non-empty array' });
+    }
+    const trials = Math.min(Math.max(body.trials ?? 100, 1), 500);
+
+    const pcMap    = getPCMap();
+    const bestiary = getBestiary();
+
+    const party: Combatant[] = [];
+    for (const cfg of body.party) {
+      const pc = spawnPC(pcMap, cfg.cls, { x: 0, y: 0, z: 0 }, cfg.aiProfile ?? 'smart');
+      if (!pc) return res.status(400).json({ error: `Unknown class: ${cfg.cls}` });
+      party.push(pc);
+    }
+
+    const enemies: Combatant[] = [];
+    let ex = 0;
+    for (const cfg of body.enemies) {
+      const n = Math.min(Math.max(cfg.count ?? 1, 1), 20);
+      for (let i = 0; i < n; i++) {
+        const m = spawnMonster(bestiary, cfg.name, { x: ex++ * 2, y: 6, z: 0 }, cfg.aiProfile ?? 'attackNearest');
+        if (!m) return res.status(400).json({ error: `Unknown monster: ${cfg.name}` });
+        enemies.push(m);
+      }
+    }
+
+    const spec: EncounterSpec = { party, enemies };
+    const result = simulate(spec, { runs: trials });
+
+    const partyIds = party.map(c => c.id);
+    const title    = [
+      ...body.party.map(p => p.cls),
+      'vs',
+      ...body.enemies.map(e => `${e.count > 1 ? e.count + 'x ' : ''}${e.name}`),
+    ].join(' ');
+
+    const html = generateHTMLReport(result, { title, partyIds });
+    return res.json({ html });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }

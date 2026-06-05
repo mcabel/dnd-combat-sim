@@ -35,9 +35,9 @@ function notContains(html: string, snippet: string, label: string): void {
 
 // ---- Fixture ------------------------------------------------
 
-function makeStats(id: string, name: string): CombatantStats {
+function makeStats(id: string, name: string, side: 'party'|'enemy' = 'party'): CombatantStats {
   return {
-    id, name,
+    id, name, side,
     survivalRate:   0.8,
     avgDamageDealt: 32.5,
     avgHpRemaining: 12.1,
@@ -55,9 +55,10 @@ function makeResult(overrides: Partial<SimulationResult> = {}): SimulationResult
     minRounds:    2,
     maxRounds:    12,
     combatantStats: [
-      makeStats('fighter-1', 'Fighter'),
-      makeStats('zombie-1',  'Zombie'),
+      makeStats('fighter-1', 'Fighter', 'party'),
+      makeStats('zombie-1',  'Zombie',  'enemy'),
     ],
+    roundDistribution: { 2:10, 3:25, 4:30, 5:20, 6:10, 7:5 },
     runResults: Array.from({ length: 100 }, (_, i) => ({
       winner:      (i < 72 ? 'party' : i < 96 ? 'enemy' : 'draw') as 'party' | 'enemy' | 'draw',
       rounds:      2 + (i % 11),

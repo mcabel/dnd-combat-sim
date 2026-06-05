@@ -49,6 +49,8 @@ export interface SimulationResult {
   minRounds:    number;
   maxRounds:    number;
   combatantStats: CombatantStats[];
+  /** How many runs ended on each round number, e.g. { 3: 12, 4: 25 } */
+  roundDistribution: Record<number, number>;
   /** Full per-run data (for detailed analysis) */
   runResults:   RunResult[];
 }
@@ -120,6 +122,7 @@ export function simulate(
   const origEnemies = spec.enemies.map(c => ({ ...c, actions: c.actions.map(a => ({...a})), pos: {...c.pos}, conditions: new Set(c.conditions) }));
 
   const runResults: RunResult[] = [];
+  const roundDist: Record<number, number> = {};
   let partyWins = 0, enemyWins = 0, draws = 0;
   let totalRounds = 0, minRounds = Infinity, maxRoundsActual = 0;
 
@@ -146,6 +149,7 @@ export function simulate(
     else draws++;
 
     totalRounds += result.rounds;
+    roundDist[result.rounds] = (roundDist[result.rounds] ?? 0) + 1;
     if (result.rounds < minRounds)      minRounds      = result.rounds;
     if (result.rounds > maxRoundsActual) maxRoundsActual = result.rounds;
 
@@ -186,6 +190,7 @@ export function simulate(
     minRounds:    minRounds === Infinity ? 0 : minRounds,
     maxRounds:    maxRoundsActual,
     combatantStats,
+    roundDistribution: roundDist,
     runResults,
   };
 }

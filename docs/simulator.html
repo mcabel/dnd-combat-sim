@@ -22,7 +22,6 @@
 }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { min-height: 100%; background: var(--bg); color: var(--text); font-family: var(--mono); }
-
 .app { max-width: 700px; margin: 0 auto; padding: 0 16px 48px; }
 
 /* Header */
@@ -63,8 +62,6 @@ button.primary:hover { background: #d4a44a; border-color: #d4a44a; color: #0d0d0
 button.primary:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
 button.ghost-danger { border-color: transparent; color: var(--muted); padding: 6px 8px; font-size: 13px; }
 button.ghost-danger:hover { color: var(--danger); border-color: transparent; }
-button.tab { border-radius: 4px; padding: 6px 12px; font-size: 11px; color: var(--muted); border-color: transparent; }
-button.tab.active { color: var(--accent); border-color: var(--accent); background: transparent; }
 button.preset-btn {
   font-size: 11px; padding: 6px 10px; border-radius: 5px; text-align: left;
   color: var(--muted); border-color: var(--border);
@@ -72,6 +69,8 @@ button.preset-btn {
 button.preset-btn:hover { color: var(--accent); border-color: var(--accent); }
 button.trial-btn { padding: 7px 14px; font-size: 12px; color: var(--muted); }
 button.trial-btn.active { color: var(--accent); border-color: var(--accent); }
+button.export-btn { font-size: 11px; padding: 6px 12px; color: var(--muted); }
+button.export-btn:hover { color: var(--accent); border-color: var(--accent); }
 
 /* Connection status */
 .conn-row { display: flex; align-items: center; gap: 10px; }
@@ -83,13 +82,20 @@ button.trial-btn.active { color: var(--accent); border-color: var(--accent); }
 .conn-label { font-size: 11px; color: var(--muted); }
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
 
-/* Rows (party / enemy) */
+/* Combatant rows */
 .row-list { display: flex; flex-direction: column; gap: 8px; }
 .combatant-row { display: flex; align-items: center; gap: 8px; }
 .combatant-row select { flex: 1; }
 .combatant-row input[type=number] { width: 58px; }
 .add-btn { margin-top: 10px; font-size: 12px; color: var(--muted); border-style: dashed; width: 100%; padding: 8px; }
 .add-btn:hover { color: var(--accent); border-color: var(--accent); }
+
+/* CR filter row inside Enemies card header */
+.section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.section-header .card-title { margin-bottom: 0; }
+.cr-filter-wrap { display: flex; align-items: center; gap: 6px; }
+.cr-filter-wrap label { font-size: 10px; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; }
+.cr-filter-wrap select { padding: 5px 8px; font-size: 11px; }
 
 /* Presets grid */
 .preset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 6px; }
@@ -109,10 +115,28 @@ button.trial-btn.active { color: var(--accent); border-color: var(--accent); }
 .win-bar .draw    { background: var(--muted);   }
 .win-bar .enemy   { background: var(--danger);  }
 
-.stats-row { display: flex; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
-.stat-box { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; flex: 1; min-width: 100px; }
+.stats-row { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+.stat-box { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; flex: 1; min-width: 90px; }
 .stat-box .val { font-family: var(--serif); font-size: 20px; color: var(--accent); font-weight: 600; }
 .stat-box .lbl { font-size: 10px; color: var(--muted); margin-top: 2px; letter-spacing: 0.08em; text-transform: uppercase; }
+
+/* Histogram (8-D) */
+.histogram-wrap { margin-bottom: 20px; }
+.histogram-title { font-size: 10px; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 8px; }
+.histogram-chart { display: flex; align-items: flex-end; gap: 2px; height: 56px; position: relative; }
+.hbar-col { display: flex; flex-direction: column; align-items: center; flex: 1; min-width: 6px; height: 100%; justify-content: flex-end; position: relative; }
+.hbar { width: 100%; border-radius: 2px 2px 0 0; background: var(--accent); opacity: 0.6; transition: opacity 0.15s; cursor: default; }
+.hbar:hover { opacity: 1; }
+.hbar-tip {
+  display: none; position: absolute; bottom: calc(100% + 4px); left: 50%;
+  transform: translateX(-50%); background: var(--surface);
+  border: 1px solid var(--border); border-radius: 4px;
+  padding: 3px 7px; font-size: 10px; white-space: nowrap; z-index: 10;
+  pointer-events: none;
+}
+.hbar-col:hover .hbar-tip { display: block; }
+.histogram-axis { display: flex; gap: 2px; margin-top: 3px; }
+.haxis-lbl { flex: 1; min-width: 6px; font-size: 9px; color: var(--muted); text-align: center; overflow: hidden; }
 
 /* Combatant table */
 .ctable { width: 100%; border-collapse: collapse; font-size: 12px; }
@@ -125,21 +149,19 @@ button.trial-btn.active { color: var(--accent); border-color: var(--accent); }
 .badge.enemy   { background: rgba(192,57,43,0.15);  color: #e87070; }
 .badge-bar { display: flex; align-items: center; gap: 6px; }
 .badge-bar .fill { height: 6px; border-radius: 3px; background: var(--accent); }
-.badge-bar .fill.low { background: var(--danger); }
-.badge-bar .fill.mid { background: #e0a838; }
+.badge-bar .fill.low  { background: var(--danger);  }
+.badge-bar .fill.mid  { background: #e0a838; }
 .badge-bar .fill.high { background: var(--success); }
 
-/* Run button container */
+/* Results header row */
+.results-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.results-header .card-title { margin-bottom: 0; }
+
+/* Run button / error */
 .run-wrap { margin: 4px 0 16px; }
-
-/* Error banner */
 .err-banner { background: rgba(192,57,43,0.12); border: 1px solid rgba(192,57,43,0.35); border-radius: 8px; padding: 12px 16px; font-size: 12px; color: #e87070; margin-bottom: 14px; display: none; }
-
-/* Spinner */
 .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(13,13,15,0.3); border-top-color: #0d0d0f; border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 6px; }
 @keyframes spin { to { transform: rotate(360deg); } }
-
-/* Datalist hint */
 input[list] { -webkit-appearance: none; }
 </style>
 </head>
@@ -186,9 +208,25 @@ input[list] { -webkit-appearance: none; }
     <button class="add-btn" onclick="addPartyRow()">+ Add PC</button>
   </div>
 
-  <!-- Enemy Builder -->
+  <!-- Enemy Builder (8-E: CR filter in header) -->
   <div class="card">
-    <div class="card-title">Enemies</div>
+    <div class="section-header">
+      <div class="card-title">Enemies</div>
+      <div class="cr-filter-wrap">
+        <label for="cr-filter">Max CR</label>
+        <select id="cr-filter" onchange="setCrFilter(this.value)">
+          <option value="all">All</option>
+          <option value="0">CR 0</option>
+          <option value="0.125">CR 1/8</option>
+          <option value="0.25">CR 1/4</option>
+          <option value="0.5">CR 1/2</option>
+          <option value="1">CR 1</option>
+          <option value="2">CR 2</option>
+          <option value="5">CR 5</option>
+          <option value="10">CR 10</option>
+        </select>
+      </div>
+    </div>
     <div class="row-list" id="enemy-list"></div>
     <button class="add-btn" onclick="addEnemyRow()">+ Add Enemy</button>
     <datalist id="monster-list"></datalist>
@@ -214,7 +252,11 @@ input[list] { -webkit-appearance: none; }
   <!-- Results -->
   <div id="results">
     <div class="card">
-      <div class="card-title">Results</div>
+      <!-- 8-F: Export button in results header -->
+      <div class="results-header">
+        <div class="card-title">Results</div>
+        <button class="export-btn" id="export-btn" onclick="exportReport()" title="Open full HTML report in new tab">Export Report</button>
+      </div>
       <div class="summary-text" id="summary-text"></div>
 
       <div class="win-bar-wrap">
@@ -231,32 +273,23 @@ input[list] { -webkit-appearance: none; }
       </div>
 
       <div class="stats-row">
-        <div class="stat-box">
-          <div class="val" id="stat-avg">—</div>
-          <div class="lbl">Avg Rounds</div>
-        </div>
-        <div class="stat-box">
-          <div class="val" id="stat-min">—</div>
-          <div class="lbl">Min Rounds</div>
-        </div>
-        <div class="stat-box">
-          <div class="val" id="stat-max">—</div>
-          <div class="lbl">Max Rounds</div>
-        </div>
-        <div class="stat-box">
-          <div class="val" id="stat-runs">—</div>
-          <div class="lbl">Runs</div>
-        </div>
+        <div class="stat-box"><div class="val" id="stat-avg">—</div><div class="lbl">Avg Rounds</div></div>
+        <div class="stat-box"><div class="val" id="stat-min">—</div><div class="lbl">Min Rounds</div></div>
+        <div class="stat-box"><div class="val" id="stat-max">—</div><div class="lbl">Max Rounds</div></div>
+        <div class="stat-box"><div class="val" id="stat-runs">—</div><div class="lbl">Runs</div></div>
       </div>
 
-      <table class="ctable" id="ctable">
+      <!-- 8-D: Round distribution histogram -->
+      <div class="histogram-wrap" id="histogram-wrap">
+        <div class="histogram-title">Rounds per combat</div>
+        <div class="histogram-chart" id="histogram-chart"></div>
+        <div class="histogram-axis" id="histogram-axis"></div>
+      </div>
+
+      <table class="ctable">
         <thead>
           <tr>
-            <th>Combatant</th>
-            <th>Side</th>
-            <th>Survived</th>
-            <th>Avg Dmg Dealt</th>
-            <th>Avg HP Left</th>
+            <th>Combatant</th><th>Side</th><th>Survived</th><th>Avg Dmg Dealt</th><th>Avg HP Left</th>
           </tr>
         </thead>
         <tbody id="ctable-body"></tbody>
@@ -268,21 +301,23 @@ input[list] { -webkit-appearance: none; }
 <script>
 // ── State ──────────────────────────────────────────────────
 const S = {
-  url:      'http://localhost:3000',
+  url:       'http://localhost:3000',
   connected: false,
-  classes:  [],
-  monsters: [],
-  presets:  [],
-  trials:   100,
-  party:    [
+  classes:   [],
+  monsters:  [],    // all monsters (unfiltered)
+  presets:   [],
+  trials:    100,
+  crFilter:  'all', // 'all' or numeric string e.g. '0.25'
+  party: [
     { cls: 'fighter', ai: 'smart' },
     { cls: 'rogue',   ai: 'smart' },
     { cls: 'cleric',  ai: 'smart' },
     { cls: 'wizard',  ai: 'smart' },
   ],
-  enemies:  [
+  enemies: [
     { name: 'Goblin', count: 4, ai: 'attackNearest' },
   ],
+  lastResult: null,   // most recent ApiSimResult — used by exportReport()
 };
 
 const AI_OPTS = [
@@ -301,10 +336,8 @@ window.addEventListener('load', () => {
 
 // ── Connection ────────────────────────────────────────────
 async function connect() {
-  const input = document.getElementById('server-url');
-  S.url = input.value.replace(/\/$/, '');
+  S.url = document.getElementById('server-url').value.replace(/\/$/, '');
   setConnStatus('loading', 'Connecting…');
-
   try {
     const [health, classes, monsters, presets] = await Promise.all([
       api('/api/health'),
@@ -317,12 +350,11 @@ async function connect() {
     S.presets  = presets.presets;
     S.connected = true;
     setConnStatus('ok', `Connected · ${S.monsters.length} monsters`);
-    populateMonsterDatalist();
+    populateMonsterDatalist(S.monsters);
     renderPresets();
     document.getElementById('presets-card').style.display = '';
     document.getElementById('run-btn').disabled = false;
     document.getElementById('run-btn').textContent = '▶  Run Simulation';
-    // Re-render rows so class selects are populated
     renderParty();
     renderEnemies();
   } catch (e) {
@@ -334,10 +366,8 @@ async function connect() {
 }
 
 function setConnStatus(state, label) {
-  const dot = document.getElementById('conn-dot');
-  const lbl = document.getElementById('conn-label');
-  dot.className = 'dot ' + state;
-  lbl.textContent = label;
+  document.getElementById('conn-dot').className = 'dot ' + state;
+  document.getElementById('conn-label').textContent = label;
 }
 
 async function api(path, opts) {
@@ -349,28 +379,40 @@ async function api(path, opts) {
   return res.json();
 }
 
-// ── Monster datalist ───────────────────────────────────────
-function populateMonsterDatalist() {
-  const dl = document.getElementById('monster-list');
-  dl.innerHTML = S.monsters
+// ── Monster datalist ─────────────────────────────────────
+function populateMonsterDatalist(list) {
+  document.getElementById('monster-list').innerHTML = list
     .map(m => `<option value="${esc(m.name)}">CR ${m.cr} · ${m.type}</option>`)
     .join('');
 }
 
+// ── 8-E: CR filter ───────────────────────────────────────
+async function setCrFilter(val) {
+  S.crFilter = val;
+  if (!S.connected) return;
+  try {
+    const path = val === 'all' ? '/api/monsters' : `/api/monsters?maxCr=${val}`;
+    const { monsters } = await api(path);
+    populateMonsterDatalist(monsters);
+    setConnStatus('ok', `Connected · ${monsters.length} monsters (CR filter: ${val === 'all' ? 'all' : '≤ ' + crLabel(val)})`);
+  } catch (e) {
+    showErr(e.message);
+  }
+}
+
+function crLabel(val) {
+  return val === '0.125' ? '1/8' : val === '0.25' ? '1/4' : val === '0.5' ? '1/2' : val;
+}
+
 // ── Presets ───────────────────────────────────────────────
 function renderPresets() {
-  const grid = document.getElementById('preset-grid');
-  grid.innerHTML = S.presets.map(p =>
+  document.getElementById('preset-grid').innerHTML = S.presets.map(p =>
     `<button class="preset-btn" onclick="loadPreset('${esc(p.id)}')" title="${esc(p.description)}">${esc(p.name)}</button>`
   ).join('');
 }
 
 async function loadPreset(id) {
-  const p = S.presets.find(x => x.id === id);
-  if (!p) return;
   showErr('');
-
-  // Run it directly
   setRunning(true);
   try {
     const result = await api('/api/simulate/preset', {
@@ -378,6 +420,7 @@ async function loadPreset(id) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id, trials: S.trials }),
     });
+    S.lastResult = result;
     showResults(result);
   } catch (e) {
     showErr(e.message);
@@ -388,62 +431,44 @@ async function loadPreset(id) {
 
 // ── Party Builder ─────────────────────────────────────────
 function renderParty() {
-  const list = document.getElementById('party-list');
-  list.innerHTML = S.party.map((row, i) => `
+  document.getElementById('party-list').innerHTML = S.party.map((row, i) => `
     <div class="combatant-row">
-      <select onchange="S.party[${i}].cls=this.value">
-        ${classOptions(row.cls)}
-      </select>
-      <select onchange="S.party[${i}].ai=this.value" title="AI Profile">
-        ${aiOptions(row.ai)}
-      </select>
+      <select onchange="S.party[${i}].cls=this.value">${classOptions(row.cls)}</select>
+      <select onchange="S.party[${i}].ai=this.value" title="AI Profile">${aiOptions(row.ai)}</select>
       <button class="ghost-danger" onclick="removeParty(${i})" title="Remove">✕</button>
-    </div>
-  `).join('');
+    </div>`).join('');
 }
-
 function addPartyRow() {
   if (S.party.length >= 8) return;
   S.party.push({ cls: S.classes[0] || 'fighter', ai: 'smart' });
   renderParty();
 }
-
 function removeParty(i) {
   if (S.party.length <= 1) return;
-  S.party.splice(i, 1);
-  renderParty();
+  S.party.splice(i, 1); renderParty();
 }
 
 // ── Enemy Builder ─────────────────────────────────────────
 function renderEnemies() {
-  const list = document.getElementById('enemy-list');
-  list.innerHTML = S.enemies.map((row, i) => `
+  document.getElementById('enemy-list').innerHTML = S.enemies.map((row, i) => `
     <div class="combatant-row">
       <input type="text" list="monster-list" value="${esc(row.name)}"
-        onchange="S.enemies[${i}].name=this.value"
-        placeholder="Monster name…" style="flex:1"/>
+        onchange="S.enemies[${i}].name=this.value" placeholder="Monster name…" style="flex:1"/>
       <input type="number" value="${row.count}" min="1" max="20"
         onchange="S.enemies[${i}].count=Math.max(1,Math.min(20,+this.value))"
         title="Count" style="width:54px"/>
-      <select onchange="S.enemies[${i}].ai=this.value" title="AI Profile">
-        ${aiOptions(row.ai)}
-      </select>
+      <select onchange="S.enemies[${i}].ai=this.value" title="AI Profile">${aiOptions(row.ai)}</select>
       <button class="ghost-danger" onclick="removeEnemy(${i})" title="Remove">✕</button>
-    </div>
-  `).join('');
+    </div>`).join('');
 }
-
 function addEnemyRow() {
   if (S.enemies.length >= 8) return;
-  const def = S.monsters.length ? S.monsters[0].name : 'Goblin';
-  S.enemies.push({ name: def, count: 1, ai: 'attackNearest' });
+  S.enemies.push({ name: S.monsters.length ? S.monsters[0].name : 'Goblin', count: 1, ai: 'attackNearest' });
   renderEnemies();
 }
-
 function removeEnemy(i) {
   if (S.enemies.length <= 1) return;
-  S.enemies.splice(i, 1);
-  renderEnemies();
+  S.enemies.splice(i, 1); renderEnemies();
 }
 
 // ── Trial selector ────────────────────────────────────────
@@ -458,20 +483,18 @@ function setTrials(n) {
 async function runSim() {
   if (!S.connected) return;
   showErr('');
-
-  const body = {
-    party:   S.party.map(r  => ({ cls: r.cls,  aiProfile: r.ai })),
-    enemies: S.enemies.map(r => ({ name: r.name, count: r.count, aiProfile: r.ai })),
-    trials:  S.trials,
-  };
-
   setRunning(true);
   try {
     const result = await api('/api/simulate', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify(body),
+      body:    JSON.stringify({
+        party:   S.party.map(r  => ({ cls: r.cls,  aiProfile: r.ai })),
+        enemies: S.enemies.map(r => ({ name: r.name, count: r.count, aiProfile: r.ai })),
+        trials:  S.trials,
+      }),
     });
+    S.lastResult = result;
     showResults(result);
   } catch (e) {
     showErr(e.message);
@@ -483,9 +506,44 @@ async function runSim() {
 function setRunning(on) {
   const btn = document.getElementById('run-btn');
   btn.disabled = on;
-  btn.innerHTML = on
-    ? '<span class="spinner"></span>Running…'
-    : '▶  Run Simulation';
+  btn.innerHTML = on ? '<span class="spinner"></span>Running…' : '▶  Run Simulation';
+}
+
+// ── 8-D: Round distribution histogram ─────────────────────
+function drawHistogram(dist) {
+  const chart = document.getElementById('histogram-chart');
+  const axis  = document.getElementById('histogram-axis');
+  if (!dist || Object.keys(dist).length === 0) {
+    chart.innerHTML = '<span style="font-size:11px;color:var(--muted)">No data</span>';
+    axis.innerHTML  = '';
+    return;
+  }
+
+  const keys    = Object.keys(dist).map(Number).sort((a, b) => a - b);
+  const minR    = keys[0];
+  const maxR    = keys[keys.length - 1];
+  const maxCnt  = Math.max(...keys.map(k => dist[k]));
+  const CHART_H = 56;  // px, matches CSS
+
+  // Fill in zeros for missing rounds so the x-axis is continuous
+  const allRounds = [];
+  for (let r = minR; r <= maxR; r++) allRounds.push(r);
+
+  chart.innerHTML = allRounds.map(r => {
+    const cnt = dist[r] || 0;
+    const pct = maxCnt > 0 ? (cnt / maxCnt) : 0;
+    const h   = Math.max(2, Math.round(pct * CHART_H));
+    return `<div class="hbar-col">
+      <div class="hbar-tip">Round ${r}: ${cnt}</div>
+      <div class="hbar" style="height:${h}px"></div>
+    </div>`;
+  }).join('');
+
+  // X-axis: show label every N rounds to avoid crowding
+  const step = allRounds.length > 20 ? 5 : allRounds.length > 10 ? 2 : 1;
+  axis.innerHTML = allRounds.map((r, i) =>
+    `<div class="haxis-lbl">${i % step === 0 ? r : ''}</div>`
+  ).join('');
 }
 
 // ── Results ───────────────────────────────────────────────
@@ -497,7 +555,6 @@ function showResults(r) {
   const pw = Math.round(r.partyWinRate * 100);
   const dw = Math.round(r.drawRate     * 100);
   const ew = Math.round(r.enemyWinRate * 100);
-
   document.getElementById('party-pct').textContent = `Party ${pw}%`;
   document.getElementById('draw-pct').textContent  = `Draw ${dw}%`;
   document.getElementById('enemy-pct').textContent = `Enemies ${ew}%`;
@@ -510,29 +567,55 @@ function showResults(r) {
   document.getElementById('stat-max').textContent  = r.maxRounds;
   document.getElementById('stat-runs').textContent = r.runs;
 
-  const tbody = document.getElementById('ctable-body');
-  tbody.innerHTML = (r.combatantStats || []).map(c => {
-    const side   = c.side === 'party' ? 'party' : 'enemy';
-    const srvPct = Math.round((c.survivalRate || 0) * 100);
+  drawHistogram(r.roundDistribution);
+
+  document.getElementById('ctable-body').innerHTML = (r.combatantStats || []).map(c => {
+    const side    = c.side === 'party' ? 'party' : 'enemy';
+    const srvPct  = Math.round((c.survivalRate || 0) * 100);
     const fillCls = srvPct >= 70 ? 'high' : srvPct >= 35 ? 'mid' : 'low';
-    const dmgDealt = typeof c.avgDamageDealt  === 'number' ? c.avgDamageDealt.toFixed(1)  : '—';
-    const hpLeft   = typeof c.avgHpRemaining  === 'number' ? c.avgHpRemaining.toFixed(1)  : '—';
+    const dmgDealt = typeof c.avgDamageDealt === 'number' ? c.avgDamageDealt.toFixed(1) : '—';
+    const hpLeft   = typeof c.avgHpRemaining === 'number' ? c.avgHpRemaining.toFixed(1) : '—';
     return `<tr>
       <td>${esc(c.name)}</td>
       <td><span class="badge ${side}">${side}</span></td>
-      <td>
-        <div class="badge-bar">
-          <div class="fill ${fillCls}" style="width:${srvPct}px; max-width:80px;"></div>
-          <span style="font-size:11px;color:var(--muted)">${srvPct}%</span>
-        </div>
-      </td>
+      <td><div class="badge-bar">
+        <div class="fill ${fillCls}" style="width:${srvPct}px;max-width:80px"></div>
+        <span style="font-size:11px;color:var(--muted)">${srvPct}%</span>
+      </div></td>
       <td>${dmgDealt}</td>
       <td>${hpLeft}</td>
     </tr>`;
   }).join('');
 
-  // Scroll to results
   document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// ── 8-F: Export full HTML report ─────────────────────────
+async function exportReport() {
+  if (!S.lastResult) return;
+  showErr('');
+  const btn = document.getElementById('export-btn');
+  btn.disabled = true;
+  btn.textContent = 'Exporting…';
+  try {
+    const { html } = await api('/api/simulate/report', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        party:   S.party.map(r  => ({ cls: r.cls,  aiProfile: r.ai })),
+        enemies: S.enemies.map(r => ({ name: r.name, count: r.count, aiProfile: r.ai })),
+        trials:  S.trials,
+      }),
+    });
+    const win = window.open('', '_blank');
+    win.document.write(html);
+    win.document.close();
+  } catch (e) {
+    showErr('Export failed: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Export Report';
+  }
 }
 
 function showErr(msg) {
@@ -546,24 +629,16 @@ function showErr(msg) {
 function classOptions(selected) {
   const opts = S.classes.length ? S.classes : [
     'barbarian','bard','cleric','druid','fighter','monk',
-    'paladin','ranger','rogue','sorcerer','warlock','wizard'
+    'paladin','ranger','rogue','sorcerer','warlock','wizard',
   ];
-  return opts.map(c =>
-    `<option value="${c}" ${c === selected ? 'selected' : ''}>${cap(c)}</option>`
-  ).join('');
+  return opts.map(c => `<option value="${c}" ${c===selected?'selected':''}>${cap(c)}</option>`).join('');
 }
-
 function aiOptions(selected) {
-  return AI_OPTS.map(([v, l]) =>
-    `<option value="${v}" ${v === selected ? 'selected' : ''}>${l}</option>`
-  ).join('');
+  return AI_OPTS.map(([v,l]) => `<option value="${v}" ${v===selected?'selected':''}>${l}</option>`).join('');
 }
-
-function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
-function esc(s) {
-  return String(s ?? '')
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
-    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+function cap(s)  { return s.charAt(0).toUpperCase() + s.slice(1); }
+function esc(s)  {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 </script>
 </body>

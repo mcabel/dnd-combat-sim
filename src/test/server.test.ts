@@ -280,6 +280,75 @@ async function run() {
     assert(status === 404, `Expected 404, got ${status}`);
   });
 
+  // -- roundDistribution (8-D) --
+
+  await test('POST /api/simulate returns roundDistribution object', async () => {
+    const { json } = await request(BASE, '/api/simulate', 'POST', {
+      party:   [{ cls: 'fighter', aiProfile: 'smart' }],
+      enemies: [{ name: 'Goblin', count: 1 }],
+      trials:  20,
+    });
+    assert(typeof json.roundDistribution === 'object' && json.roundDistribution !== null,
+      'Missing roundDistribution');
+    const keys = Object.keys(json.roundDistribution);
+    assert(keys.length > 0, 'roundDistribution is empty');
+    for (const k of keys) {
+      assert(!isNaN(Number(k)), `Non-numeric key: ${k}`);
+      assert(json.roundDistribution[k] > 0, `Zero count for round ${k}`);
+    }
+  });
+
+  await test('POST /api/simulate roundDistribution counts sum to runs', async () => {
+    const RUNS = 30;
+    const { json } = await request(BASE, '/api/simulate', 'POST', {
+      party:   [{ cls: 'fighter', aiProfile: 'smart' }],
+      enemies: [{ name: 'Goblin', count: 1 }],
+      trials:  RUNS,
+    });
+    const total = Object.values(json.roundDistribution as Record<string, number>)
+      .reduce((a: number, b: number) => a + b, 0);
+    assert(total === RUNS, `Distribution counts ${total} !== runs ${RUNS}`);
+  });
+
+  await test('POST /api/simulate/preset returns roundDistribution', async () => {
+    const { json } = await request(BASE, '/api/simulate/preset', 'POST', {
+      id: 'fighter-vs-larva', trials: 10,
+    });
+    assert(typeof json.roundDistribution === 'object', 'Missing roundDistribution from preset');
+  });
+
+  // -- POST /api/simulate/report (8-F) --
+
+  await test('POST /api/simulate/report returns html string', async () => {
+    const { status, json } = await request(BASE, '/api/simulate/report', 'POST', {
+      party:   [{ cls: 'fighter', aiProfile: 'smart' }],
+      enemies: [{ name: 'Goblin', count: 1 }],
+      trials:  10,
+    });
+    assert(status === 200, `Expected 200, got ${status}`);
+    assert(typeof json.html === 'string', 'Expected html string');
+    assert(json.html.startsWith('<!DOCTYPE html>'), 'html should start with DOCTYPE');
+    assert(json.html.includes('fighter'), 'html should include party class name');
+  });
+
+  await test('POST /api/simulate/report 400 on empty party', async () => {
+    const { status } = await request(BASE, '/api/simulate/report', 'POST', {
+      party:   [],
+      enemies: [{ name: 'Goblin', count: 1 }],
+      trials:  5,
+    });
+    assert(status === 400, `Expected 400, got ${status}`);
+  });
+
+  await test('POST /api/simulate/report 400 on unknown monster', async () => {
+    const { status } = await request(BASE, '/api/simulate/report', 'POST', {
+      party:   [{ cls: 'fighter', aiProfile: 'smart' }],
+      enemies: [{ name: 'NotARealMonster', count: 1 }],
+      trials:  5,
+    });
+    assert(status === 400, `Expected 400, got ${status}`);
+  });
+
   // ── CORS ──────────────────────────────────────────────────
 
   await test('All responses include CORS header', async () => {
