@@ -68,6 +68,7 @@ function makeC(overrides: Partial<Combatant> = {}): Combatant {
     hasHands: false,
     isDead: false,
     isUnconscious: false,
+    advantages: [], vulnerabilities: [],
     ...overrides,
   };
 }

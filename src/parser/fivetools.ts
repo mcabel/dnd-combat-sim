@@ -478,6 +478,8 @@ export function monsterToCombatant(
     size: parseSizeCode(raw.size),
     isDead: false,
     isUnconscious: false,
+    advantages:      [],
+    vulnerabilities: [],
   };
 }
 

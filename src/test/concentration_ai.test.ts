@@ -52,6 +52,7 @@ function makeC(o: Partial<Combatant> = {}): Combatant {
     bonded: null,
     aiProfile: 'smart', perception: { targets: new Map() },
     isDead: false, isUnconscious: false,
+    advantages: [], vulnerabilities: [],
     ...o,
   };
 }

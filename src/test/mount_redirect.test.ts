@@ -58,6 +58,7 @@ function makeCombatant(overrides: Partial<Combatant>): Combatant {
     usedSneakAttackThisTurn: false, helpedThisTurn: false,
     isDefender: false, cannotAttack: false, hasHands: true,
     isDead: false, isUnconscious: false,
+    advantages: [], vulnerabilities: [],
     ...overrides,
   };
 }

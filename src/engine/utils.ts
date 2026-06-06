@@ -4,6 +4,7 @@
 // ============================================================
 
 import { Combatant, Action, DiceExpression, Condition, ActionBudget, Battlefield, CreatureSize } from '../types/core';
+import { querySelf, queryVulnerability } from './adv_system';
 
 // ---- Dice rolling -------------------------------------------
 
@@ -97,9 +98,12 @@ export function rollSave(
   const mod = abilityMod(score);
   const prof = isProficient ? profBonusByCR(combatant.cr) : 0;
 
-  // Conditions that affect saves
-  const hasAdvantage = false;  // extendable: frightened source direction checks etc.
-  const hasDisadvantage = combatant.conditions.has('poisoned'); // PHB: poisoned = disadv on attacks & saves
+  // Conditions and advantage-system entries that affect saving throws
+  const selfSave = querySelf(combatant, `save:${ability}` as import('../types/core').D20TestScope);
+  const allSave  = querySelf(combatant, 'save');
+  const hasAdvantage   = selfSave.advantage   || allSave.advantage;
+  const hasDisadvantage = combatant.conditions.has('poisoned') // PHB Appendix A: poisoned → disadv on saves
+    || selfSave.disadvantage || allSave.disadvantage;
 
   let roll: number;
   if (hasAdvantage && !hasDisadvantage) roll = rollWithAdvantage();
@@ -271,22 +275,37 @@ export function attackAdvantageState(
   let advantage = false;
   let disadvantage = false;
 
-  // Attacker conditions
-  if (attacker.conditions.has('blinded')) disadvantage = true;
+  // ── Attacker conditions (PHB Appendix A) ──────────────────
+  if (attacker.conditions.has('blinded'))    disadvantage = true;
   if (attacker.conditions.has('frightened')) disadvantage = true;
-  if (attacker.conditions.has('poisoned')) disadvantage = true;
+  if (attacker.conditions.has('poisoned'))   disadvantage = true;
   if (attacker.conditions.has('restrained')) disadvantage = true;
-  if (attacker.conditions.has('prone')) disadvantage = true;
+  if (attacker.conditions.has('prone'))      disadvantage = true;
+  // Invisible attacker has advantage on all attacks (PHB Appendix A)
+  if (attacker.conditions.has('invisible'))  advantage    = true;
 
-  // Target conditions
-  if (target.conditions.has('blinded')) advantage = true;
-  if (target.conditions.has('paralyzed')) advantage = true;
+  // ── Target conditions (PHB Appendix A) ────────────────────
+  if (target.conditions.has('blinded'))      advantage = true;
+  if (target.conditions.has('paralyzed'))    advantage = true;
   // Prone: melee attacks have advantage, ranged have disadvantage (PHB Appendix A)
   // We encode both flags; resolveAttack passes attackType to decide which applies.
   // Store separately so caller can apply the right one.
-  if (target.conditions.has('restrained')) advantage = true;
-  if (target.conditions.has('stunned')) advantage = true;
-  if (target.conditions.has('unconscious')) advantage = true;
+  if (target.conditions.has('restrained'))   advantage = true;
+  if (target.conditions.has('stunned'))      advantage = true;
+  if (target.conditions.has('unconscious'))  advantage = true;
+  // Invisible target → attacker has disadvantage (PHB Appendix A)
+  if (target.conditions.has('invisible'))    disadvantage = true;
+
+  // ── Advantage/disadvantage system entries (spells, feats, class features) ──
+  // Attacker's own advantage on attack rolls
+  const selfAdv = querySelf(attacker, 'attack');
+  if (selfAdv.advantage)    advantage    = true;
+  if (selfAdv.disadvantage) disadvantage = true;
+
+  // Vulnerabilities stored on the target (Dodge → disadv; Reckless Attack exposed → adv)
+  const vulnAdv = queryVulnerability(target, 'attack');
+  if (vulnAdv.advantage)    advantage    = true;
+  if (vulnAdv.disadvantage) disadvantage = true;
 
   return { advantage, disadvantage };
 }

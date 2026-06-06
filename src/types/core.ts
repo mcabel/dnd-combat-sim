@@ -31,6 +31,49 @@ export type AttackType = 'melee' | 'ranged' | 'spell' | 'save' | 'special';
 
 export type AICostType = 'action' | 'bonusAction' | 'legendaryAction' | 'reaction';
 
+// ---- Advantage / Disadvantage System (PHB p.173) -----------
+
+/**
+ * Identifies which d20 test an advantage/disadvantage entry applies to.
+ * General scopes ('attack') cover all sub-types ('attack:melee').
+ * Specific scopes ('attack:melee') do NOT implicitly cover the general 'attack' scope.
+ * 'all' covers every d20 test.
+ */
+export type D20TestScope =
+  | 'attack'                                               // any attack roll
+  | 'attack:melee' | 'attack:ranged' | 'attack:spell'     // specific attack types
+  | 'save'                                                 // any saving throw
+  | 'save:str' | 'save:dex' | 'save:con'
+  | 'save:int' | 'save:wis' | 'save:cha'
+  | 'ability'                                              // any ability check
+  | 'ability:str' | 'ability:dex' | 'ability:con'
+  | 'ability:int' | 'ability:wis' | 'ability:cha'
+  | 'initiative'                                           // initiative rolls
+  | 'perception'                                           // passive perception (±5 modifier)
+  | 'all';                                                 // every d20 test
+
+/**
+ * Duration model for advantage/disadvantage entries.
+ *   'permanent'       never expires; must be removed via removeBySource()
+ *   'until_next_turn' expires at the START of this creature's next turn
+ *   'rounds'          expires after roundsRemaining turns reach 0
+ */
+export type AdvDurationType = 'permanent' | 'until_next_turn' | 'rounds';
+
+/**
+ * One advantage or disadvantage grant on a creature.
+ *
+ * Refresh rule: if a new entry has the same { type, scope } as an existing one,
+ * only the entry with the LONGER roundsRemaining is kept (no stacking).
+ */
+export interface AdvantageEntry {
+  type:             'advantage' | 'disadvantage';
+  scope:            D20TestScope;
+  source:           string;           // human-readable label e.g. "Reckless Attack", "Dodge"
+  durationType:     AdvDurationType;
+  roundsRemaining:  number;           // permanent → Infinity; until_next_turn → 1; rounds → N
+}
+
 // ---- Action -------------------------------------------------
 
 export interface DiceExpression {
@@ -253,6 +296,14 @@ export interface Combatant {
   // Flags
   isDead: boolean;
   isUnconscious: boolean;
+
+  // Advantage / Disadvantage entries (PHB p.173)
+  // 'advantages'     : this creature's OWN d20 rolls (attack, save, ability, initiative)
+  // 'vulnerabilities': d20 rolls made AGAINST this creature (Dodge → attacks vs you have disadv;
+  //                    Reckless Attack → enemies have adv vs the Barbarian)
+  // Both arrays are ticked at the start of this creature's turn via tickAdvantages().
+  advantages:      AdvantageEntry[];
+  vulnerabilities: AdvantageEntry[];
 }
 
 // ---- Battlefield --------------------------------------------

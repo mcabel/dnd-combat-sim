@@ -26,6 +26,7 @@ import { planTurn, planLegendaryAction, shouldTakeOpportunityAttack } from '../a
 import { shouldSmite, applyDivineSmite } from '../ai/resources';
 import { isControlledMount, mountDeathRiderCheck, isIndependentMount } from '../summons/mount';
 import { checkMountedCombatant, checkProtectionStyle, checkInterceptionReduction } from './mount_redirect';
+import { tickAdvantages, grantSelf, grantVulnerability } from './adv_system';
 import { getSummonEntry }                           from '../summons/registry';
 import { rollGrappleContest, rollShoveContest, canGrappleOrShoveTarget } from './utils';
 
@@ -431,9 +432,11 @@ function executePlannedAction(
 
     case 'dodge':
       log(state, 'dodge', actor.id, plan.description);
-      // Dodge: attacks against this creature have disadvantage until next turn
-      // Tracked via a flag — engine checks it during attack resolution
-      (actor as any).isDodging = true;
+      // PHB p.192: Until your next turn, attacks against you have disadvantage (if you can
+      // see the attacker) and you make DEX saving throws with advantage.
+      // Both expire at the START of this creature's next turn (tickAdvantages handles this).
+      grantVulnerability(actor, 'disadvantage', 'attack', 'Dodge', 'until_next_turn');
+      grantSelf(actor, 'advantage', 'save:dex', 'Dodge', 'until_next_turn');
       break;
 
     case 'legendary': {
@@ -597,7 +600,6 @@ function executeTurnPlan(actor: Combatant, plan: TurnPlan, state: EngineState): 
 
   // Clean up turn flags
   (actor as any).usedDisengage = false;
-  (actor as any).isDodging = false;
 }
 
 // ---- Perception update --------------------------------------
@@ -751,6 +753,7 @@ export function runCombat(
           // AI choice: if rider is in melee range of enemies → Disengage (safe escape)
           //            otherwise → Dash (close gap / extra movement for rider)
           resetBudget(actor);
+          tickAdvantages(actor);  // expire until_next_turn / decrement rounds entries
           actor.usedSneakAttackThisTurn = false;
           actor.helpedThisTurn = false;
           actor.budget.movementFt = actor.flySpeed ?? actor.speed;
@@ -782,6 +785,24 @@ export function runCombat(
       // Reset per-turn flags
       actor.usedSneakAttackThisTurn = false;
       actor.helpedThisTurn = false;
+
+      // Tick advantage/disadvantage durations (expire until_next_turn; decrement rounds)
+      tickAdvantages(actor);
+
+      // ── Reckless Attack (Barbarian, PHB p.48) ─────────────────────────────────
+      // "When you make your first attack on your turn, you can decide to attack
+      //  recklessly. Doing so gives you advantage on melee weapon attack rolls using
+      //  Strength during this turn, but attack rolls against you have advantage until
+      //  your next turn."
+      // AI: always use when enemies are present (benefit outweighs exposure at level 1).
+      if (actor.traits.includes('Reckless Attack') &&
+          livingEnemiesOf(actor, battlefield).length > 0) {
+        grantSelf(actor, 'advantage', 'attack:melee', 'Reckless Attack', 'until_next_turn');
+        grantVulnerability(actor, 'advantage', 'attack', 'Reckless Attack', 'until_next_turn');
+        log(state, 'action', actor.id,
+          `${actor.name} attacks Recklessly! (adv on melee attacks; enemies have adv vs ${actor.name} until next turn)`,
+          undefined);
+      }
 
       // 4.12 Commanded creatures: allow external profile override each turn.
       // A controller (commander) can call bf.pendingCommands.get(actorId) to

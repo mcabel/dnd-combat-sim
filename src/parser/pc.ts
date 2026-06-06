@@ -361,6 +361,8 @@ export function pcToCombatant(
     hasHands: false,
     isDead:        false,
     isUnconscious: false,
+    advantages:      [],
+    vulnerabilities: [],
   };
 }
 
