@@ -25,6 +25,7 @@ import {
 import { planTurn, planLegendaryAction, shouldTakeOpportunityAttack } from '../ai/planner';
 import { shouldSmite, applyDivineSmite } from '../ai/resources';
 import { isControlledMount, mountDeathRiderCheck, isIndependentMount } from '../summons/mount';
+import { checkMountedCombatant, checkProtectionStyle, checkInterceptionReduction } from './mount_redirect';
 import { getSummonEntry }                           from '../summons/registry';
 import { rollGrappleContest, rollShoveContest, canGrappleOrShoveTarget } from './utils';
 
@@ -158,8 +159,18 @@ function resolveAttack(
 
   // Standard attack roll — include Pack Tactics advantage, Prone modifier, and Help action
   const advState = resolveAttackAdvantage(attacker, target, action.attackType);
-  const { advantage: baseAdv, disadvantage } = advState;
+  const { advantage: baseAdv, disadvantage: baseDisadv } = advState;
   const advantage = baseAdv || packTacticsAdvantage || attacker.helpedThisTurn;
+
+  // ST-5B: Fighting Style: Protection — rider imposes disadvantage on attack vs mount (reaction)
+  const protectionRider = checkProtectionStyle(target, bf);
+  if (protectionRider) {
+    log(state, 'action', protectionRider.id,
+      `${protectionRider.name} uses Protection — disadvantage on attack against ${target.name}!`,
+      target.id);
+  }
+  const disadvantage = baseDisadv || !!protectionRider;
+
   const result = rollAttack(action.hitBonus ?? 0, advantage, disadvantage);
   const hits = isCritOverride ?? attackHits(result.roll, result.total, target.ac);
 
@@ -219,6 +230,16 @@ function resolveAttack(
       attacker.usedSneakAttackThisTurn = true;
       log(state, 'action', attacker.id,
         `${attacker.name} applies Sneak Attack (+${saRoll} damage)!`, target.id, saRoll);
+    }
+
+    // ST-5C: Fighting Style: Interception — rider reduces damage to mount (reaction)
+    const { reduction: interceptReduction, rider: interceptRider } =
+      checkInterceptionReduction(target, dmg, bf);
+    if (interceptReduction > 0 && interceptRider) {
+      dmg = Math.max(0, dmg - interceptReduction);
+      log(state, 'action', interceptRider.id,
+        `${interceptRider.name} uses Interception — reduces damage to ${target.name} by ${interceptReduction}!`,
+        target.id, interceptReduction);
     }
 
     const dealt = applyDamageWithTempHP(target, dmg);
@@ -352,11 +373,17 @@ function executeMove(
       // Execute OA
       const oaAction = selectOAAction(watcher);
       if (oaAction && canReach(watcher, mover, oaAction)) {
+        // ST-5A: Mounted Combatant — redirect OA to rider if feat active (no reaction cost)
+        const oaTarget = checkMountedCombatant(mover, oaAction, bf) ?? mover;
+        if (oaTarget !== mover) {
+          log(state, 'action', oaTarget.id,
+            `${oaTarget.name} uses Mounted Combatant — intercepts OA on ${mover.name}!`, oaTarget.id);
+        }
         log(state, 'opportunity_attack', watcher.id,
-          `${watcher.name} takes opportunity attack on ${mover.name}!`, mover.id);
+          `${watcher.name} takes opportunity attack on ${oaTarget.name}!`, oaTarget.id);
         watcher.budget.reactionUsed = true;
-        resolveAttack(watcher, mover, oaAction, state);
-        if (mover.isDead || mover.isUnconscious) return; // mover died on OA
+        resolveAttack(watcher, oaTarget, oaAction, state);
+        if (oaTarget.isDead || oaTarget.isUnconscious) return; // target died on OA
       }
     }
   }
@@ -377,8 +404,15 @@ function executePlannedAction(
       const target = plan.targetId ? bf.combatants.get(plan.targetId) : null;
       if (!target || target.isDead || target.isUnconscious) break;
       if (!plan.action) break;
-      log(state, 'action', actor.id, plan.description, plan.targetId ?? undefined);
-      resolveAttack(actor, target, plan.action, state);
+      // ST-5A: Mounted Combatant — redirect attack to rider if feat active (no reaction cost)
+      const effectiveTarget = checkMountedCombatant(target, plan.action, bf) ?? target;
+      if (effectiveTarget !== target) {
+        log(state, 'action', effectiveTarget.id,
+          `${effectiveTarget.name} uses Mounted Combatant — intercepts attack on ${target.name}!`,
+          effectiveTarget.id);
+      }
+      log(state, 'action', actor.id, plan.description, effectiveTarget.id ?? undefined);
+      resolveAttack(actor, effectiveTarget, plan.action, state);
       break;
     }
 
@@ -406,9 +440,16 @@ function executePlannedAction(
       const target = plan.targetId ? bf.combatants.get(plan.targetId) : null;
       if (!target || target.isDead || target.isUnconscious) break;
       if (!plan.action) break;
-      log(state, 'legendary_action', actor.id, plan.description, plan.targetId ?? undefined);
+      // ST-5A: Mounted Combatant — redirect legendary attack to rider if feat active
+      const legEffectiveTarget = checkMountedCombatant(target, plan.action, bf) ?? target;
+      if (legEffectiveTarget !== target) {
+        log(state, 'action', legEffectiveTarget.id,
+          `${legEffectiveTarget.name} uses Mounted Combatant — intercepts legendary attack on ${target.name}!`,
+          legEffectiveTarget.id);
+      }
+      log(state, 'legendary_action', actor.id, plan.description, legEffectiveTarget.id ?? undefined);
       actor.legendaryActionPool -= plan.action.legendaryCost;
-      resolveAttack(actor, target, plan.action, state);
+      resolveAttack(actor, legEffectiveTarget, plan.action, state);
       break;
     }
 
