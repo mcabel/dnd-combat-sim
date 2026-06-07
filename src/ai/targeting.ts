@@ -149,10 +149,72 @@ export function selectSmart(self: Combatant, battlefield: Battlefield): Combatan
   );
 }
 
+// ---- Rogue: SA-aware target selection -----------------------
+
+/**
+ * Returns true if an ally of `attacker` (excluding itself) is within 5 ft of `enemy`.
+ * "Within 5 ft" = Chebyshev distance ≤ 1 grid square.
+ * Used to detect guaranteed Sneak Attack eligibility before movement.
+ */
+export function allyAdjacentToEnemy(
+  attacker: Combatant,
+  enemy: Combatant,
+  bf: Battlefield
+): boolean {
+  for (const [, c] of bf.combatants) {
+    if (
+      c.faction === attacker.faction &&
+      c.id !== attacker.id &&
+      !c.isDead &&
+      !c.isUnconscious &&
+      chebyshev3D(c.pos, enemy.pos) <= 1
+    ) return true;
+  }
+  return false;
+}
+
+/**
+ * Rogue-specific target selection.
+ *
+ * Augments the smart score with a Sneak Attack eligibility bonus when an
+ * ally is already adjacent to the candidate — guaranteeing SA without needing
+ * advantage. SA at Level 1 = avg 3.5 extra damage; the bonus is scaled to be
+ * meaningful (tips close decisions) but not override a bloodied target at the
+ * same distance (bloodied bonus = 60, SA bonus = 50).
+ *
+ * Falls back to pure smart scoring when all targets are equally eligible (or
+ * none are), preserving existing prioritisation logic.
+ */
+export function selectRogueTarget(self: Combatant, battlefield: Battlefield): Combatant | null {
+  const enemies = livingEnemiesOf(self, battlefield);
+  if (enemies.length === 0) return null;
+
+  const SA_BONUS = 50;
+
+  const score = (e: Combatant): number => {
+    let s = smartScore(self, e, battlefield);
+    if (allyAdjacentToEnemy(self, e, battlefield)) s += SA_BONUS;
+    return s;
+  };
+
+  return enemies.reduce((best, e) => score(e) > score(best) ? e : best);
+}
+
 // ---- Unified entry point ------------------------------------
 
-/** Select a target using the combatant's configured AI profile. */
+/**
+ * Select a target using the combatant's configured AI profile.
+ *
+ * Rogues (resources.sneakAttackDice defined, SA not yet used this turn) use
+ * selectRogueTarget, which biases toward enemies an ally is already adjacent
+ * to — guaranteeing Sneak Attack eligibility without requiring advantage.
+ */
 export function selectTarget(self: Combatant, battlefield: Battlefield): Combatant | null {
+  // Rogue: bias toward SA-eligible targets when SA hasn't been used yet
+  if (self.resources?.sneakAttackDice && !self.usedSneakAttackThisTurn) {
+    return selectRogueTarget(self, battlefield);
+  }
+
   switch (self.aiProfile) {
     case 'attackNearest': return selectNearest(self, battlefield);
     case 'attackWeakest': return selectWeakest(self, battlefield);
