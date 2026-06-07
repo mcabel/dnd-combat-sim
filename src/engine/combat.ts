@@ -16,6 +16,7 @@ import {
   applyDamageWithTempHP, hasPackTacticsAdvantage,
   canSneakAttack, sneakAttackDice,
   addResistance, removeResistance,
+  parseDieSides, consumeBardicInspiration,
   teamHasNoAttackCapability, canDealDamage, makeImprovisedUnarmed, makeImprovisedWeapon
 } from './utils';
 import {
@@ -180,6 +181,15 @@ function resolveAttack(
   const disadvantage = baseDisadv || !!protectionRider;
 
   const result = rollAttack(action.hitBonus ?? 0, advantage, disadvantage);
+
+  // Bardic Inspiration die — consumed on this attack roll (PHB p.54)
+  const biBonus = consumeBardicInspiration(attacker);
+  if (biBonus > 0) {
+    result.total += biBonus;
+    log(state, 'action', attacker.id,
+      `${attacker.name} uses Bardic Inspiration die (+${biBonus})!`, target.id, biBonus);
+  }
+
   const hits = isCritOverride ?? attackHits(result.roll, result.total, target.ac);
 
   if (!hits) {
@@ -609,10 +619,21 @@ function executePlannedAction(
     }
     case 'hide':
     case 'ready':
-    case 'bardicInspiration':
-      // Stubs: logged but not yet mechanically resolved
-      log(state, 'action', actor.id, plan.description);
+    case 'bardicInspiration': {
+      // PHB p.54: Bard grants an Inspiration die (bonus action) to one ally.
+      // The recipient adds the die to their next attack roll or saving throw.
+      const biTarget = plan.targetId
+        ? state.battlefield.combatants.get(plan.targetId) ?? null
+        : null;
+      if (biTarget && !biTarget.isDead) {
+        const die = actor.resources?.bardicInspiration?.die ?? 'd6';
+        biTarget.bardicInspirationDie = parseDieSides(die);
+        log(state, 'action', actor.id, plan.description);
+      } else {
+        log(state, 'action', actor.id, plan.description);
+      }
       break;
+    }
   }
 }
 

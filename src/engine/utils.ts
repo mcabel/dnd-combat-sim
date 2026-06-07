@@ -110,7 +110,10 @@ export function rollSave(
   else if (hasDisadvantage && !hasAdvantage) roll = rollWithDisadvantage();
   else roll = rollDie(20);
 
-  const total = roll + mod + prof;
+  // Bardic Inspiration die — consumed on save rolls too (PHB p.54)
+  const biBonus = consumeBardicInspiration(combatant);
+
+  const total = roll + mod + prof + biBonus;
   return { roll, total, success: total >= dc };
 }
 
@@ -569,6 +572,29 @@ export function addResistance(c: Combatant, type: DamageType): void {
 /** Remove a damage-type resistance from a combatant (no-op if not present). */
 export function removeResistance(c: Combatant, type: DamageType): void {
   c.resistances = c.resistances.filter(r => r !== type);
+}
+
+// ---- Bardic Inspiration helpers ----------------------------
+
+/**
+ * Parse a die string like 'd6' → 6, 'd8' → 8.
+ * Returns 6 as fallback for unrecognised formats.
+ */
+export function parseDieSides(die: string): number {
+  const m = die.match(/d(\d+)/i);
+  return m ? parseInt(m[1], 10) : 6;
+}
+
+/**
+ * Consume a held Bardic Inspiration die and return the bonus rolled.
+ * Returns 0 if the combatant has no die set.
+ * Clears bardicInspirationDie after use (one-time per grant, PHB p.54).
+ */
+export function consumeBardicInspiration(c: Combatant): number {
+  if (!c.bardicInspirationDie) return 0;
+  const roll = rollDie(c.bardicInspirationDie);
+  c.bardicInspirationDie = null;
+  return roll;
 }
 
 // ---- Sneak Attack (PHB p.96) --------------------------------

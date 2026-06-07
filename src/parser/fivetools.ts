@@ -481,6 +481,7 @@ export function monsterToCombatant(
     advantages:      [],
     vulnerabilities: [],
     resistances:     [],
+    bardicInspirationDie: null,
   };
 }
 

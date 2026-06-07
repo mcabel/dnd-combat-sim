@@ -309,6 +309,11 @@ export interface Combatant {
   // Populated by class features (Rage → B/P/S), racial traits, spells (Stoneskin), etc.
   // Use addResistance() / removeResistance() helpers to avoid duplicates.
   resistances: DamageType[];
+
+  // Bardic Inspiration die granted by a Bard (PHB p.54).
+  // Die size (e.g. 6 for d6). Consumed on the next attack roll or saving throw.
+  // null = no inspiration die held.
+  bardicInspirationDie: number | null;
 }
 
 // ---- Battlefield --------------------------------------------
