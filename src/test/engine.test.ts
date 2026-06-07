@@ -73,7 +73,7 @@ function makeCombatant(overrides: Partial<Combatant> = {}): Combatant {
     hasHands: false,
     isDead: false,
     isUnconscious: false,
-    advantages: [], vulnerabilities: [],
+    advantages: [], vulnerabilities: [], resistances: [],
     ...overrides,
   };
 }

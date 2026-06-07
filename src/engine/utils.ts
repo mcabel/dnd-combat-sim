@@ -3,7 +3,7 @@
 // Core combat math: rolling, damage, conditions, initiative, budget
 // ============================================================
 
-import { Combatant, Action, DiceExpression, Condition, ActionBudget, Battlefield, CreatureSize } from '../types/core';
+import { Combatant, Action, DiceExpression, Condition, ActionBudget, Battlefield, CreatureSize, DamageType } from '../types/core';
 import { querySelf, queryVulnerability } from './adv_system';
 
 // ---- Dice rolling -------------------------------------------
@@ -534,17 +534,41 @@ export function grantTempHP(target: Combatant, amount: number): void {
 
 /**
  * Apply damage accounting for temp HP first (PHB p.198).
+ * If damageType is provided and the target has resistance to it, damage is halved
+ * before temp HP absorption (PHB p.197 — resistance applied before any other reduction).
  * Overrides the base applyDamage for combatants with tempHP.
  */
-export function applyDamageWithTempHP(target: Combatant, amount: number): number {
-  let remaining = amount;
+export function applyDamageWithTempHP(
+  target: Combatant,
+  amount: number,
+  damageType?: DamageType | null,
+): number {
+  // PHB p.197: resistance halves damage (rounded down) before temp HP absorption.
+  let effective = amount;
+  if (damageType && target.resistances?.includes(damageType)) {
+    effective = Math.floor(amount / 2);
+  }
+
+  let remaining = effective;
   if (target.tempHP > 0) {
     const absorbed = Math.min(target.tempHP, remaining);
     target.tempHP -= absorbed;
     remaining -= absorbed;
   }
-  if (remaining <= 0) return amount; // all absorbed
-  return applyDamage(target, remaining) + (amount - remaining);
+  if (remaining <= 0) return effective; // all absorbed by temp HP
+  return applyDamage(target, remaining) + (effective - remaining);
+}
+
+// ---- Resistance helpers ------------------------------------
+
+/** Grant a damage-type resistance to a combatant (idempotent — no duplicates). */
+export function addResistance(c: Combatant, type: DamageType): void {
+  if (!c.resistances.includes(type)) c.resistances.push(type);
+}
+
+/** Remove a damage-type resistance from a combatant (no-op if not present). */
+export function removeResistance(c: Combatant, type: DamageType): void {
+  c.resistances = c.resistances.filter(r => r !== type);
 }
 
 // ---- Sneak Attack (PHB p.96) --------------------------------

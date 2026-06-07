@@ -48,7 +48,7 @@ function makeCombatant(id = 'c1'): Combatant {
     usedSneakAttackThisTurn: false, helpedThisTurn: false,
     isDefender: false, cannotAttack: false, hasHands: true,
     isDead: false, isUnconscious: false,
-    advantages: [], vulnerabilities: [],
+    advantages: [], vulnerabilities: [], resistances: [],
   };
 }
 

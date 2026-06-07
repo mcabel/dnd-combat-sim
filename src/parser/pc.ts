@@ -363,6 +363,7 @@ export function pcToCombatant(
     isUnconscious: false,
     advantages:      [],
     vulnerabilities: [],
+    resistances:     [],
   };
 }
 

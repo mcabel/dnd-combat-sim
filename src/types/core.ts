@@ -304,6 +304,11 @@ export interface Combatant {
   // Both arrays are ticked at the start of this creature's turn via tickAdvantages().
   advantages:      AdvantageEntry[];
   vulnerabilities: AdvantageEntry[];
+
+  // Damage resistances (PHB p.197): incoming damage of listed types is halved.
+  // Populated by class features (Rage → B/P/S), racial traits, spells (Stoneskin), etc.
+  // Use addResistance() / removeResistance() helpers to avoid duplicates.
+  resistances: DamageType[];
 }
 
 // ---- Battlefield --------------------------------------------

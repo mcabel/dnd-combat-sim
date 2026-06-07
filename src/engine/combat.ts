@@ -15,6 +15,7 @@ import {
   rollConcentrationSave, rollDeathSave,
   applyDamageWithTempHP, hasPackTacticsAdvantage,
   canSneakAttack, sneakAttackDice,
+  addResistance, removeResistance,
   teamHasNoAttackCapability, canDealDamage, makeImprovisedUnarmed, makeImprovisedWeapon
 } from './utils';
 import {
@@ -23,7 +24,7 @@ import {
   livingEnemiesOf, livingAlliesOf, posKey
 } from './movement';
 import { planTurn, planLegendaryAction, shouldTakeOpportunityAttack } from '../ai/planner';
-import { shouldSmite, applyDivineSmite } from '../ai/resources';
+import { shouldSmite, applyDivineSmite, tickRage } from '../ai/resources';
 import { isControlledMount, mountDeathRiderCheck, isIndependentMount } from '../summons/mount';
 import { checkMountedCombatant, checkProtectionStyle, checkInterceptionReduction } from './mount_redirect';
 import { tickAdvantages, grantSelf, grantVulnerability } from './adv_system';
@@ -85,6 +86,9 @@ export interface EngineState {
   // Per-round damage tracking (for 10-round no-damage auto-defeat rule)
   damageThisRound: Map<string, number>;   // faction → total damage dealt this round
   noDamageRounds: Map<string, number>;    // faction → consecutive rounds with 0 damage
+  // Rage tracking: IDs of combatants that took damage since their last rage tick.
+  // Populated whenever dealt > 0; cleared per-actor at start of their turn.
+  rageDamagedSinceLastTurn: Set<string>;
 }
 
 function makeState(battlefield: Battlefield): EngineState {
@@ -94,6 +98,7 @@ function makeState(battlefield: Battlefield): EngineState {
     disengagedThisTurn: new Set(),
     damageThisRound: new Map(),
     noDamageRounds: new Map(),
+    rageDamagedSinceLastTurn: new Set(),
   };
 }
 
@@ -125,7 +130,7 @@ function resolveAttack(
     if (action.damage) {
       const dmg = rollDamage(action.damage, false);
       const actual = save.success ? Math.floor(dmg / 2) : dmg; // half on save success
-      const dealt = applyDamageWithTempHP(target, actual);
+      const dealt = applyDamageWithTempHP(target, actual, action.damageType);
       // Concentration check if target was concentrating
       if (target.concentration?.active && dealt > 0) {
         const maintained = rollConcentrationSave(target, dealt);
@@ -135,6 +140,7 @@ function resolveAttack(
       log(state, 'damage', attacker.id,
         `${attacker.name} deals ${dealt} ${action.damageType ?? ''} damage to ${target.name} (save ${save.success ? 'halved' : 'full'})`,
         target.id, dealt);
+      if (dealt > 0) state.rageDamagedSinceLastTurn.add(target.id);
       checkDeath(target, state);
     }
     return;
@@ -144,7 +150,7 @@ function resolveAttack(
   if (action.hitBonus === null) {
     if (action.damage) {
       const dmg = rollDamage(action.damage, false);
-      const dealt = applyDamageWithTempHP(target, dmg);
+      const dealt = applyDamageWithTempHP(target, dmg, action.damageType);
       if (target.concentration?.active && dealt > 0) {
         const maintained = rollConcentrationSave(target, dealt);
         if (!maintained) log(state, 'condition_remove', target.id,
@@ -153,6 +159,7 @@ function resolveAttack(
       log(state, 'damage', attacker.id,
         `${attacker.name} auto-hits ${target.name} for ${dealt} ${action.damageType ?? ''} damage`,
         target.id, dealt);
+      if (dealt > 0) state.rageDamagedSinceLastTurn.add(target.id);
       checkDeath(target, state, attacker);
     }
     return;
@@ -233,6 +240,18 @@ function resolveAttack(
         `${attacker.name} applies Sneak Attack (+${saRoll} damage)!`, target.id, saRoll);
     }
 
+    // Rage damage bonus: +2 to melee damage while raging (PHB p.48).
+    // Applies to melee weapon attacks only (not ranged, not saves, not auto-hit).
+    if (
+      attacker.resources?.rage?.active &&
+      action.attackType === 'melee'
+    ) {
+      const rageBonus = 2; // Level 1–8: +2 (level 9+ and 16+ are future work)
+      dmg += rageBonus;
+      log(state, 'action', attacker.id,
+        `${attacker.name} adds Rage bonus (+${rageBonus} damage)!`, target.id, rageBonus);
+    }
+
     // ST-5C: Fighting Style: Interception — rider reduces damage to mount (reaction)
     const { reduction: interceptReduction, rider: interceptRider } =
       checkInterceptionReduction(target, dmg, bf);
@@ -243,7 +262,7 @@ function resolveAttack(
         target.id, interceptReduction);
     }
 
-    const dealt = applyDamageWithTempHP(target, dmg);
+    const dealt = applyDamageWithTempHP(target, dmg, action.damageType);
     if (target.concentration?.active && dealt > 0) {
       const maintained = rollConcentrationSave(target, dealt);
       if (!maintained) log(state, 'condition_remove', target.id,
@@ -256,6 +275,8 @@ function resolveAttack(
     if (dealt > 0) {
       const prev = state.damageThisRound.get(attacker.faction) ?? 0;
       state.damageThisRound.set(attacker.faction, prev + dealt);
+      // Track for rage-end check: target took damage since their last turn
+      state.rageDamagedSinceLastTurn.add(target.id);
     }
     checkDeath(target, state);
   }
@@ -542,10 +563,20 @@ function executePlannedAction(
       log(state, 'action', actor.id, plan.description);
       break;
     }
+    case 'rage': {
+      // PHB p.48: Rage — bonus action.
+      // +2 to melee damage rolls while raging (applied in resolveAttack, not here).
+      // Resistance to bludgeoning, piercing, and slashing damage.
+      // activateRagePlan() already set r.active = true and decremented r.remaining.
+      const rageDmgTypes: Array<'bludgeoning' | 'piercing' | 'slashing'> =
+        ['bludgeoning', 'piercing', 'slashing'];
+      for (const dt of rageDmgTypes) addResistance(actor, dt);
+      log(state, 'action', actor.id, plan.description);
+      break;
+    }
     case 'hide':
     case 'ready':
     case 'secondWind':
-    case 'rage':
     case 'layOnHands':
     case 'bardicInspiration':
       // Stubs: logged but not yet mechanically resolved
@@ -786,6 +817,11 @@ export function runCombat(
       actor.usedSneakAttackThisTurn = false;
       actor.helpedThisTurn = false;
 
+      // Capture rage damage flag (set by attacks on OTHER creatures' turns) then clear it
+      // so damage DURING this turn isn't double-counted in the next tick.
+      const damageTakenSinceLastTurn = state.rageDamagedSinceLastTurn.has(actor.id);
+      state.rageDamagedSinceLastTurn.delete(actor.id);
+
       // Tick advantage/disadvantage durations (expire until_next_turn; decrement rounds)
       tickAdvantages(actor);
 
@@ -826,6 +862,25 @@ export function runCombat(
 
       // Execute the plan
       executeTurnPlan(actor, plan, state);
+
+      // Tick Rage at end of actor's turn (PHB p.48: rage ends if the barbarian didn't
+      // attack or take damage since their last turn). Also removes B/P/S resistance
+      // when rage ends.
+      if (actor.resources?.rage?.active) {
+        const attackedThisTurn =
+          plan.action?.type === 'attack' ||
+          plan.bonusAction?.type === 'attack';
+        const rageActiveBeforeTick = actor.resources.rage.active;
+        tickRage(actor, attackedThisTurn, damageTakenSinceLastTurn);
+        if (rageActiveBeforeTick && !actor.resources.rage.active) {
+          // Rage ended — strip B/P/S resistances granted by Rage
+          removeResistance(actor, 'bludgeoning');
+          removeResistance(actor, 'piercing');
+          removeResistance(actor, 'slashing');
+          log(state, 'action', actor.id,
+            `${actor.name}'s Rage ends.`, undefined);
+        }
+      }
 
       // Update perception for all observers
       const target = plan.targetId ? battlefield.combatants.get(plan.targetId) ?? null : null;

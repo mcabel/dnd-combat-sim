@@ -480,6 +480,7 @@ export function monsterToCombatant(
     isUnconscious: false,
     advantages:      [],
     vulnerabilities: [],
+    resistances:     [],
   };
 }
 

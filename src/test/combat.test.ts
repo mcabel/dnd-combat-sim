@@ -55,7 +55,7 @@ function makeC(overrides: Partial<Combatant> = {}): Combatant {
     cannotAttack: false,
     hasHands: false,
     isDead: false, isUnconscious: false,
-    advantages: [], vulnerabilities: [],
+    advantages: [], vulnerabilities: [], resistances: [],
     ...overrides,
   };
 }
@@ -115,17 +115,21 @@ console.log('\n=== 1. Minimal fight — attacker wins ===\n');
 console.log('\n=== 2. Reversed initiative — party wins ===\n');
 
 {
-  const att2 = makeC({ id: 'att2', faction: 'enemy', pos: {x:0,y:0,z:0}, maxHP: 7, currentHP: 7, actions: [clawAction()] });
-  const def2 = makeC({ id: 'def2', faction: 'party', pos: {x:1,y:0,z:0}, actions: [clawAction()] });
+  // att2 has 7 HP / AC 10. def2 gets a guaranteed-hit, guaranteed-kill weapon (hitBonus +20,
+  // min damage 11). This isolates the "initiative order matters" logic without RNG variance.
+  const guaranteedOneShot: Action = {
+    ...clawAction(),
+    hitBonus: 20,
+    damage: { count: 1, sides: 4, bonus: 10, average: 12.5 }, // min 11 > 7 HP
+  };
+  const att2 = makeC({ id: 'att2', faction: 'enemy', pos: {x:0,y:0,z:0}, maxHP: 7, currentHP: 7, ac: 10, actions: [clawAction()] });
+  const def2 = makeC({ id: 'def2', faction: 'party', pos: {x:1,y:0,z:0}, actions: [guaranteedOneShot] });
   const bf2 = makeFlatBattlefield(10, 10, [att2, def2]);
 
   const log2 = runCombat(bf2, fixedInit(def2, att2), { maxRounds: 10 });
 
-  // With death saves, the attacker (now going second) must accumulate 3 failures
   assert('Defender faction wins going first', log2.winner === 'party', `winner=${log2.winner}`);
-  // Death saves mean unconscious PCs still take turns (rolling saves)
-  // → combat legitimately runs a few more rounds; accept ≤ 8
-  assert('Quick kill (≤ 8 rounds with death saves)', log2.rounds <= 8, `took ${log2.rounds} rounds`);
+  assert('Quick kill (1 round guaranteed)', log2.rounds === 1, `took ${log2.rounds} rounds`);
 }
 
 // ============================================================
