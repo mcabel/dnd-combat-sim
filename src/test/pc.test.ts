@@ -277,9 +277,51 @@ if (paladin) {
 }
 
 // ============================================================
-// 11. Common rules for all PCs
+// 11. Druid (Wood Elf, Circle of the Land)
 // ============================================================
-console.log('\n=== 11. Universal rules for all 12 PCs ===\n');
+console.log('\n=== 11. Druid ===\n');
+
+const druid = spawnPC(pcMap, 'Druid', {x:9,y:0,z:0});
+assert('Spawned', druid !== null);
+if (druid) {
+  eq('HP = 9',      druid.maxHP, 9);
+  eq('AC = 16',     druid.ac,    16);    // Leather(14) + Wooden Shield(+2)
+  eq('Speed = 35',  druid.speed, 35);   // Wood Elf Fleet of Foot
+  eq('WIS = 16',    druid.wis,   16);
+
+  // Weapons / cantrips
+  const qs = druid.actions.find(a => a.name === 'Quarterstaff (Shillelagh)');
+  assert('Has Quarterstaff (Shillelagh)',        qs !== undefined);
+  if (qs) {
+    eq('Quarterstaff (Shillelagh) +5 to hit',   qs.hitBonus, 5);
+    assert('Quarterstaff (Shillelagh) 1d8 dmg', qs.damage?.sides === 8);
+    eq('Quarterstaff is melee',                 qs.attackType, 'melee');
+  }
+
+  const thornWhip = druid.actions.find(a => a.name === 'Thorn Whip');
+  assert('Has Thorn Whip',              thornWhip !== undefined);
+  if (thornWhip) {
+    eq('Thorn Whip +5 to hit',          thornWhip.hitBonus, 5);
+    assert('Thorn Whip 1d6 dmg',        thornWhip.damage?.sides === 6);
+  }
+
+  // Spell slots — 2 first-level slots at Level 1
+  assert('Has spellSlots',              druid.resources?.spellSlots !== undefined);
+  if (druid.resources?.spellSlots) {
+    eq('1st-level slots max = 2',       druid.resources.spellSlots[1]?.max,       2);
+    eq('1st-level slots remaining = 2', druid.resources.spellSlots[1]?.remaining, 2);
+    assert('No 2nd-level slots',        druid.resources.spellSlots[2] === undefined);
+  }
+
+  // Combatant fields from Session 24-25
+  eq('bardicInspirationDie = null',     druid.bardicInspirationDie, null);
+  assert('resistances empty',           druid.resistances.length === 0);
+}
+
+// ============================================================
+// 12. Common rules for all PCs
+// ============================================================
+console.log('\n=== 12. Universal rules for all 12 PCs ===\n');
 
 for (const [cls, rawEntry] of pcMap) {
   const pc = pcToCombatant(rawEntry, {x:0,y:0,z:0});

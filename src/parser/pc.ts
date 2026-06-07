@@ -365,6 +365,7 @@ export function pcToCombatant(
     vulnerabilities: [],
     resistances:     [],
     bardicInspirationDie: null,
+    wardingBond: null,
   };
 }
 

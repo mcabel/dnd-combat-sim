@@ -314,6 +314,12 @@ export interface Combatant {
   // Die size (e.g. 6 for d6). Consumed on the next attack roll or saving throw.
   // null = no inspiration die held.
   bardicInspirationDie: number | null;
+
+  // Warding Bond (PHB p.287): if non-null, this creature is the bonded target.
+  // The caster identified by casterId takes the same damage whenever this creature does.
+  // Grants +1 AC, +1 to saving throws, and resistance to all damage types.
+  // Bond breaks when caster drops to 0 HP.  null = no bond active.
+  wardingBond: { casterId: string } | null;
 }
 
 // ---- Battlefield --------------------------------------------

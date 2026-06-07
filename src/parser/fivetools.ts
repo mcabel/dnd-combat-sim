@@ -482,6 +482,7 @@ export function monsterToCombatant(
     vulnerabilities: [],
     resistances:     [],
     bardicInspirationDie: null,
+    wardingBond: null,
   };
 }
 

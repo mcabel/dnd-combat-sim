@@ -113,7 +113,10 @@ export function rollSave(
   // Bardic Inspiration die — consumed on save rolls too (PHB p.54)
   const biBonus = consumeBardicInspiration(combatant);
 
-  const total = roll + mod + prof + biBonus;
+  // Warding Bond: +1 to all saving throws while bonded (PHB p.287)
+  const wbBonus = combatant.wardingBond ? 1 : 0;
+
+  const total = roll + mod + prof + biBonus + wbBonus;
   return { roll, total, success: total >= dc };
 }
 
@@ -547,8 +550,12 @@ export function applyDamageWithTempHP(
   damageType?: DamageType | null,
 ): number {
   // PHB p.197: resistance halves damage (rounded down) before temp HP absorption.
+  // Warding Bond (PHB p.287) grants resistance to ALL damage types.
   let effective = amount;
-  if (damageType && target.resistances?.includes(damageType)) {
+  const hasResistance =
+    target.wardingBond !== null ||
+    (damageType != null && (target.resistances?.includes(damageType) ?? false));
+  if (hasResistance) {
     effective = Math.floor(amount / 2);
   }
 

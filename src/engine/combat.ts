@@ -142,6 +142,7 @@ function resolveAttack(
         `${attacker.name} deals ${dealt} ${action.damageType ?? ''} damage to ${target.name} (save ${save.success ? 'halved' : 'full'})`,
         target.id, dealt);
       if (dealt > 0) state.rageDamagedSinceLastTurn.add(target.id);
+      applyWardingBondRedirect(target, dealt, state);
       checkDeath(target, state);
     }
     return;
@@ -161,6 +162,7 @@ function resolveAttack(
         `${attacker.name} auto-hits ${target.name} for ${dealt} ${action.damageType ?? ''} damage`,
         target.id, dealt);
       if (dealt > 0) state.rageDamagedSinceLastTurn.add(target.id);
+      applyWardingBondRedirect(target, dealt, state);
       checkDeath(target, state, attacker);
     }
     return;
@@ -190,11 +192,13 @@ function resolveAttack(
       `${attacker.name} uses Bardic Inspiration die (+${biBonus})!`, target.id, biBonus);
   }
 
-  const hits = isCritOverride ?? attackHits(result.roll, result.total, target.ac);
+  // Warding Bond: +1 AC while bonded (PHB p.287)
+  const effectiveAC = target.ac + (target.wardingBond ? 1 : 0);
+  const hits = isCritOverride ?? attackHits(result.roll, result.total, effectiveAC);
 
   if (!hits) {
     log(state, 'attack_miss', attacker.id,
-      `${attacker.name} misses ${target.name} with ${action.name} (rolled ${result.roll}+${action.hitBonus}=${result.total} vs AC ${target.ac})`,
+      `${attacker.name} misses ${target.name} with ${action.name} (rolled ${result.roll}+${action.hitBonus}=${result.total} vs AC ${effectiveAC})`,
       target.id, result.roll);
     return;
   }
@@ -220,7 +224,7 @@ function resolveAttack(
 
   const isCrit = isCritOverride === true || result.isCrit;
   log(state, isCrit ? 'attack_crit' : 'attack_hit', attacker.id,
-    `${attacker.name} ${isCrit ? 'CRITS' : 'hits'} ${target.name} with ${action.name} (${result.total} vs AC ${target.ac})`,
+    `${attacker.name} ${isCrit ? 'CRITS' : 'hits'} ${target.name} with ${action.name} (${result.total} vs AC ${effectiveAC})`,
     target.id, result.roll);
 
   if (action.damage) {
@@ -288,7 +292,39 @@ function resolveAttack(
       // Track for rage-end check: target took damage since their last turn
       state.rageDamagedSinceLastTurn.add(target.id);
     }
+    applyWardingBondRedirect(target, dealt, state);
     checkDeath(target, state);
+  }
+}
+
+/**
+ * Warding Bond (PHB p.287): after the bonded creature takes damage, the caster
+ * takes the same amount.  Breaks the bond if the caster drops to 0 HP.
+ * Called after every applyDamageWithTempHP on a bonded target.
+ */
+function applyWardingBondRedirect(
+  bonded:  Combatant,
+  dealt:   number,
+  state:   EngineState,
+): void {
+  if (!bonded.wardingBond || dealt <= 0) return;
+  const caster = state.battlefield.combatants.get(bonded.wardingBond.casterId);
+  if (!caster || caster.isDead || caster.isUnconscious) {
+    // Caster already incapacitated — bond ends silently
+    bonded.wardingBond = null;
+    return;
+  }
+  // Caster takes the same damage (null type — already post-resistance from bonded's side)
+  const casterDealt = applyDamageWithTempHP(caster, dealt, null);
+  log(state, 'damage', caster.id,
+    `${caster.name} takes ${casterDealt} damage from Warding Bond (protecting ${bonded.name})`,
+    bonded.id, casterDealt);
+  checkDeath(caster, state);
+  // Break bond if caster dropped to 0 HP
+  if (caster.isDead || caster.isUnconscious) {
+    bonded.wardingBond = null;
+    log(state, 'condition_remove', caster.id,
+      `Warding Bond ends — ${caster.name} dropped to 0 HP`, bonded.id);
   }
 }
 
@@ -344,6 +380,11 @@ function checkDeath(target: Combatant, state: EngineState, attacker?: Combatant)
       c.grappledBy = undefined;
       log(state, 'condition_remove', target.id,
         `${c.name} is released from ${target.name}'s grapple!`, c.id);
+    }
+    // Warding Bond (PHB p.287): spell ends when caster drops to 0 HP.
+    // Clear bond on any creature bonded to this (now-downed) caster.
+    if (c.wardingBond?.casterId === target.id) {
+      c.wardingBond = null;
     }
   }
   // Also release any grapple this target was in (in case it gets swept up later)
