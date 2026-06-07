@@ -358,4 +358,7 @@ export interface PlannedAction {
   action: Action | null;
   targetId: string | null;
   description: string;
+  // For healing actions (secondWind, layOnHands): HP restored this action.
+  // secondWindPlan/layOnHandsPlan set this; engine uses it to emit the 'heal' log event.
+  healAmount?: number;
 }

@@ -113,13 +113,14 @@ export function shouldSecondWind(fighter: Combatant): boolean {
 
 export function secondWindPlan(fighter: Combatant): PlannedAction {
   fighter.resources!.secondWind!.remaining--;
-  // Roll 1d10 + fighter level (1); engine applies this healing
+  // Roll 1d10 + fighter level (1); HP applied here so engine only needs to log the heal.
   const roll = rollDie(10) + 1;
   fighter.currentHP = Math.min(fighter.maxHP, fighter.currentHP + roll);
   return {
     type: 'secondWind',
     action: null,
     targetId: fighter.id,
+    healAmount: roll,
     description: `${fighter.name} uses Second Wind, regaining ${roll} HP (now ${fighter.currentHP}/${fighter.maxHP})`,
   };
 }
@@ -194,6 +195,7 @@ export function layOnHandsPlan(paladin: Combatant, targetId: string): PlannedAct
     type: 'layOnHands',
     action: null,
     targetId,
+    healAmount: amount,
     description: `${paladin.name} uses Lay on Hands for ${amount} HP`,
   };
 }

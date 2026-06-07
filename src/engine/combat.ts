@@ -574,10 +574,41 @@ function executePlannedAction(
       log(state, 'action', actor.id, plan.description);
       break;
     }
+    case 'secondWind': {
+      // HP was already applied in secondWindPlan. Emit action + heal log events.
+      // PHB p.72: Fighter bonus action; heals 1d10 + fighter level HP.
+      log(state, 'action', actor.id, plan.description);
+      if (plan.healAmount && plan.healAmount > 0) {
+        log(state, 'heal', actor.id,
+          `${actor.name} recovers ${plan.healAmount} HP from Second Wind`,
+          actor.id, plan.healAmount);
+      }
+      break;
+    }
+    case 'layOnHands': {
+      // PHB p.84: Paladin action; restore HP from the Lay on Hands pool.
+      // applyHeal handles the unconscious → conscious transition for downed allies.
+      const lohTarget = plan.targetId
+        ? state.battlefield.combatants.get(plan.targetId) ?? null
+        : null;
+      if (lohTarget && !lohTarget.isDead && plan.healAmount && plan.healAmount > 0) {
+        const healed = applyHeal(lohTarget, plan.healAmount);
+        if (lohTarget.isUnconscious && healed > 0) {
+          // applyHeal already cleared conditions — log regained consciousness
+          log(state, 'condition_remove', lohTarget.id,
+            `${lohTarget.name} regains consciousness!`, undefined);
+        }
+        log(state, 'action', actor.id, plan.description);
+        log(state, 'heal', actor.id,
+          `${actor.name} restores ${healed} HP to ${lohTarget.name}`,
+          lohTarget.id, healed);
+      } else {
+        log(state, 'action', actor.id, plan.description);
+      }
+      break;
+    }
     case 'hide':
     case 'ready':
-    case 'secondWind':
-    case 'layOnHands':
     case 'bardicInspiration':
       // Stubs: logged but not yet mechanically resolved
       log(state, 'action', actor.id, plan.description);
