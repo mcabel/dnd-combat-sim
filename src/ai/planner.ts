@@ -5,7 +5,7 @@
 // ============================================================
 
 // (adjacentEnemyCount and livingEnemiesOf already imported via movement)
-import { Combatant, Battlefield, TurnPlan, PlannedAction } from '../types/core';
+import { Combatant, Battlefield, TurnPlan, PlannedAction, Vec3 } from '../types/core';
 import { selectTarget } from './targeting';
 import {
   shouldRage, activateRagePlan, shouldSecondWind, secondWindPlan,
@@ -15,7 +15,7 @@ import {
 import { selectAction, selfPreserveDecision, selectLegendaryAction } from './actions';
 import {
   canReach, bestAdjacentPos, bestRangedPosition,
-  adjacentEnemyCount, livingEnemiesOf, livingAlliesOf
+  adjacentEnemyCount, livingEnemiesOf, livingAlliesOf, posKey
 } from '../engine/movement';
 import { makeImprovisedUnarmed, makeImprovisedWeapon } from '../engine/utils';
 
@@ -86,6 +86,100 @@ function planMovement(
 
   // Already in reach: no movement needed (or optional repositioning)
   return { moveBefore: null, moveAfter: null };
+}
+
+// ---- Cunning Action (Rogue Level 2+) ------------------------
+
+/**
+ * Compute a 1-square retreat destination for the hit-and-run Disengage pattern.
+ * Steps one grid square directly away from the target; clamps to battlefield bounds.
+ * Falls back to the orthogonal axis if the primary retreat direction goes off-map.
+ * @param startPos — position from which the Rogue is attacking (after moveBefore)
+ */
+function cunningRetreatPos(startPos: Vec3, target: Combatant, bf: Battlefield): Vec3 {
+  const dx = startPos.x - target.pos.x;
+  const dy = startPos.y - target.pos.y;
+
+  // Try candidates in priority order: primary axis away from target, then secondary
+  const candidates: Vec3[] = [];
+
+  if (Math.abs(dx) >= Math.abs(dy) && dx !== 0) {
+    // Primary: step in x (dominant)
+    candidates.push({ x: startPos.x + Math.sign(dx), y: startPos.y, z: startPos.z });
+    // Secondary: step in y
+    if (dy !== 0) {
+      candidates.push({ x: startPos.x, y: startPos.y + Math.sign(dy), z: startPos.z });
+    } else {
+      candidates.push({ x: startPos.x, y: startPos.y + 1, z: startPos.z });
+    }
+  } else if (dy !== 0) {
+    // Primary: step in y
+    candidates.push({ x: startPos.x, y: startPos.y + Math.sign(dy), z: startPos.z });
+    // Secondary: step in x
+    if (dx !== 0) {
+      candidates.push({ x: startPos.x + Math.sign(dx), y: startPos.y, z: startPos.z });
+    } else {
+      candidates.push({ x: startPos.x + 1, y: startPos.y, z: startPos.z });
+    }
+  } else {
+    // Exactly on top of target — default to north
+    candidates.push({ x: startPos.x, y: startPos.y + 1, z: startPos.z });
+  }
+
+  // Return the first candidate that's within bounds and differs from startPos
+  for (const c of candidates) {
+    const clamped: Vec3 = {
+      x: Math.max(0, Math.min(bf.width  - 1, c.x)),
+      y: Math.max(0, Math.min(bf.height - 1, c.y)),
+      z: startPos.z,
+    };
+    if (posKey(clamped) !== posKey(startPos)) return clamped;
+  }
+
+  // All directions off-map (1×1 battlefield?) — return startPos; caller checks
+  return startPos;
+}
+
+/**
+ * Plan Cunning Action bonus for a Rogue (Level 2+).
+ * Returns { bonusAction, moveAfter } for the caller to apply to the TurnPlan.
+ *
+ * Implemented:
+ *   DISENGAGE — after a melee attack, Disengage as bonus action and step back.
+ *   "Hit and run": attack → disengage → retreat 5 ft. No OA possible.
+ *
+ * Deferred:
+ *   DASH — bonus-action Dash needs to fire before movement (engine ordering change).
+ *   HIDE — requires LOS/cover tracking to resolve stealth meaningfully.
+ *
+ * @param startPos — the Rogue's planned attack position (plan.moveBefore ?? self.pos)
+ */
+function planCunningAction(
+  self: Combatant,
+  chosenAction: PlannedAction | null,
+  target: Combatant | null,
+  startPos: Vec3,
+  bf: Battlefield
+): { bonusAction: PlannedAction | null; moveAfter: Vec3 | null } {
+  if (
+    chosenAction?.type === 'attack' &&
+    chosenAction.action?.attackType === 'melee' &&
+    target !== null
+  ) {
+    const retreatDest = cunningRetreatPos(startPos, target, bf);
+    const canRetreat  = posKey(retreatDest) !== posKey(startPos);
+    return {
+      bonusAction: {
+        type: 'disengage',
+        action: null,
+        targetId: null,
+        description: `${self.name} uses Cunning Action: Disengage`,
+      },
+      moveAfter: canRetreat ? retreatDest : null,
+    };
+  }
+
+  return { bonusAction: null, moveAfter: null };
 }
 
 // ---- Bonus action planner -----------------------------------
@@ -382,6 +476,21 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
 
   // === BONUS ACTION ===
   plan.bonusAction = planBonusAction(self, target, battlefield);
+
+  // === CUNNING ACTION (Rogue Level 2+) ===
+  // Adds Disengage (hit-and-run) as bonus action when cunningAction is available
+  // and no higher-priority bonus action was already planned (rage, second wind, etc.).
+  if (!plan.bonusAction && self.resources?.cunningAction) {
+    const postMovePos = plan.moveBefore ?? self.pos;
+    const ca = planCunningAction(self, chosenAction, target, postMovePos, battlefield);
+    if (ca.bonusAction) {
+      plan.bonusAction = ca.bonusAction;
+      // Add retreat moveAfter only if movement wasn't already planned
+      if (ca.moveAfter && !plan.moveAfter) {
+        plan.moveAfter = ca.moveAfter;
+      }
+    }
+  }
 
   return plan;
 }

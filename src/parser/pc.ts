@@ -66,6 +66,7 @@ interface RawResources {
   divineSense?:        RawResource;
   pactMagic?:          RawResource;
   arcaneRecovery?:     RawResource;
+  cunningAction?:      boolean;                // Level 2+: Dash/Disengage/Hide as bonus action
 }
 
 export interface RawPCEntry {
@@ -255,6 +256,11 @@ function buildResources(raw: RawPCEntry): PlayerResources | null {
   // Sneak Attack (Rogue)
   if (r?.sneakAttack) {
     result.sneakAttackDice = r.sneakAttack.dice ?? '1d6';
+  }
+
+  // Cunning Action (Rogue Level 2+)
+  if (r?.cunningAction) {
+    result.cunningAction = true;
   }
 
   // Arcane Recovery (Wizard)

@@ -686,7 +686,8 @@ function executePlannedAction(
  * (Movement can split around the action per PHB p.190.)
  */
 function executeTurnPlan(actor: Combatant, plan: TurnPlan, state: EngineState): void {
-  const isDisengage = plan.action?.type === 'disengage';
+  const isDisengage = plan.action?.type === 'disengage'
+                   || plan.bonusAction?.type === 'disengage';
 
   const isDash = plan.action?.type === 'dash';
 

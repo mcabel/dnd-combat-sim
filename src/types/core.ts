@@ -169,6 +169,7 @@ export interface PlayerResources {
 
   // Rogue
   sneakAttackDice?:    string;                               // e.g. "1d6"
+  cunningAction?:      boolean;                              // Level 2+: Dash/Disengage/Hide as bonus action
 
   // Wizard
   arcaneRecovery?:     { usesRemaining: number };             // 1/day, short rest
