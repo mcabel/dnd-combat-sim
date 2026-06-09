@@ -60,6 +60,36 @@ function avg(count: number, sides: number, bonus = 0): number {
  */
 export const SPELL_DB: Record<string, SpellTemplate> = {
 
+  // ---- Healing (action / bonus action) --------------------
+  // These have no damage and attackType null — they are NOT selected by selectAction.
+  // The planner explicitly checks for them by name via shouldCastCureWounds /
+  // shouldCastHealingWord. Adding them to the DB only so the parser creates Action
+  // objects for them (used by the name-checks in planner.ts).
+
+  'cure wounds': {
+    attackType: null,    // touch range, no attack roll
+    rangeNormal: 5,      // touch
+    damage: null,
+    damageType: null,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 1,
+    // costType defaults to 'action'
+  },
+
+  'healing word': {
+    attackType: null,    // 60ft range, no attack roll
+    rangeNormal: 60,
+    damage: null,
+    damageType: null,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 1,
+    bonusAction: true,   // bonus action cast
+  },
+
   // ---- Bard -----------------------------------------------
 
   'dissonant whispers': {

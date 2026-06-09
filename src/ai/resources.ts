@@ -265,3 +265,102 @@ export function hexPlan(warlock: Combatant, targetId: string): PlannedAction {
 function startConcentration_proxy(c: Combatant, spellName: string): void {
   c.concentration = { active: true, spellName, dcIfHit: 10 };
 }
+
+// ---- Healing Spells (Cleric / Druid / Bard / Paladin) -------
+
+/**
+ * Ability modifier from a stat (thin helper — avoids importing utils).
+ */
+function abMod(score: number): number {
+  return Math.floor((score - 10) / 2);
+}
+
+/**
+ * Find the best ally (or self) to heal with a spell.
+ *
+ * Priority:
+ *   1. Any downed (unconscious, !isDead) party member within range
+ *   2. Self below 25% HP
+ *   3. Any ally below 25% HP within range
+ *
+ * Returns null if no healing is warranted.
+ */
+function healSpellTarget(
+  caster: Combatant,
+  rangeFt: number,
+  battlefield: Battlefield
+): Combatant | null {
+  const inRange = (c: Combatant) => chebyshev3D(caster.pos, c.pos) * 5 <= rangeFt;
+
+  // 1. Revive a downed ally
+  for (const [, c] of battlefield.combatants) {
+    if (c.faction === caster.faction && c.isUnconscious && !c.isDead && inRange(c)) {
+      return c;
+    }
+  }
+
+  // 2. Self-heal if critical
+  if (caster.currentHP < caster.maxHP * 0.25) return caster;
+
+  // 3. Any party member below 25% HP
+  for (const [, c] of battlefield.combatants) {
+    if (c.faction === caster.faction && c.id !== caster.id &&
+        !c.isDead && !c.isUnconscious &&
+        c.currentHP < c.maxHP * 0.25 && inRange(c)) {
+      return c;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * True if the caster should spend an action on Cure Wounds this turn.
+ * Only fires when a slot is available AND a valid heal target exists.
+ */
+export function shouldCastCureWounds(
+  caster: Combatant,
+  battlefield: Battlefield
+): Combatant | null {
+  if (!hasSpellSlot(caster)) return null;
+  // Cure Wounds is Touch range (5ft)
+  return healSpellTarget(caster, 5, battlefield);
+}
+
+/**
+ * True if the caster should spend a BONUS action on Healing Word this turn.
+ * Only fires when a slot is available AND a valid heal target exists.
+ */
+export function shouldCastHealingWord(
+  caster: Combatant,
+  battlefield: Battlefield
+): Combatant | null {
+  if (!hasSpellSlot(caster)) return null;
+  // Healing Word is 60ft range
+  return healSpellTarget(caster, 60, battlefield);
+}
+
+/**
+ * Build a spellHeal PlannedAction.
+ * Rolls and applies the heal eagerly (same pattern as secondWind).
+ * isHealingWord=true → 1d4 + WIS mod (Healing Word), false → 1d8 + WIS mod (Cure Wounds).
+ */
+export function spellHealPlan(
+  caster: Combatant,
+  targetId: string,
+  isHealingWord: boolean
+): PlannedAction {
+  consumeSpellSlot(caster, 1);
+  const sides  = isHealingWord ? 4 : 8;
+  const roll   = rollDie(sides);
+  const mod    = abMod(caster.wis);
+  const amount = Math.max(1, roll + mod);
+  const spell  = isHealingWord ? 'Healing Word' : 'Cure Wounds';
+  return {
+    type: 'spellHeal',
+    action: null,
+    targetId,
+    healAmount: amount,
+    description: `${caster.name} casts ${spell} for ${amount} HP`,
+  };
+}

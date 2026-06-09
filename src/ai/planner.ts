@@ -11,11 +11,12 @@ import {
   shouldRage, activateRagePlan, shouldSecondWind, secondWindPlan,
   shouldLayOnHands, layOnHandsPlan, bardicInspirationTarget, bardicInspirationPlan,
   shouldCastHex, hexPlan,
+  shouldCastCureWounds, shouldCastHealingWord, spellHealPlan,
 } from './resources';
 import { selectAction, selfPreserveDecision, selectLegendaryAction } from './actions';
 import {
   canReach, bestAdjacentPos, bestRangedPosition,
-  adjacentEnemyCount, livingEnemiesOf, livingAlliesOf, posKey, distanceFt
+  adjacentEnemyCount, livingEnemiesOf, livingAlliesOf, posKey, distanceFt, chebyshev3D
 } from '../engine/movement';
 import { makeImprovisedUnarmed, makeImprovisedWeapon, effectiveSpeed } from '../engine/utils';
 import { bestAttackAction } from './actions';
@@ -269,6 +270,16 @@ function planBonusAction(
     return secondWindPlan(self);
   }
 
+  // --- 2.5. Healing Word (Cleric / Druid / Bard — bonus action heal) ---
+  // Higher priority than Bardic Inspiration: reviving a downed ally is urgent.
+  // Only triggers when a heal target exists (downed ally or critical HP within 60ft).
+  {
+    const hwTarget = shouldCastHealingWord(self, battlefield);
+    if (hwTarget && self.actions.some(a => a.name === 'Healing Word')) {
+      return spellHealPlan(self, hwTarget.id, true);
+    }
+  }
+
   // --- 3. Bardic Inspiration ---
   if (self.resources?.bardicInspiration !== undefined) {
     const biTarget = bardicInspirationTarget(self, battlefield);
@@ -500,6 +511,24 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
   if (!target) return plan; // No enemies left
 
   plan.targetId = target.id;
+
+  // === CURE WOUNDS (action heal) — checked before attack ===
+  // Reviving a downed ally or saving a critical ally takes precedence over attacking.
+  // Only fires when the caster has 'Cure Wounds' in their actions AND a slot available.
+  if (self.actions.some(a => a.name === 'Cure Wounds')) {
+    const cwTarget = shouldCastCureWounds(self, battlefield);
+    if (cwTarget) {
+      plan.action = spellHealPlan(self, cwTarget.id, false);
+      plan.targetId = cwTarget.id;
+      // Movement: move toward the heal target if needed (Cure Wounds is touch range)
+      const dist = chebyshev3D(self.pos, cwTarget.pos) * 5;
+      if (dist > 5) {
+        plan.moveBefore = bestAdjacentPos(self, cwTarget, battlefield);
+      }
+      plan.bonusAction = planBonusAction(self, target, battlefield);
+      return plan;
+    }
+  }
 
   // === SELECT ACTION ===
   let chosenAction = selectAction(self, target, battlefield);

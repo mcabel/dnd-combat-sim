@@ -105,9 +105,13 @@ console.log('\n=== 1. Spell database ===\n');
 }
 {
   // Utility/heal spells not in DB → null
-  assert('Bless → null (buff, no combat target)',     lookupSpell('Bless') === null);
-  assert('Detect Magic → null (utility)',              lookupSpell('Detect Magic') === null);
-  assert('Cure Wounds → null (healing — deferred)',    lookupSpell('Cure Wounds') === null);
+  assert('Bless → null (buff, no combat target)',        lookupSpell('Bless') === null);
+  assert('Detect Magic → null (utility)',                lookupSpell('Detect Magic') === null);
+  {
+    const cw = lookupSpell('Cure Wounds');
+    assert('Cure Wounds in DB (heal-only, no damage)',   cw !== null && cw?.damage === null);
+    eq('Cure Wounds slotLevel = 1',                      cw?.slotLevel, 1);
+  }
 }
 
 // ============================================================
@@ -120,18 +124,18 @@ console.log('\n=== 2. Parser — spell actions parsed ===\n');
   const druid = spawnClass('Druid');
   const spellActions = druid.actions.filter(a => a.slotLevel && a.slotLevel >= 1);
   const names = spellActions.map(a => a.name);
-  assert('Druid has Thunderwave action',  names.includes('Thunderwave'));
-  assert('Druid has Entangle action',     names.includes('Entangle'));
-  assert('Druid has Faerie Fire action',  names.includes('Faerie Fire'));
-  assert('Druid skips Healing Word (not in DB)', !names.includes('Healing Word'));
-  assert('Druid skips Goodberry (not in DB)',    !names.includes('Goodberry'));
+  assert('Druid has Thunderwave action',   names.includes('Thunderwave'));
+  assert('Druid has Entangle action',      names.includes('Entangle'));
+  assert('Druid has Faerie Fire action',   names.includes('Faerie Fire'));
+  assert('Druid has Healing Word action',  names.includes('Healing Word'));
+  assert('Druid skips Goodberry (not in DB)', !names.includes('Goodberry'));
 }
 {
   const bard = spawnClass('Bard');
   const names = bard.actions.filter(a => a.slotLevel && a.slotLevel >= 1).map(a => a.name);
-  assert('Bard has Dissonant Whispers', names.includes('Dissonant Whispers'));
+  assert('Bard has Dissonant Whispers',   names.includes('Dissonant Whispers'));
+  assert('Bard has Cure Wounds action',   names.includes('Cure Wounds'));
   assert('Bard skips Charm Person (not in DB)', !names.includes('Charm Person'));
-  assert('Bard skips Cure Wounds (healing)', !names.includes('Cure Wounds'));
 }
 {
   const wizard = spawnClass('Wizard');

@@ -367,11 +367,11 @@ export interface PlannedAction {
     | 'attack' | 'cast' | 'dash' | 'disengage' | 'dodge'
     | 'help' | 'hide' | 'ready' | 'shove' | 'grapple' | 'escapeGrapple'
     | 'secondWind' | 'rage' | 'layOnHands' | 'bardicInspiration'
+    | 'spellHeal'    // Cure Wounds (action) or Healing Word (bonus action)
     | 'legendary';
   action: Action | null;
   targetId: string | null;
   description: string;
-  // For healing actions (secondWind, layOnHands): HP restored this action.
-  // secondWindPlan/layOnHandsPlan set this; engine uses it to emit the 'heal' log event.
+  // For healing actions (secondWind, layOnHands, spellHeal): HP restored this action.
   healAmount?: number;
 }

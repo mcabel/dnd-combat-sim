@@ -664,6 +664,28 @@ function executePlannedAction(
       }
       break;
     }
+    case 'spellHeal': {
+      // Cure Wounds (action) or Healing Word (bonus action).
+      // PHB p.230 / p.250: 1d8+WIS or 1d4+WIS; restores HP to a touched/nearby creature.
+      // healAmount was rolled eagerly in spellHealPlan (slot already consumed).
+      const shTarget = plan.targetId
+        ? state.battlefield.combatants.get(plan.targetId) ?? null
+        : null;
+      if (shTarget && !shTarget.isDead && plan.healAmount && plan.healAmount > 0) {
+        const healed = applyHeal(shTarget, plan.healAmount);
+        if (shTarget.isUnconscious && healed > 0) {
+          log(state, 'condition_remove', shTarget.id,
+            `${shTarget.name} regains consciousness!`, undefined);
+        }
+        log(state, 'action', actor.id, plan.description);
+        log(state, 'heal', actor.id,
+          `${actor.name} restores ${healed} HP to ${shTarget.name}`,
+          shTarget.id, healed);
+      } else {
+        log(state, 'action', actor.id, plan.description);
+      }
+      break;
+    }
     case 'hide':
     case 'ready':
     case 'bardicInspiration': {
