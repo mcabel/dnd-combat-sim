@@ -7,6 +7,7 @@
 import { Combatant, Action, Battlefield, PlannedAction } from '../types/core';
 import { canReach, livingEnemiesOf, adjacentEnemyCount, distanceFt } from '../engine/movement';
 import { expectedDamage, isBloodied, unarmedStrikeAction, hasAmmo, shouldGrapple, rollGrappleContest, rollShoveContest, makeImprovisedUnarmed, makeImprovisedWeapon, canGrappleOrShoveTarget } from '../engine/utils';
+import { hasSpellSlot } from './resources';
 
 // ---- Best single-target attack for a given target -----------
 
@@ -31,7 +32,9 @@ export function bestAttackAction(
     (a.attackType !== 'ranged' || hasAmmo(self, a.name)) &&
     // Concentration guard: don't cast a concentration spell when already concentrating
     // (would silently drop the active spell — only worthwhile if explicitly better)
-    !(a.requiresConcentration && alreadyConcentrating)
+    !(a.requiresConcentration && alreadyConcentrating) &&
+    // Slot gate: skip leveled spells when no spell slots remain
+    !(a.slotLevel && a.slotLevel > 0 && !hasSpellSlot(self))
   );
 
   if (candidates.length === 0) return null;
@@ -145,7 +148,8 @@ export function selectAction(
     a => !a.isMultiattack && a.attackType === 'melee' && canReach(self, target, a)
   );
   const hasRangedReach = self.actions.some(
-    a => (a.attackType === 'ranged' || a.attackType === 'spell') && canReach(self, target, a)
+    a => (a.attackType === 'ranged' || a.attackType === 'spell' || a.attackType === 'save')
+      && canReach(self, target, a)
   );
 
   // --- 1. Smart: Control before damage on high-threat target ---
@@ -239,30 +243,53 @@ export function selectAction(
     };
   }
 
-  // --- 4. Best single melee attack if in reach ---
+  // --- 4. Best single attack if in reach ---
+  // bestAttackAction considers all attack types (melee, spell, save) so a leveled
+  // save-based spell (e.g. Dissonant Whispers) may outperform a melee weapon.
+  // Use 'cast' type for spell/save actions so executePlannedAction consumes the slot.
   if (inMeleeReach) {
     const attack = bestAttackAction(self, target, true);
     if (attack) {
+      const actionType = (attack.attackType === 'save' || attack.attackType === 'spell')
+        ? 'cast' : 'attack';
       return {
-        type: 'attack',
+        type: actionType,
         action: attack,
         targetId: target.id,
-        description: `${self.name} attacks ${target.name} with ${attack.name}`,
+        description: actionType === 'cast'
+          ? `${self.name} uses ${attack.name} on ${target.name}`
+          : `${self.name} attacks ${target.name} with ${attack.name}`,
       };
     }
   }
 
   // --- 5. Ranged attack if target reachable ---
   if (hasRangedReach) {
-    const ranged = self.actions.find(
-      a => (a.attackType === 'ranged' || a.attackType === 'spell') && canReach(self, target, a)
-    ) ?? null;
+    // Pick the highest-expected-damage ranged/spell/save action in reach
+    // (slotLevel > 0 spells are filtered out if no slots remain — checked in bestRangedAction)
+    const rangedCandidates = self.actions.filter(
+      a => a.costType === 'action' &&
+        (a.attackType === 'ranged' || a.attackType === 'spell' || a.attackType === 'save') &&
+        canReach(self, target, a) &&
+        !(a.slotLevel && a.slotLevel > 0 && !hasSpellSlot(self))
+    );
+    const ranged = rangedCandidates.length > 0
+      ? rangedCandidates.reduce((best, a) => {
+          const scoreA = a.hitBonus !== null
+            ? expectedDamage(a.hitBonus, a.damage, target.ac)
+            : (a.damage?.average ?? 0); // auto-hit / save-based: use raw average
+          const scoreBest = best.hitBonus !== null
+            ? expectedDamage(best.hitBonus, best.damage, target.ac)
+            : (best.damage?.average ?? 0);
+          return scoreA > scoreBest ? a : best;
+        })
+      : null;
     if (ranged) {
       return {
-        type: 'attack',
+        type: ranged.attackType === 'save' ? 'cast' : 'attack',
         action: ranged,
         targetId: target.id,
-        description: `${self.name} shoots ${target.name} with ${ranged.name}`,
+        description: `${self.name} uses ${ranged.name} on ${target.name}`,
       };
     }
   }

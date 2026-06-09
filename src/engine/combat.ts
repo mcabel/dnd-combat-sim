@@ -26,7 +26,7 @@ import {
   livingEnemiesOf, livingAlliesOf, posKey
 } from './movement';
 import { planTurn, planLegendaryAction, shouldTakeOpportunityAttack } from '../ai/planner';
-import { shouldSmite, applyDivineSmite, tickRage } from '../ai/resources';
+import { shouldSmite, applyDivineSmite, tickRage, consumeSpellSlot } from '../ai/resources';
 import { isControlledMount, mountDeathRiderCheck, isIndependentMount } from '../summons/mount';
 import { checkMountedCombatant, checkProtectionStyle, checkInterceptionReduction } from './mount_redirect';
 import { tickAdvantages, grantSelf, grantVulnerability } from './adv_system';
@@ -478,6 +478,10 @@ function executePlannedAction(
       const target = plan.targetId ? bf.combatants.get(plan.targetId) : null;
       if (!target || target.isDead || target.isUnconscious) break;
       if (!plan.action) break;
+      // Consume spell slot for leveled spells (slotLevel >= 1)
+      if (plan.action.slotLevel && plan.action.slotLevel >= 1) {
+        consumeSpellSlot(actor, plan.action.slotLevel);
+      }
       // ST-5A: Mounted Combatant — redirect attack to rider if feat active (no reaction cost)
       const effectiveTarget = checkMountedCombatant(target, plan.action, bf) ?? target;
       if (effectiveTarget !== target) {

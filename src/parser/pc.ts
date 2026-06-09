@@ -10,6 +10,7 @@ import {
   PlayerResources, SpellSlots,
 } from '../types/core';
 import { abilityMod } from '../engine/utils';
+import { lookupSpell } from '../data/spells';
 
 // ---- Raw PC JSON shapes -------------------------------------
 
@@ -116,10 +117,19 @@ function weaponToAction(w: RawWeapon, profBonus: number): Action {
   const reachMatch = w.range.match(/melee\s+(\d+)ft/i);
   const reach      = reachMatch ? parseInt(reachMatch[1], 10) : 5;
 
-  // Range bands: "ranged 150/600ft" or "thrown 20/60ft"
+  // Range bands: "ranged 150/600ft", "thrown 20/60ft", or single "60ft" / "120ft"
   let rangeObj: { normal: number; long: number } | null = null;
   const rangeMatch = w.range.match(/(\d+)\/(\d+)\s*ft/i);
-  if (rangeMatch) rangeObj = { normal: parseInt(rangeMatch[1], 10), long: parseInt(rangeMatch[2], 10) };
+  if (rangeMatch) {
+    rangeObj = { normal: parseInt(rangeMatch[1], 10), long: parseInt(rangeMatch[2], 10) };
+  } else {
+    // Single range value (e.g. "60ft", "120ft") — used by save-based spells/cantrips
+    const singleMatch = w.range.match(/^(\d+)\s*ft$/i);
+    if (singleMatch) {
+      const r = parseInt(singleMatch[1], 10);
+      rangeObj = { normal: r, long: r };
+    }
+  }
 
   const damage = parseDamageDice(w.damage);
 
@@ -133,7 +143,9 @@ function weaponToAction(w: RawWeapon, profBonus: number): Action {
 
   // Cost
   const costType: Action['costType'] =
-    w.cost === 'bonusAction' ? 'bonusAction' : 'action';
+    w.cost === 'bonusAction' ? 'bonusAction' :
+    w.cost === 'reaction'    ? 'reaction' :
+    'action';
 
   return {
     name: w.name,
@@ -304,6 +316,46 @@ export function pcToCombatant(
   const actions: Action[] = raw.weapons
     .filter(w => !w.name.includes('+SA') && !w.name.includes('+Smite'))
     .map(w => weaponToAction(w, prof));
+
+  // Append combat-relevant spell actions from preparedSpells / spells_1st / spellbook
+  const sp = raw.spellcasting;
+  if (sp) {
+    const spellNames: string[] = [
+      ...(sp.preparedSpells ?? []),
+      ...(sp.spells_1st ?? []),
+      ...(sp.spellbook ?? []),
+    ];
+    const spellAttackBonus = sp.spellAttackBonus ?? 0;
+    const saveDC           = sp.saveDC ?? 10;
+
+    for (const name of spellNames) {
+      const tmpl = lookupSpell(name);
+      if (!tmpl) continue; // utility / heal / unsupported — skip
+
+      const damage = tmpl.damage ? { ...tmpl.damage } : null;
+
+      const spellAction: Action = {
+        name,
+        isMultiattack: false,
+        attackType:  tmpl.attackType,
+        reach:       tmpl.attackType === null ? 5 : tmpl.rangeNormal,  // auto-hit spells use touch/close
+        range:       tmpl.rangeNormal > 5 ? { normal: tmpl.rangeNormal, long: tmpl.rangeNormal * 2 } : null,
+        hitBonus:    tmpl.attackType === 'spell' ? spellAttackBonus : null,
+        damage,
+        damageType:  (tmpl.damageType as Action['damageType']) ?? null,
+        saveDC:      tmpl.saveAbility ? saveDC : null,
+        saveAbility: (tmpl.saveAbility as Action['saveAbility']) ?? null,
+        isAoE:       tmpl.isAoE,
+        isControl:   tmpl.isControl,
+        requiresConcentration: tmpl.requiresConcentration,
+        slotLevel:   tmpl.slotLevel,
+        costType:    tmpl.bonusAction ? 'bonusAction' : 'action',
+        legendaryCost: 0,
+        description: name,
+      };
+      actions.push(spellAction);
+    }
+  }
 
   // Traits list = feature names (for Pack Tactics etc. checks)
   const traits: string[] = [

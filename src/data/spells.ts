@@ -1,0 +1,175 @@
+// ============================================================
+// Level 1 PC Spell Database
+// Maps spell names (lowercase) to Action-like templates.
+// The parser (pc.ts) looks up spells here when building a PC's
+// action list from preparedSpells / spells_1st / spellbook.
+//
+// Scope: PHB 2014 — Level 1 spells used by PCs in pc_stat_blocks_lv1.json
+//
+// Cantrips are in the weapons array → not needed here.
+// Utility / out-of-combat spells (Detect Magic, Find Familiar, etc.)
+// are skipped — the AI has no use for them in combat.
+// Healing spells are also skipped here — they require ally-targeting
+// logic not yet implemented (deferred to a future session).
+//
+// Each entry is a Partial<Action>; the parser fills in:
+//   hitBonus   ← sp.spellAttackBonus  (spell attack roll spells)
+//   saveDC     ← sp.saveDC            (save-based spells)
+//   description ← generated
+// ============================================================
+
+export interface SpellTemplate {
+  /** 'spell' = spell attack roll; 'save' = saving throw; null = auto-hit */
+  attackType: 'spell' | 'save' | null;
+  /** Range in ft (for canReach checks) */
+  rangeNormal: number;
+  damage: { count: number; sides: number; bonus: number; average: number } | null;
+  damageType: string | null;
+  /** For save-based spells */
+  saveAbility?: 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha';
+  isAoE: boolean;
+  /** AoE radius in ft (used by findBestAoECluster) */
+  aoeRadius?: number;
+  isControl: boolean;
+  requiresConcentration: boolean;
+  /** 1 = consumes a 1st-level slot */
+  slotLevel: number;
+  /** Bonus-action cost instead of action */
+  bonusAction?: boolean;
+}
+
+// ---- Helpers ------------------------------------------------
+
+function avg(count: number, sides: number, bonus = 0): number {
+  return Math.round(count * ((sides + 1) / 2) + bonus);
+}
+
+// ---- Level 1 combat spells ----------------------------------
+
+/**
+ * Combat-relevant Level 1 spells usable by PCs in the stat block file.
+ * Key = lowercase spell name (must match preparedSpells / spells_1st entries).
+ *
+ * Omitted (non-combat / pure utility):
+ *   detect magic, find familiar, goodberry, mage armor, protection from evil
+ *   and good, charm person (mostly out-of-combat), shield (reaction — not
+ *   actionable by current planner), sleep (HP-bucket mechanic — complex).
+ *
+ * Omitted (healing / ally-targeting — deferred):
+ *   cure wounds, healing word, bless, shield of faith
+ */
+export const SPELL_DB: Record<string, SpellTemplate> = {
+
+  // ---- Bard -----------------------------------------------
+
+  'dissonant whispers': {
+    attackType: 'save',
+    rangeNormal: 60,
+    damage: { count: 3, sides: 6, bonus: 0, average: avg(3, 6) },
+    damageType: 'psychic',
+    saveAbility: 'wis',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 1,
+  },
+
+  // ---- Sorcerer / Wizard ----------------------------------
+
+  'chromatic orb': {
+    // Ranged spell attack; damage type chosen by caster — use thunder as default
+    attackType: 'spell',
+    rangeNormal: 90,
+    damage: { count: 3, sides: 8, bonus: 0, average: avg(3, 8) },
+    damageType: 'thunder',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 1,
+  },
+
+  'magic missile': {
+    // Auto-hit (no attack roll); 3 darts, each 1d4+1 force — modelled as one roll
+    attackType: null,  // hitBonus: null → auto-hit path in resolveAttack
+    rangeNormal: 120,
+    damage: { count: 3, sides: 4, bonus: 3, average: avg(3, 4, 3) },
+    damageType: 'force',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 1,
+  },
+
+  'thunderwave': {
+    // 15-ft cube centred on caster; CON save, 2d8 thunder + push on fail
+    attackType: 'save',
+    rangeNormal: 15,      // self-centred, radius 15 ft
+    damage: { count: 2, sides: 8, bonus: 0, average: avg(2, 8) },
+    damageType: 'thunder',
+    saveAbility: 'con',
+    isAoE: true,
+    aoeRadius: 15,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 1,
+  },
+
+  // ---- Druid ----------------------------------------------
+
+  'entangle': {
+    // 20-ft square; STR save or restrained, concentration
+    attackType: 'save',
+    rangeNormal: 90,
+    damage: null,
+    damageType: null,
+    saveAbility: 'str',
+    isAoE: true,
+    aoeRadius: 20,
+    isControl: true,
+    requiresConcentration: true,
+    slotLevel: 1,
+  },
+
+  'faerie fire': {
+    // 20-ft cube; DEX save or outlined (attacks against have advantage), concentration
+    // Modelled as control (isControl: true); no direct damage
+    attackType: 'save',
+    rangeNormal: 60,
+    damage: null,
+    damageType: null,
+    saveAbility: 'dex',
+    isAoE: true,
+    aoeRadius: 20,
+    isControl: true,
+    requiresConcentration: true,
+    slotLevel: 1,
+  },
+
+  // ---- Warlock --------------------------------------------
+
+  'arms of hadar': {
+    // 10-ft radius sphere centred on caster; STR save, 2d6 necrotic
+    attackType: 'save',
+    rangeNormal: 10,      // self-centred
+    damage: { count: 2, sides: 6, bonus: 0, average: avg(2, 6) },
+    damageType: 'necrotic',
+    saveAbility: 'str',
+    isAoE: true,
+    aoeRadius: 10,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 1,
+  },
+
+};
+
+// ---- Lookup helper ------------------------------------------
+
+/**
+ * Returns the SpellTemplate for the given spell name, or null if it's
+ * not in the combat database (utility / heal / unsupported).
+ * Case-insensitive.
+ */
+export function lookupSpell(name: string): SpellTemplate | null {
+  return SPELL_DB[name.toLowerCase()] ?? null;
+}

@@ -97,6 +97,7 @@ export interface Action {
   isAoE: boolean;
   isControl: boolean;                     // grapple/restrain/stun/fear/etc.
   requiresConcentration: boolean;         // casting this replaces/starts concentration
+  slotLevel?: number;                     // 0 = cantrip (free), 1+ = spell slot level required
   costType: AICostType;
   legendaryCost: number;
   description: string;
