@@ -17,7 +17,8 @@ import {
   canSneakAttack, sneakAttackDice,
   addResistance, removeResistance,
   parseDieSides, consumeBardicInspiration,
-  teamHasNoAttackCapability, canDealDamage, makeImprovisedUnarmed, makeImprovisedWeapon
+  teamHasNoAttackCapability, canDealDamage, makeImprovisedUnarmed, makeImprovisedWeapon,
+  effectiveSpeed
 } from './utils';
 import {
   chebyshev3D, distanceFt, canReach, estimateMoveCostFt,
@@ -491,8 +492,9 @@ function executePlannedAction(
 
     case 'dash':
       log(state, 'dash', actor.id, plan.description);
-      // Dash doubles movement — engine adds another speed's worth
-      actor.budget.movementFt += actor.speed;
+      // PHB p.192: Dash gives a stipend equal to speed *after* condition modifiers.
+      // A grappled/paralysed/restrained creature has effectiveSpeed = 0, so gains nothing.
+      actor.budget.movementFt += effectiveSpeed(actor);
       break;
 
     case 'disengage':
@@ -690,18 +692,26 @@ function executeTurnPlan(actor: Combatant, plan: TurnPlan, state: EngineState): 
                    || plan.bonusAction?.type === 'disengage';
 
   const isDash = plan.action?.type === 'dash';
+  // Cunning Action: Dash (and any future bonus-action Dash) must fire BEFORE movement
+  // so its speed stipend is available to spend. All other bonus actions fire after.
+  const isBonusDash = plan.bonusAction?.type === 'dash';
 
-  // For Dash: execute the Dash action first to double movement budget,
-  // THEN move — otherwise the doubled movement isn't available yet.
+  // For action-Dash: execute the Dash action first to add speed stipend,
+  // THEN move — otherwise the extra movement isn't available yet.
   if (isDash) {
     if (plan.action && !actor.isDead && !actor.isUnconscious) {
       actor.budget.actionUsed = true;
-      executePlannedAction(actor, plan.action, state);  // adds actor.speed to movementFt
+      executePlannedAction(actor, plan.action, state);  // adds effectiveSpeed to movementFt
     }
     if (plan.moveBefore && !actor.isDead && !actor.isUnconscious) {
       executeMove(actor, plan.moveBefore, state, isDisengage);
     }
   } else {
+    // Bonus-action Dash (e.g. Cunning Action): fire first so stipend is available for moveBefore
+    if (isBonusDash && plan.bonusAction && !actor.isDead && !actor.isUnconscious) {
+      actor.budget.bonusActionUsed = true;
+      executePlannedAction(actor, plan.bonusAction, state);  // adds effectiveSpeed to movementFt
+    }
     // Normal order: move → action
     if (plan.moveBefore && !actor.isDead && !actor.isUnconscious) {
       executeMove(actor, plan.moveBefore, state, isDisengage);
@@ -712,8 +722,8 @@ function executeTurnPlan(actor: Combatant, plan: TurnPlan, state: EngineState): 
     }
   }
 
-  // Bonus action
-  if (plan.bonusAction && !actor.isDead && !actor.isUnconscious) {
+  // Bonus action (non-Dash: Disengage, Bardic Inspiration, rage, etc. fire after the action)
+  if (!isBonusDash && plan.bonusAction && !actor.isDead && !actor.isUnconscious) {
     actor.budget.bonusActionUsed = true;
     executePlannedAction(actor, plan.bonusAction, state);
   }
@@ -898,7 +908,7 @@ export function runCombat(
             state.disengagedThisTurn.add(actor.id);
             (actor as any).usedDisengage = true;
           } else {
-            // Dash: doubles effective movement for the rider this turn
+            // Dash: rider gets another speed stipend equal to mount's base speed
             log(state, 'dash', actor.id,
               `${actor.name} (controlled mount) Dashes — +${actor.speed}ft movement pool`, undefined);
             actor.budget.movementFt += actor.flySpeed ?? actor.speed;

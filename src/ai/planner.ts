@@ -15,9 +15,10 @@ import {
 import { selectAction, selfPreserveDecision, selectLegendaryAction } from './actions';
 import {
   canReach, bestAdjacentPos, bestRangedPosition,
-  adjacentEnemyCount, livingEnemiesOf, livingAlliesOf, posKey
+  adjacentEnemyCount, livingEnemiesOf, livingAlliesOf, posKey, distanceFt
 } from '../engine/movement';
-import { makeImprovisedUnarmed, makeImprovisedWeapon } from '../engine/utils';
+import { makeImprovisedUnarmed, makeImprovisedWeapon, effectiveSpeed } from '../engine/utils';
+import { bestAttackAction } from './actions';
 
 // ---- Empty plan helper --------------------------------------
 
@@ -63,7 +64,8 @@ function planMovement(
   battlefield: Battlefield
 ): { moveBefore: TurnPlan['moveBefore']; moveAfter: TurnPlan['moveAfter'] } {
   if (chosenAction.type === 'dash') {
-    // Dash: move toward target using full double-speed budget
+    // Action Dash: the engine will add a speed stipend before executing this move.
+    // Plan to move adjacent to the target with the enlarged budget.
     const dest = bestAdjacentPos(self, target, battlefield);
     return { moveBefore: dest, moveAfter: null };
   }
@@ -160,7 +162,14 @@ function planCunningAction(
   target: Combatant | null,
   startPos: Vec3,
   bf: Battlefield
-): { bonusAction: PlannedAction | null; moveAfter: Vec3 | null } {
+): {
+  bonusAction: PlannedAction | null;
+  moveAfter:   Vec3 | null;
+  moveBefore?: Vec3 | null;   // set when Dash overrides movement
+  overrideAction?: PlannedAction | null; // set when Dash converts action-Dash → melee attack
+} {
+  // ── Case 1: DISENGAGE ─────────────────────────────────────
+  // After a melee attack, use bonus action to Disengage and step back (hit-and-run).
   if (
     chosenAction?.type === 'attack' &&
     chosenAction.action?.attackType === 'melee' &&
@@ -177,6 +186,58 @@ function planCunningAction(
       },
       moveAfter: canRetreat ? retreatDest : null,
     };
+  }
+
+  // ── Case 2: DASH ──────────────────────────────────────────
+  // The AI chose action-Dash because it couldn't reach the target with normal move.
+  // PHB p.96: Rogue can instead use the BONUS action to Dash, freeing the main action
+  // for an attack.  This is only worthwhile if the bonus Dash's stipend covers the gap.
+  //
+  // PHB p.192: Dash gives a stipend equal to speed after condition modifiers.
+  // So: totalBudget = current movementFt (from resetBudget) + effectiveSpeed.
+  //
+  // IMPORTANT: use self.pos (current position), not startPos (action-Dash destination).
+  // We are OVERRIDING the action-Dash, so movement still starts from self.pos.
+  if (chosenAction?.type === 'dash' && target !== null) {
+    const eff         = effectiveSpeed(self);
+    const totalBudget = self.budget.movementFt + eff;
+    // Distance from current position, not the planned (now-cancelled) Dash destination.
+    const dist        = distanceFt(self.pos, target.pos);
+
+    // Find the best melee action available to the Rogue.
+    const meleeCandidates = self.actions.filter(
+      a => !a.isMultiattack && a.costType === 'action' && a.attackType === 'melee'
+    );
+    const bestReach = meleeCandidates.length > 0
+      ? Math.max(...meleeCandidates.map(a => a.reach))
+      : 0;
+    const movementNeeded = Math.max(0, dist - bestReach);
+
+    if (meleeCandidates.length > 0 && totalBudget >= movementNeeded) {
+      // Pick the highest-damage melee attack (same ranking as bestAttackAction).
+      const bestMelee = meleeCandidates.reduce((best, a) => {
+        // Simple tiebreak: prefer higher reach, then first listed
+        return (a.reach ?? 5) > (best.reach ?? 5) ? a : best;
+      });
+
+      const dest = bestAdjacentPos(self, target, bf);
+      return {
+        bonusAction: {
+          type: 'dash',
+          action: null,
+          targetId: null,
+          description: `${self.name} uses Cunning Action: Dash`,
+        },
+        moveAfter:      null,
+        moveBefore:     dest,
+        overrideAction: {
+          type: 'attack',
+          action: bestMelee,
+          targetId: target.id,
+          description: `${self.name} attacks ${target.name} with ${bestMelee.name} (Cunning Dash)`,
+        },
+      };
+    }
   }
 
   return { bonusAction: null, moveAfter: null };
@@ -478,16 +539,25 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
   plan.bonusAction = planBonusAction(self, target, battlefield);
 
   // === CUNNING ACTION (Rogue Level 2+) ===
-  // Adds Disengage (hit-and-run) as bonus action when cunningAction is available
+  // Adds Disengage or Dash as bonus action when cunningAction is available
   // and no higher-priority bonus action was already planned (rage, second wind, etc.).
   if (!plan.bonusAction && self.resources?.cunningAction) {
     const postMovePos = plan.moveBefore ?? self.pos;
     const ca = planCunningAction(self, chosenAction, target, postMovePos, battlefield);
     if (ca.bonusAction) {
       plan.bonusAction = ca.bonusAction;
-      // Add retreat moveAfter only if movement wasn't already planned
+      // Disengage: add retreat moveAfter only if movement wasn't already planned.
       if (ca.moveAfter && !plan.moveAfter) {
         plan.moveAfter = ca.moveAfter;
+      }
+      // Dash: override moveBefore (move adjacent) and action (melee attack).
+      // ca.moveBefore / ca.overrideAction are only set when type === 'dash'.
+      if (ca.moveBefore !== undefined) {
+        plan.moveBefore = ca.moveBefore;
+      }
+      if (ca.overrideAction !== undefined && ca.overrideAction !== null) {
+        plan.action = ca.overrideAction;
+        chosenAction = ca.overrideAction;  // keep local reference consistent
       }
     }
   }

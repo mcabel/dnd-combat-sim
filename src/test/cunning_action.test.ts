@@ -4,8 +4,8 @@
 //
 // Session 28 scope:
 //   ✅ Cunning Action: Disengage (hit-and-run after melee attack)
-//   ⬜ Cunning Action: Dash   — deferred (ordering issue)
-//   ⬜ Cunning Action: Hide   — deferred (needs LOS system)
+//   ✅ Cunning Action: Dash   — bonus-action Dash when target out of normal move range
+//   ⬜ Cunning Action: Hide   — deferred (needs LOS/cover tracking system)
 //
 // Run: ts-node src/test/cunning_action.test.ts
 // ============================================================
@@ -349,6 +349,203 @@ console.log('\n=== 5. Integration: SA targeting + Cunning Action Disengage ===\n
     plan.targetId, 'enemyA');
   assert('Lv1 Rogue: no Cunning Action bonus action',
     plan.bonusAction === null);
+}
+
+// ============================================================
+// Section 6: Cunning Action — DASH
+// PHB p.96: Rogue can use bonus action to Dash, freeing main action for an attack.
+// PHB p.192: Dash gives a stipend equal to speed after condition modifiers (additive,
+//            NOT a doubling).  A grappled creature (speed 0) gains 0 movement.
+// ============================================================
+
+console.log('\n=== 6. Cunning Action: Dash ===\n');
+
+// --- 6.1: planCunningAction triggers when action-Dash is selected ---
+{
+  /*
+   * Rogue with cunningAction and melee-only weapons.
+   * Target is 40ft away (8 squares). Speed = 30ft → normal move falls 5ft short.
+   * selectAction returns type:'dash' (can't reach, no ranged option).
+   * planCunningAction should flip this to: bonus-action Dash + melee attack.
+   *
+   * Layout: Rogue (0,0), Enemy (8,0) — 40ft apart.
+   */
+  const rogue = makeC({
+    id: 'rogue', faction: 'party', pos: { x: 0, y: 0, z: 0 },
+    resources: lv2RogueResources(),
+    actions: [meleeAction('Shortsword', 5)],   // melee only
+    speed: 30,
+    budget: { movementFt: 30, actionUsed: false, bonusActionUsed: false, reactionUsed: false, freeObjectUsed: false },
+  });
+  const enemy = makeC({ id: 'enemy', faction: 'enemy', pos: { x: 8, y: 0, z: 0 } });
+  const bf = makeBF([rogue, enemy]);
+  const plan = planTurn(rogue, bf);
+
+  eq('Dash: bonus action type is dash',  plan.bonusAction?.type, 'dash');
+  assert('Dash: bonus description mentions Cunning Action',
+    plan.bonusAction?.description?.includes('Cunning Action') ?? false);
+  eq('Dash: main action type is attack', plan.action?.type, 'attack');
+  eq('Dash: attack uses melee action',   plan.action?.action?.attackType, 'melee');
+  assert('Dash: moveBefore is set (move to adjacent)',   plan.moveBefore !== null);
+}
+
+// --- 6.2: No Dash when ranged weapon available ---
+{
+  /*
+   * Rogue with BOTH Shortsword and Shortbow, target 40ft away.
+   * selectAction finds Shortbow in range → returns ranged attack, NOT type:'dash'.
+   * planCunningAction Dash case only triggers on type:'dash'; ranged action skips it.
+   * Expected: ranged attack, NO bonus action.
+   */
+  const rogue = makeC({
+    id: 'rogue', faction: 'party', pos: { x: 0, y: 0, z: 0 },
+    resources: lv2RogueResources(),
+    actions: [meleeAction(), rangedAction()],
+    speed: 30,
+    budget: { movementFt: 30, actionUsed: false, bonusActionUsed: false, reactionUsed: false, freeObjectUsed: false },
+  });
+  const enemy = makeC({ id: 'enemy', faction: 'enemy', pos: { x: 8, y: 0, z: 0 } });
+  const bf = makeBF([rogue, enemy]);
+  const plan = planTurn(rogue, bf);
+
+  // Should use ranged, not Dash to close
+  assert('No-Dash: action is not dash-type (ranged or attack)',
+    plan.action?.type !== 'dash');
+  assert('No-Dash: bonus action is NOT a dash (no cunning Dash when ranged available)',
+    plan.bonusAction?.type !== 'dash');
+}
+
+// --- 6.3: No Dash when target is truly out of range (even with bonus Dash) ---
+{
+  /*
+   * Target 70ft away (14 squares). Speed = 30ft.
+   * totalBudget = 30 + 30 = 60ft. movementNeeded = 70 - 5 = 65ft.
+   * 60 < 65 → Dash doesn't help. Plan stays as action-Dash (close distance this turn).
+   */
+  const rogue = makeC({
+    id: 'rogue', faction: 'party', pos: { x: 0, y: 0, z: 0 },
+    resources: lv2RogueResources(),
+    actions: [meleeAction()],
+    speed: 30,
+    budget: { movementFt: 30, actionUsed: false, bonusActionUsed: false, reactionUsed: false, freeObjectUsed: false },
+  });
+  const enemy = makeC({ id: 'enemy', faction: 'enemy', pos: { x: 14, y: 0, z: 0 } });
+  const bf = makeBF([rogue, enemy]);
+  const plan = planTurn(rogue, bf);
+
+  eq('Out-of-range: main action stays as dash', plan.action?.type, 'dash');
+  assert('Out-of-range: no bonus Dash (can\'t help)', plan.bonusAction?.type !== 'dash');
+}
+
+// --- 6.4: No Dash without cunningAction (Level 1 Rogue) ---
+{
+  /*
+   * Level 1 Rogue (no cunningAction), target 40ft away, melee-only.
+   * Without Cunning Action, the bonus Dash is unavailable.
+   * Plan must stay: action-Dash to close distance (no attack this turn).
+   */
+  const rogue = makeC({
+    id: 'rogue', faction: 'party', pos: { x: 0, y: 0, z: 0 },
+    resources: lv1RogueResources(),
+    actions: [meleeAction()],
+    speed: 30,
+    budget: { movementFt: 30, actionUsed: false, bonusActionUsed: false, reactionUsed: false, freeObjectUsed: false },
+  });
+  const enemy = makeC({ id: 'enemy', faction: 'enemy', pos: { x: 8, y: 0, z: 0 } });
+  const bf = makeBF([rogue, enemy]);
+  const plan = planTurn(rogue, bf);
+
+  eq('Lv1 no-Dash: action is still dash (normal)',  plan.action?.type, 'dash');
+  assert('Lv1 no-Dash: no bonus action',            plan.bonusAction === null);
+}
+
+// --- 6.5: Disengage beats Dash when Rogue is already in melee reach ---
+{
+  /*
+   * Rogue adjacent to target (1 square away). selectAction returns melee attack.
+   * planCunningAction: chosenAction.type === 'attack' (melee) → Disengage case fires first.
+   * Dash case never reached. Expected: Disengage bonus, melee attack main.
+   */
+  const rogue = makeC({
+    id: 'rogue', faction: 'party', pos: { x: 0, y: 0, z: 0 },
+    resources: lv2RogueResources(),
+    actions: [meleeAction()],
+    speed: 30,
+    budget: { movementFt: 30, actionUsed: false, bonusActionUsed: false, reactionUsed: false, freeObjectUsed: false },
+  });
+  // Enemy at (1,0) — 5ft away, Chebyshev 1 ≤ reach(5ft)
+  const enemy = makeC({ id: 'enemy', faction: 'enemy', pos: { x: 1, y: 0, z: 0 } });
+  const bf = makeBF([rogue, enemy]);
+  const plan = planTurn(rogue, bf);
+
+  eq('Adjacent: action is melee attack', plan.action?.type, 'attack');
+  eq('Adjacent: bonus action is Disengage (not Dash)', plan.bonusAction?.type, 'disengage');
+}
+
+// --- 6.6: Dash boundary — just within range (35ft gap, 60ft budget) ---
+{
+  /*
+   * Rogue at (0,0), target at (8,0) — 40ft apart.
+   * To be adjacent: move to (7,0) = 35ft. totalBudget = 60. 60 ≥ 35 → Dash works.
+   * Rogue at (0,0), target at (13,0) — 65ft apart.
+   * To be adjacent: move to (12,0) = 60ft. totalBudget = 60. 60 ≥ 60 → also works (exact).
+   */
+  const makeRogue = (pos: { x: number; y: number; z: number }) => makeC({
+    id: `rogue_${pos.x}`, faction: 'party', pos,
+    resources: lv2RogueResources(), actions: [meleeAction()], speed: 30,
+    budget: { movementFt: 30, actionUsed: false, bonusActionUsed: false, reactionUsed: false, freeObjectUsed: false },
+  });
+
+  // Target 65ft away: movementNeeded = 65 - 5 = 60 = totalBudget (exactly reachable)
+  const rogue65 = makeRogue({ x: 0, y: 0, z: 0 });
+  const enemy65 = makeC({ id: 'enemy65', faction: 'enemy', pos: { x: 13, y: 0, z: 0 } });
+  const plan65 = planTurn(rogue65, makeBF([rogue65, enemy65]));
+  eq('Boundary-65ft: bonus Dash fires', plan65.bonusAction?.type, 'dash');
+  eq('Boundary-65ft: main action is attack', plan65.action?.type, 'attack');
+
+  // Target 70ft away: movementNeeded = 70 - 5 = 65 > 60 → Dash cannot help
+  const rogue70 = makeRogue({ x: 0, y: 0, z: 0 });
+  const enemy70 = makeC({ id: 'enemy70', faction: 'enemy', pos: { x: 14, y: 0, z: 0 } });
+  const plan70 = planTurn(rogue70, makeBF([rogue70, enemy70]));
+  eq('Boundary-70ft: no bonus Dash (just out of range)', plan70.action?.type, 'dash');
+  assert('Boundary-70ft: no bonus action', plan70.bonusAction === null || plan70.bonusAction?.type !== 'dash');
+}
+
+// --- 6.7: Engine ordering — bonus-action Dash fires BEFORE movement ---
+{
+  /*
+   * Full combat integration test.
+   * Rogue at (0,0), enemy at (8,0) = 40ft apart.  Melee-only Rogue, cunningAction.
+   * Normal move budget = 30ft (can't reach adjacent at 35ft).
+   * Engine should: (1) execute bonus Dash → budget = 60ft, (2) move 35ft → attack.
+   *
+   * Observable: an 'attack' event from 'rogue' should appear on round 1.
+   * If bonus Dash fired AFTER movement, the Rogue couldn't reach → no attack event.
+   */
+  const rogue = makeC({
+    id: 'rogue', faction: 'party', pos: { x: 0, y: 0, z: 0 },
+    resources: lv2RogueResources(),
+    actions: [meleeAction()],
+    speed: 30, maxHP: 100, currentHP: 100,
+    budget: { movementFt: 30, actionUsed: false, bonusActionUsed: false, reactionUsed: false, freeObjectUsed: false },
+  });
+  const enemy = makeC({
+    id: 'enemy', faction: 'enemy', pos: { x: 8, y: 0, z: 0 },
+    maxHP: 500, currentHP: 500, ac: 30, // near-immortal to survive round 1
+    actions: [meleeAction('Claw', 3)],
+  });
+  const bf = makeFlatBattlefield(20, 5, [rogue, enemy]);
+  const result = runCombat(bf, ['rogue', 'enemy'], { maxRounds: 1 });
+
+  const attackByRogue = result.events.find(
+    (e: CombatEvent) => e.type === 'action' && e.actorId === 'rogue'
+  );
+  const dashBonusEvent = result.events.find(
+    (e: CombatEvent) => e.type === 'dash' && e.actorId === 'rogue'
+  );
+
+  assert('Engine-ordering: bonus Dash event fires', dashBonusEvent !== undefined);
+  assert('Engine-ordering: Rogue attacks on round 1 (reached target)', attackByRogue !== undefined);
 }
 
 // ============================================================
