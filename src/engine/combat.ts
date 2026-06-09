@@ -32,6 +32,7 @@ import { checkMountedCombatant, checkProtectionStyle, checkInterceptionReduction
 import { tickAdvantages, grantSelf, grantVulnerability } from './adv_system';
 import { getSummonEntry }                           from '../summons/registry';
 import { rollGrappleContest, rollShoveContest, canGrappleOrShoveTarget } from './utils';
+import { computeLOS } from './los';
 
 // ---- Combat log ---------------------------------------------
 
@@ -119,6 +120,19 @@ function resolveAttack(
 ): void {
   const bf = state.battlefield;
 
+  // ── LOS / Cover check (PHB Ch.10, DMG Ch.8) ─────────────────────────────
+  // Skip for save-based AoE (area is targeted, not an individual creature).
+  // For melee/ranged/spell attacks: block on total cover; AC bonus otherwise.
+  const los = action.attackType !== 'save'
+    ? computeLOS(attacker, target, bf)
+    : null;
+
+  if (los && !los.hasLineOfEffect) {
+    log(state, 'action', attacker.id,
+      `${attacker.name}'s attack on ${target.name} is blocked — Total Cover!`, target.id);
+    return;
+  }
+
   // Pack Tactics: advantage if ally adjacent to target (MM)
   const packTacticsAdvantage = hasPackTacticsAdvantage(attacker, target, bf);
 
@@ -181,7 +195,13 @@ function resolveAttack(
       `${protectionRider.name} uses Protection — disadvantage on attack against ${target.name}!`,
       target.id);
   }
-  const disadvantage = baseDisadv || !!protectionRider;
+  // Vision blocked by obstacle (fog cloud, magical darkness) → Disadvantage (PHB Ch.10)
+  const losDisadvantage = los !== null && !los.hasLineOfSight;
+  if (losDisadvantage) {
+    log(state, 'action', attacker.id,
+      `${attacker.name} attacks ${target.name} with Disadvantage (vision blocked).`, target.id);
+  }
+  const disadvantage = baseDisadv || !!protectionRider || losDisadvantage;
 
   const result = rollAttack(action.hitBonus ?? 0, advantage, disadvantage);
 
@@ -194,7 +214,8 @@ function resolveAttack(
   }
 
   // Warding Bond: +1 AC while bonded (PHB p.287)
-  const effectiveAC = target.ac + (target.wardingBond ? 1 : 0);
+  // Cover: +2 (half) or +5 (three-quarters) to AC from obstacles (DMG Ch.8 p.196)
+  const effectiveAC = target.ac + (target.wardingBond ? 1 : 0) + (los?.coverACBonus ?? 0);
   const hits = isCritOverride ?? attackHits(result.roll, result.total, effectiveAC);
 
   if (!hits) {

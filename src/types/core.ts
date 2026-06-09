@@ -324,6 +324,29 @@ export interface Combatant {
   wardingBond: { casterId: string } | null;
 }
 
+// ---- Obstacle -----------------------------------------------
+// PHB Ch.10, DMG Ch.8: static map obstacles for LOS and cover.
+// All coordinates are in grid squares (1 GS = 5 ft).
+//
+//   blocksMovement: true  → physical line of effect blocked (wall, pillar, closed door)
+//                           determines cover category (+2 / +5 AC) and total cover
+//   blocksVision:   true  → visual line of sight blocked (fog cloud, curtain, magical darkness)
+//                           attacks against obscured targets have Disadvantage
+//   isOpen:         true  → bypasses BOTH flags (open door, open window, portcullis up)
+
+export interface Obstacle {
+  id: string;
+  x: number;        // grid square of left edge
+  y: number;        // grid square of top edge
+  z: number;        // reserved for future 3D — use 0 for flat encounters
+  width: number;    // extent on X axis (grid squares)
+  depth: number;    // extent on Y axis (grid squares)
+  height: number;   // reserved for future 3D — use 1 for flat encounters
+  blocksMovement: boolean;
+  blocksVision: boolean;
+  isOpen?: boolean;
+}
+
 // ---- Battlefield --------------------------------------------
 
 export type TerrainType = 'normal' | 'difficult' | 'water';
@@ -348,6 +371,9 @@ export interface Battlefield {
   // Reset to 0 whenever a team deals ≥1 damage in a round.
   // At 10 consecutive rounds → team is auto-defeated.
   noDamageRounds?: Map<string, number>;   // keyed by faction
+  // LOS/Cover: static obstacles on the map (walls, pillars, doors, fog, etc.)
+  // Optional — absent means open terrain (no cover calculations).
+  obstacles?: Obstacle[];
 }
 
 // ---- TurnPlan (output of AI) --------------------------------
