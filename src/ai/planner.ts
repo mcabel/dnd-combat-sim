@@ -13,6 +13,7 @@ import {
   shouldCastHex, hexPlan,
   shouldCastCureWounds, shouldCastHealingWord, spellHealPlan,
 } from './resources';
+import { shouldCast as shouldCastFaerieFire } from '../spells/faerie_fire';
 import { selectAction, selfPreserveDecision, selectLegendaryAction } from './actions';
 import {
   canReach, bestAdjacentPos, bestRangedPosition,
@@ -562,6 +563,24 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
       if (dist > 5) {
         plan.moveBefore = bestAdjacentPos(self, cwTarget, battlefield);
       }
+      plan.bonusAction = planBonusAction(self, target, battlefield);
+      return plan;
+    }
+  }
+
+  // === FAERIE FIRE (action control) — cast before attacking if conditions met ===
+  // Best early in a fight: advantage on all attacks against outlined enemies is
+  // extremely valuable. Only fires when caster is NOT already concentrating.
+  {
+    const ffTargets = shouldCastFaerieFire(self, battlefield);
+    if (ffTargets) {
+      plan.action = {
+        type: 'faerieFire',
+        action: null,
+        targetId: ffTargets[0].id,
+        description: `${self.name} casts Faerie Fire`,
+      };
+      plan.targetId = ffTargets[0].id;
       plan.bonusAction = planBonusAction(self, target, battlefield);
       return plan;
     }

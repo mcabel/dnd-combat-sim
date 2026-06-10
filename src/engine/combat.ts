@@ -34,6 +34,7 @@ import { getSummonEntry }                           from '../summons/registry';
 import { rollGrappleContest, rollShoveContest, canGrappleOrShoveTarget } from './utils';
 import { computeLOS } from './los';
 import { removeEffectsFromCaster, getActiveAcBonus } from './spell_effects';
+import { shouldCast as shouldCastFaerieFire, execute as executeFaerieFire } from '../spells/faerie_fire';
 
 // ---- Combat log ---------------------------------------------
 
@@ -680,6 +681,15 @@ function executePlannedAction(
           `${actor.name} recovers ${plan.healAmount} HP from Second Wind`,
           actor.id, plan.healAmount);
       }
+      break;
+    }
+    case 'faerieFire': {
+      // Faerie Fire — PHB p.239: DEX save or outlined (advantage on all attacks vs target).
+      // AoE 20-ft cube, concentration, range 60 ft.
+      // Re-run shouldCast to get the live target list (planning may have been stale).
+      const ffTargets = shouldCastFaerieFire(actor, bf);
+      if (!ffTargets || ffTargets.length === 0) break;
+      executeFaerieFire(actor, ffTargets, state);
       break;
     }
     case 'layOnHands': {

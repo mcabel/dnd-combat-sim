@@ -435,6 +435,7 @@ export interface PlannedAction {
     | 'help' | 'hide' | 'ready' | 'shove' | 'grapple' | 'escapeGrapple'
     | 'secondWind' | 'rage' | 'layOnHands' | 'bardicInspiration'
     | 'spellHeal'    // Cure Wounds (action) or Healing Word (bonus action)
+    | 'faerieFire'   // Faerie Fire AoE control (concentration)
     | 'legendary';
   action: Action | null;
   targetId: string | null;
