@@ -424,6 +424,7 @@ export function pcToCombatant(
     resistances:     [],
     bardicInspirationDie: null,
     wardingBond: null,
+    activeEffects:   [],
   };
 }
 

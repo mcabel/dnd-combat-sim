@@ -483,6 +483,7 @@ export function monsterToCombatant(
     resistances:     [],
     bardicInspirationDie: null,
     wardingBond: null,
+    activeEffects:   [],
   };
 }
 

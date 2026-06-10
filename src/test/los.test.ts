@@ -76,7 +76,7 @@ function makeC(o: Partial<Combatant> = {}): Combatant {
     isDefender: false, cannotAttack: false, hasHands: true,
     isDead: false, isUnconscious: false,
     advantages: [], vulnerabilities: [], resistances: [],
-    bardicInspirationDie: null, wardingBond: null,
+    bardicInspirationDie: null, wardingBond: null, activeEffects: [],
     ...o,
   };
 }

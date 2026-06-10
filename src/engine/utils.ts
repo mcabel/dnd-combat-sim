@@ -708,6 +708,7 @@ export function longRest(c: Combatant): void {
   c.tempHP       = 0;
   c.conditions   = new Set();
   c.concentration = null;
+  c.activeEffects = [];      // all spell effects end on a long rest
   c.deathSaves   = c.isPlayer ? { successes: 0, failures: 0 } : null;
 
   const r = c.resources;

@@ -33,6 +33,7 @@ import { tickAdvantages, grantSelf, grantVulnerability } from './adv_system';
 import { getSummonEntry }                           from '../summons/registry';
 import { rollGrappleContest, rollShoveContest, canGrappleOrShoveTarget } from './utils';
 import { computeLOS } from './los';
+import { removeEffectsFromCaster, getActiveAcBonus } from './spell_effects';
 
 // ---- Combat log ---------------------------------------------
 
@@ -150,8 +151,11 @@ function resolveAttack(
       // Concentration check if target was concentrating
       if (target.concentration?.active && dealt > 0) {
         const maintained = rollConcentrationSave(target, dealt);
-        if (!maintained) log(state, 'condition_remove', target.id,
-          `${target.name} loses concentration on ${target.concentration?.spellName ?? 'spell'}!`, undefined);
+        if (!maintained) {
+          removeEffectsFromCaster(target.id, state.battlefield);
+          log(state, 'condition_remove', target.id,
+            `${target.name} loses concentration on ${target.concentration?.spellName ?? 'spell'}!`, undefined);
+        }
       }
       log(state, 'damage', attacker.id,
         `${attacker.name} deals ${dealt} ${action.damageType ?? ''} damage to ${target.name} (save ${save.success ? 'halved' : 'full'})`,
@@ -170,8 +174,11 @@ function resolveAttack(
       const dealt = applyDamageWithTempHP(target, dmg, action.damageType);
       if (target.concentration?.active && dealt > 0) {
         const maintained = rollConcentrationSave(target, dealt);
-        if (!maintained) log(state, 'condition_remove', target.id,
-          `${target.name} loses concentration!`, undefined);
+        if (!maintained) {
+          removeEffectsFromCaster(target.id, state.battlefield);
+          log(state, 'condition_remove', target.id,
+            `${target.name} loses concentration!`, undefined);
+        }
       }
       log(state, 'damage', attacker.id,
         `${attacker.name} auto-hits ${target.name} for ${dealt} ${action.damageType ?? ''} damage`,
@@ -215,7 +222,7 @@ function resolveAttack(
 
   // Warding Bond: +1 AC while bonded (PHB p.287)
   // Cover: +2 (half) or +5 (three-quarters) to AC from obstacles (DMG Ch.8 p.196)
-  const effectiveAC = target.ac + (target.wardingBond ? 1 : 0) + (los?.coverACBonus ?? 0);
+  const effectiveAC = target.ac + (target.wardingBond ? 1 : 0) + (los?.coverACBonus ?? 0) + getActiveAcBonus(target);
   const hits = isCritOverride ?? attackHits(result.roll, result.total, effectiveAC);
 
   if (!hits) {
@@ -301,8 +308,11 @@ function resolveAttack(
     const dealt = applyDamageWithTempHP(target, dmg, action.damageType);
     if (target.concentration?.active && dealt > 0) {
       const maintained = rollConcentrationSave(target, dealt);
-      if (!maintained) log(state, 'condition_remove', target.id,
-        `${target.name} loses concentration on ${target.concentration?.spellName ?? 'spell'}!`, undefined);
+      if (!maintained) {
+        removeEffectsFromCaster(target.id, state.battlefield);
+        log(state, 'condition_remove', target.id,
+          `${target.name} loses concentration on ${target.concentration?.spellName ?? 'spell'}!`, undefined);
+      }
     }
     log(state, 'damage', attacker.id,
       `${attacker.name} deals ${dealt} ${action.damageType ?? ''} damage to ${target.name}${isCrit ? ' (CRIT)' : ''}`,
@@ -380,6 +390,7 @@ function checkDeath(target: Combatant, state: EngineState, attacker?: Combatant)
   // Break concentration on going down (PHB p.203)
   if (target.concentration?.active) {
     const spellName = target.concentration.spellName ?? 'spell';
+    removeEffectsFromCaster(target.id, state.battlefield);
     target.concentration = null;
     log(state, 'condition_remove', target.id,
       `${target.name}'s concentration on ${spellName} breaks!`, undefined);

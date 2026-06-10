@@ -63,7 +63,7 @@ function makeEnemy(id: string, pos: { x: number; y: number; z: number }, hp = 15
     isDefender: false, cannotAttack: false, hasHands: true,
     isDead: false, isUnconscious: false,
     advantages: [], vulnerabilities: [], resistances: [],
-    bardicInspirationDie: null, wardingBond: null,
+    bardicInspirationDie: null, wardingBond: null, activeEffects: [],
   };
 }
 

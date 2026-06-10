@@ -74,6 +74,42 @@ export interface AdvantageEntry {
   roundsRemaining:  number;           // permanent → Infinity; until_next_turn → 1; rounds → N
 }
 
+// ---- Active Spell Effects -----------------------------------
+// Tracks ongoing effects placed on a Combatant by a spell.
+// Effects are applied when a spell is cast and removed when:
+//   - the caster's concentration breaks (sourceIsConcentration: true), or
+//   - the spell ends naturally (removeEffectById called explicitly), or
+//   - the caster dies / goes to 0 HP.
+//
+// Advantage/disadvantage effects (advantage_vs) mirror an entry in
+// Combatant.vulnerabilities via adv_system.grantVulnerability; removing
+// this effect also calls adv_system.removeBySource so both stay in sync.
+
+export type SpellEffectType =
+  | 'advantage_vs'      // rolls AGAINST this creature get adv/disadv (e.g. Faerie Fire)
+  | 'ac_bonus'          // flat AC bonus to this creature (e.g. Shield of Faith +2)
+  | 'bless_die'         // add a bonus die to this creature's attack rolls & saves (Bless 1d4)
+  | 'condition_apply';  // apply a condition to this creature (e.g. Entangle → restrained)
+
+export interface ActiveEffect {
+  id: string;               // unique per instance, e.g. 'eff_1'
+  casterId: string;         // ID of the Combatant who cast the spell
+  spellName: string;        // canonical spell name; also used as adv_system source label
+  effectType: SpellEffectType;
+  payload: {
+    // advantage_vs
+    advType?:  'advantage' | 'disadvantage';
+    advScope?: D20TestScope;
+    // ac_bonus
+    acBonus?:  number;
+    // bless_die
+    dieSides?: number;                // e.g. 4 for a d4
+    // condition_apply
+    condition?: Condition;
+  };
+  sourceIsConcentration: boolean;     // if true, removed when caster's concentration ends
+}
+
 // ---- Action -------------------------------------------------
 
 export interface DiceExpression {
@@ -322,6 +358,11 @@ export interface Combatant {
   // Grants +1 AC, +1 to saving throws, and resistance to all damage types.
   // Bond breaks when caster drops to 0 HP.  null = no bond active.
   wardingBond: { casterId: string } | null;
+
+  // Active spell effects currently applied to this creature.
+  // Managed by src/engine/spell_effects.ts — use applySpellEffect / removeEffectsFromCaster
+  // rather than mutating this array directly.
+  activeEffects: ActiveEffect[];
 }
 
 // ---- Obstacle -----------------------------------------------
