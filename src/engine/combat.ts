@@ -18,7 +18,7 @@ import {
   addResistance, removeResistance,
   parseDieSides, consumeBardicInspiration,
   teamHasNoAttackCapability, canDealDamage, makeImprovisedUnarmed, makeImprovisedWeapon,
-  effectiveSpeed
+  effectiveSpeed, rollDie, abilityMod, proficiencyBonus
 } from './utils';
 import {
   chebyshev3D, distanceFt, canReach, estimateMoveCostFt,
@@ -194,6 +194,14 @@ function resolveAttack(
   const advState = resolveAttackAdvantage(attacker, target, action.attackType);
   const { advantage: baseAdv, disadvantage: baseDisadv } = advState;
   const advantage = baseAdv || packTacticsAdvantage || attacker.helpedThisTurn;
+
+  // Cunning Action: Hide — hidden attacker is revealed on attack, hit or miss (PHB p.177/194).
+  // Advantage was already captured above by resolveAttackAdvantage reading the 'hidden' condition.
+  if (attacker.conditions.has('hidden')) {
+    removeCondition(attacker, 'hidden');
+    log(state, 'condition_remove', attacker.id,
+      `${attacker.name} is revealed after attacking!`, target.id);
+  }
 
   // ST-5B: Fighting Style: Protection — rider imposes disadvantage on attack vs mount (reaction)
   const protectionRider = checkProtectionStyle(target, bf);
@@ -718,7 +726,32 @@ function executePlannedAction(
       }
       break;
     }
-    case 'hide':
+    case 'hide': {
+      // Cunning Action: Hide (PHB p.96)
+      // Rogue makes a DEX (Stealth) check. Proficiency always applies (Rogues have Stealth prof).
+      // Compare to each enemy's Passive Perception (10 + WIS mod).
+      // If the roll exceeds the highest passive perception among living enemies, Rogue is Hidden.
+      // 'hidden' condition grants advantage on the Rogue's next attack and disadvantage on attacks
+      // against them. Condition is removed immediately when the Rogue attacks (PHB p.177/194).
+      const stealthRoll = rollDie(20) + abilityMod(actor.dex) + proficiencyBonus(actor.cr);
+      const enemies = [...bf.combatants.values()].filter(
+        c => c.faction !== actor.faction && !c.isDead && !c.isUnconscious
+      );
+      const maxPassivePerception = enemies.length > 0
+        ? Math.max(...enemies.map(e => 10 + abilityMod(e.wis)))
+        : 0;
+      if (enemies.length === 0 || stealthRoll > maxPassivePerception) {
+        addCondition(actor, 'hidden');
+        log(state, 'condition_add', actor.id,
+          `${actor.name} Hides! (Stealth ${stealthRoll} > Passive Perception ${maxPassivePerception})`,
+          actor.id);
+      } else {
+        log(state, 'action', actor.id,
+          `${actor.name} tries to Hide but is Detected! (Stealth ${stealthRoll} ≤ Passive Perception ${maxPassivePerception})`,
+          actor.id);
+      }
+      break;
+    }
     case 'ready':
     case 'bardicInspiration': {
       // PHB p.54: Bard grants an Inspiration die (bonus action) to one ally.

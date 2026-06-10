@@ -289,6 +289,9 @@ export function attackAdvantageState(
   if (attacker.conditions.has('prone'))      disadvantage = true;
   // Invisible attacker has advantage on all attacks (PHB Appendix A)
   if (attacker.conditions.has('invisible'))  advantage    = true;
+  // Hidden attacker has advantage on attacks (PHB p.194 — unseen attackers)
+  // Note: 'hidden' is removed in resolveAttack immediately after advantage is computed.
+  if (attacker.conditions.has('hidden'))     advantage    = true;
 
   // ── Target conditions (PHB Appendix A) ────────────────────
   if (target.conditions.has('blinded'))      advantage = true;
@@ -301,6 +304,8 @@ export function attackAdvantageState(
   if (target.conditions.has('unconscious'))  advantage = true;
   // Invisible target → attacker has disadvantage (PHB Appendix A)
   if (target.conditions.has('invisible'))    disadvantage = true;
+  // Hidden target → attacker has disadvantage (PHB p.194 — attacking an unseen creature)
+  if (target.conditions.has('hidden'))       disadvantage = true;
 
   // ── Advantage/disadvantage system entries (spells, feats, class features) ──
   // Attacker's own advantage on attack rolls

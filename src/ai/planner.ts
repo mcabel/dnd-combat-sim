@@ -19,6 +19,7 @@ import {
   adjacentEnemyCount, livingEnemiesOf, livingAlliesOf, posKey, distanceFt, chebyshev3D
 } from '../engine/movement';
 import { makeImprovisedUnarmed, makeImprovisedWeapon, effectiveSpeed } from '../engine/utils';
+import { hasLineOfSight } from '../engine/los';
 import { bestAttackAction } from './actions';
 
 // ---- Empty plan helper --------------------------------------
@@ -238,6 +239,42 @@ function planCunningAction(
           description: `${self.name} attacks ${target.name} with ${bestMelee.name} (Cunning Dash)`,
         },
       };
+    }
+  }
+
+  // ── Case 3: HIDE ──────────────────────────────────────────
+  // PHB p.96: Rogue can use Cunning Action to Hide as a bonus action.
+  //
+  // Conditions for planning Hide:
+  //   1. No attack planned this turn (attacking while hidden immediately reveals you)
+  //   2. Rogue is not already hidden
+  //   3. Battlefield has at least one open vision-blocking obstacle
+  //   4. No living enemy currently has line of sight to the Rogue's position
+  //
+  // LOS check uses self.pos (current position). In most Case-3 scenarios,
+  // no moveBefore was planned, so self.pos = startPos. If a moveBefore was
+  // planned to a non-attack action, this check is slightly conservative.
+  const noAttackPlanned = chosenAction?.type !== 'attack';
+  if (noAttackPlanned && !self.conditions.has('hidden')) {
+    const hasVisionObstacle = (bf.obstacles ?? []).some(
+      o => !o.isOpen && o.blocksVision
+    );
+    if (hasVisionObstacle) {
+      const enemies = [...bf.combatants.values()].filter(
+        c => c.faction !== self.faction && !c.isDead && !c.isUnconscious
+      );
+      const anyEnemySees = enemies.some(e => hasLineOfSight(e, self, bf));
+      if (!anyEnemySees) {
+        return {
+          bonusAction: {
+            type: 'hide',
+            action: null,
+            targetId: null,
+            description: `${self.name} uses Cunning Action: Hide`,
+          },
+          moveAfter: null,
+        };
+      }
     }
   }
 

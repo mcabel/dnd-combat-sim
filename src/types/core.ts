@@ -17,7 +17,7 @@ export type DamageType =
 
 export type Condition =
   | 'blinded' | 'charmed' | 'deafened' | 'frightened'
-  | 'grappled' | 'incapacitated' | 'invisible' | 'paralyzed'
+  | 'grappled' | 'hidden' | 'incapacitated' | 'invisible' | 'paralyzed'
   | 'petrified' | 'poisoned' | 'prone' | 'restrained'
   | 'stunned' | 'unconscious';
 

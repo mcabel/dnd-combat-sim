@@ -549,6 +549,253 @@ console.log('\n=== 6. Cunning Action: Dash ===\n');
 }
 
 // ============================================================
+// Section 7: Cunning Action — Hide (LOS-gated stealth)
+// PHB p.96 / PHB p.177 / PHB p.194
+// ============================================================
+
+import { Obstacle } from '../types/core';
+
+console.log('\n=== 7. Cunning Action: Hide ===\n');
+
+/** Fog cloud obstacle: vision-blocking, does not block movement */
+function fogCloud(x: number, y: number, w = 1, d = 1): Obstacle {
+  return {
+    id: `fog-${x}-${y}`, x, y, z: 0,
+    width: w, depth: d, height: 1,
+    blocksMovement: false, blocksVision: true,
+  };
+}
+
+/** Wall obstacle: blocks both movement and vision */
+function wall(x: number, y: number, w: number, d = 1): Obstacle {
+  return {
+    id: `wall-${x}-${y}`, x, y, z: 0,
+    width: w, depth: d, height: 1,
+    blocksMovement: true, blocksVision: true,
+  };
+}
+
+function makeBFWithObstacles(combatants: Combatant[], obstacles: Obstacle[]): Battlefield {
+  const map = new Map<string, Combatant>();
+  for (const c of combatants) map.set(c.id, c);
+  return {
+    width: 20, height: 20, depth: 1, cells: [],
+    combatants: map, round: 1,
+    initiativeOrder: combatants.map(c => c.id),
+    obstacles,
+  };
+}
+
+// ── 7a: Planner plans Hide when Rogue is behind a vision blocker ──────────────
+
+{
+  // Rogue at (0,5), fog column at x=2-13 (depth covers full y range).
+  // Enemy at (15,5) — all rays from enemy to rogue pass through fog interior → blocked.
+  // Combatants at y=5 so their corner y-coords (5,6) fall inside fog y=[0+eps, 10-eps].
+  const rogue = makeC({
+    id: 'rogue', faction: 'party', pos: { x: 0, y: 5, z: 0 },
+    resources: lv2RogueResources(),
+    actions: [],   // no attack options → not Case 1 or 2
+  });
+  const enemy = makeC({ id: 'enemy', faction: 'enemy', pos: { x: 15, y: 5, z: 0 } });
+  const bf = makeBFWithObstacles([rogue, enemy], [fogCloud(2, 0, 12, 10)]);
+
+  const plan = planTurn(rogue, bf);
+
+  assert('7a: Rogue behind fog → bonusAction is hide',
+    plan.bonusAction?.type === 'hide',
+    `got ${plan.bonusAction?.type}`);
+  assert('7a: Hide description mentions Cunning Action',
+    plan.bonusAction?.description?.includes('Cunning Action') ?? false);
+}
+
+// ── 7b: Planner does NOT plan Hide in open field (no vision obstacles) ──────
+
+{
+  const rogue = makeC({
+    id: 'rogue', faction: 'party', pos: { x: 0, y: 5, z: 0 },
+    resources: lv2RogueResources(),
+    actions: [],
+  });
+  const enemy = makeC({ id: 'enemy', faction: 'enemy', pos: { x: 10, y: 5, z: 0 } });
+  const bf = makeBF([rogue, enemy]); // no obstacles
+
+  const plan = planTurn(rogue, bf);
+
+  assert('7b: Open field → bonusAction is NOT hide',
+    plan.bonusAction?.type !== 'hide',
+    `got ${plan.bonusAction?.type}`);
+}
+
+// ── 7c: Planner does NOT plan Hide when enemy has LOS to Rogue ───────────────
+
+{
+  // Rogue at (0,5), enemy at (3,5). Wall is at x=8 (between both and far space).
+  // Enemy at x=3 has CLEAR LOS to rogue at x=0 — nothing between them.
+  const rogue = makeC({
+    id: 'rogue', faction: 'party', pos: { x: 0, y: 5, z: 0 },
+    resources: lv2RogueResources(),
+    actions: [],
+  });
+  const enemy = makeC({ id: 'enemy', faction: 'enemy', pos: { x: 3, y: 5, z: 0 } });
+  // Wall at x=8, does NOT block enemy→rogue LOS (enemy is on same side as rogue)
+  const bf = makeBFWithObstacles([rogue, enemy], [wall(8, 0, 3, 10)]);
+
+  const plan = planTurn(rogue, bf);
+
+  assert('7c: Enemy has LOS to Rogue → bonusAction is NOT hide',
+    plan.bonusAction?.type !== 'hide',
+    `got ${plan.bonusAction?.type}`);
+}
+
+// ── 7d: Planner does NOT plan Hide when Rogue is already hidden ─────────────
+
+{
+  const rogue = makeC({
+    id: 'rogue', faction: 'party', pos: { x: 0, y: 5, z: 0 },
+    resources: lv2RogueResources(),
+    actions: [],
+    conditions: new Set(['hidden'] as any),
+  });
+  const enemy = makeC({ id: 'enemy', faction: 'enemy', pos: { x: 15, y: 5, z: 0 } });
+  const bf = makeBFWithObstacles([rogue, enemy], [fogCloud(2, 0, 12, 10)]);
+
+  const plan = planTurn(rogue, bf);
+
+  assert('7d: Already hidden → bonusAction is NOT hide again',
+    plan.bonusAction?.type !== 'hide',
+    `got ${plan.bonusAction?.type}`);
+}
+
+// ── 7e: Planner does NOT plan Hide when Rogue plans a melee attack (Case 1 priority) ─
+
+{
+  const rogue = makeC({
+    id: 'rogue', faction: 'party', pos: { x: 0, y: 0, z: 0 },
+    resources: lv2RogueResources(),
+    actions: [meleeAction()],
+  });
+  const enemy = makeC({ id: 'enemy', faction: 'enemy', pos: { x: 1, y: 0, z: 0 } });
+  const bf = makeBFWithObstacles([rogue, enemy], [fogCloud(10, 0, 5, 1)]);
+
+  const plan = planTurn(rogue, bf);
+
+  assert('7e: Melee attack planned → Case 1 Disengage, not Hide',
+    plan.bonusAction?.type === 'disengage',
+    `got ${plan.bonusAction?.type}`);
+}
+
+// ── 7f: Engine execution — hidden Rogue attacks with advantage ───────────────
+
+{
+  // Rogue pre-hidden, attacks enemy → attack should be resolved with advantage.
+  // We verify: condition_remove event fires (revealed) and attack event fires.
+  const rogue = makeC({
+    id: 'rogue', faction: 'party', pos: { x: 0, y: 0, z: 0 },
+    resources: lv2RogueResources(),
+    actions: [meleeAction()],
+    conditions: new Set(['hidden'] as any),
+    maxHP: 100, currentHP: 100,
+  });
+  const enemy = makeC({
+    id: 'enemy', faction: 'enemy', pos: { x: 1, y: 0, z: 0 },
+    maxHP: 500, currentHP: 500, ac: 30, // near-immortal: won't die before we can inspect events
+    actions: [meleeAction('Claw', 3)],
+  });
+  const bf = makeFlatBattlefield(10, 5, [rogue, enemy]);
+  const result = runCombat(bf, ['rogue', 'enemy'], { maxRounds: 1 });
+
+  const revealEvent = result.events.find(
+    (e: CombatEvent) => e.type === 'condition_remove' && e.actorId === 'rogue' &&
+                        e.description.includes('revealed')
+  );
+  const attackEvent = result.events.find(
+    (e: CombatEvent) => (e.type === 'attack_hit' || e.type === 'attack_miss' || e.type === 'attack_crit') &&
+                        e.actorId === 'rogue'
+  );
+
+  assert('7f: Hidden Rogue attacks → condition_remove "revealed" event fires',
+    revealEvent !== undefined,
+    revealEvent ? '' : 'no condition_remove event with "revealed"');
+  assert('7f: Hidden Rogue attacks → attack event fires',
+    attackEvent !== undefined);
+}
+
+// ── 7g: Engine execution — hidden condition added on successful Hide ─────────
+
+{
+  // Combatants at y=2 so their AABB corners (y=2,3) lie well inside the fog's
+  // y-range [0+eps, 5-eps]. Fog from x=2-13 blocks all rays between enemy and rogue.
+  // Rogue DEX=30 (mod +10) + prof 2 → stealth roll min 13, always > PP=10. Guaranteed success.
+  const rogue = makeC({
+    id: 'rogue', faction: 'party', pos: { x: 0, y: 2, z: 0 },
+    resources: lv2RogueResources(),
+    actions: [],   // no attack → planner reaches Case 3
+    dex: 30,
+    maxHP: 100, currentHP: 100,
+  });
+  const enemy = makeC({
+    id: 'enemy', faction: 'enemy', pos: { x: 15, y: 2, z: 0 },
+    wis: 10, // passive perception = 10 + 0 = 10
+    maxHP: 500, currentHP: 500, ac: 30,
+    actions: [meleeAction('Claw', 3)],
+  });
+  const bf = makeFlatBattlefield(20, 5, [rogue, enemy]);
+  bf.obstacles = [fogCloud(2, 0, 12, 5)]; // fog from x=2-13, full y depth
+
+  const result = runCombat(bf, ['rogue', 'enemy'], { maxRounds: 1 });
+
+  const hideEvent = result.events.find(
+    (e: CombatEvent) => e.type === 'condition_add' && e.actorId === 'rogue' &&
+                        e.description.includes('Hides')
+  );
+
+  assert('7g: Guaranteed stealth success → condition_add "Hides" event fires',
+    hideEvent !== undefined,
+    hideEvent ? '' : `events: ${result.events.map((e: CombatEvent) => e.type + ':' + e.description).join('; ')}`);
+}
+
+// ── 7h: Engine execution — failed Hide does not add condition ────────────────
+
+{
+  // Rogue dex=2 (mod -4), prof 2 → max stealth = 20-4+2 = 18.
+  // Enemy wis=30 → passive perception = 10+10 = 20. P(18 > 20) = 0. Guaranteed failure.
+  const rogue = makeC({
+    id: 'rogue', faction: 'party', pos: { x: 0, y: 2, z: 0 },
+    resources: lv2RogueResources(),
+    actions: [],
+    dex: 2, // mod = -4; max stealth roll = 18 < 20
+    maxHP: 100, currentHP: 100,
+  });
+  const enemy = makeC({
+    id: 'enemy', faction: 'enemy', pos: { x: 15, y: 2, z: 0 },
+    wis: 30, // passive perception = 10 + 10 = 20
+    maxHP: 500, currentHP: 500, ac: 30,
+    actions: [meleeAction('Claw', 3)],
+  });
+  const bf = makeFlatBattlefield(20, 5, [rogue, enemy]);
+  bf.obstacles = [fogCloud(2, 0, 12, 5)];
+
+  const result = runCombat(bf, ['rogue', 'enemy'], { maxRounds: 1 });
+
+  const hideSuccessEvent = result.events.find(
+    (e: CombatEvent) => e.type === 'condition_add' && e.actorId === 'rogue' &&
+                        e.description.includes('Hides')
+  );
+  const hideFailEvent = result.events.find(
+    (e: CombatEvent) => e.type === 'action' && e.actorId === 'rogue' &&
+                        e.description.includes('Detected')
+  );
+
+  assert('7h: Guaranteed stealth failure → condition_add does NOT fire',
+    hideSuccessEvent === undefined,
+    `found unexpected hide success event`);
+  assert('7h: Guaranteed stealth failure → "Detected" action event fires',
+    hideFailEvent !== undefined,
+    hideFailEvent ? '' : `events: ${result.events.filter((e: CombatEvent) => e.actorId === 'rogue').map((e: CombatEvent) => e.type + ':' + e.description).join('; ')}`);
+}
+
+// ============================================================
 
 console.log('\n─────────────────────────────────────────────');
 console.log(`Results: ${passed} passed, ${failed} failed`);
