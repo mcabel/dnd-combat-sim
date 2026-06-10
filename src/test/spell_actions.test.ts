@@ -104,8 +104,11 @@ console.log('\n=== 1. Spell database ===\n');
   eq('Magic Missile slotLevel: 1', mm?.slotLevel, 1);
 }
 {
-  // Utility/heal spells not in DB → null
-  assert('Bless → null (buff, no combat target)',        lookupSpell('Bless') === null);
+  // Bless is now implemented — it IS in the DB (Session 34)
+  const bless = lookupSpell('Bless');
+  assert('Bless in DB (implemented Session 34)',         bless !== null);
+  assert('Bless: requiresConcentration = true',         bless?.requiresConcentration === true);
+  assert('Bless: no damage (buff spell)',                bless?.damage === null);
   assert('Detect Magic → null (utility)',                lookupSpell('Detect Magic') === null);
   {
     const cw = lookupSpell('Cure Wounds');
@@ -203,12 +206,14 @@ console.log('\n=== 4. Reaction spell excluded from action selection ===\n');
 console.log('\n=== 5. Save-based cantrip selection ===\n');
 
 {
-  // Enemy at range (30ft) — Cleric can't reach in melee → should pick Sacred Flame
+  // Enemy at range (30ft) — Cleric already cast Bless round 1 (concentration active).
+  // Round 2: can't reach in melee, Bless already up → should pick Sacred Flame.
   const cleric = spawnClass('Cleric', { x: 0, y: 0, z: 0 });
+  cleric.concentration = { active: true, spellName: 'Bless', dcIfHit: 13 }; // already blessed
   const enemy  = makeEnemy('e1', { x: 6, y: 0, z: 0 }); // 30ft away
   const plan   = planTurn(cleric, makeBF([cleric], [enemy]));
 
-  assert('Cleric picks Sacred Flame at range', plan.action?.action?.name === 'Sacred Flame',
+  assert('Cleric picks Sacred Flame at range (Bless already active)', plan.action?.action?.name === 'Sacred Flame',
     `got: ${plan.action?.action?.name}`);
   assert('Cleric: Sacred Flame is cast type', plan.action?.type === 'cast');
   assert('Cleric: no slot consumed (cantrip)',

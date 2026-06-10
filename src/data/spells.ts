@@ -56,7 +56,7 @@ function avg(count: number, sides: number, bonus = 0): number {
  *   actionable by current planner), sleep (HP-bucket mechanic — complex).
  *
  * Omitted (healing / ally-targeting — deferred):
- *   cure wounds, healing word, bless, shield of faith
+ *   cure wounds, healing word, shield of faith
  */
 export const SPELL_DB: Record<string, SpellTemplate> = {
 
@@ -88,6 +88,22 @@ export const SPELL_DB: Record<string, SpellTemplate> = {
     requiresConcentration: false,
     slotLevel: 1,
     bonusAction: true,   // bonus action cast
+  },
+
+  // ---- Buff spells (ally-targeting) -----------------------
+  // attackType null — NOT selected by selectAction.
+  // Planner checks by name via shouldCastBless in spells/bless.ts.
+
+  'bless': {
+    attackType: null,    // 30ft range, no attack roll, no save — willing targets
+    rangeNormal: 30,
+    damage: null,
+    damageType: null,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 1,
+    // costType defaults to 'action'
   },
 
   // ---- Bard -----------------------------------------------

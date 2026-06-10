@@ -5,6 +5,7 @@
 
 import { Combatant, Action, DiceExpression, Condition, ActionBudget, Battlefield, CreatureSize, DamageType } from '../types/core';
 import { querySelf, queryVulnerability } from './adv_system';
+import { getActiveBlessDie } from './spell_effects';
 
 // ---- Dice rolling -------------------------------------------
 
@@ -113,10 +114,14 @@ export function rollSave(
   // Bardic Inspiration die — consumed on save rolls too (PHB p.54)
   const biBonus = consumeBardicInspiration(combatant);
 
+  // Bless die — +1d4 to saving throws when blessed (PHB p.219)
+  const blessSides = getActiveBlessDie(combatant);
+  const blessBonus = blessSides > 0 ? rollDie(blessSides) : 0;
+
   // Warding Bond: +1 to all saving throws while bonded (PHB p.287)
   const wbBonus = combatant.wardingBond ? 1 : 0;
 
-  const total = roll + mod + prof + biBonus + wbBonus;
+  const total = roll + mod + prof + biBonus + blessBonus + wbBonus;
   return { roll, total, success: total >= dc };
 }
 

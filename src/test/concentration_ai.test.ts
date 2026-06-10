@@ -97,13 +97,12 @@ console.log('\n=== 1. requiresConcentration detection ===\n');
   const flameAction = cleric.actions.find(a => a.name.toLowerCase().includes('sacred flame'));
 
   if (blessAction) {
-    // Bless is in the weapon list for Cleric? Check spellcasting weapons
-    // Bless is a preparedSpell, not in weapons[] — so it's not an Action in our model yet
-    // The parser creates Actions from weapons[], not prepared spells
-    // This is expected: spell selection AI is future work
-    assert('Bless not in Cleric weapon actions (spell slots TBD)', blessAction === undefined);
+    // Bless IS now implemented as a spell module (Session 34).
+    // It is parsed from preparedSpells into the Cleric's action list.
+    assert('Bless in Cleric actions (implemented Session 34)', blessAction !== undefined);
+    assert('Bless: requiresConcentration = true', blessAction.requiresConcentration === true);
   } else {
-    assert('Bless not in Cleric weapon actions (spells not actions yet)', true);
+    assert('Bless not found in Cleric actions (unexpected)', false);
   }
 
   // Sacred Flame IS in weapons[] as a cantrip action

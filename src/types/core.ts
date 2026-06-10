@@ -436,6 +436,7 @@ export interface PlannedAction {
     | 'secondWind' | 'rage' | 'layOnHands' | 'bardicInspiration'
     | 'spellHeal'    // Cure Wounds (action) or Healing Word (bonus action)
     | 'faerieFire'   // Faerie Fire AoE control (concentration)
+    | 'bless'        // Bless up to 3 allies — +1d4 to attacks and saves (concentration)
     | 'legendary';
   action: Action | null;
   targetId: string | null;

@@ -14,6 +14,7 @@ import {
   shouldCastCureWounds, shouldCastHealingWord, spellHealPlan,
 } from './resources';
 import { shouldCast as shouldCastFaerieFire } from '../spells/faerie_fire';
+import { shouldCast as shouldCastBless } from '../spells/bless';
 import { selectAction, selfPreserveDecision, selectLegendaryAction } from './actions';
 import {
   canReach, bestAdjacentPos, bestRangedPosition,
@@ -544,6 +545,35 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
     return plan;  // nothing adjacent: stand still
   }
 
+  // === BLESS (buff allies) — cast before target selection ===
+  // Bless is a buff spell that targets allies — it fires regardless of whether the caster
+  // has an enemy target. Cast round 1 before anything else, when conditions are met.
+  // Only fires when caster is NOT already concentrating.
+  // GUARD: skip Bless if there is a downed ally in Cure Wounds range (5ft) — urgent healing
+  // takes higher priority. The Cure Wounds check after selectTarget will handle it.
+  {
+    const hasDownedAllyInReach = self.actions.some(a => a.name === 'Cure Wounds')
+      && [...battlefield.combatants.values()].some(
+        c => c.faction === self.faction && c.isUnconscious && !c.isDead
+          && chebyshev3D(self.pos, c.pos) * 5 <= 5
+      );
+
+    if (!hasDownedAllyInReach) {
+      const blessTargets = shouldCastBless(self, battlefield);
+      if (blessTargets) {
+        plan.action = {
+          type: 'bless',
+          action: null,
+          targetId: blessTargets[0].id,
+          description: `${self.name} casts Bless`,
+        };
+        plan.targetId = blessTargets[0].id;
+        plan.bonusAction = planBonusAction(self, null, battlefield);
+        return plan;
+      }
+    }
+  }
+
   // === SELECT TARGET ===
   const target = selectTarget(self, battlefield);
   if (!target) return plan; // No enemies left
@@ -567,6 +597,7 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
       return plan;
     }
   }
+
 
   // === FAERIE FIRE (action control) — cast before attacking if conditions met ===
   // Best early in a fight: advantage on all attacks against outlined enemies is

@@ -33,8 +33,9 @@ import { tickAdvantages, grantSelf, grantVulnerability } from './adv_system';
 import { getSummonEntry }                           from '../summons/registry';
 import { rollGrappleContest, rollShoveContest, canGrappleOrShoveTarget } from './utils';
 import { computeLOS } from './los';
-import { removeEffectsFromCaster, getActiveAcBonus } from './spell_effects';
+import { removeEffectsFromCaster, getActiveAcBonus, getActiveBlessDie } from './spell_effects';
 import { shouldCast as shouldCastFaerieFire, execute as executeFaerieFire } from '../spells/faerie_fire';
+import { shouldCast as shouldCastBless, execute as executeBless } from '../spells/bless';
 
 // ---- Combat log ---------------------------------------------
 
@@ -227,6 +228,15 @@ function resolveAttack(
     result.total += biBonus;
     log(state, 'action', attacker.id,
       `${attacker.name} uses Bardic Inspiration die (+${biBonus})!`, target.id, biBonus);
+  }
+
+  // Bless die — +1d4 to attack rolls when blessed (PHB p.219)
+  const blessSides = getActiveBlessDie(attacker);
+  if (blessSides > 0) {
+    const blessBonus = rollDie(blessSides);
+    result.total += blessBonus;
+    log(state, 'action', attacker.id,
+      `${attacker.name} rolls Bless die (+${blessBonus})!`, target.id, blessBonus);
   }
 
   // Warding Bond: +1 AC while bonded (PHB p.287)
@@ -690,6 +700,15 @@ function executePlannedAction(
       const ffTargets = shouldCastFaerieFire(actor, bf);
       if (!ffTargets || ffTargets.length === 0) break;
       executeFaerieFire(actor, ffTargets, state);
+      break;
+    }
+    case 'bless': {
+      // Bless — PHB p.219: +1d4 to attack rolls and saving throws for up to 3 allies.
+      // Concentration, range 30 ft.
+      // Re-run shouldCast to get the live target list (planning may have been stale).
+      const blessTargets = shouldCastBless(actor, bf);
+      if (!blessTargets || blessTargets.length === 0) break;
+      executeBless(actor, blessTargets, state);
       break;
     }
     case 'layOnHands': {
