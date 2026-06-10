@@ -53,7 +53,10 @@ function spawnClass(cls: string, pos = { x: 0, y: 0, z: 0 }) {
 function spawnMonster(name: string, id: string, pos = { x: 8, y: 0, z: 0 }) {
   const template = bestiary.get(name);
   if (!template) throw new Error(`Monster not found: ${name}`);
-  return monsterToCombatant(template, id, pos);
+  const c = monsterToCombatant(template, pos);
+  c.id = id;
+  c.name = id;
+  return c;
 }
 
 /** Build a minimal Battlefield from an array of combatants. */
@@ -470,3 +473,4 @@ console.log(`\n─────────────────────�
 console.log(`Results: ${passed} passed, ${failed} failed`);
 if (failed === 0) console.log('\nAll tests passed ✅');
 else process.exit(1);
+}

@@ -689,11 +689,12 @@ function executePlannedAction(
         ? state.battlefield.combatants.get(plan.targetId) ?? null
         : null;
       if (lohTarget && !lohTarget.isDead && plan.healAmount && plan.healAmount > 0) {
+        const wasUnconscious = lohTarget.isUnconscious;
         const healed = applyHeal(lohTarget, plan.healAmount);
-        if (lohTarget.isUnconscious && healed > 0) {
-          // applyHeal already cleared conditions — log regained consciousness
+        if (wasUnconscious && healed > 0) {
+          // applyHeal already cleared isUnconscious — log the event
           log(state, 'condition_remove', lohTarget.id,
-            `${lohTarget.name} regains consciousness!`, undefined);
+            `${lohTarget.name} regains consciousness!`, lohTarget.id);
         }
         log(state, 'action', actor.id, plan.description);
         log(state, 'heal', actor.id,
@@ -712,10 +713,12 @@ function executePlannedAction(
         ? state.battlefield.combatants.get(plan.targetId) ?? null
         : null;
       if (shTarget && !shTarget.isDead && plan.healAmount && plan.healAmount > 0) {
+        const wasUnconscious = shTarget.isUnconscious;
         const healed = applyHeal(shTarget, plan.healAmount);
-        if (shTarget.isUnconscious && healed > 0) {
+        if (wasUnconscious && healed > 0) {
+          // applyHeal already cleared isUnconscious — log the event
           log(state, 'condition_remove', shTarget.id,
-            `${shTarget.name} regains consciousness!`, undefined);
+            `${shTarget.name} regains consciousness!`, shTarget.id);
         }
         log(state, 'action', actor.id, plan.description);
         log(state, 'heal', actor.id,
