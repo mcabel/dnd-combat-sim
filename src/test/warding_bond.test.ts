@@ -13,9 +13,11 @@
 // ============================================================
 
 import { runCombat, makeFlatBattlefield } from '../engine/combat';
-import { applyDamageWithTempHP, rollSave } from '../engine/utils';
+import { applyDamageWithTempHP, rollSave, resetBudget } from '../engine/utils';
 import { loadPCStatBlocks, spawnPC }       from '../parser/pc';
-import { Combatant, Action }               from '../types/core';
+import { Combatant, Action, PlayerResources } from '../types/core';
+import { shouldCast as shouldCastWardingBond, execute as executeWardingBond } from '../spells/warding_bond';
+import { planTurn } from '../ai/planner';
 import * as fs from 'fs';
 
 // ---- Harness ------------------------------------------------
@@ -296,6 +298,408 @@ console.log('\n=== 5. wardingBond: null for spawned PCs ===\n');
   eq('Cleric wardingBond initializes to null',  cleric.wardingBond,  null);
   eq('Paladin wardingBond initializes to null', paladin.wardingBond, null);
   eq('Wizard wardingBond initializes to null',  wizard.wardingBond,  null);
+}
+
+// ============================================================
+// Shared helpers for new AI sections (6–9)
+// ============================================================
+
+import { EngineState, CombatLog } from '../engine/combat';
+import { Battlefield } from '../types/core';
+
+/** Minimal Battlefield for shouldCast / execute unit tests. */
+function makeBF(combatants: Combatant[]): Battlefield {
+  const map = new Map<string, Combatant>(combatants.map(c => [c.id, c]));
+  return {
+    width: 10, height: 10, depth: 1, cells: [],
+    combatants: map, round: 1,
+    obstacles: [],
+    initiativeOrder: combatants.map(c => c.id),
+  } as unknown as Battlefield;
+}
+
+function makeState(bf: Battlefield): EngineState {
+  const log: CombatLog = { events: [], winner: null, rounds: 0 };
+  return {
+    battlefield: bf,
+    log,
+    disengagedThisTurn: new Set(),
+    damageThisRound: new Map(),
+    noDamageRounds: new Map(),
+    rageDamagedSinceLastTurn: new Set(),
+  };
+}
+
+/** Minimal PlayerResources with wardingBond resource ready to cast. */
+function wbResources(remaining = 1): PlayerResources {
+  return { wardingBond: { remaining } };
+}
+
+// ============================================================
+// Section 6: shouldCastWardingBond — gate conditions
+// ============================================================
+console.log('\n=== 6. shouldCastWardingBond — gate conditions ===\n');
+
+{
+  // 6a: Returns a target when an adjacent ally exists and resource is available
+  const caster = makeC({ id: 'wb6_caster', faction: 'party', pos: { x: 0, y: 0, z: 0 },
+    resources: wbResources(1) });
+  const ally   = makeC({ id: 'wb6_ally',   faction: 'party', pos: { x: 1, y: 0, z: 0 },
+    wardingBond: null });
+  const bf = makeBF([caster, ally]);
+
+  const t = shouldCastWardingBond(caster, bf);
+  assert('6a: returns ally when adjacent and resource=1', t?.id === 'wb6_ally');
+}
+
+{
+  // 6b: Returns null when wardingBond resource is absent (no field)
+  const caster = makeC({ id: 'wb6b_caster', faction: 'party', pos: { x: 0, y: 0, z: 0 },
+    resources: null });
+  const ally   = makeC({ id: 'wb6b_ally',   faction: 'party', pos: { x: 1, y: 0, z: 0 } });
+  const bf = makeBF([caster, ally]);
+
+  assert('6b: null when resources is null', shouldCastWardingBond(caster, bf) === null);
+}
+
+{
+  // 6c: Returns null when remaining = 0
+  const caster = makeC({ id: 'wb6c_caster', faction: 'party', pos: { x: 0, y: 0, z: 0 },
+    resources: wbResources(0) });
+  const ally   = makeC({ id: 'wb6c_ally',   faction: 'party', pos: { x: 1, y: 0, z: 0 } });
+  const bf = makeBF([caster, ally]);
+
+  assert('6c: null when remaining=0', shouldCastWardingBond(caster, bf) === null);
+}
+
+{
+  // 6d: Returns null when no allies within 5 ft (ally is 3 squares = 15 ft away)
+  const caster = makeC({ id: 'wb6d_caster', faction: 'party', pos: { x: 0, y: 0, z: 0 },
+    resources: wbResources(1) });
+  const ally   = makeC({ id: 'wb6d_ally',   faction: 'party', pos: { x: 3, y: 0, z: 0 },
+    wardingBond: null });
+  const bf = makeBF([caster, ally]);
+
+  assert('6d: null when ally out of touch range (15 ft)', shouldCastWardingBond(caster, bf) === null);
+}
+
+{
+  // 6e: Returns null when the only ally is already bonded (to a different caster)
+  const caster  = makeC({ id: 'wb6e_caster',  faction: 'party', pos: { x: 0, y: 0, z: 0 },
+    resources: wbResources(1) });
+  const ally    = makeC({ id: 'wb6e_ally',    faction: 'party', pos: { x: 1, y: 0, z: 0 },
+    wardingBond: { casterId: 'some_other_caster' } });
+  const bf = makeBF([caster, ally]);
+
+  assert('6e: null when only ally already bonded', shouldCastWardingBond(caster, bf) === null);
+}
+
+{
+  // 6f: Returns null when caster already maintains an active bond on the field
+  const caster = makeC({ id: 'wb6f_caster', faction: 'party', pos: { x: 0, y: 0, z: 0 },
+    resources: wbResources(1) });
+  const bonded = makeC({ id: 'wb6f_bonded', faction: 'party', pos: { x: 1, y: 0, z: 0 },
+    wardingBond: { casterId: 'wb6f_caster' } });
+  const ally2  = makeC({ id: 'wb6f_ally2', faction: 'party', pos: { x: 1, y: 1, z: 0 },
+    wardingBond: null });
+  const bf = makeBF([caster, bonded, ally2]);
+
+  assert('6f: null when caster already has an active bond', shouldCastWardingBond(caster, bf) === null);
+}
+
+{
+  // 6g: Skips dead allies (no dead targets returned)
+  const caster = makeC({ id: 'wb6g_caster', faction: 'party', pos: { x: 0, y: 0, z: 0 },
+    resources: wbResources(1) });
+  const dead   = makeC({ id: 'wb6g_dead',   faction: 'party', pos: { x: 1, y: 0, z: 0 },
+    isDead: true, wardingBond: null });
+  const bf = makeBF([caster, dead]);
+
+  assert('6g: null when only adjacent ally is dead', shouldCastWardingBond(caster, bf) === null);
+}
+
+{
+  // 6h: Prefers the most vulnerable (lowest HP%) ally
+  const caster  = makeC({ id: 'wb6h_caster', faction: 'party', pos: { x: 0, y: 0, z: 0 },
+    resources: wbResources(1) });
+  const healthy = makeC({ id: 'wb6h_healthy', faction: 'party', pos: { x: 1, y: 0, z: 0 },
+    maxHP: 20, currentHP: 20, wardingBond: null });
+  const hurt    = makeC({ id: 'wb6h_hurt',    faction: 'party', pos: { x: 0, y: 1, z: 0 },
+    maxHP: 20, currentHP: 5,  wardingBond: null });
+  const bf = makeBF([caster, healthy, hurt]);
+
+  const t = shouldCastWardingBond(caster, bf);
+  assert('6h: prefers hurt ally (lowest HP%)', t?.id === 'wb6h_hurt');
+}
+
+// ============================================================
+// Section 7: execute — bond applied, resource decremented, events logged
+// ============================================================
+console.log('\n=== 7. executeWardingBond — pipeline ===\n');
+
+function makeBFWithInit(combatants: Combatant[]): Battlefield {
+  return makeBF(combatants);
+}
+
+{
+  // 7a: execute sets wardingBond on target
+  const caster = makeC({ id: 'wb7a_c', faction: 'party', resources: wbResources(1) });
+  const ally   = makeC({ id: 'wb7a_a', faction: 'party', wardingBond: null });
+  const bf     = makeBF([caster, ally]);
+  const state  = makeState(bf);
+
+  executeWardingBond(caster, ally, state);
+
+  assert('7a: target.wardingBond set to caster id', ally.wardingBond?.casterId === 'wb7a_c');
+}
+
+{
+  // 7b: execute decrements remaining from 1 → 0
+  const caster = makeC({ id: 'wb7b_c', faction: 'party', resources: wbResources(1) });
+  const ally   = makeC({ id: 'wb7b_a', faction: 'party', wardingBond: null });
+  const bf     = makeBF([caster, ally]);
+  const state  = makeState(bf);
+
+  executeWardingBond(caster, ally, state);
+
+  eq('7b: resource.remaining decremented to 0',
+    caster.resources!.wardingBond!.remaining, 0);
+}
+
+{
+  // 7c: execute logs an 'action' event
+  const caster = makeC({ id: 'wb7c_c', faction: 'party', resources: wbResources(1) });
+  const ally   = makeC({ id: 'wb7c_a', faction: 'party', wardingBond: null });
+  const bf     = makeBF([caster, ally]);
+  const state  = makeState(bf);
+
+  executeWardingBond(caster, ally, state);
+
+  const actionEvt = state.log.events.find(e => e.type === 'action' && e.actorId === 'wb7c_c');
+  assert('7c: action event logged', actionEvt !== undefined);
+}
+
+{
+  // 7d: execute logs a 'condition_add' event pointing at the ally
+  const caster = makeC({ id: 'wb7d_c', faction: 'party', resources: wbResources(1) });
+  const ally   = makeC({ id: 'wb7d_a', faction: 'party', wardingBond: null });
+  const bf     = makeBF([caster, ally]);
+  const state  = makeState(bf);
+
+  executeWardingBond(caster, ally, state);
+
+  const condEvt = state.log.events.find(
+    e => e.type === 'condition_add' && e.targetId === 'wb7d_a',
+  );
+  assert('7d: condition_add event logged targeting ally', condEvt !== undefined);
+}
+
+{
+  // 7e: After execute, the existing resistance + redirect mechanics fire in combat
+  //     (unit-level: directly check that applyDamageWithTempHP halves damage when
+  //      wardingBond is set, as already proven in Section 1 — this just confirms
+  //      execute's side-effect enables those mechanics)
+  const caster = makeC({ id: 'wb7e_c', faction: 'party', resources: wbResources(1) });
+  const ally   = makeC({ id: 'wb7e_a', faction: 'party', maxHP: 100, currentHP: 100,
+    wardingBond: null });
+  const bf     = makeBF([caster, ally]);
+  const state  = makeState(bf);
+
+  executeWardingBond(caster, ally, state);
+  const dealt  = applyDamageWithTempHP(ally, 10, 'fire');
+
+  eq('7e: post-bond fire damage halved (5)', dealt, 5);
+}
+
+// ============================================================
+// Section 8: planTurn — planner chooses wardingBond when gated
+// ============================================================
+console.log('\n=== 8. planTurn picks wardingBond ===\n');
+
+{
+  // 8a: Planner selects wardingBond when resource is available and ally is adjacent
+  const caster  = makeC({
+    id: 'wb8a_c', name: 'Cleric', faction: 'party',
+    pos: { x: 0, y: 0, z: 0 },
+    aiProfile: 'smart',
+    resources: wbResources(1),
+    actions: [meleeAction()],
+  });
+  const ally    = makeC({
+    id: 'wb8a_a', faction: 'party',
+    pos: { x: 1, y: 0, z: 0 },
+    wardingBond: null,
+    actions: [meleeAction()],
+  });
+  const enemy   = makeC({
+    id: 'wb8a_e', faction: 'enemy',
+    pos: { x: 5, y: 5, z: 0 },
+    actions: [meleeAction()],
+  });
+  const bf = makeBFWithInit([caster, ally, enemy]);
+
+  resetBudget(caster);
+  const plan = planTurn(caster, bf);
+
+  assert('8a: plan.action.type is wardingBond', plan.action?.type === 'wardingBond');
+  assert('8a: targetId is the ally', plan.action?.targetId === 'wb8a_a');
+}
+
+{
+  // 8b: Planner does NOT choose wardingBond when remaining = 0
+  const caster  = makeC({
+    id: 'wb8b_c', faction: 'party',
+    pos: { x: 0, y: 0, z: 0 },
+    aiProfile: 'smart',
+    resources: wbResources(0),
+    actions: [meleeAction()],
+  });
+  const ally    = makeC({
+    id: 'wb8b_a', faction: 'party',
+    pos: { x: 1, y: 0, z: 0 }, wardingBond: null,
+    actions: [],
+  });
+  const enemy   = makeC({
+    id: 'wb8b_e', faction: 'enemy',
+    pos: { x: 1, y: 1, z: 0 },
+    actions: [meleeAction()],
+  });
+  const bf = makeBFWithInit([caster, ally, enemy]);
+
+  resetBudget(caster);
+  const plan = planTurn(caster, bf);
+
+  assert('8b: plan.action is NOT wardingBond when remaining=0',
+    plan.action?.type !== 'wardingBond');
+}
+
+{
+  // 8c: Planner does NOT choose wardingBond when ally is out of touch range
+  const caster  = makeC({
+    id: 'wb8c_c', faction: 'party',
+    pos: { x: 0, y: 0, z: 0 },
+    aiProfile: 'smart',
+    resources: wbResources(1),
+    actions: [meleeAction()],
+  });
+  const ally    = makeC({
+    id: 'wb8c_a', faction: 'party',
+    pos: { x: 5, y: 5, z: 0 },   // 5*sqrt(2)*5 ≈ 35 ft away
+    wardingBond: null,
+    actions: [],
+  });
+  const enemy   = makeC({
+    id: 'wb8c_e', faction: 'enemy',
+    pos: { x: 1, y: 0, z: 0 },
+    actions: [meleeAction()],
+  });
+  const bf = makeBFWithInit([caster, ally, enemy]);
+
+  resetBudget(caster);
+  const plan = planTurn(caster, bf);
+
+  assert('8c: wardingBond not chosen when ally out of range',
+    plan.action?.type !== 'wardingBond');
+}
+
+// ============================================================
+// Section 9: runCombat — Warding Bond fires and effects persist
+// ============================================================
+console.log('\n=== 9. runCombat — Warding Bond integration ===\n');
+
+{
+  // 9a: runCombat emits a 'condition_add' event for Warding Bond
+  const caster  = makeC({
+    id: 'wb9a_c', name: 'Cleric', faction: 'party',
+    pos: { x: 0, y: 0, z: 0 },
+    aiProfile: 'smart',
+    resources: wbResources(1),
+    actions: [meleeAction()],
+  });
+  const ally    = makeC({
+    id: 'wb9a_a', name: 'Paladin', faction: 'party',
+    pos: { x: 1, y: 0, z: 0 },
+    maxHP: 100, currentHP: 100, ac: 20,
+    wardingBond: null,
+    actions: [meleeAction()],
+  });
+  const enemy   = makeC({
+    id: 'wb9a_e', name: 'Orc', faction: 'enemy',
+    pos: { x: 8, y: 0, z: 0 },
+    maxHP: 5, currentHP: 5,
+    actions: [meleeAction()],
+  });
+
+  const bf = makeFlatBattlefield(15, 10, [caster, ally, enemy]);
+  const result = runCombat(bf, [caster.id, ally.id, enemy.id], { maxRounds: 5 });
+
+  const bondEvt = result.events.find(
+    e => e.type === 'condition_add' && e.description.toLowerCase().includes('warding bond'),
+  );
+  assert('9a: runCombat fires Warding Bond condition_add event', bondEvt !== undefined);
+}
+
+{
+  // 9b: After runCombat, caster's resource.remaining is 0 (bond was cast)
+  const caster  = makeC({
+    id: 'wb9b_c', name: 'Cleric', faction: 'party',
+    pos: { x: 0, y: 0, z: 0 },
+    aiProfile: 'smart',
+    resources: wbResources(1),
+    actions: [meleeAction()],
+  });
+  const ally    = makeC({
+    id: 'wb9b_a', name: 'Paladin', faction: 'party',
+    pos: { x: 1, y: 0, z: 0 },
+    maxHP: 100, currentHP: 100, ac: 20,
+    wardingBond: null,
+    actions: [meleeAction()],
+  });
+  const enemy   = makeC({
+    id: 'wb9b_e', name: 'Orc', faction: 'enemy',
+    pos: { x: 8, y: 0, z: 0 },
+    maxHP: 5, currentHP: 5,
+    actions: [meleeAction()],
+  });
+
+  const bf = makeFlatBattlefield(15, 10, [caster, ally, enemy]);
+  runCombat(bf, [caster.id, ally.id, enemy.id], { maxRounds: 5 });
+
+  const finalCaster = bf.combatants.get('wb9b_c')!;
+  eq('9b: caster.resources.wardingBond.remaining is 0 after cast',
+    finalCaster.resources!.wardingBond!.remaining, 0);
+}
+
+{
+  // 9c: Warding Bond is NOT recast on round 2 (resource gate prevents double-cast)
+  const caster  = makeC({
+    id: 'wb9c_c', name: 'Cleric', faction: 'party',
+    pos: { x: 0, y: 0, z: 0 },
+    aiProfile: 'smart',
+    resources: wbResources(1),
+    actions: [meleeAction()],
+  });
+  const ally    = makeC({
+    id: 'wb9c_a', name: 'Paladin', faction: 'party',
+    pos: { x: 1, y: 0, z: 0 },
+    maxHP: 200, currentHP: 200, ac: 20,
+    wardingBond: null,
+    actions: [meleeAction()],
+  });
+  const enemy   = makeC({
+    id: 'wb9c_e', name: 'Troll', faction: 'enemy',
+    pos: { x: 4, y: 0, z: 0 },
+    maxHP: 84, currentHP: 84,
+    actions: [meleeAction()],
+  });
+
+  const bf = makeFlatBattlefield(15, 10, [caster, ally, enemy]);
+  const result = runCombat(bf, [caster.id, ally.id, enemy.id], { maxRounds: 5 });
+
+  const bondEvents = result.events.filter(
+    e => e.type === 'condition_add' && e.description.toLowerCase().includes('warding bond'),
+  );
+  assert('9c: Warding Bond cast exactly once (resource gate)', bondEvents.length === 1);
 }
 
 // ============================================================

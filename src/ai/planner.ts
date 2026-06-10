@@ -15,6 +15,7 @@ import {
 } from './resources';
 import { shouldCast as shouldCastFaerieFire } from '../spells/faerie_fire';
 import { shouldCast as shouldCastBless } from '../spells/bless';
+import { shouldCast as shouldCastWardingBond } from '../spells/warding_bond';
 import { selectAction, selfPreserveDecision, selectLegendaryAction } from './actions';
 import {
   canReach, bestAdjacentPos, bestRangedPosition,
@@ -598,6 +599,24 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
     }
   }
 
+  // === WARDING BOND (action buff) — protect an adjacent ally before combat heats up ===
+  // Cast once, early in the fight. Requires resources.wardingBond.remaining > 0 and
+  // a living unbonded ally within 5 ft (touch range). Does NOT require concentration.
+  // Priority: after Cure Wounds (urgent heal) but before Faerie Fire (offensive advantage).
+  if (self.resources?.wardingBond && self.resources.wardingBond.remaining > 0) {
+    const wbTarget = shouldCastWardingBond(self, battlefield);
+    if (wbTarget) {
+      plan.action = {
+        type: 'wardingBond',
+        action: null,
+        targetId: wbTarget.id,
+        description: `${self.name} casts Warding Bond on ${wbTarget.name}`,
+      };
+      plan.targetId = wbTarget.id;
+      plan.bonusAction = planBonusAction(self, target, battlefield);
+      return plan;
+    }
+  }
 
   // === FAERIE FIRE (action control) — cast before attacking if conditions met ===
   // Best early in a fight: advantage on all attacks against outlined enemies is

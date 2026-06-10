@@ -214,6 +214,12 @@ export interface PlayerResources {
   // Warlock Dark One's Blessing temp HP on kill
   darkOnesBlessing?:   { amount: number };
 
+  // Warding Bond (PHB p.287): Cleric/Paladin 2nd-level spell.
+  // Tracked as a dedicated resource (not a spell slot) so level-1 casters can use it
+  // in test harnesses without requiring 2nd-level slots.
+  // remaining: 1 = can still cast; 0 = bond already active or expended this scene.
+  wardingBond?:        { remaining: number };
+
   // Ammo tracking (4.11) — Ranger arrows, Rogue shortbow
   ammo?: {
     [weaponName: string]: { max: number; remaining: number };
@@ -437,6 +443,7 @@ export interface PlannedAction {
     | 'spellHeal'    // Cure Wounds (action) or Healing Word (bonus action)
     | 'faerieFire'   // Faerie Fire AoE control (concentration)
     | 'bless'        // Bless up to 3 allies — +1d4 to attacks and saves (concentration)
+    | 'wardingBond'  // Warding Bond — buff adjacent ally (touch range, no concentration)
     | 'legendary';
   action: Action | null;
   targetId: string | null;

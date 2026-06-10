@@ -36,6 +36,7 @@ import { computeLOS } from './los';
 import { removeEffectsFromCaster, getActiveAcBonus, getActiveBlessDie } from './spell_effects';
 import { shouldCast as shouldCastFaerieFire, execute as executeFaerieFire } from '../spells/faerie_fire';
 import { shouldCast as shouldCastBless, execute as executeBless } from '../spells/bless';
+import { execute as executeWardingBond } from '../spells/warding_bond';
 
 // ---- Combat log ---------------------------------------------
 
@@ -709,6 +710,19 @@ function executePlannedAction(
       const blessTargets = shouldCastBless(actor, bf);
       if (!blessTargets || blessTargets.length === 0) break;
       executeBless(actor, blessTargets, state);
+      break;
+    }
+
+    case 'wardingBond': {
+      // Warding Bond — PHB p.287: protect an adjacent ally (touch range, no concentration).
+      // Effect: +1 AC, +1 saves, resistance to all damage, caster takes redirect damage.
+      // Mechanics (+1 AC, +1 save, resistance, redirect) are already wired in combat.ts
+      // and utils.ts — activate automatically when target.wardingBond is non-null.
+      const wbTargetId = plan.targetId;
+      if (!wbTargetId) break;
+      const wbTarget = bf.combatants.get(wbTargetId);
+      if (!wbTarget || wbTarget.isDead || wbTarget.isUnconscious) break;
+      executeWardingBond(actor, wbTarget, state);
       break;
     }
     case 'layOnHands': {
