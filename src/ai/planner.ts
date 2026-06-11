@@ -15,6 +15,7 @@ import {
 } from './resources';
 import { shouldCast as shouldCastFaerieFire } from '../spells/faerie_fire';
 import { shouldCast as shouldCastBless } from '../spells/bless';
+import { shouldCast as shouldCastEntangle } from '../spells/entangle';
 import { shouldCast as shouldCastWardingBond } from '../spells/warding_bond';
 import { selectAction, selfPreserveDecision, selectLegendaryAction } from './actions';
 import {
@@ -613,6 +614,25 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
         description: `${self.name} casts Warding Bond on ${wbTarget.name}`,
       };
       plan.targetId = wbTarget.id;
+      plan.bonusAction = planBonusAction(self, target, battlefield);
+      return plan;
+    }
+  }
+
+  // === ENTANGLE (action control) — cast before attacking if conditions met ===
+  // Restrained enemies have: speed 0, disadvantage on attacks, attacks vs them have advantage.
+  // Stronger overall than Faerie Fire (which only grants advantage). Cast first.
+  // Only fires when caster is NOT already concentrating.
+  {
+    const entangleTargets = shouldCastEntangle(self, battlefield);
+    if (entangleTargets) {
+      plan.action = {
+        type: 'entangle',
+        action: null,
+        targetId: entangleTargets[0].id,
+        description: `${self.name} casts Entangle`,
+      };
+      plan.targetId = entangleTargets[0].id;
       plan.bonusAction = planBonusAction(self, target, battlefield);
       return plan;
     }

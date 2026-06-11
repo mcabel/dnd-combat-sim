@@ -36,6 +36,7 @@ import { computeLOS } from './los';
 import { removeEffectsFromCaster, getActiveAcBonus, getActiveBlessDie } from './spell_effects';
 import { shouldCast as shouldCastFaerieFire, execute as executeFaerieFire } from '../spells/faerie_fire';
 import { shouldCast as shouldCastBless, execute as executeBless } from '../spells/bless';
+import { shouldCast as shouldCastEntangle, execute as executeEntangle } from '../spells/entangle';
 import { execute as executeWardingBond } from '../spells/warding_bond';
 
 // ---- Combat log ---------------------------------------------
@@ -710,6 +711,16 @@ function executePlannedAction(
       const blessTargets = shouldCastBless(actor, bf);
       if (!blessTargets || blessTargets.length === 0) break;
       executeBless(actor, blessTargets, state);
+      break;
+    }
+
+    case 'entangle': {
+      // Entangle — PHB p.238: STR save or restrained for duration.
+      // AoE 20-ft square, concentration, range 90 ft.
+      // Re-run shouldCast to get the live target list (planning may have been stale).
+      const entangleTargets = shouldCastEntangle(actor, bf);
+      if (!entangleTargets || entangleTargets.length === 0) break;
+      executeEntangle(actor, entangleTargets, state);
       break;
     }
 

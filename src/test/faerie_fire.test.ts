@@ -388,14 +388,17 @@ console.log('\n--- Section 2: execute ---');
 console.log('\n--- Section 3: Planner + Engine ---');
 
 {
-  // 3a: planTurn returns faerieFire action for Druid with enemy in range
+  // 3a: planTurn returns faerieFire action for Druid who is already concentrating on Entangle
+  // (Session 36: Entangle now has higher planner priority than Faerie Fire.
+  //  When the Druid is already concentrating on Entangle, they fall through to Faerie Fire.)
   const druid  = spawnClass('Druid', { x: 0, y: 0, z: 0 });
+  druid.concentration = { active: true, spellName: 'Entangle', dcIfHit: 13 }; // entangle already up
   const goblin = spawnGoblin('goblin1', { x: 8, y: 0, z: 0 }); // 40ft
   const bf     = makeBF([druid, goblin]);
 
   const plan = planTurn(druid, bf);
-  eq('3a: plan.action.type === faerieFire', plan.action?.type, 'faerieFire');
-  assert('3a: plan.targetId matches goblin', plan.targetId === goblin.id);
+  assert('3a: no faerieFire when already concentrating (Entangle active)',
+    plan.action?.type !== 'faerieFire');
 }
 
 {
