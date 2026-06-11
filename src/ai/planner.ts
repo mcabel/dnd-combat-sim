@@ -16,6 +16,7 @@ import {
 import { shouldCast as shouldCastFaerieFire } from '../spells/faerie_fire';
 import { shouldCast as shouldCastBless } from '../spells/bless';
 import { shouldCast as shouldCastEntangle } from '../spells/entangle';
+import { shouldCast as shouldCastThunderwave } from '../spells/thunderwave';
 import { shouldCast as shouldCastWardingBond } from '../spells/warding_bond';
 import { selectAction, selfPreserveDecision, selectLegendaryAction } from './actions';
 import {
@@ -633,6 +634,25 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
         description: `${self.name} casts Entangle`,
       };
       plan.targetId = entangleTargets[0].id;
+      plan.bonusAction = planBonusAction(self, target, battlefield);
+      return plan;
+    }
+  }
+
+  // === THUNDERWAVE (melee AoE damage + push) — fires when ≥2 enemies within 15 ft ===
+  // NOT concentration — can be used while concentrating on Entangle/Faerie Fire/Bless.
+  // Only justified by slot cost when multiple enemies are in range (splash value).
+  // A single adjacent enemy is handled by normal attacks (no slot needed).
+  {
+    const twTargets = shouldCastThunderwave(self, battlefield);
+    if (twTargets && twTargets.length >= 2) {
+      plan.action = {
+        type: 'thunderwave',
+        action: null,
+        targetId: twTargets[0].id,
+        description: `${self.name} casts Thunderwave`,
+      };
+      plan.targetId = twTargets[0].id;
       plan.bonusAction = planBonusAction(self, target, battlefield);
       return plan;
     }

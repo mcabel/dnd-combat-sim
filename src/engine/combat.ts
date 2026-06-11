@@ -37,6 +37,7 @@ import { removeEffectsFromCaster, getActiveAcBonus, getActiveBlessDie } from './
 import { shouldCast as shouldCastFaerieFire, execute as executeFaerieFire } from '../spells/faerie_fire';
 import { shouldCast as shouldCastBless, execute as executeBless } from '../spells/bless';
 import { shouldCast as shouldCastEntangle, execute as executeEntangle } from '../spells/entangle';
+import { shouldCast as shouldCastThunderwave, execute as executeThunderwave } from '../spells/thunderwave';
 import { execute as executeWardingBond } from '../spells/warding_bond';
 
 // ---- Combat log ---------------------------------------------
@@ -721,6 +722,16 @@ function executePlannedAction(
       const entangleTargets = shouldCastEntangle(actor, bf);
       if (!entangleTargets || entangleTargets.length === 0) break;
       executeEntangle(actor, entangleTargets, state);
+      break;
+    }
+
+    case 'thunderwave': {
+      // Thunderwave — PHB p.282: CON save, 2d8 thunder + push 10ft on fail.
+      // 15-ft cube from caster, NOT concentration.
+      // Re-run shouldCast to get the live target list (planning may have been stale).
+      const twTargets = shouldCastThunderwave(actor, bf);
+      if (!twTargets || twTargets.length === 0) break;
+      executeThunderwave(actor, twTargets, state);
       break;
     }
 

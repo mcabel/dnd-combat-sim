@@ -450,6 +450,7 @@ export interface PlannedAction {
     | 'faerieFire'   // Faerie Fire AoE control (concentration)
     | 'bless'        // Bless up to 3 allies — +1d4 to attacks and saves (concentration)
     | 'entangle'     // Entangle AoE control — STR save or restrained (concentration)
+    | 'thunderwave'  // Thunderwave — CON save, 2d8 thunder + push 10ft (no concentration)
     | 'wardingBond'  // Warding Bond — buff adjacent ally (touch range, no concentration)
     | 'legendary';
   action: Action | null;
