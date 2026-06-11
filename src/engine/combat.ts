@@ -39,6 +39,7 @@ import { shouldCast as shouldCastBless, execute as executeBless } from '../spell
 import { shouldCast as shouldCastEntangle, execute as executeEntangle } from '../spells/entangle';
 import { shouldCast as shouldCastThunderwave, execute as executeThunderwave } from '../spells/thunderwave';
 import { execute as executeWardingBond } from '../spells/warding_bond';
+import { execute as executeShieldOfFaith } from '../spells/shield_of_faith';
 
 // ---- Combat log ---------------------------------------------
 
@@ -737,14 +738,22 @@ function executePlannedAction(
 
     case 'wardingBond': {
       // Warding Bond — PHB p.287: protect an adjacent ally (touch range, no concentration).
-      // Effect: +1 AC, +1 saves, resistance to all damage, caster takes redirect damage.
-      // Mechanics (+1 AC, +1 save, resistance, redirect) are already wired in combat.ts
-      // and utils.ts — activate automatically when target.wardingBond is non-null.
       const wbTargetId = plan.targetId;
       if (!wbTargetId) break;
       const wbTarget = bf.combatants.get(wbTargetId);
       if (!wbTarget || wbTarget.isDead || wbTarget.isUnconscious) break;
       executeWardingBond(actor, wbTarget, state);
+      break;
+    }
+
+    case 'shieldOfFaith': {
+      // Shield of Faith — PHB p.275: +2 AC to one ally (bonus action, concentration, 60 ft).
+      // Re-fetch target live in case battlefield changed since planning.
+      const sofTargetId = plan.targetId;
+      if (!sofTargetId) break;
+      const sofTarget = bf.combatants.get(sofTargetId);
+      if (!sofTarget || sofTarget.isDead || sofTarget.isUnconscious) break;
+      executeShieldOfFaith(actor, sofTarget, state);
       break;
     }
     case 'layOnHands': {

@@ -18,6 +18,7 @@ import { shouldCast as shouldCastBless } from '../spells/bless';
 import { shouldCast as shouldCastEntangle } from '../spells/entangle';
 import { shouldCast as shouldCastThunderwave } from '../spells/thunderwave';
 import { shouldCast as shouldCastWardingBond } from '../spells/warding_bond';
+import { shouldCast as shouldCastShieldOfFaith } from '../spells/shield_of_faith';
 import { selectAction, selfPreserveDecision, selectLegendaryAction } from './actions';
 import {
   canReach, bestAdjacentPos, bestRangedPosition,
@@ -319,6 +320,21 @@ function planBonusAction(
     const hwTarget = shouldCastHealingWord(self, battlefield);
     if (hwTarget && self.actions.some(a => a.name === 'Healing Word')) {
       return spellHealPlan(self, hwTarget.id, true);
+    }
+  }
+
+  // --- 2.7. Shield of Faith (bonus action concentration buff) ---
+  // Priority: after emergency heals, before Bardic Inspiration.
+  // Never casts if already concentrating (shouldCast guards this).
+  {
+    const sofTarget = shouldCastShieldOfFaith(self, battlefield);
+    if (sofTarget && self.actions.some(a => a.name === 'Shield of Faith')) {
+      return {
+        type: 'shieldOfFaith',
+        action: null,
+        targetId: sofTarget.id,
+        description: `${self.name} casts Shield of Faith on ${sofTarget.name}`,
+      };
     }
   }
 
