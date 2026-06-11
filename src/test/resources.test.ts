@@ -281,8 +281,8 @@ const checks: [string, (c: Combatant) => boolean, string][] = [
   ['Cleric',    c => (c.resources?.spellSlots?.[1]?.max ?? 0) === 2, 'cleric spellSlots[1].max=2'],
   ['Druid',     c => (c.resources?.spellSlots?.[1]?.max ?? 0) === 2, 'druid spellSlots[1].max=2'],
   ['Sorcerer',  c => (c.resources?.spellSlots?.[1]?.max ?? 0) === 2, 'sorcerer spellSlots[1].max=2'],
-  // These classes have no resources at level 1
-  ['Monk',   c => c.resources === null || Object.keys(c.resources).length === 0, 'monk no resources'],
+  // These classes have no CLASS-SPECIFIC resources at level 1, but all PCs now have hitDice
+  ['Monk',   c => !!c.resources?.hitDice && !c.resources?.rage && !c.resources?.spellSlots && !c.resources?.pactSlots, 'monk has hitDice only, no class resources'],
   ['Ranger', c => c.resources === null || !c.resources.spellSlots, 'ranger no spell slots at lv1 (has ammo only)'],
 ];
 

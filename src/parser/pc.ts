@@ -292,6 +292,17 @@ function buildResources(raw: RawPCEntry): PlayerResources | null {
   }
   if (Object.keys(ammoWeapons).length > 0) result.ammo = ammoWeapons;
 
+  // Hit Dice (PHB p.186): size determined by class; max = level.
+  // Barbarian=d12, Fighter/Paladin/Ranger=d10, all others=d8 except Sorcerer/Wizard=d6.
+  const cls = raw.class.toLowerCase();
+  const dieSides =
+    cls === 'barbarian'                                  ? 12 :
+    cls === 'fighter' || cls === 'paladin' || cls === 'ranger' ? 10 :
+    cls === 'sorcerer' || cls === 'wizard'               ?  6 :
+    8;  // Bard, Cleric, Druid, Monk, Rogue, Warlock
+  const hdMax = raw.level ?? 1;
+  result.hitDice = { max: hdMax, remaining: hdMax, dieSides };
+
   return Object.keys(result).length > 0 ? result : null;
 }
 

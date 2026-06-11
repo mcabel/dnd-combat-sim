@@ -116,6 +116,7 @@ function resetResources(r: PlayerResources): PlayerResources {
       out.ammo[k] = { max: v.max, remaining: v.max };
     }
   }
+  if (r.hitDice)            out.hitDice = { ...r.hitDice, remaining: r.hitDice.max };
   return out;
 }
 

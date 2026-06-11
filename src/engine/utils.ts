@@ -697,7 +697,9 @@ import { PlayerResources } from '../types/core';
 
 /**
  * Apply a short rest to a combatant's resources.
- * Recovers: Warlock pact slots, Fighter Second Wind, Hit Dice (not modelled yet).
+ * Recovers: Warlock pact slots, Fighter Second Wind.
+ * NOTE: Hit dice spending is handled separately via spendHitDiceOnRest(),
+ * because the number of dice to spend is an AI/caller decision.
  */
 export function shortRest(c: Combatant): void {
   const r = c.resources;
@@ -709,9 +711,36 @@ export function shortRest(c: Combatant): void {
 }
 
 /**
+ * Spend hit dice during a short rest to recover HP.
+ * Keeps spending until currentHP >= targetFraction * maxHP or no dice remain.
+ * Returns the number of hit dice spent.
+ * PHB p.186: roll hit die + CON modifier per die, recover that many HP (min 0).
+ */
+export function spendHitDiceOnRest(c: Combatant, targetFraction = 0.75): number {
+  const r = c.resources;
+  if (!r?.hitDice) return 0;
+  if (c.isDead || c.isUnconscious) return 0;
+
+  const hd = r.hitDice;
+  const conMod = abilityMod(c.con);
+  let spent = 0;
+
+  while (hd.remaining > 0 && c.currentHP < c.maxHP * targetFraction) {
+    const roll = rollDie(hd.dieSides);
+    const recovered = Math.max(0, roll + conMod);
+    c.currentHP = Math.min(c.maxHP, c.currentHP + recovered);
+    hd.remaining--;
+    spent++;
+  }
+
+  return spent;
+}
+
+/**
  * Apply a long rest to a combatant's resources.
- * Recovers: all spell slots, rage, bardic inspiration, second wind, lay on hands.
- * Also restores HP to max.
+ * Recovers: all spell slots, rage, bardic inspiration, second wind, lay on hands,
+ * hit dice (up to half max, round up — PHB p.186).
+ * Also restores HP to max and clears conditions/effects.
  */
 export function longRest(c: Combatant): void {
   c.currentHP    = c.maxHP;
@@ -735,6 +764,11 @@ export function longRest(c: Combatant): void {
   if (r.bardicInspiration) r.bardicInspiration.remaining = r.bardicInspiration.max;
   if (r.layOnHands)        r.layOnHands.remaining        = r.layOnHands.pool;
   if (r.arcaneRecovery)    r.arcaneRecovery.usesRemaining = 1;
+  // Hit dice: recover up to half max (round up). PHB p.186.
+  if (r.hitDice) {
+    const toRecover = Math.ceil(r.hitDice.max / 2);
+    r.hitDice.remaining = Math.min(r.hitDice.max, r.hitDice.remaining + toRecover);
+  }
 }
 
 // ---- Ammo tracking (4.11) ----------------------------------

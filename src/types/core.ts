@@ -224,6 +224,12 @@ export interface PlayerResources {
   ammo?: {
     [weaponName: string]: { max: number; remaining: number };
   };                    // CHA mod + level temp HP on kill
+
+  // Hit Dice (PHB p.186) — used during Short Rests to recover HP.
+  // max = character level; dieSides = class hit die (d12/d10/d8/d6).
+  // Recovered on long rest: up to half max (round up), per PHB p.186.
+  // Optional — absent for monsters and legacy test combatants.
+  hitDice?: { max: number; remaining: number; dieSides: number };
 }
 
 // ---- Combatant ----------------------------------------------
