@@ -340,6 +340,26 @@ for (const [cls, rawEntry] of pcMap) {
 }
 
 // ============================================================
+// Chromatic Orb deduplication (weapons[] + spells_1st)
+// ============================================================
+
+console.log('\n=== Chromatic Orb deduplication ===\n');
+
+{
+  // Chromatic Orb appears in both Sorcerer's weapons[] and spells_1st[].
+  // Parser must deduplicate — spell-list version wins (has slotLevel set correctly).
+  const sorc = spawnPC(pcMap, 'Sorcerer', { x:0, y:0, z:0 })!;
+  const co = sorc.actions.filter((a: { name: string }) => a.name === 'Chromatic Orb');
+  eq('Sorcerer: Chromatic Orb appears exactly once', co.length, 1);
+  assert('Sorcerer: Chromatic Orb slotLevel = 1 (spell-list version wins)',
+    co[0]?.slotLevel === 1);
+  assert('Sorcerer: Chromatic Orb hitBonus = 5 (from spellAttackBonus, not weapon)',
+    co[0]?.hitBonus === 5);
+  assert('Sorcerer: Chromatic Orb attackType = spell',
+    co[0]?.attackType === 'spell');
+}
+
+// ============================================================
 // Summary
 // ============================================================
 console.log('\n' + '─'.repeat(45));

@@ -324,11 +324,12 @@ export function pcToCombatant(
 
   // Convert all weapons to Actions (filter out duplicate +SA entries — those are
   // the same weapon with sneak attack note; the engine applies SA conditionally)
-  const actions: Action[] = raw.weapons
+  const weaponActions: Action[] = raw.weapons
     .filter(w => !w.name.includes('+SA') && !w.name.includes('+Smite'))
     .map(w => weaponToAction(w, prof));
 
   // Append combat-relevant spell actions from preparedSpells / spells_1st / spellbook
+  const spellActions: Action[] = [];
   const sp = raw.spellcasting;
   if (sp) {
     const spellNames: string[] = [
@@ -364,9 +365,21 @@ export function pcToCombatant(
         legendaryCost: 0,
         description: name,
       };
-      actions.push(spellAction);
+      spellActions.push(spellAction);
     }
   }
+
+  // Merge: spell-list actions take priority over weapon-parsed versions of the same spell.
+  // A spell that appears in both the weapons array AND spells_1st (e.g. Chromatic Orb for
+  // Sorcerer) would otherwise create a duplicate entry — one without slotLevel (never
+  // consumes a slot, skips slot-gate filtering) and one with slotLevel set correctly.
+  // The spell-list version wins because it has accurate slotLevel, hitBonus (from
+  // spellAttackBonus), and AoE / concentration flags.
+  const spellNames = new Set(spellActions.map(a => a.name));
+  const actions: Action[] = [
+    ...weaponActions.filter(a => !spellNames.has(a.name)),
+    ...spellActions,
+  ];
 
   // Traits list = feature names (for Pack Tactics etc. checks)
   const traits: string[] = [
