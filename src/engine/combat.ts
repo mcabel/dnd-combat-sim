@@ -21,7 +21,7 @@ import {
   effectiveSpeed, rollDie, abilityMod, proficiencyBonus
 } from './utils';
 import {
-  chebyshev3D, distanceFt, canReach, estimateMoveCostFt,
+  chebyshev3D, distanceFt, euclideanDistFt, canReach, estimateMoveCostFt,
   opportunityAttackTriggered, selectOAAction,
   livingEnemiesOf, livingAlliesOf, posKey
 } from './movement';
@@ -38,6 +38,7 @@ import { shouldCast as shouldCastFaerieFire, execute as executeFaerieFire } from
 import { shouldCast as shouldCastBless, execute as executeBless } from '../spells/bless';
 import { shouldCast as shouldCastEntangle, execute as executeEntangle } from '../spells/entangle';
 import { shouldCast as shouldCastThunderwave, execute as executeThunderwave } from '../spells/thunderwave';
+import { execute as executeArmsOfHadar } from '../spells/arms_of_hadar';
 import { execute as executeWardingBond } from '../spells/warding_bond';
 import { execute as executeShieldOfFaith } from '../spells/shield_of_faith';
 
@@ -733,6 +734,24 @@ function executePlannedAction(
       const twTargets = shouldCastThunderwave(actor, bf);
       if (!twTargets || twTargets.length === 0) break;
       executeThunderwave(actor, twTargets, state);
+      break;
+    }
+
+    case 'armsOfHadar': {
+      // Arms of Hadar — PHB p.215: STR save, 2d6 necrotic + lose reaction on fail.
+      // 10-ft radius circle centred on caster (Euclidean AoE), NOT concentration.
+      //
+      // We do NOT re-run shouldCast here because shouldCast re-checks the spell slot,
+      // which may already have been consumed by hexPlan() during bonus-action planning
+      // (both Hex and Arms of Hadar share the single Warlock pact slot).
+      // The slot check was validated in the planner; we only need fresh live targets.
+      const aohTargets = [...bf.combatants.values()].filter(c =>
+        c.faction !== actor.faction &&
+        !c.isDead && !c.isUnconscious &&
+        euclideanDistFt(actor.pos, c.pos) <= 10
+      );
+      if (aohTargets.length === 0) break;
+      executeArmsOfHadar(actor, aohTargets, state);
       break;
     }
 

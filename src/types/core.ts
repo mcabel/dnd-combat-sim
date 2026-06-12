@@ -451,6 +451,7 @@ export interface PlannedAction {
     | 'bless'          // Bless up to 3 allies — +1d4 to attacks and saves (concentration)
     | 'entangle'       // Entangle AoE control — STR save or restrained (concentration)
     | 'thunderwave'    // Thunderwave — CON save, 2d8 thunder + push 10ft (no concentration)
+    | 'armsOfHadar'   // Arms of Hadar — STR save, 2d6 necrotic + lose reaction (no concentration, circle AoE)
     | 'wardingBond'    // Warding Bond — buff adjacent ally (touch range, no concentration)
     | 'shieldOfFaith'  // Shield of Faith — +2 AC to one ally (bonus action, concentration)
     | 'legendary';

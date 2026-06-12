@@ -17,9 +17,25 @@ export function chebyshev3D(a: Vec3, b: Vec3): number {
   return Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y), Math.abs(a.z - b.z));
 }
 
-/** Distance in feet (1 square = 5 ft). */
+/** Distance in feet (1 square = 5 ft). Uses Chebyshev — the PHB default. */
 export function distanceFt(a: Vec3, b: Vec3): number {
   return chebyshev3D(a, b) * 5;
+}
+
+/**
+ * True Euclidean distance in feet for circle/sphere AoE spells (PHB p.251).
+ *
+ * Use this for any spell whose area is described as "X-foot radius" (e.g.
+ * Arms of Hadar 10-ft, Sleep 20-ft sphere).  Chebyshev produces a square
+ * approximation; a true circle rejects the diagonal corners that Chebyshev
+ * would include — e.g. a cell 2 squares diagonally away is ~14 ft (out of a
+ * 10-ft radius), not 10 ft.
+ */
+export function euclideanDistFt(a: Vec3, b: Vec3): number {
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  const dz = a.z - b.z;
+  return Math.sqrt(dx * dx + dy * dy + dz * dz) * 5;
 }
 
 // ---- Reachability -------------------------------------------

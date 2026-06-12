@@ -17,6 +17,7 @@ import { shouldCast as shouldCastFaerieFire } from '../spells/faerie_fire';
 import { shouldCast as shouldCastBless } from '../spells/bless';
 import { shouldCast as shouldCastEntangle } from '../spells/entangle';
 import { shouldCast as shouldCastThunderwave } from '../spells/thunderwave';
+import { shouldCast as shouldCastArmsOfHadar } from '../spells/arms_of_hadar';
 import { shouldCast as shouldCastWardingBond } from '../spells/warding_bond';
 import { shouldCast as shouldCastShieldOfFaith } from '../spells/shield_of_faith';
 import { selectAction, selfPreserveDecision, selectLegendaryAction } from './actions';
@@ -669,6 +670,27 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
         description: `${self.name} casts Thunderwave`,
       };
       plan.targetId = twTargets[0].id;
+      plan.bonusAction = planBonusAction(self, target, battlefield);
+      return plan;
+    }
+  }
+
+  // === ARMS OF HADAR (close-range AoE damage + reaction denial) — ≥2 enemies within 10 ft ===
+  // 10-ft radius sphere centred on caster (Euclidean circle AoE), NOT concentration.
+  // Tighter range than Thunderwave (10 ft vs 15 ft), but strips reactions on failed save —
+  // preventing OAs and mounted-redirect until the target's next turn.
+  // Only worthwhile when multiple enemies are in the circle; a single adjacent enemy is
+  // better handled by Eldritch Blast or a melee attack.
+  {
+    const aohTargets = shouldCastArmsOfHadar(self, battlefield);
+    if (aohTargets && aohTargets.length >= 2) {
+      plan.action = {
+        type: 'armsOfHadar',
+        action: null,
+        targetId: aohTargets[0].id,
+        description: `${self.name} casts Arms of Hadar`,
+      };
+      plan.targetId = aohTargets[0].id;
       plan.bonusAction = planBonusAction(self, target, battlefield);
       return plan;
     }

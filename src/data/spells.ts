@@ -146,6 +146,21 @@ export const SPELL_DB: Record<string, SpellTemplate> = {
     slotLevel: 1,
   },
 
+  'sleep': {
+    // 1st-level enchantment, NOT concentration, range 90ft, 20-ft sphere.
+    // No attack roll, no save — HP bucket mechanic handled entirely in the spell module.
+    // attackType: null keeps it out of selectAction (engine dispatches via case 'sleep').
+    attackType: null,
+    rangeNormal: 90,
+    damage: null,       // damage is emergent (5d8 HP threshold), not a dice formula
+    damageType: null,
+    isAoE: true,
+    aoeRadius: 20,
+    isControl: true,
+    requiresConcentration: false,
+    slotLevel: 1,
+  },
+
   'thunderwave': {
     // 15-ft cube centred on caster; CON save, 2d8 thunder + push on fail
     attackType: 'save',
