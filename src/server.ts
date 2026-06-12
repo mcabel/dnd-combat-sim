@@ -17,6 +17,8 @@ import express, { Request, Response, NextFunction } from 'express';
 import * as fs   from 'fs';
 import * as path from 'path';
 
+import characterRouter from './character_router';
+
 import { loadBestiaryDir }                        from './data/loader';
 import { loadPCStatBlocks, spawnPC, RawPCEntry }  from './parser/pc';
 import { spawnMonster, Raw5etoolsMonster }         from './parser/fivetools';
@@ -139,7 +141,7 @@ const app = express();
 // CORS — allow local file:// and dev servers; handle preflight inline
 app.use((req: Request, res: Response, next: NextFunction) => {
   res.setHeader('Access-Control-Allow-Origin',  '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') { res.sendStatus(204); return; }
   next();
@@ -149,6 +151,9 @@ app.use(express.json({ limit: '1mb' }));
 
 // ---- Serve docs/ as static ----------------------------------
 app.use(express.static(path.join(__dirname, '../docs')));
+
+// ---- Character Sheet & Party routes (/api/characters, /api/parties)
+app.use('/api', characterRouter);
 
 // ---- GET /api/health ----------------------------------------
 app.get('/api/health', (_req: Request, res: Response) => {
