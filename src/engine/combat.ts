@@ -39,6 +39,7 @@ import { shouldCast as shouldCastBless, execute as executeBless } from '../spell
 import { shouldCast as shouldCastEntangle, execute as executeEntangle } from '../spells/entangle';
 import { shouldCast as shouldCastThunderwave, execute as executeThunderwave } from '../spells/thunderwave';
 import { execute as executeArmsOfHadar } from '../spells/arms_of_hadar';
+import { shouldCast as shouldCastSleep, execute as executeSleep } from '../spells/sleep';
 import { execute as executeWardingBond } from '../spells/warding_bond';
 import { execute as executeShieldOfFaith } from '../spells/shield_of_faith';
 
@@ -752,6 +753,18 @@ function executePlannedAction(
       );
       if (aohTargets.length === 0) break;
       executeArmsOfHadar(actor, aohTargets, state);
+      break;
+    }
+
+    case 'sleep': {
+      // Sleep — PHB p.276: 5d8 HP budget, no save, renders lowest-HP enemies unconscious.
+      // NOT concentration. Range 90 ft, 20-ft sphere.
+      // Re-run shouldCast to get the live target list (enemies may have died since planning).
+      // Sleep does NOT share a slot with any bonus-action spell for Sorcerer/Wizard,
+      // so the re-run pattern is safe here (unlike armsOfHadar + Hex pact-slot conflict).
+      const sleepTargets = shouldCastSleep(actor, bf);
+      if (!sleepTargets || sleepTargets.length === 0) break;
+      executeSleep(actor, sleepTargets, state);
       break;
     }
 

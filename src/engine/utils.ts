@@ -141,6 +141,16 @@ export function applyDamage(target: Combatant, amount: number): number {
   const actual = Math.min(amount, target.currentHP);
   target.currentHP = Math.max(0, target.currentHP - amount);
 
+  // PHB p.276: any damage immediately awakens a creature put to sleep by the Sleep spell.
+  // Do this BEFORE the zero-HP logic so the creature is "awake" (just badly hurt) if
+  // the damage brings them to 0 — checkDeath will handle the 0-HP state correctly.
+  if (amount > 0 && target.conditions.has('sleeping')) {
+    target.isUnconscious = false;
+    target.conditions.delete('sleeping');
+    target.conditions.delete('unconscious');
+    target.conditions.delete('incapacitated');
+  }
+
   if (target.currentHP === 0) {
     if (target.isPlayer) {
       target.isUnconscious = true;

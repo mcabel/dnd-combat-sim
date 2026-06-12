@@ -19,6 +19,7 @@ export type Condition =
   | 'blinded' | 'charmed' | 'deafened' | 'frightened'
   | 'grappled' | 'hidden' | 'incapacitated' | 'invisible' | 'paralyzed'
   | 'petrified' | 'poisoned' | 'prone' | 'restrained'
+  | 'sleeping'   // PHB p.276 — Sleep spell; wakes on any damage or action to rouse
   | 'stunned' | 'unconscious';
 
 // PHB p.6 / MM p.6 — creature size categories
@@ -452,6 +453,7 @@ export interface PlannedAction {
     | 'entangle'       // Entangle AoE control — STR save or restrained (concentration)
     | 'thunderwave'    // Thunderwave — CON save, 2d8 thunder + push 10ft (no concentration)
     | 'armsOfHadar'   // Arms of Hadar — STR save, 2d6 necrotic + lose reaction (no concentration, circle AoE)
+    | 'sleep'         // Sleep — 5d8 HP bucket, no save, renders enemies unconscious (no concentration)
     | 'wardingBond'    // Warding Bond — buff adjacent ally (touch range, no concentration)
     | 'shieldOfFaith'  // Shield of Faith — +2 AC to one ally (bonus action, concentration)
     | 'legendary';

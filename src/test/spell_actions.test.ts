@@ -237,8 +237,11 @@ console.log('\n=== 6. Leveled spell selected over weaker weapon ===\n');
   eq('Type is cast (not attack)', plan.action?.type, 'cast');
 }
 {
-  // Sorcerer at range — Chromatic Orb (3d8=avg13.5) > any weapon
+  // Sorcerer at range — Chromatic Orb (3d8=avg13.5) > any weapon.
+  // Sleep has higher priority for Sorcerer when enemies are in range; remove it here
+  // to test that Chromatic Orb is correctly selected as the best damage action.
   const sorc  = spawnClass('Sorcerer', { x: 0, y: 0, z: 0 });
+  sorc.actions = sorc.actions.filter(a => a.name !== 'Sleep'); // isolate Chromatic Orb behaviour
   const enemy = makeEnemy('e1', { x: 10, y: 0, z: 0 }); // 50ft, in Chromatic Orb range (90ft)
   const plan  = planTurn(sorc, makeBF([sorc], [enemy]));
 

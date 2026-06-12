@@ -18,6 +18,7 @@ import { shouldCast as shouldCastBless } from '../spells/bless';
 import { shouldCast as shouldCastEntangle } from '../spells/entangle';
 import { shouldCast as shouldCastThunderwave } from '../spells/thunderwave';
 import { shouldCast as shouldCastArmsOfHadar } from '../spells/arms_of_hadar';
+import { shouldCast as shouldCastSleep } from '../spells/sleep';
 import { shouldCast as shouldCastWardingBond } from '../spells/warding_bond';
 import { shouldCast as shouldCastShieldOfFaith } from '../spells/shield_of_faith';
 import { selectAction, selfPreserveDecision, selectLegendaryAction } from './actions';
@@ -632,6 +633,33 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
         description: `${self.name} casts Warding Bond on ${wbTarget.name}`,
       };
       plan.targetId = wbTarget.id;
+      plan.bonusAction = planBonusAction(self, target, battlefield);
+      return plan;
+    }
+  }
+
+  // === SLEEP (no-save AoE stun) — strongest opener at level 1 ===
+  // 5d8 HP budget, no attack roll, no saving throw.  Starting from the lowest-HP
+  // enemy, renders creatures unconscious.  More reliable than Entangle (which
+  // allows a STR save) and more decisive (unconscious > restrained).
+  //
+  // Cast conditions: has Sleep, has slot, ≥1 enemy in 90ft whose HP is plausibly
+  // within a 5d8 budget.  At level 1, essentially all enemies qualify (5d8 avg ≈ 22.5
+  // HP; most level-1 enemies have ≤ 14 HP).  We let shouldCast decide viability —
+  // if it returns targets, we cast.  Sleep is NOT concentration so it fires freely.
+  //
+  // Sorcerer: Sleep is their primary crowd-control (no Entangle, no Faerie Fire).
+  // Wizard: likewise; Sleep + Thunderwave form their level-1 toolkit.
+  {
+    const sleepTargets = shouldCastSleep(self, battlefield);
+    if (sleepTargets && sleepTargets.length >= 1) {
+      plan.action = {
+        type: 'sleep',
+        action: null,
+        targetId: sleepTargets[0].id,
+        description: `${self.name} casts Sleep`,
+      };
+      plan.targetId = sleepTargets[0].id;
       plan.bonusAction = planBonusAction(self, target, battlefield);
       return plan;
     }

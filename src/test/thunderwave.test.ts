@@ -352,8 +352,12 @@ console.log('\n--- Section 3: Planner ---');
 }
 
 {
-  // 3e: Wizard also picks thunderwave with 2 adjacent enemies
+  // 3e: Wizard also picks thunderwave with 2 adjacent enemies.
+  // Sleep has higher priority for Wizard normally; this test verifies Thunderwave
+  // fires correctly as the next-best AoE when Sleep isn't in the spell list
+  // (e.g. at higher levels or after it's been scribed out — or as a direct capability test).
   const wiz = spawnClass('Wizard', { x: 5, y: 5, z: 0 });
+  wiz.actions = wiz.actions.filter(a => a.name !== 'Sleep'); // isolate Thunderwave behaviour
   const g1  = spawnClass('Fighter', { x: 6, y: 5, z: 0 }); g1.id = 'g1'; g1.faction = 'enemy';
   const g2  = spawnClass('Fighter', { x: 5, y: 6, z: 0 }); g2.id = 'g2'; g2.faction = 'enemy';
   const bf  = makeBF([wiz, g1, g2]);
