@@ -1,0 +1,1373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>D&D Characters &amp; Parties</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;900&family=IBM+Plex+Mono:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+:root {
+  --bg:      #0d0d0f;
+  --surface: #141418;
+  --surface2:#1a1a1f;
+  --border:  #2a2a35;
+  --accent:  #c8973a;
+  --accent2: #7c5cbf;
+  --text:    #e8e4d8;
+  --muted:   #6b6878;
+  --danger:  #c0392b;
+  --success: #27ae60;
+  --warn:    #d4a017;
+  --mono:    'IBM Plex Mono', monospace;
+  --serif:   'Cinzel', serif;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { min-height: 100%; background: var(--bg); color: var(--text); font-family: var(--mono); }
+.app { max-width: 720px; margin: 0 auto; padding: 0 16px 48px; }
+
+/* Header */
+header { padding: 20px 0 16px; display: flex; align-items: center; gap: 14px; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
+.logo-svg { width: 36px; height: 36px; flex-shrink: 0; }
+.header-text h1 { font-family: var(--serif); font-size: 17px; font-weight: 600; letter-spacing: 0.08em; color: var(--accent); }
+.header-text p  { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.header-nav { margin-left: auto; display: flex; gap: 8px; }
+.nav-link { font-size: 11px; color: var(--muted); text-decoration: none; padding: 6px 10px; border: 1px solid transparent; border-radius: 5px; letter-spacing: 0.04em; }
+.nav-link:hover { color: var(--accent); border-color: var(--border); }
+
+/* Cards */
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; margin-bottom: 12px; }
+.card-title { font-family: var(--serif); font-size: 11px; letter-spacing: 0.15em; color: var(--muted); text-transform: uppercase; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+.card-title::before { content: ''; display: block; width: 3px; height: 12px; background: var(--accent); border-radius: 2px; flex-shrink: 0; }
+.card-title .ct-right { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+
+/* Form elements */
+label { display: block; font-size: 11px; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 5px; margin-top: 12px; }
+label:first-of-type { margin-top: 0; }
+input[type=text], input[type=number], input[type=url], select, textarea {
+  width: 100%; background: var(--bg); border: 1px solid var(--border);
+  border-radius: 6px; color: var(--text); font-family: var(--mono);
+  font-size: 13px; padding: 8px 10px; outline: none; transition: border-color 0.15s;
+}
+input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+select option { background: var(--bg); }
+textarea { resize: vertical; min-height: 60px; }
+
+/* Buttons */
+button {
+  font-family: var(--mono); font-size: 12px; letter-spacing: 0.04em;
+  padding: 8px 14px; border-radius: 6px; cursor: pointer;
+  border: 1px solid var(--border); background: transparent;
+  color: var(--text); transition: all 0.15s;
+}
+button:hover  { border-color: var(--accent); color: var(--accent); }
+button:active { transform: scale(0.97); }
+button:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #0d0d0f; font-weight: 500; }
+button.primary:hover { background: #d4a44a; border-color: #d4a44a; color: #0d0d0f; }
+button.primary:disabled { opacity: 0.4; }
+button.danger  { border-color: transparent; color: var(--muted); font-size: 11px; }
+button.danger:hover { color: var(--danger); border-color: transparent; }
+button.secondary { border-color: var(--border); color: var(--muted); }
+button.secondary:hover { border-color: var(--accent2); color: var(--accent2); }
+button.sm { padding: 5px 9px; font-size: 11px; }
+button.full { width: 100%; padding: 11px; font-size: 13px; }
+
+/* Connection row */
+.conn-row { display: flex; align-items: center; gap: 8px; }
+.conn-row input { flex: 1; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex-shrink: 0; transition: background 0.3s; }
+.dot.ok  { background: var(--success); box-shadow: 0 0 5px var(--success); }
+.dot.err { background: var(--danger);  box-shadow: 0 0 5px var(--danger); }
+#conn-label { font-size: 11px; color: var(--muted); white-space: nowrap; }
+
+/* Error banner */
+.err-banner { display: none; background: rgba(192,57,43,0.12); border: 1px solid var(--danger); border-radius: 7px; color: var(--danger); font-size: 12px; padding: 10px 14px; margin-bottom: 12px; }
+
+/* Tabs */
+.tab-row { display: flex; gap: 4px; margin-bottom: 16px; }
+.tab-btn { flex: 1; padding: 9px; font-family: var(--serif); font-size: 12px; letter-spacing: 0.08em; text-align: center; border-radius: 6px; border: 1px solid var(--border); color: var(--muted); cursor: pointer; background: transparent; transition: all 0.15s; }
+.tab-btn.active { background: var(--surface); border-color: var(--accent); color: var(--accent); }
+
+/* Character list */
+.char-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; margin-bottom: 10px; }
+.char-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; cursor: pointer; transition: all 0.15s; }
+.char-card:hover { border-color: var(--accent); }
+.char-card.selected { border-color: var(--accent); background: #1c1a10; }
+.char-card .cc-name { font-family: var(--serif); font-size: 13px; color: var(--accent); margin-bottom: 4px; }
+.char-card .cc-class { font-size: 11px; color: var(--text); margin-bottom: 2px; }
+.char-card .cc-sub { font-size: 10px; color: var(--muted); }
+
+/* Ability scores grid */
+.stat-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+.stat-cell { text-align: center; }
+.stat-cell label { font-size: 10px; margin-bottom: 3px; }
+.stat-cell input { text-align: center; padding: 6px 4px; font-size: 14px; }
+.stat-cell .mod { font-size: 10px; color: var(--muted); text-align: center; margin-top: 2px; }
+
+/* Stats row */
+.stats-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.stat-box { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px; text-align: center; }
+.stat-box .val { font-family: var(--serif); font-size: 20px; color: var(--accent); }
+.stat-box .lbl { font-size: 10px; color: var(--muted); margin-top: 2px; letter-spacing: 0.06em; text-transform: uppercase; }
+
+/* Section divider */
+.sec-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+.sec-title { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; }
+.sec-line { flex: 1; height: 1px; background: var(--border); }
+
+/* Feature list */
+.feat-list { font-size: 11px; color: var(--muted); list-style: none; }
+.feat-list li { padding: 3px 0; border-bottom: 1px solid var(--border); }
+.feat-list li:last-child { border: none; }
+.feat-list li strong { color: var(--text); }
+
+/* Pending alert */
+.alert { padding: 10px 14px; border-radius: 7px; margin-bottom: 10px; font-size: 12px; }
+.alert.warn  { background: rgba(212,160,23,0.1); border: 1px solid var(--warn); color: var(--warn); }
+.alert.info  { background: rgba(124,92,191,0.1); border: 1px solid var(--accent2); color: var(--accent2); }
+
+/* Inline form row */
+.inline-row { display: flex; gap: 8px; align-items: flex-end; }
+.inline-row > * { flex: 1; }
+.inline-row > button { flex: 0 0 auto; margin-bottom: 0; }
+
+/* Monster row */
+.row-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.mon-row { display: flex; gap: 6px; align-items: center; }
+.mon-row input[type=text]   { flex: 2; }
+.mon-row input[type=number] { flex: 0 0 60px; }
+.mon-row select             { flex: 1; }
+
+/* Member row */
+.mem-row { display: flex; gap: 8px; align-items: center; padding: 8px 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; }
+.mem-row .mem-name { flex: 1; font-size: 13px; }
+.mem-row .mem-sub  { font-size: 11px; color: var(--muted); }
+
+/* Win bar */
+.win-bar-wrap { margin: 12px 0; }
+.win-bar-labels { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+.win-bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: var(--bg); border: 1px solid var(--border); }
+.win-bar .party { background: var(--success); }
+.win-bar .draw  { background: var(--muted); }
+.win-bar .enemy { background: var(--danger); }
+
+/* Results table */
+.ctable { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 10px; }
+.ctable th { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); color: var(--muted); font-weight: 400; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; }
+.ctable td { padding: 6px 8px; border-bottom: 1px solid var(--border); }
+.ctable tr:last-child td { border: none; }
+.badge { display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 10px; letter-spacing: 0.04em; }
+.badge.party { background: rgba(39,174,96,0.15); color: var(--success); }
+.badge.enemy { background: rgba(192,57,43,0.15); color: var(--danger); }
+
+/* Trial buttons */
+.trial-row { display: flex; gap: 6px; align-items: center; }
+.trial-label { font-size: 11px; color: var(--muted); margin-right: 4px; }
+.trial-btn { padding: 6px 12px; font-size: 11px; color: var(--muted); }
+.trial-btn.active { color: var(--accent); border-color: var(--accent); }
+
+/* Spinner */
+.spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(0,0,0,0.3); border-top-color: #0d0d0f; border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 6px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Diff badge */
+.diff-badge { display: inline-block; padding: 3px 9px; border-radius: 5px; font-size: 11px; letter-spacing: 0.05em; font-weight: 500; }
+.diff-badge.trivial  { background: rgba(39,174,96,0.2);  color: #2ecc71; }
+.diff-badge.easy     { background: rgba(39,174,96,0.15); color: #27ae60; }
+.diff-badge.medium   { background: rgba(212,160,23,0.2); color: #d4a017; }
+.diff-badge.hard     { background: rgba(231,76,60,0.2);  color: #e74c3c; }
+.diff-badge.deadly   { background: rgba(192,57,43,0.25); color: #c0392b; }
+.diff-badge.nearly.impossible { background: rgba(192,57,43,0.35); color: #a93226; }
+
+/* Util */
+.hidden { display: none !important; }
+.mt8 { margin-top: 8px; }
+.mt12 { margin-top: 12px; }
+.flex-right { display: flex; justify-content: flex-end; gap: 8px; }
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- Header -->
+<header>
+  <svg class="logo-svg" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <polygon points="20,3 37,12 37,28 20,37 3,28 3,12" fill="none" stroke="#c8973a" stroke-width="1.5"/>
+    <polygon points="20,9 31,15 31,25 20,31 9,25 9,15" fill="none" stroke="#c8973a" stroke-width="0.8" opacity="0.5"/>
+    <text x="20" y="24" text-anchor="middle" font-family="serif" font-size="13" fill="#c8973a" font-weight="bold">★</text>
+  </svg>
+  <div class="header-text">
+    <h1>Characters &amp; Parties</h1>
+    <p>D&amp;D 5e — PHB 2014 / MM 2014</p>
+  </div>
+  <nav class="header-nav">
+    <a class="nav-link" href="simulator.html">⚔ Simulator</a>
+    <a class="nav-link" href="index.html">⌂ Home</a>
+  </nav>
+</header>
+
+<!-- Server URL -->
+<div class="card">
+  <div class="card-title">Server</div>
+  <div class="conn-row">
+    <input type="url" id="server-url" value="http://localhost:3000" placeholder="http://localhost:3000"/>
+    <button onclick="connect()" class="sm">Connect</button>
+    <div class="dot" id="conn-dot"></div>
+    <span id="conn-label">—</span>
+  </div>
+</div>
+
+<!-- Error banner -->
+<div class="err-banner" id="err-banner"></div>
+
+<!-- Tabs -->
+<div class="tab-row">
+  <button class="tab-btn active" id="tab-chars" onclick="setTab('characters')">Characters</button>
+  <button class="tab-btn"        id="tab-parties" onclick="setTab('parties')">Parties</button>
+</div>
+
+<!-- ══════════════════ CHARACTERS TAB ══════════════════ -->
+<div id="panel-characters">
+
+  <!-- Character List -->
+  <div class="card">
+    <div class="card-title">
+      Characters
+      <div class="ct-right">
+        <button class="sm secondary" onclick="refreshChars()">↻</button>
+        <button class="sm" onclick="newChar()">+ New</button>
+      </div>
+    </div>
+    <div class="char-grid" id="char-grid">
+      <div style="color:var(--muted);font-size:12px">Connect to server to load characters.</div>
+    </div>
+  </div>
+
+  <!-- Create / Edit Form -->
+  <div class="card hidden" id="char-form-card">
+    <div class="card-title" id="char-form-title">New Character
+      <div class="ct-right"><button class="danger" onclick="cancelForm()">✕ Cancel</button></div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div>
+        <label>Name</label>
+        <input type="text" id="cf-name" placeholder="Gareth Stonebrow"/>
+      </div>
+      <div>
+        <label>Race</label>
+        <input type="text" id="cf-race" placeholder="Human, Elf, Dwarf…"/>
+      </div>
+      <div>
+        <label>Class</label>
+        <select id="cf-class" onchange="onClassChange()">
+          <option value="Fighter">Fighter</option>
+          <option value="Rogue">Rogue</option>
+          <option value="Wizard">Wizard</option>
+          <option value="Cleric">Cleric</option>
+          <option value="Barbarian">Barbarian</option>
+          <option value="Bard">Bard</option>
+          <option value="Druid">Druid</option>
+          <option value="Monk">Monk</option>
+          <option value="Paladin">Paladin</option>
+          <option value="Ranger">Ranger</option>
+          <option value="Sorcerer">Sorcerer</option>
+          <option value="Warlock">Warlock</option>
+        </select>
+      </div>
+      <div>
+        <label>Background</label>
+        <input type="text" id="cf-background" placeholder="Soldier, Sage, Criminal…"/>
+      </div>
+      <div>
+        <label>Alignment</label>
+        <input type="text" id="cf-alignment" placeholder="Lawful Good"/>
+      </div>
+      <div>
+        <label>Gold (gp)</label>
+        <input type="number" id="cf-gold" value="10" min="0"/>
+      </div>
+    </div>
+
+    <label style="margin-top:14px">Ability Scores (Final — after racial bonuses)</label>
+    <div class="stat-grid" id="cf-stat-grid">
+      <!-- rendered by renderStatInputs() -->
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:12px">
+      <div>
+        <label>Max HP</label>
+        <input type="number" id="cf-hp" value="10" min="1"/>
+      </div>
+      <div>
+        <label>Armor Class</label>
+        <input type="number" id="cf-ac" value="16" min="1"/>
+      </div>
+      <div>
+        <label>Speed (ft)</label>
+        <input type="number" id="cf-speed" value="30" min="5" step="5"/>
+      </div>
+    </div>
+
+    <label style="margin-top:14px">Primary Weapon</label>
+    <div style="display:grid;grid-template-columns:2fr 1fr;gap:8px">
+      <input type="text" id="cf-weapon" placeholder="Greatsword"/>
+      <select id="cf-weapon-cat">
+        <option value="martial-melee">Martial Melee</option>
+        <option value="simple-melee">Simple Melee</option>
+        <option value="martial-ranged">Martial Ranged</option>
+        <option value="simple-ranged">Simple Ranged</option>
+      </select>
+    </div>
+
+    <label style="margin-top:12px">Armor / Shield</label>
+    <div style="display:grid;grid-template-columns:2fr 1fr;gap:8px">
+      <input type="text" id="cf-armor" placeholder="Chain Mail"/>
+      <select id="cf-armor-cat">
+        <option value="heavy">Heavy</option>
+        <option value="medium">Medium</option>
+        <option value="light">Light</option>
+        <option value="shield">Shield</option>
+        <option value="none">None</option>
+      </select>
+    </div>
+
+    <label style="margin-top:12px">Notes (optional)</label>
+    <textarea id="cf-notes" placeholder="Character backstory, build notes…"></textarea>
+
+    <div class="flex-right mt12">
+      <button class="secondary" onclick="cancelForm()">Cancel</button>
+      <button class="primary" onclick="saveCharForm()" id="char-form-save-btn">Create Character</button>
+    </div>
+  </div>
+
+  <!-- Character Detail -->
+  <div class="card hidden" id="char-detail-card">
+    <div class="card-title" id="char-detail-title">Character
+      <div class="ct-right">
+        <button class="sm secondary" onclick="editChar()" id="char-edit-btn">Edit</button>
+        <button class="danger" onclick="deleteChar()" id="char-delete-btn">Delete</button>
+      </div>
+    </div>
+
+    <!-- Pending ASI alert -->
+    <div class="alert warn hidden" id="asi-alert">
+      <strong>⬆ Ability Score Improvement available!</strong>
+      Apply it below.
+    </div>
+    <!-- Pending subclass alert -->
+    <div class="alert info hidden" id="subclass-alert">
+      <strong>🎭 Subclass selection required!</strong>
+      Choose your subclass below.
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-3" id="char-stats-row"></div>
+
+    <!-- Ability scores -->
+    <div class="sec-row mt12"><div class="sec-title">Ability Scores</div><div class="sec-line"></div></div>
+    <div class="stat-grid" id="char-ability-grid"></div>
+
+    <!-- Class & Resources -->
+    <div class="sec-row mt12"><div class="sec-title">Class & Resources</div><div class="sec-line"></div></div>
+    <div id="char-class-info" style="font-size:12px;color:var(--muted);line-height:1.8"></div>
+
+    <!-- Level Up -->
+    <div class="sec-row mt12"><div class="sec-title">Level Up</div><div class="sec-line"></div></div>
+    <div class="inline-row">
+      <div>
+        <label>Class to advance</label>
+        <select id="lvl-class"></select>
+      </div>
+      <div>
+        <label>HP method</label>
+        <select id="lvl-hp-method">
+          <option value="average">Average</option>
+          <option value="max">Max</option>
+        </select>
+      </div>
+      <button onclick="doLevelUp()" id="lvl-btn" class="primary" style="margin-top:17px">Level Up</button>
+    </div>
+
+    <!-- ASI Application -->
+    <div class="card hidden" id="asi-form-card" style="margin-top:10px;background:var(--bg);">
+      <div class="card-title" style="color:var(--warn)">Apply Ability Score Improvement</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px">
+        Pending: <span id="asi-pending-count" style="color:var(--warn)"></span> ASI(s)
+        · Half-pts: <span id="asi-half-pts" style="color:var(--muted)"></span>
+      </div>
+      <div class="inline-row">
+        <div>
+          <label>Ability</label>
+          <select id="asi-ability">
+            <option value="str">Strength</option>
+            <option value="dex">Dexterity</option>
+            <option value="con">Constitution</option>
+            <option value="int">Intelligence</option>
+            <option value="wis">Wisdom</option>
+            <option value="cha">Charisma</option>
+          </select>
+        </div>
+        <div>
+          <label>Points</label>
+          <select id="asi-amount">
+            <option value="2">+2 (full ASI)</option>
+            <option value="1">+1 (split ASI)</option>
+          </select>
+        </div>
+        <button onclick="doApplyASI()" class="primary" style="margin-top:17px">Apply</button>
+      </div>
+    </div>
+
+    <!-- Subclass Selection -->
+    <div class="card hidden" id="subclass-form-card" style="margin-top:10px;background:var(--bg);">
+      <div class="card-title" style="color:var(--accent2)">Choose Subclass — <span id="subclass-class-name"></span></div>
+      <div class="inline-row">
+        <div>
+          <label>Subclass</label>
+          <select id="subclass-select"></select>
+        </div>
+        <button onclick="doChooseSubclass()" class="primary" style="margin-top:17px">Confirm</button>
+      </div>
+    </div>
+
+    <!-- Features -->
+    <div class="sec-row mt12"><div class="sec-title">Features</div><div class="sec-line"></div></div>
+    <ul class="feat-list" id="char-features"></ul>
+  </div>
+</div><!-- /panel-characters -->
+
+<!-- ══════════════════ PARTIES TAB ══════════════════ -->
+<div id="panel-parties" class="hidden">
+
+  <!-- Party List -->
+  <div class="card">
+    <div class="card-title">
+      Parties
+      <div class="ct-right">
+        <button class="sm secondary" onclick="refreshParties()">↻</button>
+        <button class="sm" onclick="newParty()">+ New</button>
+      </div>
+    </div>
+    <div class="char-grid" id="party-grid">
+      <div style="color:var(--muted);font-size:12px">Connect to server to load parties.</div>
+    </div>
+  </div>
+
+  <!-- Party Editor -->
+  <div class="card hidden" id="party-editor-card">
+    <div class="card-title" id="party-editor-title">Party
+      <div class="ct-right">
+        <button class="danger" onclick="deleteParty()" id="party-delete-btn">Delete</button>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+      <div>
+        <label>Party Name</label>
+        <input type="text" id="pe-name" placeholder="The Ashen Shield"/>
+      </div>
+      <div>
+        <label>Notes</label>
+        <input type="text" id="pe-notes" placeholder="Optional notes"/>
+      </div>
+    </div>
+
+    <!-- Members -->
+    <div class="sec-row"><div class="sec-title">Members</div><div class="sec-line"></div></div>
+    <div class="row-list" id="party-member-list"></div>
+    <div class="inline-row">
+      <select id="pe-add-char" style="flex:1"></select>
+      <button onclick="addMemberToParty()" class="sm">Add Member</button>
+    </div>
+
+    <div class="flex-right mt12">
+      <button class="secondary" onclick="cancelPartyEdit()">Cancel</button>
+      <button class="primary" onclick="savePartyEdit()" id="party-save-btn">Save Party</button>
+    </div>
+  </div>
+
+  <!-- Simulate with Party -->
+  <div class="card hidden" id="party-sim-card">
+    <div class="card-title">Simulate Encounter</div>
+
+    <div class="sec-row"><div class="sec-title">Enemies</div><div class="sec-line"></div></div>
+    <div class="row-list" id="ps-enemy-list"></div>
+    <button class="sm mt8" onclick="addEnemyRow()" style="width:100%;color:var(--muted)">+ Add Enemy</button>
+    <datalist id="monster-list"></datalist>
+
+    <div class="sec-row mt12"><div class="sec-title">Trials</div><div class="sec-line"></div></div>
+    <div class="trial-row">
+      <span class="trial-label">Runs:</span>
+      <button class="trial-btn" onclick="setTrials(20)">20</button>
+      <button class="trial-btn active" onclick="setTrials(100)">100</button>
+      <button class="trial-btn" onclick="setTrials(200)">200</button>
+      <button class="trial-btn" onclick="setTrials(500)">500</button>
+    </div>
+
+    <button class="primary full mt12" id="sim-btn" onclick="runSim()" disabled>Select a party first</button>
+  </div>
+
+  <!-- Sim Results -->
+  <div class="card hidden" id="sim-results-card">
+    <div class="card-title">
+      Results
+      <div class="ct-right">
+        <span class="diff-badge" id="sim-diff-badge" style="display:none"></span>
+      </div>
+    </div>
+    <div id="sim-summary" style="font-size:13px;color:var(--text);margin-bottom:10px"></div>
+    <div class="win-bar-wrap">
+      <div class="win-bar-labels">
+        <span id="sim-party-pct">Party 0%</span>
+        <span id="sim-draw-pct">Draw 0%</span>
+        <span id="sim-enemy-pct">Enemies 0%</span>
+      </div>
+      <div class="win-bar">
+        <div class="party" id="sim-bar-party" style="width:0%"></div>
+        <div class="draw"  id="sim-bar-draw"  style="width:0%"></div>
+        <div class="enemy" id="sim-bar-enemy" style="width:0%"></div>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;margin:10px 0">
+      <div class="stat-box" style="flex:1"><div class="val" id="sim-avg">—</div><div class="lbl">Avg Rounds</div></div>
+      <div class="stat-box" style="flex:1"><div class="val" id="sim-min">—</div><div class="lbl">Min</div></div>
+      <div class="stat-box" style="flex:1"><div class="val" id="sim-max">—</div><div class="lbl">Max</div></div>
+      <div class="stat-box" style="flex:1"><div class="val" id="sim-runs">—</div><div class="lbl">Runs</div></div>
+    </div>
+    <table class="ctable">
+      <thead><tr><th>Combatant</th><th>Side</th><th>Survived</th><th>Avg Dmg</th></tr></thead>
+      <tbody id="sim-ctable"></tbody>
+    </table>
+  </div>
+</div><!-- /panel-parties -->
+
+</div><!-- .app -->
+<script>
+// ── Constants ─────────────────────────────────────────────────
+const CLASS_HD = { Barbarian:12, Fighter:10, Paladin:10, Ranger:10, Bard:8, Cleric:8, Druid:8, Monk:8, Rogue:8, Warlock:8, Sorcerer:6, Wizard:6 };
+const CLASS_SAVES = {
+  Fighter:['str','con'], Barbarian:['str','con'], Paladin:['wis','cha'], Ranger:['str','dex'],
+  Rogue:['dex','int'], Bard:['dex','cha'], Cleric:['wis','cha'], Druid:['int','wis'],
+  Monk:['str','dex'], Sorcerer:['con','cha'], Warlock:['wis','cha'], Wizard:['int','wis'],
+};
+const CLASS_WEAPON_PROFS = {
+  Fighter:['simple-melee','simple-ranged','martial-melee','martial-ranged'],
+  Barbarian:['simple-melee','simple-ranged','martial-melee','martial-ranged'],
+  Paladin:['simple-melee','simple-ranged','martial-melee','martial-ranged'],
+  Ranger:['simple-melee','simple-ranged','martial-melee','martial-ranged'],
+  Bard:['simple-melee','simple-ranged','martial-melee','martial-ranged'],
+  Cleric:['simple-melee','simple-ranged'],
+  Druid:['simple-melee','simple-ranged'],
+  Monk:['simple-melee','simple-ranged'],
+  Rogue:['simple-melee','simple-ranged','martial-melee','martial-ranged'],
+  Sorcerer:['simple-melee','simple-ranged'],
+  Warlock:['simple-melee','simple-ranged'],
+  Wizard:['simple-melee'],
+};
+const CLASS_ARMOR_PROFS = {
+  Fighter:['light','medium','heavy','shield'], Barbarian:['light','medium','shield'],
+  Paladin:['light','medium','heavy','shield'], Ranger:['light','medium','shield'],
+  Bard:['light'], Cleric:['light','medium','shield'], Druid:['light','medium','shield'],
+  Monk:[], Rogue:['light'], Sorcerer:[], Warlock:['light'], Wizard:[],
+};
+const CLASS_SKILLS = { Fighter:[], Rogue:[], Wizard:[], Cleric:[], Barbarian:[], Bard:[], Druid:[], Monk:[], Paladin:[], Ranger:[], Sorcerer:[], Warlock:[] };
+const CLASS_RESOURCES_L1 = {
+  Fighter: { secondWind:{ max:1, remaining:1 } },
+  Barbarian: { rage:{ max:2, remaining:2 } },
+  Bard: { bardicInspiration:{ max:3, remaining:3, dieSides:6 } },
+  Paladin: { divineSmite:true },
+  Rogue: { sneakAttackDice:'1d6' },
+  Wizard: {},
+  Cleric: {}, Druid:{}, Monk:{}, Ranger:{}, Sorcerer:{}, Warlock:{},
+};
+
+const SUBCLASSES = {
+  Fighter:    ['Champion','Battle Master','Eldritch Knight'],
+  Rogue:      ['Thief','Assassin','Arcane Trickster'],
+  Barbarian:  ['Path of the Berserker','Path of the Totem Warrior'],
+  Bard:       ['College of Lore','College of Valor'],
+  Cleric:     ['Knowledge Domain','Life Domain','Light Domain','Nature Domain','Tempest Domain','Trickery Domain','War Domain'],
+  Druid:      ['Circle of the Land','Circle of the Moon'],
+  Monk:       ['Way of the Open Hand','Way of Shadow','Way of the Four Elements'],
+  Paladin:    ['Oath of Devotion','Oath of the Ancients','Oath of Vengeance'],
+  Ranger:     ['Hunter','Beast Master'],
+  Sorcerer:   ['Wild Magic','Draconic Bloodline'],
+  Warlock:    ['The Archfey','The Fiend','The Great Old One'],
+  Wizard:     ['School of Abjuration','School of Conjuration','School of Divination','School of Enchantment','School of Evocation','School of Illusion','School of Necromancy','School of Transmutation'],
+};
+
+// ── State ─────────────────────────────────────────────────────
+const S = {
+  url: 'http://localhost:3000',
+  connected: false,
+  tab: 'characters',
+  chars: [],         // list summaries
+  charDetail: null,  // full sheet
+  editingId: null,   // null = new
+  pendingSubclass: null,  // className string pending subclass
+  parties: [],
+  selectedParty: null,
+  partyEnemies: [{ name:'Goblin', count:1, ai:'attackNearest' }],
+  trials: 100,
+  monsters: [],
+};
+
+// ── Boot ──────────────────────────────────────────────────────
+window.addEventListener('load', () => {
+  renderStatInputs();
+  addEnemyRow();
+  S.partyEnemies = [];
+  document.getElementById('server-url').value = S.url;
+  connect();
+});
+
+// ── Connection ────────────────────────────────────────────────
+async function connect() {
+  S.url = document.getElementById('server-url').value.replace(/\/$/,'');
+  setConn('loading','Connecting…');
+  try {
+    const [, monsters] = await Promise.all([api('/api/health'), api('/api/monsters')]);
+    S.monsters = monsters.monsters || [];
+    S.connected = true;
+    setConn('ok',`Connected · ${S.monsters.length} monsters`);
+    populateMonsterList(S.monsters);
+    refreshChars();
+    refreshParties();
+  } catch(e) {
+    S.connected = false;
+    setConn('err','Cannot reach server');
+  }
+}
+function setConn(state, label) {
+  document.getElementById('conn-dot').className = 'dot ' + (state==='loading'?'':state);
+  document.getElementById('conn-label').textContent = label;
+}
+
+async function api(path, opts) {
+  const r = await fetch(S.url + path, opts);
+  if (!r.ok) { const d = await r.json().catch(()=>({})); throw new Error(d.error || `HTTP ${r.status}`); }
+  return r.json();
+}
+
+function showErr(msg) {
+  const el = document.getElementById('err-banner');
+  if (!msg) { el.style.display='none'; return; }
+  el.style.display=''; el.textContent = '⚠  ' + msg;
+  el.scrollIntoView({ behavior:'smooth', block:'nearest' });
+}
+
+// ── Tabs ──────────────────────────────────────────────────────
+function setTab(tab) {
+  S.tab = tab;
+  document.getElementById('tab-chars').classList.toggle('active', tab==='characters');
+  document.getElementById('tab-parties').classList.toggle('active', tab==='parties');
+  document.getElementById('panel-characters').classList.toggle('hidden', tab!=='characters');
+  document.getElementById('panel-parties').classList.toggle('hidden', tab!=='parties');
+}
+
+// ── Character List ────────────────────────────────────────────
+async function refreshChars() {
+  if (!S.connected) return;
+  showErr('');
+  try {
+    const data = await api('/api/characters');
+    S.chars = data.characters || [];
+    renderCharList();
+  } catch(e) { showErr(e.message); }
+}
+
+function renderCharList() {
+  const grid = document.getElementById('char-grid');
+  if (!S.chars.length) {
+    grid.innerHTML = '<div style="color:var(--muted);font-size:12px">No characters yet. Create one above.</div>';
+    return;
+  }
+  grid.innerHTML = S.chars.map(c => {
+    const cls = classLevelStr(c.classLevels);
+    const sel = S.charDetail && S.charDetail.id === c.id ? 'selected' : '';
+    return `<div class="char-card ${sel}" onclick="loadCharDetail('${c.id}')">
+      <div class="cc-name">${esc(c.name)}</div>
+      <div class="cc-class">${esc(cls)}</div>
+      <div class="cc-sub">${esc(c.race)} · HP ${c.maxHP} · AC ${c.armorClass}</div>
+    </div>`;
+  }).join('');
+}
+
+function classLevelStr(cls) {
+  return cls.map(c => `${c.className} ${c.level}`).join(' / ');
+}
+
+// ── Character Detail ──────────────────────────────────────────
+async function loadCharDetail(id) {
+  showErr('');
+  try {
+    const data = await api(`/api/characters/${id}`);
+    S.charDetail = data.character;
+    renderCharDetail();
+    renderCharList();  // update selection highlight
+    document.getElementById('char-detail-card').classList.remove('hidden');
+    document.getElementById('char-form-card').classList.add('hidden');
+  } catch(e) { showErr(e.message); }
+}
+
+function renderCharDetail() {
+  const c = S.charDetail;
+  if (!c) return;
+  document.getElementById('char-detail-title').childNodes[0].textContent = c.name + ' ';
+
+  // Alerts
+  const hasPendingASI = (c.pendingAbilityScoreImprovements || 0) > 0 || (c.pendingASIHalfPoints || 0) > 0;
+  document.getElementById('asi-alert').classList.toggle('hidden', !hasPendingASI);
+  document.getElementById('subclass-alert').classList.toggle('hidden', !S.pendingSubclass);
+
+  // Stats row
+  document.getElementById('char-stats-row').innerHTML = `
+    <div class="stat-box"><div class="val">${c.maxHP}</div><div class="lbl">Max HP</div></div>
+    <div class="stat-box"><div class="val">${c.armorClass}</div><div class="lbl">AC</div></div>
+    <div class="stat-box"><div class="val">${c.speed}</div><div class="lbl">Speed ft</div></div>`;
+
+  // Ability scores
+  const STATS = ['str','dex','con','int','wis','cha'];
+  document.getElementById('char-ability-grid').innerHTML = STATS.map(s => {
+    const val = c.stats[s];
+    const mod = Math.floor((val-10)/2);
+    const sign = mod >= 0 ? '+' : '';
+    return `<div class="stat-cell">
+      <label>${s.toUpperCase()}</label>
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 4px;font-size:14px;text-align:center;color:var(--accent)">${val}</div>
+      <div class="mod">${sign}${mod}</div>
+    </div>`;
+  }).join('');
+
+  // Class info
+  const profBonus = computeProf(c);
+  const classInfo = c.classLevels.map(cl => {
+    const sub = c.subclassChoices && c.subclassChoices[cl.className] ? ` (${c.subclassChoices[cl.className]})` : '';
+    return `${cl.className} ${cl.level}${sub}`;
+  }).join(', ');
+  const resLines = buildResourceLines(c.resources);
+  document.getElementById('char-class-info').innerHTML =
+    `<div><strong>${classInfo}</strong> · Prof +${profBonus} · XP ${c.experiencePoints}</div>` +
+    (resLines ? `<div style="margin-top:4px;color:var(--muted)">${resLines}</div>` : '');
+
+  // Level-up class selector
+  const lvlSel = document.getElementById('lvl-class');
+  lvlSel.innerHTML = c.classLevels.map(cl =>
+    `<option value="${cl.className}">${cl.className} (${cl.level}→${cl.level+1})</option>`
+  ).join('') + '<option value="__new__">＋ Multiclass…</option>';
+
+  // ASI form
+  const asiCard = document.getElementById('asi-form-card');
+  if (hasPendingASI) {
+    asiCard.classList.remove('hidden');
+    document.getElementById('asi-pending-count').textContent = c.pendingAbilityScoreImprovements || 0;
+    document.getElementById('asi-half-pts').textContent = c.pendingASIHalfPoints || 0;
+  } else {
+    asiCard.classList.add('hidden');
+  }
+
+  // Subclass form
+  const subCard = document.getElementById('subclass-form-card');
+  if (S.pendingSubclass) {
+    subCard.classList.remove('hidden');
+    document.getElementById('subclass-class-name').textContent = S.pendingSubclass;
+    const subs = SUBCLASSES[S.pendingSubclass] || [];
+    document.getElementById('subclass-select').innerHTML = subs.map(s => `<option>${esc(s)}</option>`).join('');
+  } else {
+    subCard.classList.add('hidden');
+  }
+
+  // Features
+  const feats = c.allFeatures || c.level1Features || [];
+  const featEl = document.getElementById('char-features');
+  if (feats.length) {
+    featEl.innerHTML = feats.map(f =>
+      `<li><strong>${esc(f.name)}</strong> <span style="color:var(--muted);font-size:10px">[${f.source}]</span> — ${esc(f.description)}</li>`
+    ).join('');
+  } else {
+    featEl.innerHTML = '<li style="color:var(--muted)">No features recorded.</li>';
+  }
+}
+
+function computeProf(c) {
+  const total = c.classLevels.reduce((s,cl)=>s+cl.level,0);
+  return total >= 17 ? 6 : total >= 13 ? 5 : total >= 9 ? 4 : total >= 5 ? 3 : 2;
+}
+
+function buildResourceLines(res) {
+  if (!res) return '';
+  const parts = [];
+  if (res.rage)              parts.push(`Rage ${res.rage.remaining}/${res.rage.max}`);
+  if (res.secondWind)        parts.push(`Second Wind ${res.secondWind.remaining}/${res.secondWind.max}`);
+  if (res.bardicInspiration) parts.push(`Bardic Insp ${res.bardicInspiration.remaining}/${res.bardicInspiration.max} (d${res.bardicInspiration.dieSides})`);
+  if (res.layOnHands)        parts.push(`Lay on Hands ${res.layOnHands.remaining}/${res.layOnHands.pool}`);
+  if (res.sneakAttackDice)   parts.push(`Sneak Attack ${res.sneakAttackDice}`);
+  if (res.cunningAction)     parts.push(`Cunning Action`);
+  if (res.arcaneRecovery)    parts.push(`Arcane Recovery ${res.arcaneRecovery.usesRemaining}`);
+  return parts.join(' · ');
+}
+
+// ── Level Up ──────────────────────────────────────────────────
+async function doLevelUp() {
+  if (!S.charDetail) return;
+  showErr('');
+  let className = document.getElementById('lvl-class').value;
+  if (className === '__new__') {
+    className = prompt('Enter class name for multiclass:');
+    if (!className || !className.trim()) return;
+    className = className.trim();
+  }
+  const hpRollMethod = document.getElementById('lvl-hp-method').value;
+  const btn = document.getElementById('lvl-btn');
+  btn.disabled = true; btn.textContent = 'Leveling…';
+  try {
+    const data = await api(`/api/${S.charDetail.id}/levelup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ className, hpRollMethod }),
+    });
+    S.charDetail = data.character;
+    S.pendingSubclass = data.subclassPrompt || null;
+    refreshChars();
+    renderCharDetail();
+    const msg = [`Leveled up ${className}! HP +${data.hpGained}.`];
+    if (data.abilityScoreImprovement) msg.push('ASI available!');
+    if (data.subclassPrompt) msg.push(`Choose subclass for ${data.subclassPrompt}!`);
+    showBanner(msg.join(' '), 'ok');
+  } catch(e) { showErr(e.message); }
+  finally { btn.disabled = false; btn.textContent = 'Level Up'; }
+}
+
+// ── Apply ASI ─────────────────────────────────────────────────
+async function doApplyASI() {
+  if (!S.charDetail) return;
+  showErr('');
+  const ability = document.getElementById('asi-ability').value;
+  const amount  = parseInt(document.getElementById('asi-amount').value, 10);
+  try {
+    const data = await api(`/api/characters/${S.charDetail.id}/applyasi`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ability, amount }),
+    });
+    S.charDetail = data.character;
+    refreshChars();
+    renderCharDetail();
+    showBanner(`${ability.toUpperCase()} ${data.oldScore} → ${data.newScore}`, 'ok');
+  } catch(e) { showErr(e.message); }
+}
+
+// ── Choose Subclass ───────────────────────────────────────────
+async function doChooseSubclass() {
+  if (!S.charDetail || !S.pendingSubclass) return;
+  showErr('');
+  const subclassName = document.getElementById('subclass-select').value;
+  try {
+    const data = await api(`/api/characters/${S.charDetail.id}/choosesubclass`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ className: S.pendingSubclass, subclassName }),
+    });
+    S.charDetail = data.character;
+    S.pendingSubclass = null;
+    renderCharDetail();
+    showBanner(`Subclass set: ${subclassName}`, 'ok');
+  } catch(e) { showErr(e.message); }
+}
+
+function showBanner(msg, type) {
+  // Brief success flash via err-banner (green tint override)
+  const el = document.getElementById('err-banner');
+  el.style.display = '';
+  el.style.background = type==='ok' ? 'rgba(39,174,96,0.12)' : 'rgba(192,57,43,0.12)';
+  el.style.borderColor = type==='ok' ? 'var(--success)' : 'var(--danger)';
+  el.style.color = type==='ok' ? 'var(--success)' : 'var(--danger)';
+  el.textContent = (type==='ok'?'✓  ':'⚠  ') + msg;
+  setTimeout(() => { el.style.display='none'; el.style.cssText=''; }, 4000);
+}
+
+// ── Edit / Delete ─────────────────────────────────────────────
+function editChar() {
+  if (!S.charDetail) return;
+  const c = S.charDetail;
+  S.editingId = c.id;
+  document.getElementById('char-form-title').childNodes[0].textContent = 'Edit Character ';
+  document.getElementById('char-form-save-btn').textContent = 'Save Changes';
+  document.getElementById('cf-name').value = c.name;
+  document.getElementById('cf-race').value = c.race;
+  document.getElementById('cf-class').value = c.firstClass;
+  document.getElementById('cf-background').value = c.background;
+  document.getElementById('cf-alignment').value = c.alignment || '';
+  document.getElementById('cf-gold').value = c.gold || 0;
+  document.getElementById('cf-hp').value = c.maxHP;
+  document.getElementById('cf-ac').value = c.armorClass;
+  document.getElementById('cf-speed').value = c.speed;
+  document.getElementById('cf-notes').value = c.notes || '';
+  const STATS = ['str','dex','con','int','wis','cha'];
+  STATS.forEach(s => {
+    const el = document.getElementById(`cf-stat-${s}`);
+    if (el) el.value = c.stats[s];
+  });
+  const wpn = (c.equipment || []).find(e => e.category === 'weapon' && e.equipped);
+  if (wpn) {
+    document.getElementById('cf-weapon').value = wpn.name;
+  }
+  const arm = (c.equipment || []).find(e => (e.category==='armor'||e.category==='shield') && e.equipped);
+  if (arm) {
+    document.getElementById('cf-armor').value = arm.name;
+    document.getElementById('cf-armor-cat').value = arm.category;
+  }
+  document.getElementById('char-form-card').classList.remove('hidden');
+  document.getElementById('char-detail-card').classList.add('hidden');
+}
+
+async function deleteChar() {
+  if (!S.charDetail) return;
+  if (!confirm(`Delete ${S.charDetail.name}? This cannot be undone.`)) return;
+  showErr('');
+  try {
+    await api(`/api/characters/${S.charDetail.id}`, { method:'DELETE' });
+    S.charDetail = null;
+    S.pendingSubclass = null;
+    document.getElementById('char-detail-card').classList.add('hidden');
+    refreshChars();
+    showBanner('Character deleted.', 'ok');
+  } catch(e) { showErr(e.message); }
+}
+
+// ── Create / Edit Form ────────────────────────────────────────
+function newChar() {
+  S.editingId = null;
+  S.charDetail = null;
+  S.pendingSubclass = null;
+  document.getElementById('char-form-title').childNodes[0].textContent = 'New Character ';
+  document.getElementById('char-form-save-btn').textContent = 'Create Character';
+  // Clear form
+  ['cf-name','cf-race','cf-background','cf-alignment','cf-notes'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('cf-class').value = 'Fighter';
+  document.getElementById('cf-gold').value = '10';
+  onClassChange();
+  document.getElementById('char-form-card').classList.remove('hidden');
+  document.getElementById('char-detail-card').classList.add('hidden');
+}
+
+function cancelForm() {
+  S.editingId = null;
+  document.getElementById('char-form-card').classList.add('hidden');
+  if (S.charDetail) document.getElementById('char-detail-card').classList.remove('hidden');
+}
+
+function renderStatInputs() {
+  const STATS = ['str','dex','con','int','wis','cha'];
+  const defaults = { Fighter:{str:17,dex:10,con:16,int:8,wis:12,cha:13}, Rogue:{str:10,dex:17,con:14,int:12,wis:12,cha:10}, Wizard:{str:8,dex:14,con:14,int:17,wis:12,cha:10}, Cleric:{str:13,dex:10,con:14,int:10,wis:17,cha:12} };
+  const def = defaults.Fighter;
+  document.getElementById('cf-stat-grid').innerHTML = STATS.map(s =>
+    `<div class="stat-cell">
+      <label>${s.toUpperCase()}</label>
+      <input type="number" id="cf-stat-${s}" value="${def[s]||10}" min="1" max="20" oninput="updateMod('${s}')"/>
+      <div class="mod" id="cf-mod-${s}">${modStr(def[s]||10)}</div>
+    </div>`
+  ).join('');
+}
+
+function updateMod(stat) {
+  const val = parseInt(document.getElementById(`cf-stat-${stat}`).value)||10;
+  document.getElementById(`cf-mod-${stat}`).textContent = modStr(val);
+}
+function modStr(v) { const m=Math.floor((v-10)/2); return (m>=0?'+':'')+m; }
+
+function onClassChange() {
+  const cls = document.getElementById('cf-class').value;
+  // Set default weapon/armor/hp for class
+  const defaults = {
+    Fighter:   { weapon:'Greatsword', wcat:'martial-melee', armor:'Chain Mail', acat:'heavy', hp:13, ac:16, speed:30 },
+    Barbarian: { weapon:'Greataxe',   wcat:'martial-melee', armor:'Hide Armor', acat:'medium',hp:15, ac:14, speed:30 },
+    Rogue:     { weapon:'Shortsword', wcat:'martial-melee', armor:'Leather Armor',acat:'light',hp:9, ac:13, speed:30 },
+    Wizard:    { weapon:'Quarterstaff',wcat:'simple-melee', armor:'Robes',       acat:'none', hp:7,  ac:10, speed:30 },
+    Cleric:    { weapon:'Mace',       wcat:'simple-melee', armor:'Chain Mail',  acat:'heavy', hp:10, ac:16, speed:25 },
+    Druid:     { weapon:'Quarterstaff',wcat:'simple-melee', armor:'Leather Armor',acat:'light',hp:10, ac:13, speed:30 },
+    Bard:      { weapon:'Rapier',     wcat:'martial-melee', armor:'Leather Armor',acat:'light',hp:9,  ac:13, speed:30 },
+    Paladin:   { weapon:'Longsword',  wcat:'martial-melee', armor:'Chain Mail',  acat:'heavy', hp:13, ac:16, speed:30 },
+    Ranger:    { weapon:'Longbow',    wcat:'martial-ranged',armor:'Scale Mail',  acat:'medium',hp:12, ac:14, speed:30 },
+    Monk:      { weapon:'Unarmed Strike',wcat:'simple-melee',armor:'None',       acat:'none', hp:10, ac:10, speed:30 },
+    Sorcerer:  { weapon:'Dagger',     wcat:'simple-melee', armor:'Robes',       acat:'none', hp:7,  ac:10, speed:30 },
+    Warlock:   { weapon:'Dagger',     wcat:'simple-melee', armor:'Leather Armor',acat:'light',hp:9,  ac:13, speed:30 },
+  };
+  const d = defaults[cls] || defaults.Fighter;
+  document.getElementById('cf-weapon').value = d.weapon;
+  document.getElementById('cf-weapon-cat').value = d.wcat;
+  document.getElementById('cf-armor').value = d.armor;
+  document.getElementById('cf-armor-cat').value = d.acat;
+  document.getElementById('cf-hp').value = d.hp;
+  document.getElementById('cf-ac').value = d.ac;
+  document.getElementById('cf-speed').value = d.speed;
+}
+
+async function saveCharForm() {
+  showErr('');
+  const name = document.getElementById('cf-name').value.trim();
+  const cls  = document.getElementById('cf-class').value;
+  if (!name) { showErr('Name is required.'); return; }
+
+  const STATS = ['str','dex','con','int','wis','cha'];
+  const stats = {};
+  STATS.forEach(s => { stats[s] = parseInt(document.getElementById(`cf-stat-${s}`).value)||10; });
+
+  const maxHP  = parseInt(document.getElementById('cf-hp').value)||10;
+  const ac     = parseInt(document.getElementById('cf-ac').value)||10;
+  const speed  = parseInt(document.getElementById('cf-speed').value)||30;
+  const gold   = parseFloat(document.getElementById('cf-gold').value)||0;
+  const wpnName = document.getElementById('cf-weapon').value.trim() || 'Dagger';
+  const wpnCat  = document.getElementById('cf-weapon-cat').value;
+  const armName = document.getElementById('cf-armor').value.trim();
+  const armCat  = document.getElementById('cf-armor-cat').value;
+
+  const hd = CLASS_HD[cls] || 8;
+  const sheet = {
+    version: 1,
+    name,
+    race: document.getElementById('cf-race').value.trim() || 'Human',
+    background: document.getElementById('cf-background').value.trim() || 'Soldier',
+    alignment: document.getElementById('cf-alignment').value.trim() || 'Neutral',
+    notes: document.getElementById('cf-notes').value.trim() || undefined,
+    firstClass: cls,
+    classLevels: [{ className: cls, level: 1 }],
+    subclassChoices: {},
+    experiencePoints: 0,
+    baseStats: { ...stats },
+    stats,
+    maxHP,
+    currentHP: maxHP,
+    temporaryHP: 0,
+    armorClass: ac,
+    acFormula: `${armName || 'Unarmored'}: ${ac}`,
+    speed,
+    hitDice: [{ className: cls, dieSides: hd, total: 1, remaining: 1 }],
+    proficiencies: {
+      armor: CLASS_ARMOR_PROFS[cls] || [],
+      weapons: CLASS_WEAPON_PROFS[cls] || [],
+      tools: [],
+      savingThrows: CLASS_SAVES[cls] || [],
+      skills: [],
+      expertise: [],
+    },
+    languages: ['Common'],
+    resources: CLASS_RESOURCES_L1[cls] || {},
+    equipment: [
+      { name: wpnName, quantity: 1, equipped: true,  category: 'weapon' },
+      ...(armName && armCat !== 'none' ? [{ name: armName, quantity: 1, equipped: true, category: armCat === 'shield' ? 'shield' : 'armor' }] : []),
+    ],
+    gold,
+    level1Features: [],
+    allFeatures: [],
+    feats: [],
+    backgroundFeature: '',
+    exhaustionLevel: 0,
+  };
+
+  const btn = document.getElementById('char-form-save-btn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    let data;
+    if (S.editingId) {
+      data = await api(`/api/characters/${S.editingId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(sheet),
+      });
+      S.charDetail = data.character;
+    } else {
+      data = await api('/api/characters', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(sheet),
+      });
+      S.charDetail = data.character;
+    }
+    document.getElementById('char-form-card').classList.add('hidden');
+    document.getElementById('char-detail-card').classList.remove('hidden');
+    S.editingId = null;
+    await refreshChars();
+    renderCharDetail();
+    showBanner(S.editingId ? 'Character updated.' : `${name} created!`, 'ok');
+  } catch(e) { showErr(e.message); }
+  finally { btn.disabled = false; btn.textContent = S.editingId ? 'Save Changes' : 'Create Character'; }
+}
+
+// ── Party Management ──────────────────────────────────────────
+async function refreshParties() {
+  if (!S.connected) return;
+  try {
+    const data = await api('/api/parties');
+    S.parties = data.parties || [];
+    renderPartyList();
+  } catch(e) { /* silent */ }
+}
+
+function renderPartyList() {
+  const grid = document.getElementById('party-grid');
+  if (!S.parties.length) {
+    grid.innerHTML = '<div style="color:var(--muted);font-size:12px">No parties yet. Create one above.</div>';
+    return;
+  }
+  grid.innerHTML = S.parties.map(p => {
+    const sel = S.selectedParty && S.selectedParty.id === p.id ? 'selected' : '';
+    return `<div class="char-card ${sel}" onclick="loadPartyDetail('${p.id}')">
+      <div class="cc-name">${esc(p.name)}</div>
+      <div class="cc-sub">${p.characterIds ? p.characterIds.length : 0} members</div>
+    </div>`;
+  }).join('');
+}
+
+function newParty() {
+  S.selectedParty = { id: null, name: '', characterIds: [], notes: '' };
+  openPartyEditor();
+}
+
+async function loadPartyDetail(id) {
+  showErr('');
+  try {
+    const data = await api(`/api/parties/${id}`);
+    S.selectedParty = data.party;
+    renderPartyList();
+    openPartyEditor();
+    // Enable simulate card
+    document.getElementById('party-sim-card').classList.remove('hidden');
+    updateSimBtn();
+  } catch(e) { showErr(e.message); }
+}
+
+function openPartyEditor() {
+  const p = S.selectedParty;
+  document.getElementById('party-editor-card').classList.remove('hidden');
+  document.getElementById('party-editor-title').childNodes[0].textContent = p.id ? p.name + ' ' : 'New Party ';
+  document.getElementById('party-delete-btn').style.display = p.id ? '' : 'none';
+  document.getElementById('pe-name').value = p.name || '';
+  document.getElementById('pe-notes').value = p.notes || '';
+  renderMemberList();
+  // Populate char dropdown
+  const sel = document.getElementById('pe-add-char');
+  sel.innerHTML = S.chars.map(c =>
+    `<option value="${c.id}">${esc(c.name)} (${classLevelStr(c.classLevels)})</option>`
+  ).join('') || '<option disabled>No characters available</option>';
+}
+
+function renderMemberList() {
+  const p = S.selectedParty;
+  const list = document.getElementById('party-member-list');
+  if (!p || !p.characterIds || !p.characterIds.length) {
+    list.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:8px 0">No members. Add from the dropdown below.</div>';
+    return;
+  }
+  list.innerHTML = p.characterIds.map(id => {
+    const c = S.chars.find(ch => ch.id === id);
+    const name = c ? c.name : id;
+    const sub  = c ? classLevelStr(c.classLevels) : '';
+    return `<div class="mem-row">
+      <div>
+        <div class="mem-name">${esc(name)}</div>
+        <div class="mem-sub">${esc(sub)}</div>
+      </div>
+      <button class="danger sm" onclick="removeMember('${id}')">✕</button>
+    </div>`;
+  }).join('');
+}
+
+function addMemberToParty() {
+  if (!S.selectedParty) return;
+  const id = document.getElementById('pe-add-char').value;
+  if (!id) return;
+  if (!S.selectedParty.characterIds) S.selectedParty.characterIds = [];
+  if (S.selectedParty.characterIds.includes(id)) { showErr('Character already in party.'); return; }
+  S.selectedParty.characterIds.push(id);
+  renderMemberList();
+}
+
+function removeMember(id) {
+  if (!S.selectedParty) return;
+  S.selectedParty.characterIds = (S.selectedParty.characterIds || []).filter(cid => cid !== id);
+  renderMemberList();
+}
+
+function cancelPartyEdit() {
+  document.getElementById('party-editor-card').classList.add('hidden');
+  S.selectedParty = null;
+}
+
+async function savePartyEdit() {
+  if (!S.selectedParty) return;
+  showErr('');
+  const name = document.getElementById('pe-name').value.trim();
+  if (!name) { showErr('Party name is required.'); return; }
+  const body = {
+    name,
+    notes: document.getElementById('pe-notes').value.trim() || undefined,
+    characterIds: S.selectedParty.characterIds || [],
+  };
+  const btn = document.getElementById('party-save-btn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    let data;
+    if (S.selectedParty.id) {
+      data = await api(`/api/parties/${S.selectedParty.id}`, {
+        method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body),
+      });
+      S.selectedParty = data.party;
+    } else {
+      data = await api('/api/parties', {
+        method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body),
+      });
+      S.selectedParty = data.party;
+    }
+    await refreshParties();
+    renderPartyList();
+    document.getElementById('party-editor-title').childNodes[0].textContent = S.selectedParty.name + ' ';
+    document.getElementById('party-delete-btn').style.display = '';
+    document.getElementById('party-sim-card').classList.remove('hidden');
+    updateSimBtn();
+    showBanner(`Party saved: ${name}`, 'ok');
+  } catch(e) { showErr(e.message); }
+  finally { btn.disabled=false; btn.textContent='Save Party'; }
+}
+
+async function deleteParty() {
+  if (!S.selectedParty || !S.selectedParty.id) return;
+  if (!confirm(`Delete party "${S.selectedParty.name}"?`)) return;
+  try {
+    await api(`/api/parties/${S.selectedParty.id}`, { method:'DELETE' });
+    S.selectedParty = null;
+    document.getElementById('party-editor-card').classList.add('hidden');
+    document.getElementById('party-sim-card').classList.add('hidden');
+    document.getElementById('sim-results-card').classList.add('hidden');
+    refreshParties();
+    showBanner('Party deleted.', 'ok');
+  } catch(e) { showErr(e.message); }
+}
+
+// ── Simulate ──────────────────────────────────────────────────
+function populateMonsterList(list) {
+  document.getElementById('monster-list').innerHTML =
+    list.map(m => `<option value="${esc(m.name)}">CR ${m.cr} · ${m.type}</option>`).join('');
+}
+
+function addEnemyRow() {
+  const list = document.getElementById('ps-enemy-list');
+  const idx = S.partyEnemies.length;
+  S.partyEnemies.push({ name:'', count:1, ai:'attackNearest' });
+  const row = document.createElement('div');
+  row.className = 'mon-row';
+  row.id = `enemy-row-${idx}`;
+  row.innerHTML = `
+    <input type="text" list="monster-list" placeholder="Monster name" oninput="S.partyEnemies[${idx}].name=this.value"/>
+    <input type="number" value="1" min="1" max="20" style="flex:0 0 55px" oninput="S.partyEnemies[${idx}].count=+this.value"/>
+    <select onchange="S.partyEnemies[${idx}].ai=this.value">
+      <option value="attackNearest">Nearest</option>
+      <option value="smart">Tactical</option>
+      <option value="attackWeakest">Weakest</option>
+    </select>
+    <button class="danger sm" onclick="removeEnemyRow(${idx},this)">✕</button>`;
+  list.appendChild(row);
+}
+
+function removeEnemyRow(idx, btn) {
+  S.partyEnemies.splice(idx, 1);
+  btn.closest('.mon-row').remove();
+  // Re-index remaining rows
+  document.querySelectorAll('.mon-row').forEach((row, i) => {
+    row.id = `enemy-row-${i}`;
+    row.querySelectorAll('input,select').forEach(el => {
+      el.getAttribute('oninput') && el.setAttribute('oninput', el.getAttribute('oninput').replace(/\[\d+\]/, `[${i}]`));
+      el.getAttribute('onchange') && el.setAttribute('onchange', el.getAttribute('onchange').replace(/\[\d+\]/, `[${i}]`));
+    });
+  });
+}
+
+function setTrials(n) {
+  S.trials = n;
+  document.querySelectorAll('.trial-btn').forEach(b => {
+    b.classList.toggle('active', parseInt(b.textContent) === n);
+  });
+}
+
+function updateSimBtn() {
+  const btn = document.getElementById('sim-btn');
+  const ok = S.selectedParty && S.selectedParty.id && (S.selectedParty.characterIds||[]).length > 0;
+  btn.disabled = !ok;
+  btn.textContent = ok ? '▶  Simulate Encounter' : 'Save a party with members first';
+}
+
+async function runSim() {
+  if (!S.selectedParty || !S.selectedParty.id) return;
+  showErr('');
+  const enemies = S.partyEnemies.filter(e => e.name && e.name.trim());
+  if (!enemies.length) { showErr('Add at least one enemy.'); return; }
+  const btn = document.getElementById('sim-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Running…';
+  try {
+    const data = await api('/api/simulate/custom', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        partyCharacterIds: S.selectedParty.characterIds,
+        enemies: enemies.map(e => ({ name: e.name.trim(), count: e.count, aiProfile: e.ai })),
+        trials: S.trials,
+      }),
+    });
+    showSimResults(data);
+  } catch(e) { showErr(e.message); }
+  finally { btn.disabled = false; btn.textContent = '▶  Simulate Encounter'; updateSimBtn(); }
+}
+
+function showSimResults(r) {
+  const card = document.getElementById('sim-results-card');
+  card.classList.remove('hidden');
+  card.scrollIntoView({ behavior:'smooth', block:'start' });
+
+  const pw = Math.round((r.partyWinRate||0)*100);
+  const dw = Math.round((r.drawRate||0)*100);
+  const ew = Math.round((r.enemyWinRate||0)*100);
+  document.getElementById('sim-summary').textContent = `Party wins ${pw}% · Draw ${dw}% · Enemies win ${ew}%`;
+  document.getElementById('sim-party-pct').textContent = `Party ${pw}%`;
+  document.getElementById('sim-draw-pct').textContent  = `Draw ${dw}%`;
+  document.getElementById('sim-enemy-pct').textContent = `Enemies ${ew}%`;
+  document.getElementById('sim-bar-party').style.width = pw+'%';
+  document.getElementById('sim-bar-draw').style.width  = dw+'%';
+  document.getElementById('sim-bar-enemy').style.width = ew+'%';
+
+  document.getElementById('sim-avg').textContent = (r.avgRounds||0).toFixed(1);
+  document.getElementById('sim-min').textContent = r.minRounds||'—';
+  document.getElementById('sim-max').textContent = r.maxRounds||'—';
+  document.getElementById('sim-runs').textContent = r.runs||'—';
+
+  const badge = document.getElementById('sim-diff-badge');
+  if (r.difficulty) {
+    badge.textContent = r.difficulty;
+    badge.className   = 'diff-badge ' + r.difficulty.toLowerCase().replace(' ','.');
+    badge.style.display = '';
+  } else { badge.style.display = 'none'; }
+
+  document.getElementById('sim-ctable').innerHTML = (r.combatantStats||[]).map(c => {
+    const side = c.side==='party'?'party':'enemy';
+    const pct  = Math.round((c.survivalRate||0)*100);
+    const dmg  = typeof c.avgDamageDealt==='number' ? c.avgDamageDealt.toFixed(1) : '—';
+    return `<tr>
+      <td>${esc(c.name)}</td>
+      <td><span class="badge ${side}">${side}</span></td>
+      <td>${pct}%</td>
+      <td>${dmg}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Utils ─────────────────────────────────────────────────────
+function esc(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>
