@@ -23,14 +23,41 @@
 // ============================================================
 
 import { Router, Request, Response } from 'express';
+import * as path from 'path';
 import {
   saveCharacter, loadCharacter, listCharacters,
   deleteCharacter, importCharacter, exportCharacter,
   saveParty, loadParty, listParties,
   deleteParty, loadPartyMembers,
 } from './characters/storage';
-import { ValidationError } from './characters/validator';
+import { ValidationError }            from './characters/validator';
+import { buildCombatant, buildWarnings } from './characters/builder';
+import { spawnMonster, Raw5etoolsMonster } from './parser/fivetools';
+import { simulate }                    from './scenarios/simulate';
+import { Combatant }                   from './types/core';
+import { EncounterSpec }               from './scenarios/encounter';
 
+// Lazy-loaded bestiary — mirrors getBestiary() in server.ts
+let _bestiary: Map<string, Raw5etoolsMonster> | null = null;
+function getBestiary(): Map<string, Raw5etoolsMonster> {
+  if (_bestiary) return _bestiary;
+  const dir = path.join(process.cwd(), 'bestiaryData');
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { loadBestiaryDir } = require('./data/loader');
+  _bestiary = loadBestiaryDir(dir) as Map<string, Raw5etoolsMonster>;
+  return _bestiary!;
+}
+
+
+// Inlined from server.ts to avoid triggering app.listen() via circular import
+function difficultyLabel(winRate: number): string {
+  if (winRate >= 0.90) return 'Trivial';
+  if (winRate >= 0.70) return 'Easy';
+  if (winRate >= 0.45) return 'Medium';
+  if (winRate >= 0.20) return 'Hard';
+  if (winRate >= 0.05) return 'Deadly';
+  return 'Nearly Impossible';
+}
 const router = Router();
 
 // ---- Helpers ------------------------------------------------
@@ -242,6 +269,88 @@ router.get('/parties/:id/members', (req: Request, res: Response) => {
     if (!party) return res.status(404).json({ error: `Party "${String(req.params.id)}" not found` });
     const members = loadPartyMembers(String(req.params.id));
     return res.json({ party, members, total: members.length });
+  } catch (err) {
+    return handleError(res, err);
+  }
+});
+
+
+// ---- POST /api/simulate/custom ------------------------------
+// Run a simulation where the party is built from saved CharacterSheets
+// instead of preset class templates.
+//
+// Request body:
+//   {
+//     partyCharacterIds: string[],        // IDs of saved characters
+//     enemies: { name: string; count?: number; aiProfile?: string }[],
+//     trials?: number                     // 1–500, default 100
+//   }
+//
+// Response: same shape as POST /api/simulate
+router.post('/simulate/custom', (req: Request, res: Response) => {
+  try {
+    const body = req.body as {
+      partyCharacterIds?: string[];
+      enemies?: { name: string; count?: number; aiProfile?: string }[];
+      trials?: number;
+    };
+
+    if (!Array.isArray(body.partyCharacterIds) || body.partyCharacterIds.length === 0) {
+      return res.status(400).json({ error: 'partyCharacterIds must be a non-empty array' });
+    }
+    if (!Array.isArray(body.enemies) || body.enemies.length === 0) {
+      return res.status(400).json({ error: 'enemies must be a non-empty array' });
+    }
+    const trials = Math.min(Math.max(body.trials ?? 100, 1), 500);
+
+    // Build party from saved character sheets
+    const party: Combatant[] = [];
+    const warnings: string[] = [];
+    let px = 0;
+
+    for (const id of body.partyCharacterIds) {
+      const sheet = loadCharacter(String(id));
+      if (!sheet) {
+        return res.status(400).json({ error: `Character "${id}" not found` });
+      }
+      const w = buildWarnings(sheet);
+      if (w.length > 0) warnings.push(...w.map(ww => `${sheet.name}: ${ww}`));
+
+      party.push(buildCombatant(sheet, { x: px++, y: 0, z: 0 }, 'smart'));
+    }
+
+    // Build enemies
+    const enemies: Combatant[] = [];
+    const bestiary = getBestiary();
+    let ex = 0;
+
+    for (const cfg of body.enemies) {
+      const n = Math.min(Math.max(cfg.count ?? 1, 1), 20);
+      for (let i = 0; i < n; i++) {
+        const m = spawnMonster(bestiary, cfg.name, { x: ex++ * 2, y: 6, z: 0 }, (cfg.aiProfile as any) ?? 'attackNearest');
+        if (!m) {
+          return res.status(400).json({ error: `Unknown monster: "${cfg.name}"` });
+        }
+        enemies.push(m);
+      }
+    }
+
+    const spec: EncounterSpec = { party, enemies };
+    const result = simulate(spec, { runs: trials });
+
+    return res.json({
+      runs:              result.runs,
+      partyWinRate:      result.partyWinRate,
+      enemyWinRate:      result.enemyWinRate,
+      drawRate:          result.drawRate,
+      avgRounds:         result.avgRounds,
+      minRounds:         result.minRounds,
+      maxRounds:         result.maxRounds,
+      combatantStats:    result.combatantStats,
+      roundDistribution: result.roundDistribution,
+      difficulty:        difficultyLabel(result.partyWinRate),
+      warnings:          warnings.length > 0 ? warnings : undefined,
+    });
   } catch (err) {
     return handleError(res, err);
   }
