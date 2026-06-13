@@ -20,6 +20,7 @@
 //   PUT    /api/parties/:id             update a party
 //   DELETE /api/parties/:id             delete a party
 //   GET    /api/parties/:id/members     get full character sheets for party members
+//   POST   /api/parties/:id/awardxp     award combat XP to all party members
 // ============================================================
 
 import { Router, Request, Response } from 'express';
@@ -38,6 +39,7 @@ import { spawnMonster, Raw5etoolsMonster } from './parser/fivetools';
 import { simulate }                    from './scenarios/simulate';
 import { Combatant }                   from './types/core';
 import { EncounterSpec }               from './scenarios/encounter';
+import { totalLevel, XP_THRESHOLDS, crToXP } from './characters/types';
 
 // Lazy-loaded bestiary — mirrors getBestiary() in server.ts
 let _bestiary: Map<string, Raw5etoolsMonster> | null = null;
@@ -271,6 +273,78 @@ router.get('/parties/:id/members', (req: Request, res: Response) => {
     if (!party) return res.status(404).json({ error: `Party "${String(req.params.id)}" not found` });
     const members = loadPartyMembers(String(req.params.id));
     return res.json({ party, members, total: members.length });
+  } catch (err) {
+    return handleError(res, err);
+  }
+});
+
+
+// ============================================================
+// POST /api/parties/:id/awardxp
+// Award combat XP to all party members based on defeated monsters.
+// XP is split evenly among party members (floor division).
+//
+// Request body:
+//   { enemies: { name: string; count?: number }[] }
+//
+// Response:
+//   { totalXP: number; xpEach: number; awarded: AwardedMember[] }
+//   AwardedMember: { id, name, xpAwarded, totalXP, prevLevel, readyToLevel }
+// ============================================================
+router.post('/parties/:id/awardxp', async (req: Request, res: Response) => {
+  try {
+    const partyId = String(req.params.id);
+    const body    = req.body ?? {};
+    const enemies = body.enemies as { name: string; count?: number }[] | undefined;
+
+    if (!Array.isArray(enemies) || enemies.length === 0) {
+      return res.status(400).json({ error: 'enemies must be a non-empty array' });
+    }
+
+    const party = loadParty(partyId);
+    if (!party) return res.status(404).json({ error: `Party "${partyId}" not found` });
+    if (!party.characterIds || party.characterIds.length === 0) {
+      return res.status(400).json({ error: 'Party has no members' });
+    }
+
+    // Sum total XP from defeated monsters
+    const bestiary = getBestiary();
+    let totalXP = 0;
+    for (const cfg of enemies) {
+      const count   = Math.max(cfg.count ?? 1, 1);
+      const monster = bestiary.get(cfg.name.toLowerCase());
+      if (!monster) continue;   // unknown monsters contribute 0 XP
+      totalXP += crToXP(monster.cr) * count;
+    }
+
+    const memberCount = party.characterIds.length;
+    const xpEach     = Math.floor(totalXP / Math.max(memberCount, 1));
+
+    // Apply XP to each member
+    type AwardedMember = {
+      id: string; name: string;
+      xpAwarded: number; totalXP: number;
+      prevLevel: number; readyToLevel: boolean;
+    };
+    const awarded: AwardedMember[] = [];
+
+    for (const id of party.characterIds) {
+      const sheet = loadCharacter(String(id));
+      if (!sheet) continue;
+
+      const prevLevel  = totalLevel(sheet);
+      const newXP      = sheet.experiencePoints + xpEach;
+      const updated    = { ...sheet, experiencePoints: newXP };
+      await saveCharacter(updated);
+
+      // Level N → N+1 threshold is XP_THRESHOLDS[prevLevel] (0-indexed, level 1 = index 0)
+      const nextThreshXP = prevLevel < 20 ? (XP_THRESHOLDS[prevLevel] ?? null) : null;
+      const readyToLevel = nextThreshXP !== null && newXP >= nextThreshXP;
+
+      awarded.push({ id, name: sheet.name, xpAwarded: xpEach, totalXP: newXP, prevLevel, readyToLevel });
+    }
+
+    return res.json({ totalXP, xpEach, awarded });
   } catch (err) {
     return handleError(res, err);
   }

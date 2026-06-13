@@ -236,6 +236,7 @@ button.full { width: 100%; padding: 11px; font-size: 13px; }
       Characters
       <div class="ct-right">
         <button class="sm secondary" onclick="refreshChars()">↻</button>
+        <button class="sm secondary" onclick="importChar()">📤 Import</button>
         <button class="sm" onclick="newChar()">+ New</button>
       </div>
     </div>
@@ -346,6 +347,7 @@ button.full { width: 100%; padding: 11px; font-size: 13px; }
   <div class="card hidden" id="char-detail-card">
     <div class="card-title" id="char-detail-title">Character
       <div class="ct-right">
+        <button class="sm secondary" onclick="exportChar()" id="char-export-btn">📥 Export</button>
         <button class="sm secondary" onclick="editChar()" id="char-edit-btn">Edit</button>
         <button class="danger" onclick="deleteChar()" id="char-delete-btn">Delete</button>
       </div>
@@ -372,6 +374,10 @@ button.full { width: 100%; padding: 11px; font-size: 13px; }
     <!-- Class & Resources -->
     <div class="sec-row mt12"><div class="sec-title">Class & Resources</div><div class="sec-line"></div></div>
     <div id="char-class-info" style="font-size:12px;color:var(--muted);line-height:1.8"></div>
+
+    <!-- Spellcasting -->
+    <div class="sec-row mt12"><div class="sec-title">Spellcasting</div><div class="sec-line"></div></div>
+    <div id="char-spellcasting" style="font-size:12px;color:var(--muted);line-height:1.6"></div>
 
     <!-- Level Up -->
     <div class="sec-row mt12"><div class="sec-title">Level Up</div><div class="sec-line"></div></div>
@@ -540,6 +546,14 @@ button.full { width: 100%; padding: 11px; font-size: 13px; }
       <thead><tr><th>Combatant</th><th>Side</th><th>Survived</th><th>Avg Dmg</th></tr></thead>
       <tbody id="sim-ctable"></tbody>
     </table>
+    <!-- Award XP -->
+    <div style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <button class="btn" id="award-xp-btn" onclick="awardXP()" style="display:none">🎖 Award XP to Party</button>
+        <span id="award-xp-note" style="font-size:12px;color:var(--text-muted)"></span>
+      </div>
+      <div id="award-xp-results" style="margin-top:8px;display:none"></div>
+    </div>
   </div>
 </div><!-- /panel-parties -->
 
@@ -612,6 +626,7 @@ const S = {
   partyEnemies: [{ name:'Goblin', count:1, ai:'attackNearest' }],
   trials: 100,
   monsters: [],
+  lastSimEnemies: [],   // enemies from most recent simulate call, for XP award
 };
 
 // ── Boot ──────────────────────────────────────────────────────
@@ -751,6 +766,28 @@ function renderCharDetail() {
   document.getElementById('char-class-info').innerHTML =
     `<div><strong>${classInfo}</strong> · Prof +${profBonus} · XP ${c.experiencePoints}</div>` +
     (resLines ? `<div style="margin-top:4px;color:var(--muted)">${resLines}</div>` : '');
+
+  // Spellcasting
+  const spl = c.spellcasting;
+  const splEl = document.getElementById('char-spellcasting');
+  if (spl && (spl.cantrips.length > 0 || Object.keys(spl.slots || {}).length > 0)) {
+    let html = '';
+    if (spl.cantrips && spl.cantrips.length > 0) {
+      html += `<div><strong>Cantrips (${spl.cantrips.length})</strong></div>`;
+    }
+    for (let i=1; i<=9; i++) {
+      const key = String(i);
+      const lvlSlots = spl.slots && spl.slots[key];
+      if (lvlSlots) {
+        const avail = lvlSlots.available || 0;
+        const max   = lvlSlots.max || 0;
+        html += `<div>Lvl ${i}: ${avail}/${max} slots</div>`;
+      }
+    }
+    splEl.innerHTML = html || '<div style="color:var(--text-muted)">—</div>';
+  } else {
+    splEl.innerHTML = '<div style="color:var(--text-muted)">—</div>';
+  }
 
   // Level-up class selector
   const lvlSel = document.getElementById('lvl-class');
@@ -935,6 +972,40 @@ async function deleteChar() {
     refreshChars();
     showBanner('Character deleted.', 'ok');
   } catch(e) { showErr(e.message); }
+}
+
+function exportChar() {
+  if (!S.charDetail) return;
+  const json = JSON.stringify(S.charDetail, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = (S.charDetail.name || 'character') + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importChar() {
+  const input = document.createElement('input');
+  input.type  = 'file';
+  input.accept= '.json';
+  input.onchange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const json = await file.text();
+      const imported = JSON.parse(json);
+      const data = await api('/api/characters/import', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ json }),
+      });
+      refreshChars();
+      showBanner(`Imported ${data.character.name}`, 'ok');
+    } catch(e) { showErr('Import failed: ' + e.message); }
+  };
+  input.click();
 }
 
 // ── Create / Edit Form ────────────────────────────────────────
@@ -1308,6 +1379,8 @@ async function runSim() {
   const btn = document.getElementById('sim-btn');
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span>Running…';
+  // Store enemies for XP award
+  S.lastSimEnemies = enemies.map(e => ({ name: e.name.trim(), count: e.count }));
   try {
     const data = await api('/api/simulate/custom', {
       method: 'POST',
@@ -1362,6 +1435,63 @@ function showSimResults(r) {
       <td>${dmg}</td>
     </tr>`;
   }).join('');
+
+  // Show Award XP button (only if a party is selected)
+  const awardBtn  = document.getElementById('award-xp-btn');
+  const awardNote = document.getElementById('award-xp-note');
+  const awardRes  = document.getElementById('award-xp-results');
+  if (S.selectedParty && S.selectedParty.id) {
+    awardBtn.style.display = '';
+    awardNote.textContent  = '';
+    awardRes.style.display = 'none';
+    awardRes.innerHTML     = '';
+  } else {
+    awardBtn.style.display = 'none';
+    awardNote.textContent  = '';
+  }
+}
+
+async function awardXP() {
+  if (!S.selectedParty || !S.selectedParty.id || !S.lastSimEnemies.length) return;
+  const btn  = document.getElementById('award-xp-btn');
+  const note = document.getElementById('award-xp-note');
+  const res  = document.getElementById('award-xp-results');
+  btn.disabled = true;
+  note.textContent = 'Awarding…';
+  try {
+    const data = await api(`/api/parties/${S.selectedParty.id}/awardxp`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ enemies: S.lastSimEnemies }),
+    });
+    // Render results table
+    res.style.display = '';
+    res.innerHTML = `
+      <div style="font-size:13px;margin-bottom:6px">
+        <strong>+${data.xpEach} XP each</strong>
+        <span style="color:var(--text-muted)"> (${data.totalXP} total ÷ ${(data.awarded||[]).length} members)</span>
+      </div>
+      <table class="ctable">
+        <thead><tr><th>Name</th><th>Level</th><th>XP Gained</th><th>Total XP</th><th>Status</th></tr></thead>
+        <tbody>${(data.awarded||[]).map(m =>
+          `<tr>
+            <td>${esc(m.name)}</td>
+            <td>${m.prevLevel}</td>
+            <td>+${m.xpAwarded}</td>
+            <td>${m.totalXP}</td>
+            <td>${m.readyToLevel ? '<span class="badge party">⬆ Ready to Level!</span>' : '—'}</td>
+          </tr>`
+        ).join('')}</tbody>
+      </table>`;
+    note.textContent = '✓ XP awarded';
+    btn.textContent  = '✓ XP Awarded';
+    btn.disabled     = true;
+    // Refresh chars list so XP is reflected
+    loadChars();
+  } catch(e) {
+    note.textContent = '✗ ' + (e.message||'Error');
+    btn.disabled = false;
+  }
 }
 
 // ── Utils ─────────────────────────────────────────────────────
