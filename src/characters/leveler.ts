@@ -523,7 +523,7 @@ export function applyLevelUp(
 
   // ---- Deep copy (no mutation of original) ------------------
 
-  const updated: CharacterSheet = {
+  let updated: CharacterSheet = {
     ...sheet,
     subclassChoices: { ...sheet.subclassChoices },
     classLevels:     sheet.classLevels.map(cl => ({ ...cl })),
@@ -706,6 +706,14 @@ export function applyLevelUp(
 
   const abilityScoreImprovement: true | undefined =
     ASI_LEVELS[cn].has(newClassLevel) ? true : undefined;
+
+  // Increment pending ASI count in the sheet so applyASI can validate availability
+  if (abilityScoreImprovement) {
+    updated = {
+      ...updated,
+      pendingAbilityScoreImprovements: (updated.pendingAbilityScoreImprovements ?? 0) + 1,
+    };
+  }
 
   return {
     sheet: updated,

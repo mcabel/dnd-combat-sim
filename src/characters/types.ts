@@ -254,6 +254,10 @@ export interface CharacterSheet {
 
   // Status
   exhaustionLevel: number;              // 0–6 (PHB p.291)
+
+  // Pending progression choices (set by applyLevelUp; consumed by applyASI / chooseSubclass)
+  pendingAbilityScoreImprovements?: number;  // # of ASI choices not yet applied (each = +2 total, split freely)
+  pendingASIHalfPoints?: number;             // 0 or 1 — leftover half-point from a +1 split application
 }
 
 // ---- Party --------------------------------------------------

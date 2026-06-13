@@ -33,6 +33,7 @@ import {
 import { ValidationError }            from './characters/validator';
 import { buildCombatant, buildWarnings } from './characters/builder';
 import { applyLevelUp }               from './characters/leveler';
+import { applyASI, chooseSubclass }   from './characters/improvements';
 import { spawnMonster, Raw5etoolsMonster } from './parser/fivetools';
 import { simulate }                    from './scenarios/simulate';
 import { Combatant }                   from './types/core';
@@ -402,3 +403,103 @@ router.post('/:id/levelup', async (req: Request, res: Response) => {
 });
 
 export default router;
+
+// ============================================================
+// (routes added below to avoid merge conflicts with combat agent)
+// ============================================================
+
+// ============================================================
+// POST /api/characters/:id/applyasi
+// Apply one Ability Score Improvement to a saved character.
+//
+// Rules (PHB p.165):
+//   - Each ASI grants +2 points freely: +2 to one score, or +1/+1 split.
+//   - amount=2 → full ASI consumed; amount=1 → half ASI (two calls per ASI).
+//   - Scores cannot exceed 20.
+//   - pendingAbilityScoreImprovements must be >= 1 (or half-point available).
+//
+// Request:  { ability: "str"|"dex"|"con"|"int"|"wis"|"cha"; amount: 1|2 }
+// Response: { character: CharacterSheet; oldScore: number; newScore: number }
+// ============================================================
+router.post('/characters/:id/applyasi', async (req: Request, res: Response) => {
+  try {
+    const id   = String(req.params.id);
+    const body = req.body ?? {};
+
+    const ability = body.ability;
+    const amount  = body.amount;
+
+    if (!ability || typeof ability !== 'string') {
+      return res.status(400).json({ error: 'ability (string) is required.' });
+    }
+    if (amount !== 1 && amount !== 2) {
+      return res.status(400).json({ error: 'amount must be 1 or 2.' });
+    }
+
+    const sheet = loadCharacter(id);
+    if (!sheet) {
+      return res.status(404).json({ error: `Character not found: ${id}` });
+    }
+
+    const oldScore = (sheet.stats as any)[ability];
+    const updated  = applyASI(sheet, ability, amount);
+
+    await saveCharacter(updated);
+
+    return res.json({
+      character: updated,
+      ability,
+      oldScore,
+      newScore: (updated.stats as any)[ability],
+      pendingAbilityScoreImprovements: updated.pendingAbilityScoreImprovements ?? 0,
+      pendingASIHalfPoints:            updated.pendingASIHalfPoints ?? 0,
+    });
+  } catch (err) {
+    return handleError(res, err);
+  }
+});
+
+// ============================================================
+// POST /api/characters/:id/choosesubclass
+// Set the subclass for a class on a saved character.
+//
+// Rules:
+//   - className must exist in sheet.classLevels
+//   - subclassChoices[className] must not already be set
+//   - subclassName must be non-empty
+//
+// Request:  { className: string; subclassName: string }
+// Response: { character: CharacterSheet; className: string; subclassName: string }
+// ============================================================
+router.post('/characters/:id/choosesubclass', async (req: Request, res: Response) => {
+  try {
+    const id   = String(req.params.id);
+    const body = req.body ?? {};
+
+    const className    = body.className;
+    const subclassName = body.subclassName;
+
+    if (!className || typeof className !== 'string') {
+      return res.status(400).json({ error: 'className (string) is required.' });
+    }
+    if (!subclassName || typeof subclassName !== 'string') {
+      return res.status(400).json({ error: 'subclassName (string) is required.' });
+    }
+
+    const sheet = loadCharacter(id);
+    if (!sheet) {
+      return res.status(404).json({ error: `Character not found: ${id}` });
+    }
+
+    const updated = chooseSubclass(sheet, className, subclassName);
+    await saveCharacter(updated);
+
+    return res.json({
+      character:   updated,
+      className,
+      subclassName: updated.subclassChoices[className],
+    });
+  } catch (err) {
+    return handleError(res, err);
+  }
+});

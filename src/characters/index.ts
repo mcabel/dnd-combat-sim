@@ -8,3 +8,4 @@ export { validateCharacterSheet, validateParty, ValidationError } from './valida
 export { buildCombatant, buildWarnings } from './builder';
 export { applyLevelUp } from './leveler';
 export type { LevelUpResult } from './leveler';
+export { applyASI, chooseSubclass } from './improvements';
