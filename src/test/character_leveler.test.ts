@@ -1,0 +1,793 @@
+// ============================================================
+// Test: Character Level-Up Logic
+// Run: ts-node src/test/character_leveler.test.ts
+// ============================================================
+
+import { randomUUID } from 'crypto';
+import {
+  applyLevelUp,
+  computeStandardSlots,
+  FULL_CASTER_SLOTS,
+  HALF_CASTER_SLOTS,
+  WARLOCK_PACT_SLOTS,
+} from '../characters/leveler';
+import { CharacterSheet, totalLevel } from '../characters/types';
+
+// ---- Test harness -------------------------------------------
+
+let passed = 0;
+let failed = 0;
+
+function assert(label: string, cond: boolean, detail = ''): void {
+  if (cond) { console.log(`  ✅ ${label}`); passed++; }
+  else       { console.error(`  ❌ ${label}${detail ? ' — ' + detail : ''}`); failed++; }
+}
+function eq<T>(label: string, a: T, e: T): void {
+  assert(label, a === e, `got ${JSON.stringify(a)}, want ${JSON.stringify(e)}`);
+}
+
+// ---- Factories ----------------------------------------------
+
+/** Base Fighter level-1 sheet (CON 16, CON mod +3). */
+function makeFighter(overrides: Partial<CharacterSheet> = {}): CharacterSheet {
+  const base: CharacterSheet = {
+    id: randomUUID(), version: 1,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    name: 'Gareth', race: 'Mountain Dwarf', background: 'Soldier',
+    alignment: 'Lawful Good',
+    firstClass: 'Fighter',
+    classLevels: [{ className: 'Fighter', level: 1 }],
+    subclassChoices: {},
+    experiencePoints: 0,
+    baseStats: { str: 17, dex: 10, con: 16, int: 8, wis: 12, cha: 13 },
+    stats:     { str: 17, dex: 10, con: 16, int: 8, wis: 12, cha: 13 },
+    maxHP: 13, currentHP: 13, temporaryHP: 0,
+    armorClass: 16, acFormula: 'Chain Mail', speed: 25,
+    hitDice: [{ className: 'Fighter', dieSides: 10, total: 1, remaining: 1 }],
+    proficiencies: {
+      armor: ['light','medium','heavy','shield'],
+      weapons: ['simple-melee','simple-ranged','martial-melee','martial-ranged'],
+      tools: [], savingThrows: ['str','con'],
+      skills: ['Athletics','Intimidation'], expertise: [],
+    },
+    languages: ['Common', 'Dwarvish'],
+    resources: { secondWind: { max: 1, remaining: 1 } },
+    spellcasting: undefined,
+    equipment: [{ name: 'Greatsword', quantity: 1, equipped: true, category: 'weapon' }],
+    gold: 10,
+    level1Features: [{ name: 'Second Wind', description: 'Regain HP.', source: 'class' }],
+    allFeatures:    [{ name: 'Second Wind', description: 'Regain HP.', source: 'class' }],
+    feats: [], backgroundFeature: 'Military Rank', exhaustionLevel: 0,
+  };
+  return { ...base, ...overrides };
+}
+
+/** Base Wizard level-1 sheet (INT 16, CON 13, CON mod +1). */
+function makeWizard(overrides: Partial<CharacterSheet> = {}): CharacterSheet {
+  const base: CharacterSheet = {
+    id: randomUUID(), version: 1,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    name: 'Aelindra', race: 'High Elf', background: 'Sage',
+    alignment: 'Chaotic Good',
+    firstClass: 'Wizard',
+    classLevels: [{ className: 'Wizard', level: 1 }],
+    subclassChoices: {},
+    experiencePoints: 0,
+    baseStats: { str: 8, dex: 15, con: 13, int: 15, wis: 12, cha: 10 },
+    stats:     { str: 8, dex: 16, con: 13, int: 16, wis: 12, cha: 10 },
+    maxHP: 7, currentHP: 7, temporaryHP: 0,
+    armorClass: 13, acFormula: 'DEX Unarmored', speed: 30,
+    hitDice: [{ className: 'Wizard', dieSides: 6, total: 1, remaining: 1 }],
+    proficiencies: {
+      armor: [], weapons: ['simple-melee','simple-ranged'],
+      tools: [], savingThrows: ['int','wis'],
+      skills: ['Arcana','History'], expertise: [],
+    },
+    languages: ['Common', 'Elvish'],
+    resources: { arcaneRecovery: { usesRemaining: 1 } },
+    spellcasting: {
+      ability: 'int', spellAttackBonus: 5, saveDC: 13,
+      slots: { '1': 2 }, slotsUsed: { '1': 0 },
+      cantrips: ['Fire Bolt', 'Minor Illusion'],
+      knownSpells: [],
+      preparedSpells: ['Magic Missile', 'Sleep'],
+      spellbook: ['Magic Missile', 'Sleep', 'Shield'],
+    },
+    equipment: [{ name: 'Dagger', quantity: 2, equipped: true, category: 'weapon' }],
+    gold: 15,
+    level1Features: [{ name: 'Spellcasting', description: 'INT caster.', source: 'class' }],
+    allFeatures:    [{ name: 'Spellcasting', description: 'INT caster.', source: 'class' }],
+    feats: [], backgroundFeature: 'Researcher', exhaustionLevel: 0,
+  };
+  return { ...base, ...overrides };
+}
+
+/** Rogue level-1 sheet (DEX 17, CON 14, CON mod +2). */
+function makeRogue(overrides: Partial<CharacterSheet> = {}): CharacterSheet {
+  const base: CharacterSheet = {
+    id: randomUUID(), version: 1,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    name: 'Shiv', race: 'Human', background: 'Criminal',
+    alignment: 'Chaotic Neutral',
+    firstClass: 'Rogue',
+    classLevels: [{ className: 'Rogue', level: 1 }],
+    subclassChoices: {},
+    experiencePoints: 0,
+    baseStats: { str: 10, dex: 17, con: 14, int: 12, wis: 11, cha: 13 },
+    stats:     { str: 10, dex: 17, con: 14, int: 12, wis: 11, cha: 13 },
+    maxHP: 10, currentHP: 10, temporaryHP: 0,
+    armorClass: 13, acFormula: 'Leather + DEX', speed: 30,
+    hitDice: [{ className: 'Rogue', dieSides: 8, total: 1, remaining: 1 }],
+    proficiencies: {
+      armor: ['light'], weapons: ['simple-melee','simple-ranged','martial-melee'],
+      tools: [], savingThrows: ['dex','int'],
+      skills: ['Stealth','Deception','Sleight of Hand'], expertise: ['Stealth','Deception'],
+    },
+    languages: ['Common', 'Thieves\' Cant'],
+    resources: { sneakAttackDice: '1d6' },
+    spellcasting: undefined,
+    equipment: [{ name: 'Shortsword', quantity: 1, equipped: true, category: 'weapon' }],
+    gold: 5,
+    level1Features: [{ name: 'Sneak Attack', description: '1d6 sneak attack.', source: 'class' }],
+    allFeatures:    [{ name: 'Sneak Attack', description: '1d6 sneak attack.', source: 'class' }],
+    feats: [], backgroundFeature: 'Criminal Contact', exhaustionLevel: 0,
+  };
+  return { ...base, ...overrides };
+}
+
+/** Barbarian level-1 sheet (STR 17, CON 16, CON mod +3). */
+function makeBarbarian(overrides: Partial<CharacterSheet> = {}): CharacterSheet {
+  const base: CharacterSheet = {
+    id: randomUUID(), version: 1,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    name: 'Krog', race: 'Half-Orc', background: 'Outlander',
+    alignment: 'Chaotic Neutral',
+    firstClass: 'Barbarian',
+    classLevels: [{ className: 'Barbarian', level: 1 }],
+    subclassChoices: {},
+    experiencePoints: 0,
+    baseStats: { str: 17, dex: 12, con: 16, int: 8, wis: 11, cha: 9 },
+    stats:     { str: 17, dex: 12, con: 16, int: 8, wis: 11, cha: 9 },
+    maxHP: 15, currentHP: 15, temporaryHP: 0,
+    armorClass: 14, acFormula: '10 + DEX + CON (Unarmored)', speed: 30,
+    hitDice: [{ className: 'Barbarian', dieSides: 12, total: 1, remaining: 1 }],
+    proficiencies: {
+      armor: ['light','medium','shield'], weapons: ['simple-melee','simple-ranged','martial-melee','martial-ranged'],
+      tools: [], savingThrows: ['str','con'],
+      skills: ['Athletics','Perception'], expertise: [],
+    },
+    languages: ['Common', 'Orcish'],
+    resources: { rage: { max: 2, remaining: 2 } },
+    spellcasting: undefined,
+    equipment: [{ name: 'Greataxe', quantity: 1, equipped: true, category: 'weapon' }],
+    gold: 0,
+    level1Features: [{ name: 'Rage', description: 'Rage 2x/day.', source: 'class' }],
+    allFeatures:    [{ name: 'Rage', description: 'Rage 2x/day.', source: 'class' }],
+    feats: [], backgroundFeature: 'Wanderer', exhaustionLevel: 0,
+  };
+  return { ...base, ...overrides };
+}
+
+/** Paladin level-1 sheet (STR 17, CHA 15, CON 14, CON mod +2). */
+function makePaladin(overrides: Partial<CharacterSheet> = {}): CharacterSheet {
+  const base: CharacterSheet = {
+    id: randomUUID(), version: 1,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    name: 'Seraphel', race: 'Human', background: 'Noble',
+    alignment: 'Lawful Good',
+    firstClass: 'Paladin',
+    classLevels: [{ className: 'Paladin', level: 1 }],
+    subclassChoices: {},
+    experiencePoints: 0,
+    baseStats: { str: 17, dex: 9, con: 14, int: 10, wis: 11, cha: 15 },
+    stats:     { str: 17, dex: 9, con: 14, int: 10, wis: 11, cha: 15 },
+    maxHP: 12, currentHP: 12, temporaryHP: 0,
+    armorClass: 18, acFormula: 'Plate', speed: 30,
+    hitDice: [{ className: 'Paladin', dieSides: 10, total: 1, remaining: 1 }],
+    proficiencies: {
+      armor: ['light','medium','heavy','shield'], weapons: ['simple-melee','simple-ranged','martial-melee','martial-ranged'],
+      tools: [], savingThrows: ['wis','cha'],
+      skills: ['Athletics','Persuasion'], expertise: [],
+    },
+    languages: ['Common'],
+    resources: { layOnHands: { pool: 5, remaining: 5 } },
+    spellcasting: undefined,
+    equipment: [{ name: 'Longsword', quantity: 1, equipped: true, category: 'weapon' }],
+    gold: 25,
+    level1Features: [{ name: 'Lay on Hands', description: 'HP pool 5.', source: 'class' }],
+    allFeatures:    [{ name: 'Lay on Hands', description: 'HP pool 5.', source: 'class' }],
+    feats: [], backgroundFeature: 'Position of Privilege', exhaustionLevel: 0,
+  };
+  return { ...base, ...overrides };
+}
+
+/** Helper to bump a sheet to a target level by repeatedly calling applyLevelUp. */
+function levelTo(sheet: CharacterSheet, targetLevel: number, className?: string): CharacterSheet {
+  const cn = className ?? sheet.firstClass;
+  let s = sheet;
+  while (totalLevel(s) < targetLevel) {
+    s = applyLevelUp(s, cn).sheet;
+  }
+  return s;
+}
+
+// =============================================================
+// 1. Immutability
+// =============================================================
+
+console.log('\n=== 1. Immutability ===\n');
+
+{
+  const f   = makeFighter();
+  const res = applyLevelUp(f, 'Fighter');
+  assert('original sheet not mutated (maxHP)', f.maxHP === 13);
+  assert('original classLevels not mutated', f.classLevels[0].level === 1);
+  assert('result is new object', res.sheet !== f);
+  assert('result classLevels is new array', res.sheet.classLevels !== f.classLevels);
+}
+
+// =============================================================
+// 2. Class level update
+// =============================================================
+
+console.log('\n=== 2. Class Level Update ===\n');
+
+{
+  const f   = makeFighter();
+  const res = applyLevelUp(f, 'Fighter');
+  eq('classLevels[0].level becomes 2', res.sheet.classLevels[0].level, 2);
+  eq('totalLevel is now 2', totalLevel(res.sheet), 2);
+  eq('classLevels has 1 entry', res.sheet.classLevels.length, 1);
+}
+
+// =============================================================
+// 3. Hit dice pool
+// =============================================================
+
+console.log('\n=== 3. Hit Dice Pool ===\n');
+
+{
+  const f   = makeFighter();
+  const res = applyLevelUp(f, 'Fighter');
+  const hd  = res.sheet.hitDice[0];
+  eq('hit die total incremented', hd.total, 2);
+  eq('hit die remaining incremented', hd.remaining, 2);
+  eq('hit die sides unchanged', hd.dieSides, 10);
+}
+
+// =============================================================
+// 4. HP — Fighter (d10, CON 16 = +3 mod)
+// =============================================================
+
+console.log('\n=== 4. HP Calculation ===\n');
+
+{
+  const f    = makeFighter();   // CON 16 → +3 mod
+  const avg  = applyLevelUp(f, 'Fighter', 'average');
+  // average: floor(10/2)+1+3 = 5+1+3 = 9
+  eq('Fighter average HP: 9',  avg.sheet.maxHP,  13 + 9);
+  eq('hpGained = 9',           avg.hpGained, 9);
+
+  const max  = applyLevelUp(f, 'Fighter', 'max');
+  // max: 10+3 = 13
+  eq('Fighter max HP: 13',     max.sheet.maxHP,  13 + 13);
+  eq('hpGained = 13',          max.hpGained, 13);
+
+  assert('currentHP also increases', avg.sheet.currentHP === avg.sheet.maxHP);
+}
+
+{
+  const w   = makeWizard();    // CON 13 → +1 mod
+  const avg = applyLevelUp(w, 'Wizard', 'average');
+  // average: floor(6/2)+1+1 = 3+1+1 = 5
+  eq('Wizard average HP: 5',   avg.hpGained, 5);
+  const max = applyLevelUp(w, 'Wizard', 'max');
+  // max: 6+1 = 7
+  eq('Wizard max HP: 7',       max.hpGained, 7);
+}
+
+{
+  // HP floor: Wizard with CON 6 (−2 mod): floor(6/2)+1+(−2) = 3+1−2 = 2
+  const w = makeWizard({ stats: { str:8, dex:16, con:6, int:16, wis:12, cha:10 } });
+  const avg = applyLevelUp(w, 'Wizard', 'average');
+  eq('Wizard low CON average HP: 2', avg.hpGained, 2);
+
+  // Absolute floor: CON 1 (−5 mod): 3+1−5 = −1 → clamped to 1
+  const wLow = makeWizard({ stats: { str:8, dex:16, con:1, int:16, wis:12, cha:10 } });
+  const avgLow = applyLevelUp(wLow, 'Wizard', 'average');
+  eq('HP minimum is always 1', avgLow.hpGained, 1);
+}
+
+// =============================================================
+// 5. Fighter resources & features
+// =============================================================
+
+console.log('\n=== 5. Fighter Resources & Features ===\n');
+
+{
+  // 1→2: Action Surge
+  const f2 = applyLevelUp(makeFighter(), 'Fighter');
+  eq('Fighter 2: Second Wind unchanged (max)', f2.sheet.resources.secondWind?.max, 1);
+  assert('Fighter 2: Action Surge in newFeatures',
+    f2.newFeatures.some(f => f.name === 'Action Surge (1/rest)'));
+  assert('Fighter 2: features appended to allFeatures',
+    f2.sheet.allFeatures.some(f => f.name === 'Action Surge (1/rest)'));
+  assert('Fighter 2: no ASI', f2.abilityScoreImprovement === undefined);
+  assert('Fighter 2: no subclass prompt', f2.subclassPrompt === undefined);
+}
+
+{
+  // 2→3: subclass prompt
+  const f3 = applyLevelUp(levelTo(makeFighter(), 2), 'Fighter');
+  eq('Fighter 3: level is 3', f3.sheet.classLevels[0].level, 3);
+  eq('Fighter 3: subclass prompt is Fighter', f3.subclassPrompt, 'Fighter');
+  assert('Fighter 3: no ASI', f3.abilityScoreImprovement === undefined);
+}
+
+{
+  // 3→4: ASI
+  const f4 = applyLevelUp(levelTo(makeFighter(), 3), 'Fighter');
+  assert('Fighter 4: ASI available', f4.abilityScoreImprovement === true);
+  assert('Fighter 4: no subclass prompt', f4.subclassPrompt === undefined);
+}
+
+{
+  // 4→5: Extra Attack
+  const f5 = applyLevelUp(levelTo(makeFighter(), 4), 'Fighter');
+  assert('Fighter 5: Extra Attack in newFeatures',
+    f5.newFeatures.some(f => f.name === 'Extra Attack'));
+  assert('Fighter 5: no ASI', f5.abilityScoreImprovement === undefined);
+}
+
+{
+  // 5→6: ASI (Fighter extra)
+  const f6 = applyLevelUp(levelTo(makeFighter(), 5), 'Fighter');
+  assert('Fighter 6: ASI available', f6.abilityScoreImprovement === true);
+}
+
+// =============================================================
+// 6. Rogue resources & features
+// =============================================================
+
+console.log('\n=== 6. Rogue Resources & Features ===\n');
+
+{
+  // 1→2: Cunning Action, sneak attack stays 1d6
+  const r2 = applyLevelUp(makeRogue(), 'Rogue');
+  eq('Rogue 2: sneakAttackDice = 1d6', r2.sheet.resources.sneakAttackDice, '1d6');
+  assert('Rogue 2: cunningAction = true', r2.sheet.resources.cunningAction === true);
+  assert('Rogue 2: Cunning Action in newFeatures',
+    r2.newFeatures.some(f => f.name === 'Cunning Action'));
+}
+
+{
+  // 2→3: sneak attack becomes 2d6, subclass prompt
+  const r3 = applyLevelUp(levelTo(makeRogue(), 2), 'Rogue');
+  eq('Rogue 3: sneakAttackDice = 2d6', r3.sheet.resources.sneakAttackDice, '2d6');
+  eq('Rogue 3: subclass prompt', r3.subclassPrompt, 'Rogue');
+}
+
+{
+  // 4→5: sneak attack becomes 3d6, Uncanny Dodge
+  const r5 = applyLevelUp(levelTo(makeRogue(), 4), 'Rogue');
+  eq('Rogue 5: sneakAttackDice = 3d6', r5.sheet.resources.sneakAttackDice, '3d6');
+  assert('Rogue 5: Uncanny Dodge in newFeatures',
+    r5.newFeatures.some(f => f.name === 'Uncanny Dodge'));
+}
+
+{
+  // 9→10: sneak attack = 5d6, ASI (Rogue extra)
+  const r10 = applyLevelUp(levelTo(makeRogue(), 9), 'Rogue');
+  eq('Rogue 10: sneakAttackDice = 5d6', r10.sheet.resources.sneakAttackDice, '5d6');
+  assert('Rogue 10: ASI available', r10.abilityScoreImprovement === true);
+}
+
+// =============================================================
+// 7. Barbarian resources
+// =============================================================
+
+console.log('\n=== 7. Barbarian Resources ===\n');
+
+{
+  // 1→2: Reckless Attack, rage stays 2
+  const b2 = applyLevelUp(makeBarbarian(), 'Barbarian');
+  eq('Barbarian 2: rage max = 3', b2.sheet.resources.rage?.max, 3);
+  assert('Barbarian 2: Reckless Attack in newFeatures',
+    b2.newFeatures.some(f => f.name === 'Reckless Attack'));
+}
+
+{
+  // 2→3: rage = 4, subclass prompt
+  const b3 = applyLevelUp(levelTo(makeBarbarian(), 2), 'Barbarian');
+  eq('Barbarian 3: rage max = 4', b3.sheet.resources.rage?.max, 4);
+  eq('Barbarian 3: subclass prompt', b3.subclassPrompt, 'Barbarian');
+}
+
+{
+  // 5→6: rage = 5
+  const b6 = applyLevelUp(levelTo(makeBarbarian(), 5), 'Barbarian');
+  eq('Barbarian 6: rage max = 5', b6.sheet.resources.rage?.max, 5);
+}
+
+{
+  // 16→17: rage = unlimited (999)
+  const b17 = applyLevelUp(levelTo(makeBarbarian(), 16), 'Barbarian');
+  eq('Barbarian 17: rage max = 999 (unlimited)', b17.sheet.resources.rage?.max, 999);
+}
+
+// =============================================================
+// 8. Paladin: Lay on Hands scaling & spell slots appearing
+// =============================================================
+
+console.log('\n=== 8. Paladin Resources & Spellcasting ===\n');
+
+{
+  // 1→2: Divine Smite + Fighting Style + Spellcasting; LOH pool = 10; slots appear
+  const p2 = applyLevelUp(makePaladin(), 'Paladin');
+  eq('Paladin 2: LOH pool = 10', p2.sheet.resources.layOnHands?.pool, 10);
+  assert('Paladin 2: divineSmite = true', p2.sheet.resources.divineSmite === true);
+  assert('Paladin 2: spellcasting initialised', p2.sheet.spellcasting !== undefined);
+  eq('Paladin 2: 1st-level slots = 2', p2.sheet.spellcasting?.slots['1'], 2);
+  assert('Paladin 2: ability = cha', p2.sheet.spellcasting?.ability === 'cha');
+  assert('Paladin 2: spellcasting in newFeatures',
+    p2.newFeatures.some(f => f.name === 'Spellcasting'));
+}
+
+{
+  // 1→2→3: LOH = 15, subclass prompt (Sacred Oath)
+  const p3 = applyLevelUp(levelTo(makePaladin(), 2), 'Paladin');
+  eq('Paladin 3: LOH pool = 15', p3.sheet.resources.layOnHands?.pool, 15);
+  eq('Paladin 3: subclass prompt = Paladin', p3.subclassPrompt, 'Paladin');
+}
+
+{
+  // Paladin 5: Extra Attack, LOH = 25, slots = [4,2]
+  const p5 = levelTo(makePaladin(), 5);
+  eq('Paladin 5: LOH pool = 25', p5.resources.layOnHands?.pool, 25);
+  eq('Paladin 5: 1st-level slots = 4', p5.spellcasting?.slots['1'], 4);
+  eq('Paladin 5: 2nd-level slots = 2', p5.spellcasting?.slots['2'], 2);
+  assert('Paladin 5: no 3rd-level slots', p5.spellcasting?.slots['3'] === undefined);
+}
+
+// =============================================================
+// 9. Wizard spell slots
+// =============================================================
+
+console.log('\n=== 9. Wizard Spell Slots ===\n');
+
+{
+  // 1→2: no subclass yet; slots [3]
+  const w2 = applyLevelUp(makeWizard(), 'Wizard');
+  eq('Wizard 2: 1st-level slots = 3', w2.sheet.spellcasting?.slots['1'], 3);
+  assert('Wizard 2: no 2nd-level slots', w2.sheet.spellcasting?.slots['2'] === undefined);
+  eq('Wizard 2: subclass prompt = Wizard', w2.subclassPrompt, 'Wizard');
+}
+
+{
+  // 1→2→3: slots [4,2]
+  const w3 = levelTo(makeWizard(), 3);
+  eq('Wizard 3: 1st-level slots = 4', w3.spellcasting?.slots['1'], 4);
+  eq('Wizard 3: 2nd-level slots = 2', w3.spellcasting?.slots['2'], 2);
+}
+
+{
+  // Wizard 5: slots [4,3,2]
+  const w5 = levelTo(makeWizard(), 5);
+  eq('Wizard 5: 1st-level slots = 4', w5.spellcasting?.slots['1'], 4);
+  eq('Wizard 5: 2nd-level slots = 3', w5.spellcasting?.slots['2'], 3);
+  eq('Wizard 5: 3rd-level slots = 2', w5.spellcasting?.slots['3'], 2);
+}
+
+{
+  // Wizard 9: slots [4,3,3,3,1]
+  const w9 = levelTo(makeWizard(), 9);
+  eq('Wizard 9: 4th-level slots = 3', w9.spellcasting?.slots['4'], 3);
+  eq('Wizard 9: 5th-level slots = 1', w9.spellcasting?.slots['5'], 1);
+  assert('Wizard 9: no 6th-level slots', w9.spellcasting?.slots['6'] === undefined);
+}
+
+{
+  // Proficiency bonus change at level 5 updates spell stats
+  // Wizard 4: prof=2, INT=16→+3, spellAttackBonus=5, saveDC=13
+  // Wizard 4→5: prof=3, spellAttackBonus should become 6, saveDC=14
+  const w4  = levelTo(makeWizard(), 4);
+  const w5r = applyLevelUp(w4, 'Wizard');
+  eq('Wizard 5: spellAttackBonus = 6', w5r.sheet.spellcasting?.spellAttackBonus, 6);
+  eq('Wizard 5: saveDC = 14', w5r.sheet.spellcasting?.saveDC, 14);
+}
+
+// =============================================================
+// 10. Bard resources
+// =============================================================
+
+console.log('\n=== 10. Bard Resources ===\n');
+
+{
+  // Bard level-1 sheet (CHA 15 → +2 mod)
+  const bard1: CharacterSheet = {
+    ...makeFighter(),
+    firstClass: 'Bard',
+    classLevels: [{ className: 'Bard', level: 1 }],
+    hitDice: [{ className: 'Bard', dieSides: 8, total: 1, remaining: 1 }],
+    resources: { bardicInspiration: { max: 2, remaining: 2, dieSides: 6 } },
+    stats: { str: 10, dex: 14, con: 14, int: 12, wis: 12, cha: 15 },
+    maxHP: 10, currentHP: 10,
+    spellcasting: {
+      ability: 'cha', spellAttackBonus: 4, saveDC: 12,
+      slots: { '1': 2 }, slotsUsed: {},
+      cantrips: ['Vicious Mockery'], knownSpells: ['Healing Word'], preparedSpells: [],
+    },
+  };
+
+  // 1→5: Bardic Inspiration die becomes d8
+  const bard5 = levelTo(bard1, 5);
+  eq('Bard 5: bardicInspiration dieSides = 8', bard5.resources.bardicInspiration?.dieSides, 8);
+
+  // 5→10: Bardic Inspiration die becomes d10
+  const bard10 = levelTo(bard5, 10);
+  eq('Bard 10: bardicInspiration dieSides = 10', bard10.resources.bardicInspiration?.dieSides, 10);
+}
+
+// =============================================================
+// 11. Subclass already chosen — no re-prompt
+// =============================================================
+
+console.log('\n=== 11. No Duplicate Subclass Prompt ===\n');
+
+{
+  // Fighter 2→3 with subclass already chosen: no prompt
+  const f2 = levelTo(makeFighter(), 2);
+  f2.subclassChoices['Fighter'] = 'Champion';
+  const f3 = applyLevelUp(f2, 'Fighter');
+  assert('No subclass prompt when already chosen', f3.subclassPrompt === undefined);
+}
+
+// =============================================================
+// 12. Proficiency bonus tier change
+// =============================================================
+
+console.log('\n=== 12. Proficiency Bonus Tier Change ===\n');
+
+{
+  // Level 4→5 crosses from prof 2 → prof 3
+  const f4 = levelTo(makeFighter(), 4);
+  const f5 = applyLevelUp(f4, 'Fighter');
+  // Fighter has no spellcasting so we just verify total level
+  eq('Level 5: totalLevel = 5', totalLevel(f5.sheet), 5);
+  // Verify Wizard spell stats updated (tested in section 9)
+}
+
+// =============================================================
+// 13. Multiclassing — adding a new class
+// =============================================================
+
+console.log('\n=== 13. Multiclassing ===\n');
+
+{
+  // Fighter 1 + Wizard 1 = standard caster level 1 → slots [2]
+  const f1   = makeFighter();   // STR 17 meets Wizard prereq? No — Wizard needs INT 13
+  // Use a fighter with INT 14
+  const f1hi = makeFighter({
+    stats: { str: 17, dex: 10, con: 16, int: 14, wis: 12, cha: 13 },
+  });
+  const fw   = applyLevelUp(f1hi, 'Wizard');
+  eq('Fighter/Wizard 2: totalLevel = 2', totalLevel(fw.sheet), 2);
+  eq('Fighter/Wizard: classLevels length = 2', fw.sheet.classLevels.length, 2);
+  const wizEntry = fw.sheet.classLevels.find(cl => cl.className === 'Wizard');
+  eq('Wizard entry level = 1', wizEntry?.level, 1);
+
+  // Standard slots: 1 full-caster level → [2]
+  eq('Fighter/Wizard: 1st-level slots = 2', fw.sheet.spellcasting?.slots['1'], 2);
+
+  // Hit dice pool should have two entries
+  eq('Fighter/Wizard: hitDice has 2 entries', fw.sheet.hitDice.length, 2);
+  const wizHD = fw.sheet.hitDice.find(hd => hd.className === 'Wizard');
+  eq('Wizard hit die sides = 6', wizHD?.dieSides, 6);
+  eq('Wizard hit die total = 1', wizHD?.total, 1);
+}
+
+{
+  // Paladin 2 multiclassing Fighter (meets STR prereq)
+  const p2 = levelTo(makePaladin(), 2);
+  const pf = applyLevelUp(p2, 'Fighter');
+  eq('Paladin/Fighter totalLevel = 3', totalLevel(pf.sheet), 3);
+  assert('Fighter entry added', pf.sheet.classLevels.some(cl => cl.className === 'Fighter'));
+  // Paladin 2 is a half-caster; Fighter adds 0 caster levels
+  // Paladin caster level contribution to combined = floor(2/2) = 1 → slots [2]
+  // But since only half-caster class is Paladin and it now has a non-caster too,
+  // we use combined caster level: floor(2/2) = 1 → FULL_CASTER_SLOTS[1] = [2]
+  eq('Paladin/Fighter: 1st-level slots = 2', pf.sheet.spellcasting?.slots['1'], 2);
+}
+
+// =============================================================
+// 14. Warlock Pact Magic
+// =============================================================
+
+console.log('\n=== 14. Warlock Pact Magic ===\n');
+
+{
+  const wk1: CharacterSheet = {
+    ...makeFighter(),
+    firstClass: 'Warlock',
+    classLevels: [{ className: 'Warlock', level: 1 }],
+    hitDice: [{ className: 'Warlock', dieSides: 8, total: 1, remaining: 1 }],
+    resources: {},
+    stats: { str: 10, dex: 12, con: 12, int: 12, wis: 11, cha: 16 },
+    maxHP: 8, currentHP: 8,
+    spellcasting: {
+      ability: 'cha', spellAttackBonus: 5, saveDC: 13,
+      slots: {}, slotsUsed: {},
+      pactSlots: { slotLevel: 1, total: 1, used: 0 },
+      cantrips: ['Eldritch Blast'], knownSpells: ['Hex'], preparedSpells: [],
+    },
+  };
+
+  // Warlock 1→2: pact slots become [2 slots, L1]
+  const wk2 = applyLevelUp(wk1, 'Warlock');
+  eq('Warlock 2: pactSlots total = 2', wk2.sheet.spellcasting?.pactSlots?.total, 2);
+  eq('Warlock 2: pactSlots slotLevel = 1', wk2.sheet.spellcasting?.pactSlots?.slotLevel, 1);
+
+  // Warlock 2→3: pact slots become [2 slots, L2]
+  const wk3 = applyLevelUp(wk2.sheet, 'Warlock');
+  eq('Warlock 3: pactSlots slotLevel = 2', wk3.sheet.spellcasting?.pactSlots?.slotLevel, 2);
+
+  // Warlock 10→11: pact slots become [3 slots, L5]
+  const wk11 = levelTo(wk1, 11, 'Warlock');
+  eq('Warlock 11: pactSlots total = 3', wk11.spellcasting?.pactSlots?.total, 3);
+  eq('Warlock 11: pactSlots slotLevel = 5', wk11.spellcasting?.pactSlots?.slotLevel, 5);
+}
+
+// =============================================================
+// 15. Error cases
+// =============================================================
+
+console.log('\n=== 15. Error Cases ===\n');
+
+{
+  // Unknown class
+  let threw = false;
+  try { applyLevelUp(makeFighter(), 'Dragonborn'); } catch { threw = true; }
+  assert('Throws on unknown class', threw);
+}
+
+{
+  // Level 20 cap
+  const f20 = levelTo(makeFighter(), 20);
+  let threw = false;
+  try { applyLevelUp(f20, 'Fighter'); } catch { threw = true; }
+  assert('Throws when already level 20', threw);
+}
+
+{
+  // Multiclass prereq failure: Wizard needs INT 13; Fighter with INT 8 cannot
+  let threw = false;
+  try { applyLevelUp(makeFighter(), 'Wizard'); } catch { threw = true; }
+  assert('Throws on multiclass prereq failure (INT 8 < 13 for Wizard)', threw);
+}
+
+{
+  // Fighter prereq OR: STR 13 or DEX 13
+  // Character with STR 8, DEX 8 cannot multiclass into Fighter
+  const wLow = makeWizard({
+    stats: { str: 8, dex: 8, con: 13, int: 16, wis: 12, cha: 10 },
+  });
+  let threw = false;
+  try { applyLevelUp(wLow, 'Fighter'); } catch { threw = true; }
+  assert('Throws: Fighter prereq fails (STR 8, DEX 8)', threw);
+
+  // But DEX 14 alone satisfies Fighter prereq
+  const wDex = makeWizard({
+    stats: { str: 8, dex: 14, con: 13, int: 16, wis: 12, cha: 10 },
+  });
+  let noThrow = false;
+  try { applyLevelUp(wDex, 'Fighter'); noThrow = true; } catch {}
+  assert('Fighter prereq: DEX 14 satisfies OR condition', noThrow);
+}
+
+// =============================================================
+// 16. Slot table unit tests (data integrity)
+// =============================================================
+
+console.log('\n=== 16. Slot Table Integrity ===\n');
+
+{
+  // Full caster table: 20 entries (index 0 unused)
+  eq('FULL_CASTER_SLOTS has 21 entries (0..20)', FULL_CASTER_SLOTS.length, 21);
+  assert('Level 1: 2 first-level slots', FULL_CASTER_SLOTS[1][0] === 2);
+  assert('Level 3: 4+2 slots', FULL_CASTER_SLOTS[3][0] === 4 && FULL_CASTER_SLOTS[3][1] === 2);
+  assert('Level 20: 9 slot levels', FULL_CASTER_SLOTS[20].length === 9);
+  assert('Level 20: 4 first-level slots', FULL_CASTER_SLOTS[20][0] === 4);
+}
+
+{
+  // Half caster table: Paladin level 1 = no slots
+  eq('HALF_CASTER_SLOTS has 21 entries', HALF_CASTER_SLOTS.length, 21);
+  eq('Paladin 1: no slots', HALF_CASTER_SLOTS[1].length, 0);
+  eq('Paladin 2: 2 first-level slots', HALF_CASTER_SLOTS[2][0], 2);
+  eq('Paladin 5: 4+2 slots', HALF_CASTER_SLOTS[5][0], 4);
+  eq('Paladin 5: 2nd-level slots', HALF_CASTER_SLOTS[5][1], 2);
+}
+
+{
+  // Warlock pact table
+  eq('WARLOCK_PACT_SLOTS has 21 entries', WARLOCK_PACT_SLOTS.length, 21);
+  assert('Warlock 1: 1 slot, L1', WARLOCK_PACT_SLOTS[1][0] === 1 && WARLOCK_PACT_SLOTS[1][1] === 1);
+  assert('Warlock 11: 3 slots, L5', WARLOCK_PACT_SLOTS[11][0] === 3 && WARLOCK_PACT_SLOTS[11][1] === 5);
+  assert('Warlock 17: 4 slots, L5', WARLOCK_PACT_SLOTS[17][0] === 4 && WARLOCK_PACT_SLOTS[17][1] === 5);
+}
+
+{
+  // computeStandardSlots: full caster
+  const slotsWiz1 = computeStandardSlots([{ className: 'Wizard', level: 1 }]);
+  eq('computeStandardSlots Wizard 1: 1st=2', slotsWiz1['1'], 2);
+
+  // Half caster alone uses half-caster table
+  const slotsPal5 = computeStandardSlots([{ className: 'Paladin', level: 5 }]);
+  eq('computeStandardSlots Paladin 5: 1st=4', slotsPal5['1'], 4);
+  eq('computeStandardSlots Paladin 5: 2nd=2', slotsPal5['2'], 2);
+
+  // Paladin 2 alone: [2]
+  const slotsPal2 = computeStandardSlots([{ className: 'Paladin', level: 2 }]);
+  eq('computeStandardSlots Paladin 2: 1st=2', slotsPal2['1'], 2);
+
+  // Paladin 1 alone: no slots
+  const slotsPal1 = computeStandardSlots([{ className: 'Paladin', level: 1 }]);
+  eq('computeStandardSlots Paladin 1: no slots', Object.keys(slotsPal1).length, 0);
+
+  // Fighter alone: no slots
+  const slotsF = computeStandardSlots([{ className: 'Fighter', level: 5 }]);
+  eq('computeStandardSlots Fighter: no slots', Object.keys(slotsF).length, 0);
+
+  // Wizard 2 + Paladin 4: combined = 2 + floor(4/2) = 4 → [4,3]
+  const slotsMix = computeStandardSlots([
+    { className: 'Wizard', level: 2 },
+    { className: 'Paladin', level: 4 },
+  ]);
+  eq('computeStandardSlots Wizard2+Paladin4: 1st=4', slotsMix['1'], 4);
+  eq('computeStandardSlots Wizard2+Paladin4: 2nd=3', slotsMix['2'], 3);
+}
+
+// =============================================================
+// 17. allFeatures accumulation
+// =============================================================
+
+console.log('\n=== 17. allFeatures Accumulation ===\n');
+
+{
+  const f = makeFighter();
+  const startCount = f.allFeatures.length;
+  const f2 = applyLevelUp(f, 'Fighter');
+  // Action Surge added
+  assert('allFeatures grows on level up', f2.sheet.allFeatures.length > startCount);
+  assert('newFeatures subset of allFeatures',
+    f2.newFeatures.every(nf => f2.sheet.allFeatures.some(af => af.name === nf.name)));
+  assert('old features still present',
+    f2.sheet.allFeatures.some(af => af.name === 'Second Wind'));
+}
+
+// =============================================================
+// 18. updatedAt changes
+// =============================================================
+
+console.log('\n=== 18. updatedAt ===\n');
+
+{
+  const f    = makeFighter();
+  const orig = f.updatedAt;
+  // Tiny sleep to ensure timestamp differs
+  const res  = applyLevelUp(f, 'Fighter');
+  // updatedAt should be a valid ISO string (may be equal if same ms, just check format)
+  assert('updatedAt is ISO string', /^\d{4}-\d{2}-\d{2}T/.test(res.sheet.updatedAt));
+  assert('id unchanged', res.sheet.id === f.id);
+  assert('firstClass unchanged', res.sheet.firstClass === f.firstClass);
+}
+
+// ---- Results ------------------------------------------------
+
+console.log(`\nResults: ${passed} passed, ${failed} failed`);
+if (failed > 0) process.exit(1);

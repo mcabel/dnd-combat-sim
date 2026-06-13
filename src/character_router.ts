@@ -32,6 +32,7 @@ import {
 } from './characters/storage';
 import { ValidationError }            from './characters/validator';
 import { buildCombatant, buildWarnings } from './characters/builder';
+import { applyLevelUp }               from './characters/leveler';
 import { spawnMonster, Raw5etoolsMonster } from './parser/fivetools';
 import { simulate }                    from './scenarios/simulate';
 import { Combatant }                   from './types/core';
@@ -350,6 +351,50 @@ router.post('/simulate/custom', (req: Request, res: Response) => {
       roundDistribution: result.roundDistribution,
       difficulty:        difficultyLabel(result.partyWinRate),
       warnings:          warnings.length > 0 ? warnings : undefined,
+    });
+  } catch (err) {
+    return handleError(res, err);
+  }
+});
+
+
+// ============================================================
+// POST /api/characters/:id/levelup
+// Advance a saved character by one level.
+// Body: { className: string; hpRollMethod?: "average" | "max" }
+// Response: { character: CharacterSheet; hpGained: number; newFeatures: ...; subclassPrompt?: string; abilityScoreImprovement?: true }
+// ============================================================
+router.post('/:id/levelup', async (req: Request, res: Response) => {
+  try {
+    const id   = String(req.params.id);
+    const body = req.body ?? {};
+    const className = body.className;
+
+    if (!className || typeof className !== 'string') {
+      return res.status(400).json({ error: 'className (string) is required in the request body.' });
+    }
+
+    const hpRollMethod: 'average' | 'max' =
+      body.hpRollMethod === 'max' ? 'max' : 'average';
+
+    // Load existing sheet
+    const sheet = loadCharacter(id);
+    if (!sheet) {
+      return res.status(404).json({ error: `Character not found: ${id}` });
+    }
+
+    // Apply level-up (throws on validation errors)
+    const result = applyLevelUp(sheet, className, hpRollMethod);
+
+    // Persist the updated sheet
+    await saveCharacter(result.sheet);
+
+    return res.json({
+      character:               result.sheet,
+      hpGained:                result.hpGained,
+      newFeatures:             result.newFeatures,
+      ...(result.subclassPrompt          !== undefined && { subclassPrompt:          result.subclassPrompt }),
+      ...(result.abilityScoreImprovement !== undefined && { abilityScoreImprovement: result.abilityScoreImprovement }),
     });
   } catch (err) {
     return handleError(res, err);
