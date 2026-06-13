@@ -9,7 +9,7 @@ import {
   grantIndependence, controlMount
 } from '../summons/mount';
 import { spawnSummon }               from '../summons/spawner';
-import { loadBestiaryJson, monsterToCombatant } from '../parser/fivetools';
+import { loadBestiaryJson, monsterToCombatant, mergeBestiaries } from '../parser/fivetools';
 import { loadPCStatBlocks, spawnPC, RawPCEntry } from '../parser/pc';
 import { runCombat, makeFlatBattlefield }        from '../engine/combat';
 import { simulateDay, printDayReport }           from '../scenarios/multiencounter';
@@ -31,18 +31,27 @@ function eq<T>(label: string, a: T, e: T): void {
 
 // ---- Load data ----------------------------------------------
 
-const bestiaryPath = [
+const bestiaryDmgPath = [
   path.join(__dirname, '../../bestiaryData/bestiary-dmg.json'),
   '/mnt/project/bestiary-dmg.json',
+  path.join(__dirname, '../../bestiary-dmg.json'),
+  './bestiary-dmg.json',
 ].find(p => fs.existsSync(p))!;
+
+const bestiaryMmPath = [
+  path.join(__dirname, '../../bestiaryData/bestiary-mm-2014.json'),
+  '/mnt/project/bestiaryData/bestiary-mm-2014.json',
+  './bestiaryData/bestiary-mm-2014.json',
+].find(p => fs.existsSync(p));
 
 const pcPath = [
   path.join(__dirname, '../../pc_stat_blocks_lv1.json'),
   '/mnt/project/pc_stat_blocks_lv1.json',
 ].find(p => fs.existsSync(p))!;
 
-const rawBestiary = JSON.parse(fs.readFileSync(bestiaryPath, 'utf-8'));
-const fullBestiaryMap = loadBestiaryJson(rawBestiary);
+const rawDmg = JSON.parse(fs.readFileSync(bestiaryDmgPath, 'utf-8'));
+const rawMm  = bestiaryMmPath ? JSON.parse(fs.readFileSync(bestiaryMmPath, 'utf-8')) : { monster: [] };
+const fullBestiaryMap = mergeBestiaries(rawDmg, rawMm);
 const pcData: RawPCEntry[] = JSON.parse(fs.readFileSync(pcPath, 'utf-8'));
 const pcMap = loadPCStatBlocks(pcData);
 
@@ -181,21 +190,21 @@ console.log('\n=== 5. Controlled mount skips action in engine ===\n');
 {
   const wizard = pc('Wizard', 0);
   const mount  = fly(0);
-  const larvaRaw = fullBestiaryMap.get('larva');
-  assert('Larva found', larvaRaw !== undefined);
+  // orc: HP 15, CR 0.5 — survives a hit or two, won't be trivially put to sleep
+  const orcRaw = fullBestiaryMap.get('orc');
+  assert('Orc found in bestiary', orcRaw !== undefined);
 
-  if (larvaRaw) {
-    const { monsterToCombatant } = require('../parser/fivetools');
-    const larva = monsterToCombatant(larvaRaw, { x: 2, y: 0, z: 0 }, 'attackNearest');
+  if (orcRaw) {
+    const orc = monsterToCombatant(orcRaw, { x: 2, y: 0, z: 0 }, 'attackNearest');
 
     // Mount the fly
     mountCreature(wizard, mount);
     mount.faction = 'party';
 
-    const bf = makeFlatBattlefield(10, 10, [wizard, mount, larva]);
-    bf.initiativeOrder = [wizard.id, mount.id, larva.id];
+    const bf = makeFlatBattlefield(10, 10, [wizard, mount, orc]);
+    bf.initiativeOrder = [wizard.id, mount.id, orc.id];
 
-    const log = runCombat(bf, [wizard.id, mount.id, larva.id], { maxRounds: 10 });
+    const log = runCombat(bf, [wizard.id, mount.id, orc.id], { maxRounds: 10 });
 
     // Mount (fly) should NOT have any attack events — it's a controlled mount
     const flyAttacks = log.events.filter(
@@ -221,14 +230,16 @@ console.log('\n=== 5b. Independent mount attacks ===\n');
 {
   const wizard = pc('Wizard', 0);
   const mount  = fly(0);
-  const larvaRaw = fullBestiaryMap.get('larva');
-  assert('Larva found', larvaRaw !== undefined);
+  // orc: HP 15, CR 0.5 — 3 orcs = 45 HP total, exceeds Sleep's 5d8 max (40),
+  // guaranteeing at least one orc stays awake regardless of the roll.
+  // This makes the test deterministic: the mount always has a valid target.
+  const orcRaw = fullBestiaryMap.get('orc');
+  assert('Orc found in bestiary', orcRaw !== undefined);
 
-  if (larvaRaw) {
-    // 3 larvas at x:2,3,4 to ensure combat lasts multiple rounds
-    const larva1 = monsterToCombatant(larvaRaw, { x: 2, y: 0, z: 0 }, 'attackNearest');
-    const larva2 = monsterToCombatant(larvaRaw, { x: 3, y: 0, z: 0 }, 'attackNearest');
-    const larva3 = monsterToCombatant(larvaRaw, { x: 4, y: 0, z: 0 }, 'attackNearest');
+  if (orcRaw) {
+    const orc1 = monsterToCombatant(orcRaw, { x: 2, y: 0, z: 0 }, 'attackNearest');
+    const orc2 = monsterToCombatant(orcRaw, { x: 3, y: 0, z: 0 }, 'attackNearest');
+    const orc3 = monsterToCombatant(orcRaw, { x: 4, y: 0, z: 0 }, 'attackNearest');
 
     // Mount the fly
     mountCreature(wizard, mount);
@@ -238,10 +249,10 @@ console.log('\n=== 5b. Independent mount attacks ===\n');
     grantIndependence(mount);
     assert('Mount is independent', mount.independentMount === true);
 
-    const all = [wizard, mount, larva1, larva2, larva3];
+    const all = [wizard, mount, orc1, orc2, orc3];
     const bf = makeFlatBattlefield(10, 10, all);
-    // Mount goes FIRST so wizard can't kill all enemies before mount acts
-    bf.initiativeOrder = [mount.id, wizard.id, larva1.id, larva2.id, larva3.id];
+    // Mount goes FIRST so it always has awake enemies on round 1
+    bf.initiativeOrder = [mount.id, wizard.id, orc1.id, orc2.id, orc3.id];
 
     const log = runCombat(bf, bf.initiativeOrder, { maxRounds: 15 });
 
@@ -357,31 +368,32 @@ console.log('\n=== 6b. Familiar Help Action ===\n');
 console.log('\n=== 7. Multi-Encounter Day ===\n');
 
 {
-  // Simple two-encounter day: Fighter vs Larva, short rest, then repeat
-  const { loadBestiaryDir } = require('../data/loader');
-  const bestiaryResult = loadBestiaryDir(path.join(__dirname, '../../bestiaryData'));
+  // Two-encounter day: Fighter vs Tribal Warrior (CR 1/8, 11 HP, pure melee)
+  // then 2 Tribal Warriors after a short rest.
+  // Tribal Warriors are placed adjacent so there is no ranged kiting gap.
+  // Fighter should win enc1 very reliably; enc2 is harder but still favourable.
+  const warriorRaw = fullBestiaryMap.get('tribal warrior');
+  assert('Tribal Warrior found in bestiary', warriorRaw !== undefined);
 
-  if (bestiaryResult.bestiary.has('larva')) {
-    const { spawnMonster } = require('../parser/fivetools');
-
+  if (warriorRaw) {
     const day = simulateDay(
       [ pc('Fighter') ],
       [
         {
-          label: 'Encounter 1: Fighter vs Larva',
+          label: 'Encounter 1: Fighter vs Tribal Warrior',
           spec: {
             party:   [ pc('Fighter', 0) ],
-            enemies: [ spawnMonster(bestiaryResult.bestiary, 'Larva', { x: 1, y: 8, z: 0 }, 'attackNearest') ],
+            enemies: [ monsterToCombatant(warriorRaw, { x: 1, y: 0, z: 0 }, 'attackNearest') ],
           },
           restAfter: 'short',
         },
         {
-          label: 'Encounter 2: Fighter vs 2 Larva (after short rest)',
+          label: 'Encounter 2: Fighter vs 2 Tribal Warriors (after short rest)',
           spec: {
             party:   [ pc('Fighter', 0) ],
             enemies: [
-              spawnMonster(bestiaryResult.bestiary, 'Larva', { x: 1, y: 8, z: 0 }, 'attackNearest'),
-              spawnMonster(bestiaryResult.bestiary, 'Larva', { x: 3, y: 8, z: 0 }, 'attackNearest'),
+              monsterToCombatant(warriorRaw, { x: 1, y: 0, z: 0 }, 'attackNearest'),
+              monsterToCombatant(warriorRaw, { x: 2, y: 0, z: 0 }, 'attackNearest'),
             ],
           },
           restAfter: 'long',
@@ -393,17 +405,15 @@ console.log('\n=== 7. Multi-Encounter Day ===\n');
     assert('Day has 2 encounter results', day.encounters.length === 2);
     assert('Day has 2 labels', day.labels.length === 2);
 
-    // Fighter should win enc 1 reliably
-    assert('Enc 1: party wins majority', day.encounters[0].partyWinRate >= 0.6,
+    // Fighter wins enc 1 near-certainly (superior CR, single enemy, adjacent start)
+    assert('Enc 1: party wins majority', day.encounters[0].partyWinRate >= 0.7,
       `winRate=${day.encounters[0].partyWinRate.toFixed(2)}`);
 
-    // Enc 2 is harder (2 Larva) but fighter should still win most
-    assert('Enc 2: party competitive', day.encounters[1].partyWinRate >= 0.4,
+    // Enc 2 harder (2 warriors) — Fighter still wins the majority after short rest
+    assert('Enc 2: party competitive', day.encounters[1].partyWinRate >= 0.5,
       `winRate=${day.encounters[1].partyWinRate.toFixed(2)}`);
 
     printDayReport(day);
-  } else {
-    console.log('  ⚠️  Larva not in bestiary — skipping multi-encounter test');
   }
 }
 
