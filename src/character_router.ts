@@ -48,7 +48,9 @@ function getBestiary(): Map<string, Raw5etoolsMonster> {
   const dir = path.join(process.cwd(), 'bestiaryData');
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { loadBestiaryDir } = require('./data/loader');
-  _bestiary = loadBestiaryDir(dir) as Map<string, Raw5etoolsMonster>;
+  const result = loadBestiaryDir(dir);
+  // loadBestiaryDir returns LoadResult { bestiary: Map, ... }
+  _bestiary = (result.bestiary ?? result) as Map<string, Raw5etoolsMonster>;
   return _bestiary!;
 }
 

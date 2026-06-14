@@ -1,0 +1,107 @@
+{
+  "id": "00000000-0000-0000-0000-000000000001",
+  "version": 1,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "updatedAt": "2026-01-01T00:00:00.000Z",
+
+  "name": "Gareth Stonebrow",
+  "race": "Mountain Dwarf",
+  "background": "Soldier",
+  "alignment": "Lawful Good",
+  "notes": "Example level-1 Fighter derived from the built-in stat block.",
+
+  "firstClass": "Fighter",
+  "classLevels": [
+    { "className": "Fighter", "level": 1 }
+  ],
+  "subclassChoices": {
+    "Fighter": "Champion"
+  },
+  "experiencePoints": 0,
+
+  "baseStats": { "str": 15, "dex": 10, "con": 14, "int": 8, "wis": 12, "cha": 13 },
+  "stats":     { "str": 17, "dex": 10, "con": 16, "int": 8, "wis": 12, "cha": 13 },
+
+  "maxHP": 13,
+  "currentHP": 13,
+  "temporaryHP": 0,
+  "armorClass": 16,
+  "acFormula": "Chain Mail: 16",
+  "speed": 25,
+
+  "hitDice": [
+    { "className": "Fighter", "dieSides": 10, "total": 1, "remaining": 1 }
+  ],
+
+  "proficiencies": {
+    "armor": ["light", "medium", "heavy", "shield"],
+    "weapons": ["simple-melee", "simple-ranged", "martial-melee", "martial-ranged"],
+    "tools": [],
+    "savingThrows": ["str", "con"],
+    "skills": ["Athletics", "Intimidation", "Perception", "Survival"],
+    "expertise": []
+  },
+  "languages": ["Common", "Dwarvish"],
+
+  "resources": {
+    "secondWind": { "max": 1, "remaining": 1 }
+  },
+
+  "equipment": [
+    { "name": "Greatsword",  "quantity": 1, "equipped": true,  "category": "weapon" },
+    { "name": "Flail",       "quantity": 1, "equipped": false, "category": "weapon" },
+    { "name": "Javelin",     "quantity": 4, "equipped": false, "category": "weapon" },
+    { "name": "Chain Mail",  "quantity": 1, "equipped": true,  "category": "armor"  },
+    { "name": "Explorer's Pack", "quantity": 1, "equipped": false, "category": "pack" }
+  ],
+  "gold": 10,
+
+  "level1Features": [
+    {
+      "name": "Fighting Style (Great Weapon Fighting)",
+      "description": "When you roll a 1 or 2 on a damage die for an attack with a two-handed melee weapon, you can reroll the die and must use the new roll.",
+      "source": "class"
+    },
+    {
+      "name": "Second Wind",
+      "description": "Bonus action. Regain 1d10 + Fighter level HP. 1 use/short or long rest.",
+      "source": "class"
+    }
+  ],
+  "allFeatures": [
+    {
+      "name": "Fighting Style (Great Weapon Fighting)",
+      "description": "When you roll a 1 or 2 on a damage die for an attack with a two-handed melee weapon, you can reroll the die and must use the new roll.",
+      "source": "class"
+    },
+    {
+      "name": "Second Wind",
+      "description": "Bonus action. Regain 1d10 + Fighter level HP. 1 use/short or long rest.",
+      "source": "class"
+    },
+    {
+      "name": "Darkvision",
+      "description": "60 ft darkvision (Mountain Dwarf).",
+      "source": "race"
+    },
+    {
+      "name": "Dwarven Resilience",
+      "description": "Advantage on saving throws against poison; resistance to poison damage.",
+      "source": "race"
+    },
+    {
+      "name": "Stonecunning",
+      "description": "Whenever you make an Intelligence (History) check related to stonework, add double proficiency bonus.",
+      "source": "race"
+    },
+    {
+      "name": "Military Rank",
+      "description": "You have a military rank from your career as a soldier.",
+      "source": "background"
+    }
+  ],
+  "feats": [],
+  "backgroundFeature": "Military Rank: Soldiers loyal to your former military organization still recognize your authority and defer to you if they are of a lower rank.",
+
+  "exhaustionLevel": 0
+}

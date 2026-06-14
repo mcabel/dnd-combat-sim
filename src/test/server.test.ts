@@ -7,6 +7,8 @@
 
 import * as http from 'http';
 import * as net  from 'net';
+import * as fs   from 'fs';
+import * as path from 'path';
 
 // We re-use the Express `app` without calling listen()
 // by starting our own http.Server on a free port.
@@ -348,6 +350,99 @@ async function run() {
     });
     assert(status === 400, `Expected 400, got ${status}`);
   });
+
+  // -- Character routes: Paladin High Elf (UUID 000...003, UUID-named file so loadCharacter works) --
+  // Reset Paladin to level 1 before tests — the file mutates across runs.
+
+  const PALADIN_ID   = '00000000-0000-0000-0000-000000000003';
+  const PALADIN_FILE = path.join(process.cwd(), 'characters', PALADIN_ID + '.json');
+  const PALADIN_PRISTINE = JSON.parse(fs.readFileSync(PALADIN_FILE, 'utf-8'));
+
+  function resetPaladin(): void {
+    const p = JSON.parse(JSON.stringify(PALADIN_PRISTINE));
+    p.classLevels                     = [{ className: 'Paladin', level: 1 }];
+    p.experiencePoints                = 0;
+    p.currentHP                       = p.maxHP;
+    p.subclassChoices                 = {};
+    p.pendingAbilityScoreImprovements = 0;
+    p.pendingASIHalfPoints            = 0;
+    p.stats                           = { ...PALADIN_PRISTINE.stats };
+    p.hitDice                         = [{ className: 'Paladin', dieSides: 10, total: 1, remaining: 1 }];
+    p.updatedAt                       = new Date().toISOString();
+    fs.writeFileSync(PALADIN_FILE, JSON.stringify(p, null, 2), 'utf-8');
+  }
+
+  resetPaladin();
+
+  const testCharId  = PALADIN_ID;
+  let   testPartyId = '';
+
+  await test('GET /api/characters includes Paladin (Selariel Dawnblade)', async () => {
+    const { status, json } = await request(BASE, '/api/characters', 'GET');
+    assert(status === 200, `Expected 200, got ${status}`);
+    assert(Array.isArray(json.characters), 'Characters array present');
+    const paladin = (json.characters as any[]).find((c: any) => c.name === 'Selariel Dawnblade');
+    assert(!!paladin, `Paladin not found. Names: ${(json.characters as any[]).map((c:any)=>c.name).join(', ')}`);
+    assert(paladin.id === PALADIN_ID, 'Paladin has correct ID');
+  });
+
+  await test('POST /api/:id/levelup levels Paladin to 2', async () => {
+    if (!testCharId) { throw new Error('testCharId not set'); }
+    const { status, json } = await request(BASE, `/api/${testCharId}/levelup`, 'POST', {
+      className: 'Paladin', hpMethod: 'average',
+    });
+    assert(status === 200, `Expected 200, got ${status}. Body: ${JSON.stringify(json)}`);
+    assert(json.character?.classLevels?.[0]?.level === 2, `Expected level 2, got ${json.character?.classLevels?.[0]?.level}`);
+  });
+
+  await test('POST /api/characters/:id/choosesubclass sets Oath of Devotion', async () => {
+    if (!testCharId) { throw new Error('testCharId not set'); }
+    const { status, json } = await request(BASE, `/api/characters/${testCharId}/choosesubclass`, 'POST', {
+      className: 'Paladin', subclassName: 'Oath of Devotion',
+    });
+    assert(status === 200, `Expected 200, got ${status}. Body: ${JSON.stringify(json)}`);
+    assert(json.character?.subclassChoices?.Paladin === 'Oath of Devotion', 'Subclass set');
+  });
+
+  await test('POST /api/:id/levelup triggers ASI at Paladin level 4', async () => {
+    if (!testCharId) { throw new Error('testCharId not set'); }
+    await request(BASE, `/api/${testCharId}/levelup`, 'POST', { className: 'Paladin', hpMethod: 'average' }); // → 3
+    const { status, json } = await request(BASE, `/api/${testCharId}/levelup`, 'POST', { className: 'Paladin', hpMethod: 'average' }); // → 4 (ASI)
+    assert(status === 200, `Expected 200, got ${status}`);
+    assert(json.character?.pendingAbilityScoreImprovements >= 1, 'ASI pending at Paladin level 4');
+  });
+
+  await test('POST /api/characters/:id/applyasi applies +2 CHA', async () => {
+    if (!testCharId) { throw new Error('testCharId not set'); }
+    const { json: cur } = await request(BASE, `/api/characters/${testCharId}`, 'GET');
+    const chaBefore = cur.character?.stats?.cha ?? 0;
+    const { status, json } = await request(BASE, `/api/characters/${testCharId}/applyasi`, 'POST', {
+      ability: 'cha', amount: 2,
+    });
+    assert(status === 200, `Expected 200, got ${status}. Body: ${JSON.stringify(json)}`);
+    assert(json.character?.stats?.cha === chaBefore + 2, `Expected cha ${chaBefore+2}, got ${json.character?.stats?.cha}`);
+  });
+
+  await test('POST /api/parties creates party with Paladin', async () => {
+    if (!testCharId) { throw new Error('testCharId not set'); }
+    const { status, json } = await request(BASE, '/api/parties', 'POST', {
+      name: 'TestPartyPaladin', characterIds: [testCharId],
+    });
+    assert(status === 200 || status === 201, `Expected 200/201, got ${status}`);
+    assert(json.party?.id, 'Party has id');
+    testPartyId = json.party.id;
+  });
+
+  await test('POST /api/parties/:id/awardxp awards XP (4 Goblins = 200 XP)', async () => {
+    if (!testPartyId) { throw new Error('testPartyId not set'); }
+    const { status, json } = await request(BASE, `/api/parties/${testPartyId}/awardxp`, 'POST', {
+      enemies: [{ name: 'Goblin', count: 4 }],
+    });
+    assert(status === 200, `Expected 200, got ${status}. Body: ${JSON.stringify(json)}`);
+    assert(json.xpEach === 200, `Expected 200 xpEach (4×50÷1), got ${json.xpEach}`);
+    assert(Array.isArray(json.awarded) && json.awarded.length === 1, 'One member in award list');
+  });
+
 
   // -- difficulty label (8-G) --
 

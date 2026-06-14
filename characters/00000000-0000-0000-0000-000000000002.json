@@ -1,0 +1,152 @@
+{
+  "id": "00000000-0000-0000-0000-000000000002",
+  "version": 1,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "updatedAt": "2026-01-01T00:00:00.000Z",
+
+  "name": "Aelindra Swiftarrow",
+  "race": "High Elf",
+  "background": "Sage",
+  "alignment": "Chaotic Good",
+  "notes": "Example level-1 Wizard derived from the built-in stat block.",
+
+  "firstClass": "Wizard",
+  "classLevels": [
+    { "className": "Wizard", "level": 1 }
+  ],
+  "subclassChoices": {
+    "Wizard": "School of Evocation"
+  },
+  "experiencePoints": 0,
+
+  "baseStats": { "str": 8, "dex": 15, "con": 13, "int": 15, "wis": 12, "cha": 10 },
+  "stats":     { "str": 8, "dex": 16, "con": 13, "int": 16, "wis": 12, "cha": 10 },
+
+  "maxHP": 7,
+  "currentHP": 7,
+  "temporaryHP": 0,
+  "armorClass": 13,
+  "acFormula": "DEX 16 (Unarmored: 10+3)",
+  "speed": 30,
+
+  "hitDice": [
+    { "className": "Wizard", "dieSides": 6, "total": 1, "remaining": 1 }
+  ],
+
+  "proficiencies": {
+    "armor": [],
+    "weapons": ["simple-melee", "simple-ranged"],
+    "tools": [],
+    "savingThrows": ["int", "wis"],
+    "skills": ["Arcana", "History", "Investigation", "Nature"],
+    "expertise": []
+  },
+  "languages": ["Common", "Elvish", "Draconic", "Sylvan"],
+
+  "resources": {
+    "arcaneRecovery": { "usesRemaining": 1 }
+  },
+
+  "spellcasting": {
+    "ability": "int",
+    "spellAttackBonus": 5,
+    "saveDC": 13,
+    "slots": { "1": 2 },
+    "slotsUsed": { "1": 0 },
+    "cantrips": ["Fire Bolt", "Prestidigitation", "Minor Illusion"],
+    "knownSpells": [],
+    "preparedSpells": ["Magic Missile", "Sleep", "Mage Armor"],
+    "spellbook": [
+      "Mage Armor", "Shield", "Sleep",
+      "Detect Magic", "Find Familiar",
+      "Magic Missile", "Thunderwave"
+    ]
+  },
+
+  "equipment": [
+    { "name": "Dagger",          "quantity": 2, "equipped": true,  "category": "weapon" },
+    { "name": "Spellbook",       "quantity": 1, "equipped": true,  "category": "gear"   },
+    { "name": "Component Pouch", "quantity": 1, "equipped": true,  "category": "gear"   },
+    { "name": "Scholar's Pack",  "quantity": 1, "equipped": false, "category": "pack"   }
+  ],
+  "gold": 15,
+
+  "level1Features": [
+    {
+      "name": "Spellcasting",
+      "description": "You have learned to cast spells using INT. Prepared spells = INT mod + Wizard level.",
+      "source": "class"
+    },
+    {
+      "name": "Arcane Recovery",
+      "description": "Once per day on a short rest, recover spell slots totaling up to half your Wizard level (round up). Slots can be of 5th level or lower.",
+      "source": "class"
+    },
+    {
+      "name": "Ritual Casting",
+      "description": "You can cast Wizard spells with the ritual tag as rituals.",
+      "source": "class"
+    },
+    {
+      "name": "Evocation Savant",
+      "description": "The gold and time you must spend to copy an Evocation spell into your spellbook is halved.",
+      "source": "subclass"
+    },
+    {
+      "name": "Sculpt Spells",
+      "description": "You can create pockets of relative safety within the effects of your Evocation spells.",
+      "source": "subclass"
+    }
+  ],
+  "allFeatures": [
+    {
+      "name": "Spellcasting",
+      "description": "You have learned to cast spells using INT. Prepared spells = INT mod + Wizard level.",
+      "source": "class"
+    },
+    {
+      "name": "Arcane Recovery",
+      "description": "Once per day on a short rest, recover spell slots totaling up to half your Wizard level (round up). Slots can be of 5th level or lower.",
+      "source": "class"
+    },
+    {
+      "name": "Ritual Casting",
+      "description": "You can cast Wizard spells with the ritual tag as rituals.",
+      "source": "class"
+    },
+    {
+      "name": "Evocation Savant",
+      "description": "The gold and time you must spend to copy an Evocation spell into your spellbook is halved.",
+      "source": "subclass"
+    },
+    {
+      "name": "Sculpt Spells",
+      "description": "You can create pockets of relative safety within the effects of your Evocation spells.",
+      "source": "subclass"
+    },
+    {
+      "name": "Darkvision",
+      "description": "60 ft darkvision (High Elf).",
+      "source": "race"
+    },
+    {
+      "name": "Fey Ancestry",
+      "description": "Advantage on saving throws against being charmed; can't be magically put to sleep.",
+      "source": "race"
+    },
+    {
+      "name": "Cantrip (Minor Illusion)",
+      "description": "High Elf bonus cantrip: Minor Illusion (INT-based).",
+      "source": "race"
+    },
+    {
+      "name": "Researcher",
+      "description": "When you attempt to learn or recall a piece of lore, if you do not know that information, you often know where and from whom you can obtain it.",
+      "source": "background"
+    }
+  ],
+  "feats": [],
+  "backgroundFeature": "Researcher: When you attempt to learn or recall a piece of lore, if you do not know that information, you often know where and from whom you can obtain it.",
+
+  "exhaustionLevel": 0
+}

@@ -128,18 +128,21 @@ export function listCharacters(): CharacterSheet[] {
   const dir  = getCharactersDir();
   const files = fs.readdirSync(dir).filter(f => f.endsWith('.json'));
 
-  const sheets: CharacterSheet[] = [];
+  const seen  = new Map<string, CharacterSheet>();
   for (const file of files) {
     try {
       const raw   = fs.readFileSync(path.join(dir, file), 'utf-8');
       const sheet = JSON.parse(raw) as CharacterSheet;
-      sheets.push(sheet);
+      // Prefer UUID-named files over example-*.json when IDs collide
+      if (!seen.has(sheet.id) || !file.startsWith('example-')) {
+        seen.set(sheet.id, sheet);
+      }
     } catch (e) {
       console.warn(`[characters/storage] Skipping corrupt file ${file}: ${(e as Error).message}`);
     }
   }
 
-  return sheets.sort((a, b) =>
+  return [...seen.values()].sort((a, b) =>
     new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
   );
 }
