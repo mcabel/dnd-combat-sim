@@ -1,0 +1,73 @@
+{
+  "id": "test0000-0000-rogue-0000-000000000001",
+  "version": 1,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "updatedAt": "2026-01-01T00:00:00.000Z",
+  "name": "Kira Shadowstep",
+  "race": "Lightfoot Halfling",
+  "background": "Criminal",
+  "alignment": "Chaotic Neutral",
+  "notes": "Test character — Rogue 5. Sneak Attack 3d6, Cunning Action, Uncanny Dodge.",
+  "firstClass": "Rogue",
+  "classLevels": [
+    { "className": "Rogue", "level": 5 }
+  ],
+  "subclassChoices": {
+    "Rogue": "Thief"
+  },
+  "experiencePoints": 6500,
+  "baseStats": { "str": 8, "dex": 17, "con": 14, "int": 12, "wis": 11, "cha": 10 },
+  "stats":     { "str": 8, "dex": 19, "con": 14, "int": 12, "wis": 11, "cha": 10 },
+  "maxHP": 33,
+  "currentHP": 33,
+  "temporaryHP": 0,
+  "armorClass": 15,
+  "acFormula": "Studded Leather 12 + DEX 4 = 16 (with DEX 4)",
+  "speed": 25,
+  "hitDice": [
+    { "className": "Rogue", "dieSides": 8, "total": 5, "remaining": 5 }
+  ],
+  "proficiencies": {
+    "armor": ["light"],
+    "weapons": ["simple-melee", "simple-ranged", "martial-melee", "martial-ranged"],
+    "tools": ["Thieves' Tools", "Disguise Kit"],
+    "savingThrows": ["dex", "int"],
+    "skills": ["Acrobatics", "Deception", "Perception", "Sleight of Hand", "Stealth", "Athletics"],
+    "expertise": ["Stealth", "Thieves' Tools"]
+  },
+  "languages": ["Common", "Halfling"],
+  "resources": {
+    "sneakAttackDice": "3d6",
+    "cunningAction": true
+  },
+  "spellcasting": null,
+  "equipment": [
+    { "name": "Shortsword",         "quantity": 2, "equipped": true,  "category": "weapon" },
+    { "name": "Hand Crossbow",      "quantity": 1, "equipped": true,  "category": "weapon" },
+    { "name": "Crossbow Bolts",     "quantity": 20,"equipped": false, "category": "weapon" },
+    { "name": "Studded Leather",    "quantity": 1, "equipped": true,  "category": "armor"  },
+    { "name": "Thieves' Tools",     "quantity": 1, "equipped": false, "category": "tool"   },
+    { "name": "Burglar's Pack",     "quantity": 1, "equipped": false, "category": "pack"   }
+  ],
+  "gold": 25,
+  "level1Features": [
+    { "name": "Expertise",          "description": "Double proficiency on two skills or tools.", "source": "class" },
+    { "name": "Sneak Attack",       "description": "3d6 extra damage once per turn when attacking with advantage or when an ally is adjacent to target.", "source": "class" },
+    { "name": "Thieves' Cant",      "description": "Secret mix of dialect and code words.", "source": "class" }
+  ],
+  "allFeatures": [
+    { "name": "Expertise",          "description": "Double proficiency on two skills or tools.", "source": "class" },
+    { "name": "Sneak Attack",       "description": "3d6 extra damage once per turn.", "source": "class" },
+    { "name": "Thieves' Cant",      "description": "Secret mix of dialect and code words.", "source": "class" },
+    { "name": "Cunning Action",     "description": "Bonus action: Dash, Disengage, or Hide each turn.", "source": "class" },
+    { "name": "Uncanny Dodge",      "description": "Reaction: halve the damage from one attack per turn.", "source": "class" },
+    { "name": "Lucky",              "description": "Reroll 1s on attack rolls, ability checks, and saving throws (Halfling racial).", "source": "race" },
+    { "name": "Naturally Stealthy", "description": "Hide behind Medium+ creatures (Lightfoot racial).", "source": "race" },
+    { "name": "Criminal Contact",   "description": "Know a reliable criminal contact.", "source": "background" },
+    { "name": "Fast Hands (Thief)", "description": "Use Cunning Action to use Sleight of Hand, use Thieves' Tools, or take the Use an Object action.", "source": "subclass" },
+    { "name": "Second-Story Work (Thief)", "description": "Climbing costs no extra movement; add DEX to jump distance.", "source": "subclass" }
+  ],
+  "feats": [],
+  "backgroundFeature": "Criminal Contact: You have a reliable contact in the criminal underworld.",
+  "exhaustionLevel": 0
+}

@@ -1,0 +1,84 @@
+{
+  "id": "test0000-0000-wiz00-0000-000000000005",
+  "version": 1,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "updatedAt": "2026-01-01T00:00:00.000Z",
+  "name": "Aldric Voss",
+  "race": "Human",
+  "background": "Sage",
+  "alignment": "Neutral",
+  "notes": "Test character — Wizard (Evocation) 3. L1-L2 slots, Arcane Recovery, Sculpt Spells.",
+  "firstClass": "Wizard",
+  "classLevels": [
+    { "className": "Wizard", "level": 3 }
+  ],
+  "subclassChoices": {
+    "Wizard": "School of Evocation"
+  },
+  "experiencePoints": 900,
+  "baseStats": { "str": 8, "dex": 14, "con": 13, "int": 17, "wis": 12, "cha": 11 },
+  "stats":     { "str": 9, "dex": 15, "con": 14, "int": 18, "wis": 13, "cha": 12 },
+  "maxHP": 19,
+  "currentHP": 19,
+  "temporaryHP": 0,
+  "armorClass": 12,
+  "acFormula": "No armor: 10 + DEX 2",
+  "speed": 30,
+  "hitDice": [
+    { "className": "Wizard", "dieSides": 6, "total": 3, "remaining": 3 }
+  ],
+  "proficiencies": {
+    "armor": [],
+    "weapons": ["simple-melee", "simple-ranged"],
+    "tools": [],
+    "savingThrows": ["int", "wis"],
+    "skills": ["Arcana", "History", "Investigation", "Insight"],
+    "expertise": []
+  },
+  "languages": ["Common", "Elvish", "Draconic", "Dwarvish"],
+  "resources": {
+    "arcaneRecovery": { "usesRemaining": 1 }
+  },
+  "spellcasting": {
+    "ability": "int",
+    "spellAttackBonus": 6,
+    "saveDC": 14,
+    "slots": { "1": 4, "2": 2 },
+    "slotsUsed": { "1": 0, "2": 0 },
+    "cantrips": ["Fire Bolt", "Prestidigitation", "Minor Illusion", "Mage Hand"],
+    "knownSpells": [],
+    "preparedSpells": [
+      "Magic Missile", "Sleep", "Shield",
+      "Burning Hands", "Scorching Ray", "Shatter"
+    ],
+    "spellbook": [
+      "Mage Armor", "Shield", "Sleep", "Detect Magic",
+      "Find Familiar", "Magic Missile", "Thunderwave",
+      "Burning Hands", "Identify",
+      "Scorching Ray", "Shatter", "Web"
+    ]
+  },
+  "equipment": [
+    { "name": "Quarterstaff",    "quantity": 1, "equipped": true,  "category": "weapon" },
+    { "name": "Component Pouch", "quantity": 1, "equipped": true,  "category": "tool"   },
+    { "name": "Spellbook",       "quantity": 1, "equipped": true,  "category": "tool"   },
+    { "name": "Scholar's Pack",  "quantity": 1, "equipped": false, "category": "pack"   }
+  ],
+  "gold": 20,
+  "level1Features": [
+    { "name": "Spellcasting",     "description": "INT-based prepared caster. Spellbook. Arcane Recovery 1/day.", "source": "class" },
+    { "name": "Arcane Recovery",  "description": "1/long rest during short rest: recover spell slots totalling up to half Wizard level (1 at level 3). Max recovered slot level ≤ 5.", "source": "class" }
+  ],
+  "allFeatures": [
+    { "name": "Spellcasting",              "description": "INT-based prepared caster. Learns from spellbook.", "source": "class" },
+    { "name": "Arcane Recovery",           "description": "Recover up to 1 spell slot level on short rest (1/long rest).", "source": "class" },
+    { "name": "Arcane Tradition: Evocation","description": "Subclass chosen at level 2.", "source": "class" },
+    { "name": "Evocation Savant",          "description": "Copy evocation spells for half cost/time.", "source": "subclass" },
+    { "name": "Sculpt Spells",             "description": "Protect up to 1 + spell-level allies from your evocations; they auto-succeed DEX saves and take no damage on a save.", "source": "subclass" },
+    { "name": "Human Versatility",         "description": "+1 to all ability scores.", "source": "race" },
+    { "name": "Researcher",                "description": "Know where to find information or who has it.", "source": "background" }
+  ],
+  "feats": [],
+  "backgroundFeature": "Researcher: You know where to find obscure information or who might have it.",
+  "exhaustionLevel": 0
+}

@@ -312,11 +312,18 @@ router.post('/parties/:id/awardxp', async (req: Request, res: Response) => {
     // Sum total XP from defeated monsters
     const bestiary = getBestiary();
     let totalXP = 0;
+    const unknownNames: string[] = [];
     for (const cfg of enemies) {
       const count   = Math.max(cfg.count ?? 1, 1);
       const monster = bestiary.get(cfg.name.toLowerCase());
-      if (!monster) continue;   // unknown monsters contribute 0 XP
+      if (!monster) { unknownNames.push(cfg.name); continue; }
       totalXP += crToXP(monster.cr) * count;
+    }
+    // If every supplied enemy was unrecognized, return 400
+    if (unknownNames.length === enemies.length) {
+      return res.status(400).json({
+        error: `None of the supplied enemies were found in the bestiary: ${unknownNames.join(', ')}`,
+      });
     }
 
     const memberCount = party.characterIds.length;
@@ -575,6 +582,151 @@ router.post('/characters/:id/choosesubclass', async (req: Request, res: Response
       className,
       subclassName: updated.subclassChoices[className],
     });
+  } catch (err) {
+    return handleError(res, err);
+  }
+});
+
+// ============================================================
+// POST /api/characters/:id/longrest
+// Apply a long rest: restore HP, spell slots, per-long-rest resources, hit dice.
+// Response: { character: CharacterSheet; restored: string[] }
+// ============================================================
+router.post('/characters/:id/longrest', async (req: Request, res: Response) => {
+  try {
+    const id = String(req.params.id);
+    const sheet = loadCharacter(id);
+    if (!sheet) return res.status(404).json({ error: `Character not found: ${id}` });
+
+    const restored: string[] = [];
+    const updated = JSON.parse(JSON.stringify(sheet)); // deep clone
+
+    // HP
+    if (updated.currentHP < updated.maxHP) {
+      updated.currentHP = updated.maxHP;
+      restored.push('HP fully restored');
+    }
+    updated.temporaryHP = 0;
+
+    // Hit dice: recover half total (min 1), rounded down
+    for (const hd of (updated.hitDice || [])) {
+      const recover = Math.max(1, Math.floor(hd.total / 2));
+      if (hd.remaining < hd.total) {
+        hd.remaining = Math.min(hd.total, hd.remaining + recover);
+        restored.push(`Hit dice recovered (${hd.className})`);
+      }
+    }
+
+    // Spell slots
+    if (updated.spellcasting) {
+      const sc = updated.spellcasting;
+      let slotsReset = false;
+      for (const lvl of Object.keys(sc.slots || {})) {
+        if ((sc.slotsUsed?.[lvl] ?? 0) > 0) {
+          if (!sc.slotsUsed) sc.slotsUsed = {};
+          sc.slotsUsed[lvl] = 0;
+          slotsReset = true;
+        }
+      }
+      if (slotsReset) restored.push('Spell slots restored');
+      // Pact slots
+      if (sc.pactSlots && sc.pactSlots.used > 0) {
+        sc.pactSlots.used = 0;
+        restored.push('Pact slots restored');
+      }
+    }
+
+    // Per-long-rest class resources
+    const r = updated.resources || {};
+    if (r.secondWind && r.secondWind.remaining < r.secondWind.max) {
+      r.secondWind.remaining = r.secondWind.max;
+      restored.push('Second Wind restored');
+    }
+    if (r.rage && r.rage.remaining < r.rage.max) {
+      r.rage.remaining = r.rage.max;
+      restored.push('Rage uses restored');
+    }
+    if (r.bardicInspiration && r.bardicInspiration.remaining < r.bardicInspiration.max) {
+      r.bardicInspiration.remaining = r.bardicInspiration.max;
+      restored.push('Bardic Inspiration restored');
+    }
+    if (r.arcaneRecovery && r.arcaneRecovery.usesRemaining < 1) {
+      r.arcaneRecovery.usesRemaining = 1;
+      restored.push('Arcane Recovery restored');
+    }
+    if (r.layOnHands && r.layOnHands.remaining < r.layOnHands.pool) {
+      r.layOnHands.remaining = r.layOnHands.pool;
+      restored.push('Lay on Hands restored');
+    }
+    if (r.wardingBond && r.wardingBond.remaining < 1) {
+      r.wardingBond.remaining = 1;
+      restored.push('Warding Bond restored');
+    }
+    // Exhaustion: reduce by 1 on long rest (PHB p.291)
+    if (updated.exhaustionLevel && updated.exhaustionLevel > 0) {
+      updated.exhaustionLevel -= 1;
+      restored.push('Exhaustion reduced');
+    }
+
+    updated.updatedAt = new Date().toISOString();
+    await saveCharacter(updated);
+
+    return res.json({ character: updated, restored });
+  } catch (err) {
+    return handleError(res, err);
+  }
+});
+
+// ============================================================
+// POST /api/characters/:id/setlevel
+// Force a character to a target level without XP gates.
+// Only levels UP — use to quickly set DM-controlled level.
+// Body:     { level: number; className?: string }
+// Response: { character: CharacterSheet; levelsGained: number }
+//
+// NOTE: leveling down is not supported (too destructive without
+//       full feature-rollback data). Use level 1 create + setlevel
+//       if you need a fresh character at a specific level.
+// ============================================================
+router.post('/characters/:id/setlevel', async (req: Request, res: Response) => {
+  try {
+    const id   = String(req.params.id);
+    const body = req.body ?? {};
+    const targetLevel = Number(body.level);
+    if (!Number.isInteger(targetLevel) || targetLevel < 1 || targetLevel > 20) {
+      return res.status(400).json({ error: 'level must be an integer 1–20.' });
+    }
+
+    let sheet = loadCharacter(id);
+    if (!sheet) return res.status(404).json({ error: `Character not found: ${id}` });
+
+    const currentLvl = totalLevel(sheet);
+    if (targetLevel <= currentLvl) {
+      return res.status(400).json({
+        error: `Character is already level ${currentLvl}. setlevel only supports leveling up.`,
+      });
+    }
+
+    // Class to level up — default to firstClass
+    const className: string = (typeof body.className === 'string' && body.className)
+      ? body.className
+      : (sheet.firstClass || (sheet.classLevels?.[0]?.className ?? ''));
+    if (!className) {
+      return res.status(400).json({ error: 'Cannot determine className. Provide it in request body.' });
+    }
+
+    const levelsGained = targetLevel - currentLvl;
+    for (let i = 0; i < levelsGained; i++) {
+      const result = applyLevelUp(sheet, className, 'average');
+      sheet = result.sheet;
+    }
+
+    // Set XP to minimum for target level (no XP gain, DM fiat)
+    sheet = { ...sheet, experiencePoints: XP_THRESHOLDS[targetLevel - 1] ?? 0 };
+    sheet.updatedAt = new Date().toISOString();
+    await saveCharacter(sheet);
+
+    return res.json({ character: sheet, levelsGained });
   } catch (err) {
     return handleError(res, err);
   }

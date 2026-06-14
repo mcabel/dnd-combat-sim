@@ -443,6 +443,78 @@ async function run() {
     assert(Array.isArray(json.awarded) && json.awarded.length === 1, 'One member in award list');
   });
 
+  // -- awardxp error cases --
+
+  await test('POST /api/parties/:id/awardxp 404 on missing party', async () => {
+    const { status, json } = await request(BASE, '/api/parties/nonexistent-party-id/awardxp', 'POST', {
+      enemies: [{ name: 'Goblin', count: 1 }],
+    });
+    assert(status === 404, `Expected 404, got ${status}. Body: ${JSON.stringify(json)}`);
+    assert(typeof json.error === 'string', 'Response should have error field');
+  });
+
+  await test('POST /api/parties/:id/awardxp 400 on unknown monster', async () => {
+    if (!testPartyId) { throw new Error('testPartyId not set'); }
+    const { status, json } = await request(BASE, `/api/parties/${testPartyId}/awardxp`, 'POST', {
+      enemies: [{ name: 'Totally Fake Monster That Does Not Exist XYZ123', count: 1 }],
+    });
+    assert(status === 400, `Expected 400, got ${status}. Body: ${JSON.stringify(json)}`);
+    assert(typeof json.error === 'string', 'Response should have error field');
+  });
+
+  // -- long rest --
+
+  await test('POST /api/characters/:id/longrest restores HP and resources', async () => {
+    // Wound the Paladin first
+    const woundedSheet = JSON.parse(fs.readFileSync(PALADIN_FILE, 'utf-8'));
+    woundedSheet.currentHP = 1;
+    fs.writeFileSync(PALADIN_FILE, JSON.stringify(woundedSheet));
+
+    const { status, json } = await request(BASE, `/api/characters/${PALADIN_ID}/longrest`, 'POST', {});
+    assert(status === 200, `Expected 200, got ${status}. Body: ${JSON.stringify(json)}`);
+    assert(json.character.currentHP === json.character.maxHP, 'HP fully restored after long rest');
+    assert(Array.isArray(json.restored), 'restored field is array');
+    assert(json.restored.some((r: string) => r.includes('HP')), 'restored includes HP entry');
+    resetPaladin();
+  });
+
+  await test('POST /api/characters/:id/longrest 404 on missing character', async () => {
+    const { status, json } = await request(BASE, '/api/characters/no-such-char/longrest', 'POST', {});
+    assert(status === 404, `Expected 404, got ${status}`);
+    assert(typeof json.error === 'string', 'Response should have error field');
+  });
+
+  // -- set level --
+
+  await test('POST /api/characters/:id/setlevel levels up to target', async () => {
+    const { status, json } = await request(BASE, `/api/characters/${PALADIN_ID}/setlevel`, 'POST', {
+      level: 3,
+    });
+    assert(status === 200, `Expected 200, got ${status}. Body: ${JSON.stringify(json)}`);
+    assert(typeof json.levelsGained === 'number' && json.levelsGained >= 2,
+      `Expected levelsGained >= 2, got ${json.levelsGained}`);
+    const totalLvl = (json.character.classLevels || []).reduce(
+      (s: number, c: { level: number }) => s + c.level, 0);
+    assert(totalLvl === 3, `Expected total level 3, got ${totalLvl}`);
+    resetPaladin();
+  });
+
+  await test('POST /api/characters/:id/setlevel 400 on level <= current', async () => {
+    const { status, json } = await request(BASE, `/api/characters/${PALADIN_ID}/setlevel`, 'POST', {
+      level: 1,
+    });
+    assert(status === 400, `Expected 400, got ${status}. Body: ${JSON.stringify(json)}`);
+    assert(typeof json.error === 'string', 'Response should have error field');
+  });
+
+  await test('POST /api/characters/:id/setlevel 400 on invalid level', async () => {
+    const { status, json } = await request(BASE, `/api/characters/${PALADIN_ID}/setlevel`, 'POST', {
+      level: 25,
+    });
+    assert(status === 400, `Expected 400, got ${status}`);
+    assert(typeof json.error === 'string', 'Response should have error field');
+  });
+
 
   // -- difficulty label (8-G) --
 

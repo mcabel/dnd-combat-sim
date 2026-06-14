@@ -1,0 +1,80 @@
+{
+  "id": "test0000-0000-clrc0-0000-000000000003",
+  "version": 1,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "updatedAt": "2026-01-01T00:00:00.000Z",
+  "name": "Mirela Dawnborne",
+  "race": "Human",
+  "background": "Acolyte",
+  "alignment": "Lawful Good",
+  "notes": "Test character — Cleric (Life) 5. Full slot progression, Channel Divinity.",
+  "firstClass": "Cleric",
+  "classLevels": [
+    { "className": "Cleric", "level": 5 }
+  ],
+  "subclassChoices": {
+    "Cleric": "Life Domain"
+  },
+  "experiencePoints": 6500,
+  "baseStats": { "str": 12, "dex": 10, "con": 14, "int": 13, "wis": 16, "cha": 14 },
+  "stats":     { "str": 13, "dex": 11, "con": 15, "int": 14, "wis": 17, "cha": 15 },
+  "maxHP": 38,
+  "currentHP": 38,
+  "temporaryHP": 0,
+  "armorClass": 18,
+  "acFormula": "Plate Mail 18",
+  "speed": 30,
+  "hitDice": [
+    { "className": "Cleric", "dieSides": 8, "total": 5, "remaining": 5 }
+  ],
+  "proficiencies": {
+    "armor": ["light", "medium", "heavy", "shield"],
+    "weapons": ["simple-melee", "simple-ranged"],
+    "tools": [],
+    "savingThrows": ["wis", "cha"],
+    "skills": ["History", "Insight", "Medicine", "Persuasion"],
+    "expertise": []
+  },
+  "languages": ["Common", "Celestial", "Elvish"],
+  "resources": {},
+  "spellcasting": {
+    "ability": "wis",
+    "spellAttackBonus": 6,
+    "saveDC": 14,
+    "slots": { "1": 4, "2": 3, "3": 2 },
+    "slotsUsed": { "1": 0, "2": 0, "3": 0 },
+    "cantrips": ["Sacred Flame", "Guidance", "Spare the Dying"],
+    "knownSpells": [],
+    "preparedSpells": [
+      "Cure Wounds", "Healing Word", "Bless", "Shield of Faith",
+      "Prayer of Healing", "Spiritual Weapon",
+      "Mass Healing Word", "Revivify"
+    ]
+  },
+  "equipment": [
+    { "name": "Mace",         "quantity": 1, "equipped": true,  "category": "weapon" },
+    { "name": "Plate Mail",   "quantity": 1, "equipped": true,  "category": "armor"  },
+    { "name": "Shield",       "quantity": 1, "equipped": true,  "category": "armor"  },
+    { "name": "Holy Symbol",  "quantity": 1, "equipped": true,  "category": "tool"   },
+    { "name": "Priest's Pack","quantity": 1, "equipped": false, "category": "pack"   }
+  ],
+  "gold": 30,
+  "level1Features": [
+    { "name": "Spellcasting",     "description": "WIS-based prepared caster. Cantrips + spell slots by level.", "source": "class" },
+    { "name": "Divine Domain",    "description": "Life Domain chosen at level 1.", "source": "class" },
+    { "name": "Channel Divinity", "description": "1/short rest. Preserve Life (heals 5×level HP, spread freely among targets ≤half max HP).", "source": "class" }
+  ],
+  "allFeatures": [
+    { "name": "Spellcasting",                      "description": "WIS-based prepared caster.", "source": "class" },
+    { "name": "Life Domain: Bonus Proficiency",    "description": "Heavy armor proficiency.", "source": "subclass" },
+    { "name": "Life Domain: Disciple of Life",     "description": "Healing spells restore 2 + spell level additional HP.", "source": "subclass" },
+    { "name": "Channel Divinity (1/short rest)",   "description": "Turn Undead or Preserve Life.", "source": "class" },
+    { "name": "Destroy Undead (CR 1/2)",           "description": "Turn Undead destroys undead CR 1/2 or lower.", "source": "class" },
+    { "name": "Extra Attack (Cleric 5 Channel)",   "description": "Channel Divinity: Preserve Life heals 25 HP split among targets.", "source": "class" },
+    { "name": "Human Versatility",                 "description": "+1 to all ability scores (variant human: +1 STR, +1 WIS and feat).", "source": "race" },
+    { "name": "Shelter of the Faithful",           "description": "Temples of your faith provide aid.", "source": "background" }
+  ],
+  "feats": [],
+  "backgroundFeature": "Shelter of the Faithful: Temples of your deity provide shelter and healing.",
+  "exhaustionLevel": 0
+}

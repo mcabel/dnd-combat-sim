@@ -1,0 +1,80 @@
+{
+  "id": "test0000-0000-rang0-0000-000000000004",
+  "version": 1,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "updatedAt": "2026-01-01T00:00:00.000Z",
+  "name": "Sylvara Windfoot",
+  "race": "Wood Elf",
+  "background": "Outlander",
+  "alignment": "Neutral Good",
+  "notes": "Test character — Ranger (Hunter) 5. Hunter's Mark, Extra Attack, Colossus Slayer.",
+  "firstClass": "Ranger",
+  "classLevels": [
+    { "className": "Ranger", "level": 5 }
+  ],
+  "subclassChoices": {
+    "Ranger": "Hunter"
+  },
+  "experiencePoints": 6500,
+  "baseStats": { "str": 12, "dex": 17, "con": 13, "int": 11, "wis": 14, "cha": 9 },
+  "stats":     { "str": 12, "dex": 19, "con": 13, "int": 11, "wis": 15, "cha": 9 },
+  "maxHP": 38,
+  "currentHP": 38,
+  "temporaryHP": 0,
+  "armorClass": 16,
+  "acFormula": "Studded Leather 12 + DEX 4",
+  "speed": 35,
+  "hitDice": [
+    { "className": "Ranger", "dieSides": 10, "total": 5, "remaining": 5 }
+  ],
+  "proficiencies": {
+    "armor": ["light", "medium", "shield"],
+    "weapons": ["simple-melee", "simple-ranged", "martial-melee", "martial-ranged"],
+    "tools": [],
+    "savingThrows": ["str", "dex"],
+    "skills": ["Athletics", "Nature", "Perception", "Stealth", "Survival"],
+    "expertise": []
+  },
+  "languages": ["Common", "Elvish", "Sylvan"],
+  "resources": {},
+  "spellcasting": {
+    "ability": "wis",
+    "spellAttackBonus": 5,
+    "saveDC": 13,
+    "slots": { "1": 4, "2": 2 },
+    "slotsUsed": { "1": 0, "2": 0 },
+    "cantrips": [],
+    "knownSpells": [
+      "Hunter's Mark", "Cure Wounds", "Fog Cloud",
+      "Pass Without Trace"
+    ],
+    "preparedSpells": []
+  },
+  "equipment": [
+    { "name": "Longbow",         "quantity": 1,  "equipped": true,  "category": "weapon" },
+    { "name": "Arrows",          "quantity": 40, "equipped": false, "category": "weapon" },
+    { "name": "Shortsword",      "quantity": 2,  "equipped": true,  "category": "weapon" },
+    { "name": "Studded Leather", "quantity": 1,  "equipped": true,  "category": "armor"  },
+    { "name": "Explorer's Pack", "quantity": 1,  "equipped": false, "category": "pack"   }
+  ],
+  "gold": 20,
+  "level1Features": [
+    { "name": "Favored Enemy",        "description": "Undead. Advantage on Survival to track, WIS to recall info.", "source": "class" },
+    { "name": "Natural Explorer",     "description": "Forest terrain. Ignore difficult terrain, never lost, advantage on initiative.", "source": "class" }
+  ],
+  "allFeatures": [
+    { "name": "Favored Enemy (Undead)",  "description": "Advantage tracking; learn Undead language.", "source": "class" },
+    { "name": "Natural Explorer (Forest)","description": "Forest: ignore difficult terrain, double proficiency on INT/WIS while tracking.", "source": "class" },
+    { "name": "Fighting Style (Archery)","description": "+2 to ranged weapon attack rolls.", "source": "class" },
+    { "name": "Spellcasting",            "description": "WIS-based known caster.", "source": "class" },
+    { "name": "Primeval Awareness",      "description": "Expend spell slot to sense certain creature types within 1 mile.", "source": "class" },
+    { "name": "Hunter: Colossus Slayer", "description": "+1d8 damage against targets already injured.", "source": "subclass" },
+    { "name": "Extra Attack",            "description": "Attack twice per Attack action.", "source": "class" },
+    { "name": "Darkvision",              "description": "60 ft (Wood Elf).", "source": "race" },
+    { "name": "Mask of the Wild",        "description": "Hide when lightly obscured by foliage, rain, snow, etc.", "source": "race" },
+    { "name": "Wanderer",                "description": "Excellent memory for terrain; can forage for food/water.", "source": "background" }
+  ],
+  "feats": [],
+  "backgroundFeature": "Wanderer: Excellent memory for geography and natural features.",
+  "exhaustionLevel": 0
+}
