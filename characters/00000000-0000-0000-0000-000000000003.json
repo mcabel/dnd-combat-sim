@@ -2,7 +2,7 @@
   "id": "00000000-0000-0000-0000-000000000003",
   "version": 1,
   "createdAt": "2026-01-01T00:00:00.000Z",
-  "updatedAt": "2026-06-14T04:33:23.805Z",
+  "updatedAt": "2026-06-14T04:36:12.573Z",
   "name": "Selariel Dawnblade",
   "race": "High Elf",
   "background": "Noble",
@@ -12,13 +12,11 @@
   "classLevels": [
     {
       "className": "Paladin",
-      "level": 4
+      "level": 1
     }
   ],
-  "subclassChoices": {
-    "Paladin": "Oath of Devotion"
-  },
-  "experiencePoints": 200,
+  "subclassChoices": {},
+  "experiencePoints": 0,
   "baseStats": {
     "str": 15,
     "dex": 8,
@@ -45,8 +43,8 @@
     {
       "className": "Paladin",
       "dieSides": 10,
-      "total": 4,
-      "remaining": 4
+      "total": 1,
+      "remaining": 1
     }
   ],
   "proficiencies": {

@@ -518,6 +518,14 @@ async function run() {
 
   // ── Tear down ─────────────────────────────────────────────
 
+  // Clean up test parties created during this run
+  if (testPartyId) {
+    const pFile = path.join(process.cwd(), 'parties', `${testPartyId}.json`);
+    if (fs.existsSync(pFile)) fs.unlinkSync(pFile);
+  }
+  // Reset Paladin back to pristine after mutating tests
+  resetPaladin();
+
   srv.close();
 
   console.log('─'.repeat(50));
