@@ -24,6 +24,7 @@ import {
   SpellcastingInfo,
   ClassLevel,
   ClassName,
+  LevelRecord,
   CLASS_HIT_DICE,
   MULTICLASS_PREREQS,
   PROFICIENCY_BONUS_TABLE,
@@ -521,6 +522,19 @@ export function applyLevelUp(
     }
   }
 
+  // ---- Capture "before" snapshots for LevelRecord ----------
+  // Must happen before any mutations so we can fully reverse this level.
+
+  const resourcesBefore:      CharacterResources                           = { ...sheet.resources };
+  const spellSlotsBefore:     Record<string, number> | null                = sheet.spellcasting ? { ...sheet.spellcasting.slots } : null;
+  const spellSlotsUsedBefore: Record<string, number> | null                = sheet.spellcasting ? { ...sheet.spellcasting.slotsUsed } : null;
+  const pactSlotsBefore:      { slotLevel: number; total: number; used: number } | null =
+    sheet.spellcasting?.pactSlots ? { ...sheet.spellcasting.pactSlots } : null;
+  const hadSpellcastingBefore = !!sheet.spellcasting;
+  const statsBefore:          typeof sheet.stats                           = { ...sheet.stats };
+  const pendingASIBefore      = sheet.pendingAbilityScoreImprovements ?? 0;
+  const pendingASIHalfBefore  = sheet.pendingASIHalfPoints ?? 0;
+
   // ---- Deep copy (no mutation of original) ------------------
 
   let updated: CharacterSheet = {
@@ -557,6 +571,7 @@ export function applyLevelUp(
     level1Features: [...sheet.level1Features],
     allFeatures:    [...sheet.allFeatures],
     feats:          [...sheet.feats],
+    levelHistory:   [...(sheet.levelHistory ?? [])],
     updatedAt:      new Date().toISOString(),
   };
 
@@ -715,6 +730,28 @@ export function applyLevelUp(
     };
   }
 
+  // ---- Build and push LevelRecord (stack entry) -----------
+
+  const record: LevelRecord = {
+    className,
+    classLevel:            newClassLevel,
+    totalLevelAfter:       totalLevel(updated),
+    hpGained,
+    featuresAdded:         newFeatures,
+    wasNewClass:           isNewClass,
+    subclassPrompted:      subclassPrompt,
+    resourcesBefore,
+    spellSlotsBefore,
+    spellSlotsUsedBefore,
+    pactSlotsBefore,
+    hadSpellcastingBefore,
+    statsBefore,
+    pendingASIBefore,
+    pendingASIHalfBefore,
+  };
+
+  updated.levelHistory = [...(updated.levelHistory ?? []), record];
+
   return {
     sheet: updated,
     hpGained,
@@ -722,6 +759,141 @@ export function applyLevelUp(
     ...(subclassPrompt           !== undefined && { subclassPrompt }),
     ...(abilityScoreImprovement  !== undefined && { abilityScoreImprovement }),
   };
+}
+
+// ---- popLevel -----------------------------------------------
+
+export interface PopLevelResult {
+  /** Updated CharacterSheet with the top level reversed. */
+  sheet: CharacterSheet;
+  /** The LevelRecord that was popped. */
+  poppedRecord: LevelRecord;
+}
+
+/**
+ * Reverse the most recent applyLevelUp() by reading the top LevelRecord.
+ *
+ * Reverts: classLevels, hitDice, maxHP/currentHP, resources,
+ *          spellcasting slots & pact slots, allFeatures, stats (ASI reversal),
+ *          pendingAbilityScoreImprovements, pendingASIHalfPoints.
+ *
+ * Does NOT revert: equipment, gold, languages, proficiencies added during
+ *   character creation (those are not level-stack concerns).
+ *   subclassChoices are NOT reversed — choosing a subclass is a separate action
+ *   tracked in improvements.ts; the level record only notes the prompt was issued.
+ *
+ * @throws Error if levelHistory is empty or missing.
+ */
+export function popLevel(sheet: CharacterSheet): PopLevelResult {
+  const history = sheet.levelHistory ?? [];
+  if (history.length === 0) {
+    throw new Error('Cannot pop level: no level history recorded. ' +
+      'This character may have been created before the level-stack was introduced.');
+  }
+
+  const record = history[history.length - 1];
+  const poppedRecord = record;
+
+  // ---- Deep copy ------------------------------------------------
+  let updated: CharacterSheet = {
+    ...sheet,
+    subclassChoices: { ...sheet.subclassChoices },
+    classLevels:     sheet.classLevels.map(cl => ({ ...cl })),
+    hitDice:         sheet.hitDice.map(hd => ({ ...hd })),
+    resources:       { ...record.resourcesBefore },        // restore pre-level resources
+    stats:           { ...record.statsBefore },            // restore pre-level stats (ASI reversal)
+    proficiencies: {
+      ...sheet.proficiencies,
+      armor:        [...sheet.proficiencies.armor],
+      weapons:      [...sheet.proficiencies.weapons],
+      tools:        [...sheet.proficiencies.tools],
+      savingThrows: [...sheet.proficiencies.savingThrows],
+      skills:       [...sheet.proficiencies.skills],
+      expertise:    [...sheet.proficiencies.expertise],
+    },
+    level1Features: [...sheet.level1Features],
+    allFeatures:    [...sheet.allFeatures],
+    feats:          [...sheet.feats],
+    levelHistory:   history.slice(0, -1),   // pop the top record
+    updatedAt:      new Date().toISOString(),
+  };
+
+  // ---- Revert classLevels ---------------------------------------
+  if (record.wasNewClass) {
+    // Remove the class entry entirely
+    updated.classLevels = updated.classLevels.filter(
+      cl => cl.className !== record.className,
+    );
+  } else {
+    const entry = updated.classLevels.find(cl => cl.className === record.className);
+    if (entry) {
+      entry.level -= 1;
+      // Guard: remove if somehow dropped to 0 (shouldn't happen with valid data)
+      if (entry.level <= 0) {
+        updated.classLevels = updated.classLevels.filter(cl => cl.className !== record.className);
+      }
+    }
+  }
+
+  // ---- Revert hit dice pool -------------------------------------
+  if (record.wasNewClass) {
+    updated.hitDice = updated.hitDice.filter(hd => hd.className !== record.className);
+  } else {
+    const hdEntry = updated.hitDice.find(hd => hd.className === record.className);
+    if (hdEntry) {
+      hdEntry.total    -= 1;
+      hdEntry.remaining = Math.min(hdEntry.remaining, hdEntry.total);
+      if (hdEntry.total <= 0) {
+        updated.hitDice = updated.hitDice.filter(hd => hd.className !== record.className);
+      }
+    }
+  }
+
+  // ---- Revert HP ------------------------------------------------
+  updated.maxHP     = sheet.maxHP - record.hpGained;
+  updated.currentHP = Math.min(sheet.currentHP - record.hpGained, updated.maxHP);
+  // Enforce minimum 1 HP (character is alive during level management)
+  if (updated.currentHP < 0) updated.currentHP = 0;
+
+  // ---- Revert allFeatures ---------------------------------------
+  // Remove features that were added at this level (first-occurrence match per feature)
+  const featuresToRemove = [...record.featuresAdded];
+  const remainingFeatures: typeof updated.allFeatures = [];
+  for (const f of updated.allFeatures) {
+    const matchIdx = featuresToRemove.findIndex(
+      r => r.name === f.name && r.source === f.source && r.description === f.description,
+    );
+    if (matchIdx >= 0) {
+      featuresToRemove.splice(matchIdx, 1);  // consume one removal slot
+    } else {
+      remainingFeatures.push(f);
+    }
+  }
+  updated.allFeatures = remainingFeatures;
+
+  // ---- Revert spellcasting ---------------------------------------
+  if (!record.hadSpellcastingBefore) {
+    // Spellcasting was introduced at this level — remove it
+    updated.spellcasting = undefined;
+  } else if (updated.spellcasting && record.spellSlotsBefore !== null) {
+    // Restore slot counts to pre-level values
+    updated.spellcasting = {
+      ...sheet.spellcasting!,
+      slots:     { ...record.spellSlotsBefore },
+      slotsUsed: { ...record.spellSlotsUsedBefore! },
+      pactSlots: record.pactSlotsBefore
+        ? { ...record.pactSlotsBefore }
+        : sheet.spellcasting?.pactSlots
+        ? undefined   // pact slots were introduced at this level
+        : undefined,
+    };
+  }
+
+  // ---- Revert pending ASI ---------------------------------------
+  updated.pendingAbilityScoreImprovements = record.pendingASIBefore;
+  updated.pendingASIHalfPoints            = record.pendingASIHalfBefore;
+
+  return { sheet: updated, poppedRecord };
 }
 
 // ---- Exports (table data for testing) -----------------------

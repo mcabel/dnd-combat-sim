@@ -210,6 +210,48 @@ export interface CharacterFeature {
   source: 'race' | 'class' | 'subclass' | 'background' | 'feat';
 }
 
+// ---- Level Stack Record ------------------------------------
+//
+// LevelRecord captures EXACTLY what one call to applyLevelUp() added.
+// CharacterSheet.levelHistory is a stack (oldest-first).
+// popLevel() reads the top record and fully reverses the changes,
+// enabling true level-down without a full rebuild.
+
+export interface LevelRecord {
+  /** Class that was leveled up. */
+  className: string;
+  /** Level reached in that class after this push (1-based). */
+  classLevel: number;
+  /** Total character level after this push. */
+  totalLevelAfter: number;
+  /** HP added to maxHP (and currentHP at time of level-up). */
+  hpGained: number;
+  /** Features appended to allFeatures at this level. */
+  featuresAdded: CharacterFeature[];
+  /** True if this push added a brand-new classLevels entry. */
+  wasNewClass: boolean;
+  /** If a subclass prompt was triggered at this level, its className. */
+  subclassPrompted?: string;
+
+  // ---- "Before" snapshots for full reversal -----------------
+  /** sheet.resources snapshot before updateResources() ran. */
+  resourcesBefore: CharacterResources;
+  /** sheet.spellcasting.slots before slot recompute (null = spellcasting didn't exist). */
+  spellSlotsBefore: Record<string, number> | null;
+  /** sheet.spellcasting.slotsUsed before slot recompute. */
+  spellSlotsUsedBefore: Record<string, number> | null;
+  /** sheet.spellcasting.pactSlots before update (null = none). */
+  pactSlotsBefore: { slotLevel: number; total: number; used: number } | null;
+  /** True if spellcasting block existed before this level. */
+  hadSpellcastingBefore: boolean;
+  /** sheet.stats before this level (captures any ASI applied earlier for correct pop). */
+  statsBefore: CharacterAbilityScores;
+  /** sheet.pendingAbilityScoreImprovements before this push. */
+  pendingASIBefore: number;
+  /** sheet.pendingASIHalfPoints before this push. */
+  pendingASIHalfBefore: number;
+}
+
 // ---- Main CharacterSheet ------------------------------------
 
 /**
@@ -278,6 +320,11 @@ export interface CharacterSheet {
   // Pending progression choices (set by applyLevelUp; consumed by applyASI / chooseSubclass)
   pendingAbilityScoreImprovements?: number;  // # of ASI choices not yet applied (each = +2 total, split freely)
   pendingASIHalfPoints?: number;             // 0 or 1 — leftover half-point from a +1 split application
+
+  // ---- Level history stack ----------------------------------
+  // Ordered oldest → newest. Top = last element.
+  // Optional for backward compatibility with pre-stack sheets.
+  levelHistory?: LevelRecord[];
 }
 
 // ---- Party --------------------------------------------------

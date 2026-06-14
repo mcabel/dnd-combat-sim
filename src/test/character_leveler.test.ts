@@ -6,6 +6,7 @@
 import { randomUUID } from 'crypto';
 import {
   applyLevelUp,
+  popLevel,
   computeStandardSlots,
   FULL_CASTER_SLOTS,
   HALF_CASTER_SLOTS,
@@ -58,7 +59,7 @@ function makeFighter(overrides: Partial<CharacterSheet> = {}): CharacterSheet {
     gold: 10,
     level1Features: [{ name: 'Second Wind', description: 'Regain HP.', source: 'class' }],
     allFeatures:    [{ name: 'Second Wind', description: 'Regain HP.', source: 'class' }],
-    feats: [], backgroundFeature: 'Military Rank', exhaustionLevel: 0,
+    feats: [], backgroundFeature: 'Military Rank', exhaustionLevel: 0, levelHistory: [],
   };
   return { ...base, ...overrides };
 }
@@ -99,7 +100,7 @@ function makeWizard(overrides: Partial<CharacterSheet> = {}): CharacterSheet {
     gold: 15,
     level1Features: [{ name: 'Spellcasting', description: 'INT caster.', source: 'class' }],
     allFeatures:    [{ name: 'Spellcasting', description: 'INT caster.', source: 'class' }],
-    feats: [], backgroundFeature: 'Researcher', exhaustionLevel: 0,
+    feats: [], backgroundFeature: 'Researcher', exhaustionLevel: 0, levelHistory: [],
   };
   return { ...base, ...overrides };
 }
@@ -133,7 +134,7 @@ function makeRogue(overrides: Partial<CharacterSheet> = {}): CharacterSheet {
     gold: 5,
     level1Features: [{ name: 'Sneak Attack', description: '1d6 sneak attack.', source: 'class' }],
     allFeatures:    [{ name: 'Sneak Attack', description: '1d6 sneak attack.', source: 'class' }],
-    feats: [], backgroundFeature: 'Criminal Contact', exhaustionLevel: 0,
+    feats: [], backgroundFeature: 'Criminal Contact', exhaustionLevel: 0, levelHistory: [],
   };
   return { ...base, ...overrides };
 }
@@ -167,7 +168,7 @@ function makeBarbarian(overrides: Partial<CharacterSheet> = {}): CharacterSheet 
     gold: 0,
     level1Features: [{ name: 'Rage', description: 'Rage 2x/day.', source: 'class' }],
     allFeatures:    [{ name: 'Rage', description: 'Rage 2x/day.', source: 'class' }],
-    feats: [], backgroundFeature: 'Wanderer', exhaustionLevel: 0,
+    feats: [], backgroundFeature: 'Wanderer', exhaustionLevel: 0, levelHistory: [],
   };
   return { ...base, ...overrides };
 }
@@ -201,7 +202,7 @@ function makePaladin(overrides: Partial<CharacterSheet> = {}): CharacterSheet {
     gold: 25,
     level1Features: [{ name: 'Lay on Hands', description: 'HP pool 5.', source: 'class' }],
     allFeatures:    [{ name: 'Lay on Hands', description: 'HP pool 5.', source: 'class' }],
-    feats: [], backgroundFeature: 'Position of Privilege', exhaustionLevel: 0,
+    feats: [], backgroundFeature: 'Position of Privilege', exhaustionLevel: 0, levelHistory: [],
   };
   return { ...base, ...overrides };
 }
@@ -785,6 +786,143 @@ console.log('\n=== 18. updatedAt ===\n');
   assert('updatedAt is ISO string', /^\d{4}-\d{2}-\d{2}T/.test(res.sheet.updatedAt));
   assert('id unchanged', res.sheet.id === f.id);
   assert('firstClass unchanged', res.sheet.firstClass === f.firstClass);
+}
+
+// =============================================================
+// 19. popLevel — stack reversal
+// =============================================================
+
+console.log('\n=== 19. popLevel — Stack Reversal ===\n');
+
+{
+  // --- 19a. levelHistory is populated by applyLevelUp ----------
+  const f1 = makeFighter();
+  assert('f1 levelHistory empty', (f1.levelHistory ?? []).length === 0);
+  const { sheet: f2 } = applyLevelUp(f1, 'Fighter');
+  eq('f2 levelHistory length = 1', f2.levelHistory?.length, 1);
+  eq('record.className = Fighter', f2.levelHistory?.[0].className, 'Fighter');
+  eq('record.classLevel = 2', f2.levelHistory?.[0].classLevel, 2);
+  eq('record.totalLevelAfter = 2', f2.levelHistory?.[0].totalLevelAfter, 2);
+  assert('record.hpGained > 0', (f2.levelHistory?.[0].hpGained ?? 0) > 0);
+}
+
+{
+  // --- 19b. popLevel reverses HP --------------------------------
+  const f1 = makeFighter();
+  const { sheet: f2 } = applyLevelUp(f1, 'Fighter');
+  const hpBefore = f1.maxHP;
+  const hpAfter  = f2.maxHP;
+  assert('level-up increased maxHP', hpAfter > hpBefore);
+
+  const { sheet: popped } = popLevel(f2);
+  eq('popped maxHP equals original', popped.maxHP, hpBefore);
+  assert('popped currentHP <= maxHP', popped.currentHP <= popped.maxHP);
+  eq('popped levelHistory empty', popped.levelHistory?.length, 0);
+}
+
+{
+  // --- 19c. popLevel reverts classLevels -----------------------
+  const f1 = makeFighter();
+  const { sheet: f2 } = applyLevelUp(f1, 'Fighter');
+  eq('f2 Fighter level = 2', f2.classLevels.find(c => c.className === 'Fighter')?.level, 2);
+  const { sheet: popped } = popLevel(f2);
+  eq('popped Fighter level = 1', popped.classLevels.find(c => c.className === 'Fighter')?.level, 1);
+  eq('totalLevel after pop = 1', totalLevel(popped), 1);
+}
+
+{
+  // --- 19d. popLevel reverts hitDice ----------------------------
+  const f1 = makeFighter();
+  const { sheet: f2 } = applyLevelUp(f1, 'Fighter');
+  eq('f2 hitDice total = 2', f2.hitDice.find(h => h.className === 'Fighter')?.total, 2);
+  const { sheet: popped } = popLevel(f2);
+  eq('popped hitDice total = 1', popped.hitDice.find(h => h.className === 'Fighter')?.total, 1);
+}
+
+{
+  // --- 19e. popLevel removes added features --------------------
+  const f1 = makeFighter();
+  const { sheet: f2, newFeatures } = applyLevelUp(f1, 'Fighter'); // adds Action Surge (1/rest)
+  assert('Action Surge (1/rest) in f2.allFeatures',
+    f2.allFeatures.some(af => af.name === 'Action Surge (1/rest)'));
+  assert('newFeatures non-empty', newFeatures.length > 0);
+
+  const { sheet: popped } = popLevel(f2);
+  assert('Action Surge removed from popped',
+    !popped.allFeatures.some(af => af.name === 'Action Surge (1/rest)'));
+  assert('Second Wind still present',
+    popped.allFeatures.some(af => af.name === 'Second Wind'));
+}
+
+{
+  // --- 19f. popLevel reverts resources -------------------------
+  const f1 = makeFighter();
+  // Level to Barbarian 1 + Barbarian 2 (rage changes from 2 to 3)
+  const bar1 = makeFighter({
+    firstClass: 'Barbarian',
+    classLevels: [{ className: 'Barbarian', level: 1 }],
+    hitDice: [{ className: 'Barbarian', dieSides: 12, total: 1, remaining: 1 }],
+    resources: { rage: { max: 2, remaining: 2 } },
+    maxHP: 15, currentHP: 15,
+  });
+  const { sheet: bar2 } = applyLevelUp(bar1, 'Barbarian');
+  eq('Barbarian 2 rage max = 3', bar2.resources.rage?.max, 3);
+  const { sheet: popped } = popLevel(bar2);
+  eq('popped rage max = 2', popped.resources.rage?.max, 2);
+}
+
+{
+  // --- 19g. popLevel ASI reversal ------------------------------
+  const f1 = makeFighter();
+  // Level to 4 (Fighter 4 grants ASI)
+  let sheet = f1;
+  for (let i = 0; i < 3; i++) sheet = applyLevelUp(sheet, 'Fighter').sheet;
+  eq('Fighter 4 pendingASI = 1', sheet.pendingAbilityScoreImprovements, 1);
+  eq('levelHistory length = 3', sheet.levelHistory?.length, 3);
+
+  const { sheet: popped } = popLevel(sheet);
+  eq('popped back to level 3', totalLevel(popped), 3);
+  eq('pendingASI restored to 0', popped.pendingAbilityScoreImprovements, 0);
+}
+
+{
+  // --- 19h. popLevel with new multiclass class -----------------
+  // Fighter with DEX 14 can multiclass into Rogue (requires DEX 13)
+  const f1 = makeFighter({ stats: { str: 15, dex: 14, con: 16, int: 8, wis: 12, cha: 10 } });
+  // fighter 1 → add Rogue 1 (new class)
+  const { sheet: f1r1 } = applyLevelUp(f1, 'Rogue');
+  eq('classLevels length = 2', f1r1.classLevels.length, 2);
+  assert('Rogue entry exists', f1r1.classLevels.some(c => c.className === 'Rogue'));
+
+  const { sheet: popped } = popLevel(f1r1);
+  eq('classLevels length = 1 after pop', popped.classLevels.length, 1);
+  assert('Rogue entry removed', !popped.classLevels.some(c => c.className === 'Rogue'));
+  assert('Fighter entry still present', popped.classLevels.some(c => c.className === 'Fighter'));
+}
+
+{
+  // --- 19i. popLevel error on empty history --------------------
+  const f1 = makeFighter();
+  let threw = false;
+  try { popLevel(f1); } catch { threw = true; }
+  assert('popLevel throws on empty history', threw);
+}
+
+{
+  // --- 19j. multiple pops (3→2→1) ----------------------------
+  const f1 = makeFighter();
+  const f2 = applyLevelUp(f1, 'Fighter').sheet;
+  const f3 = applyLevelUp(f2, 'Fighter').sheet;
+  eq('f3 totalLevel = 3', totalLevel(f3), 3);
+
+  const p2 = popLevel(f3).sheet;
+  eq('p2 totalLevel = 2', totalLevel(p2), 2);
+  eq('p2 levelHistory length = 1', p2.levelHistory?.length, 1);
+
+  const p1 = popLevel(p2).sheet;
+  eq('p1 totalLevel = 1', totalLevel(p1), 1);
+  eq('p1 levelHistory empty', p1.levelHistory?.length, 0);
+  eq('p1 maxHP = f1 maxHP', p1.maxHP, f1.maxHP);
 }
 
 // ---- Results ------------------------------------------------

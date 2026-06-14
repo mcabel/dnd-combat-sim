@@ -368,6 +368,7 @@ async function run() {
     p.pendingASIHalfPoints            = 0;
     p.stats                           = { ...PALADIN_PRISTINE.stats };
     p.hitDice                         = [{ className: 'Paladin', dieSides: 10, total: 1, remaining: 1 }];
+    p.levelHistory                    = [];
     p.updatedAt                       = new Date().toISOString();
     fs.writeFileSync(PALADIN_FILE, JSON.stringify(p, null, 2), 'utf-8');
   }
@@ -515,8 +516,59 @@ async function run() {
     assert(typeof json.error === 'string', 'Response should have error field');
   });
 
+  // -- leveldown (popLevel via endpoint) --
 
-  // -- difficulty label (8-G) --
+  await test('POST /api/characters/:id/leveldown pops one level', async () => {
+    // First level up to 3 (builds levelHistory)
+    await request(BASE, `/api/characters/${PALADIN_ID}/setlevel`, 'POST', { level: 3 });
+
+    const { status, json } = await request(BASE, `/api/characters/${PALADIN_ID}/leveldown`, 'POST', {});
+    assert(status === 200, `Expected 200, got ${status}. Body: ${JSON.stringify(json)}`);
+    const totalLvl = (json.character.classLevels || []).reduce(
+      (s: number, c: { level: number }) => s + c.level, 0);
+    assert(totalLvl === 2, `Expected total level 2, got ${totalLvl}`);
+    assert(typeof json.poppedLevel?.className === 'string', 'poppedLevel.className present');
+    assert(typeof json.poppedLevel?.classLevel === 'number', 'poppedLevel.classLevel present');
+    assert(Array.isArray(json.character.levelHistory), 'levelHistory is array on response');
+    resetPaladin();
+  });
+
+  await test('POST /api/characters/:id/leveldown 400 at level 1', async () => {
+    // Paladin is already reset to level 1
+    const { status, json } = await request(BASE, `/api/characters/${PALADIN_ID}/leveldown`, 'POST', {});
+    assert(status === 400, `Expected 400, got ${status}. Body: ${JSON.stringify(json)}`);
+    assert(typeof json.error === 'string', 'Response should have error field');
+  });
+
+  await test('POST /api/characters/:id/leveldown 404 on missing character', async () => {
+    const { status, json } = await request(BASE, '/api/characters/no-such-char/leveldown', 'POST', {});
+    assert(status === 404, `Expected 404, got ${status}`);
+    assert(typeof json.error === 'string', 'error field present');
+  });
+
+  await test('POST /api/characters/:id/setlevel levels down via pop', async () => {
+    // Level up to 5
+    await request(BASE, `/api/characters/${PALADIN_ID}/setlevel`, 'POST', { level: 5 });
+    // Level down to 2
+    const { status, json } = await request(BASE, `/api/characters/${PALADIN_ID}/setlevel`, 'POST', { level: 2 });
+    assert(status === 200, `Expected 200, got ${status}. Body: ${JSON.stringify(json)}`);
+    const totalLvl = (json.character.classLevels || []).reduce(
+      (s: number, c: { level: number }) => s + c.level, 0);
+    assert(totalLvl === 2, `Expected total level 2, got ${totalLvl}`);
+    assert(json.levelsLost === 3, `Expected levelsLost=3, got ${json.levelsLost}`);
+    resetPaladin();
+  });
+
+  await test('POST /api/characters/:id/setlevel 400 on same level', async () => {
+    // Paladin is level 1 — send level 1 (same)
+    const { status, json } = await request(BASE, `/api/characters/${PALADIN_ID}/setlevel`, 'POST', {
+      level: 1,
+    });
+    assert(status === 400, `Expected 400, got ${status}. Body: ${JSON.stringify(json)}`);
+    assert(typeof json.error === 'string', 'Response should have error field');
+  });
+
+
 
   await test('POST /api/simulate returns difficulty string', async () => {
     const { status, json } = await request(BASE, '/api/simulate', 'POST', {

@@ -414,6 +414,7 @@ button.full { width: 100%; padding: 11px; font-size: 13px; }
         </select>
       </div>
       <button onclick="doSetLevel()" id="set-level-btn" class="secondary" style="margin-top:17px">Set Level</button>
+      <button onclick="doLevelDown()" id="level-down-btn" class="secondary" style="margin-top:17px;background:var(--dark-bg);border-color:var(--warn);color:var(--warn)" title="Pop last level from stack">⬇ Pop Level</button>
       <span id="set-level-note" style="font-size:12px;color:var(--text-muted)"></span>
     </div>
 
@@ -937,12 +938,37 @@ async function doSetLevel() {
     S.charDetail = data.character;
     refreshChars();
     renderCharDetail();
-    showBanner(`Level set to ${target} (+${data.levelsGained} levels gained).`, 'ok');
+    const dir = data.levelsGained > 0
+      ? `+${data.levelsGained} gained`
+      : `-${data.levelsLost} lost`;
+    showBanner(`Level set to ${target} (${dir}).`, 'ok');
   } catch(e) {
     note.textContent = '✗ ' + (e.message || 'Error');
     showErr(e.message);
   }
   finally { btn.disabled = false; btn.textContent = 'Set Level'; }
+}
+
+// ── Level Down (pop stack) ─────────────────────────────────────
+async function doLevelDown() {
+  if (!S.charDetail) return;
+  showErr('');
+  const btn = document.getElementById('level-down-btn');
+  btn.disabled = true; btn.textContent = '⬇ Popping…';
+  try {
+    const data = await api(`/api/characters/${S.charDetail.id}/leveldown`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+    S.charDetail = data.character;
+    refreshChars();
+    renderCharDetail();
+    showBanner(`Popped ${data.poppedLevel.className} ${data.poppedLevel.classLevel} — now level ${S.charDetail.classLevels.reduce((s,c)=>s+c.level,0)}.`, 'ok');
+  } catch(e) {
+    showErr(e.message);
+  }
+  finally { btn.disabled = false; btn.textContent = '⬇ Pop Level'; }
 }
 
 // ── Apply ASI ─────────────────────────────────────────────────

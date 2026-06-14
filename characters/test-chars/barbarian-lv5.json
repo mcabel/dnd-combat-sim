@@ -7,17 +7,34 @@
   "race": "Half-Orc",
   "background": "Outlander",
   "alignment": "Chaotic Neutral",
-  "notes": "Test character — Barbarian 5. Rage 3/day, Reckless Attack, Extra Attack, Fast Movement.",
+  "notes": "Test character \u2014 Barbarian 5. Rage 3/day, Reckless Attack, Extra Attack, Fast Movement.",
   "firstClass": "Barbarian",
   "classLevels": [
-    { "className": "Barbarian", "level": 5 }
+    {
+      "className": "Barbarian",
+      "level": 5
+    }
   ],
   "subclassChoices": {
     "Barbarian": "Berserker"
   },
   "experiencePoints": 6500,
-  "baseStats": { "str": 17, "dex": 14, "con": 16, "int": 8, "wis": 12, "cha": 9 },
-  "stats":     { "str": 17, "dex": 14, "con": 16, "int": 8, "wis": 12, "cha": 9 },
+  "baseStats": {
+    "str": 17,
+    "dex": 14,
+    "con": 16,
+    "int": 8,
+    "wis": 12,
+    "cha": 9
+  },
+  "stats": {
+    "str": 17,
+    "dex": 14,
+    "con": 16,
+    "int": 8,
+    "wis": 12,
+    "cha": 9
+  },
   "maxHP": 52,
   "currentHP": 52,
   "temporaryHP": 0,
@@ -25,46 +42,146 @@
   "acFormula": "Unarmored: 10 + DEX 2 + CON 3 = 15",
   "speed": 40,
   "hitDice": [
-    { "className": "Barbarian", "dieSides": 12, "total": 5, "remaining": 5 }
+    {
+      "className": "Barbarian",
+      "dieSides": 12,
+      "total": 5,
+      "remaining": 5
+    }
   ],
   "proficiencies": {
-    "armor": ["light", "medium", "shield"],
-    "weapons": ["simple-melee", "simple-ranged", "martial-melee", "martial-ranged"],
+    "armor": [
+      "light",
+      "medium",
+      "shield"
+    ],
+    "weapons": [
+      "simple-melee",
+      "simple-ranged",
+      "martial-melee",
+      "martial-ranged"
+    ],
     "tools": [],
-    "savingThrows": ["str", "con"],
-    "skills": ["Athletics", "Intimidation", "Perception", "Survival"],
+    "savingThrows": [
+      "str",
+      "con"
+    ],
+    "skills": [
+      "Athletics",
+      "Intimidation",
+      "Perception",
+      "Survival"
+    ],
     "expertise": []
   },
-  "languages": ["Common", "Orc"],
+  "languages": [
+    "Common",
+    "Orc"
+  ],
   "resources": {
-    "rage": { "max": 3, "remaining": 3 }
+    "rage": {
+      "max": 3,
+      "remaining": 3
+    }
   },
   "spellcasting": null,
   "equipment": [
-    { "name": "Greataxe",       "quantity": 1, "equipped": true,  "category": "weapon" },
-    { "name": "Handaxe",        "quantity": 2, "equipped": false, "category": "weapon" },
-    { "name": "Explorer's Pack","quantity": 1, "equipped": false, "category": "pack"   }
+    {
+      "name": "Greataxe",
+      "quantity": 1,
+      "equipped": true,
+      "category": "weapon"
+    },
+    {
+      "name": "Handaxe",
+      "quantity": 2,
+      "equipped": false,
+      "category": "weapon"
+    },
+    {
+      "name": "Explorer's Pack",
+      "quantity": 1,
+      "equipped": false,
+      "category": "pack"
+    }
   ],
   "gold": 15,
   "level1Features": [
-    { "name": "Rage",             "description": "Bonus action. Advantage on STR checks/saves, +2 damage (melee/thrown), resistance to bludgeoning/piercing/slashing. 3 uses/long rest. Ends if no attack or damage taken.", "source": "class" },
-    { "name": "Unarmored Defense","description": "AC = 10 + DEX mod + CON mod when not wearing armor.", "source": "class" }
+    {
+      "name": "Rage",
+      "description": "Bonus action. Advantage on STR checks/saves, +2 damage (melee/thrown), resistance to bludgeoning/piercing/slashing. 3 uses/long rest. Ends if no attack or damage taken.",
+      "source": "class"
+    },
+    {
+      "name": "Unarmored Defense",
+      "description": "AC = 10 + DEX mod + CON mod when not wearing armor.",
+      "source": "class"
+    }
   ],
   "allFeatures": [
-    { "name": "Rage",                "description": "Bonus action: 3 uses/long rest. +2 rage damage at level 5.", "source": "class" },
-    { "name": "Unarmored Defense",   "description": "AC = 10 + DEX + CON when no armor.", "source": "class" },
-    { "name": "Reckless Attack",     "description": "Advantage on melee attacks; attackers gain advantage on you until next turn.", "source": "class" },
-    { "name": "Danger Sense",        "description": "Advantage on DEX saves against visible effects.", "source": "class" },
-    { "name": "Primal Path: Berserker","description": "Subclass chosen at level 3.", "source": "class" },
-    { "name": "Frenzy",              "description": "While raging: bonus action melee attack. Suffer exhaustion after rage.", "source": "subclass" },
-    { "name": "Extra Attack",        "description": "Attack twice when taking the Attack action.", "source": "class" },
-    { "name": "Fast Movement",       "description": "+10 ft speed when not wearing heavy armor.", "source": "class" },
-    { "name": "Darkvision",          "description": "60 ft darkvision (Half-Orc).", "source": "race" },
-    { "name": "Savage Attacks",      "description": "On crit with melee weapon, roll one damage die extra.", "source": "race" },
-    { "name": "Relentless Endurance","description": "1/long rest: drop to 1 HP instead of 0.", "source": "race" },
-    { "name": "Wanderer",            "description": "Excellent memory for terrain; can forage for food/water.", "source": "background" }
+    {
+      "name": "Rage",
+      "description": "Bonus action: 3 uses/long rest. +2 rage damage at level 5.",
+      "source": "class"
+    },
+    {
+      "name": "Unarmored Defense",
+      "description": "AC = 10 + DEX + CON when no armor.",
+      "source": "class"
+    },
+    {
+      "name": "Reckless Attack",
+      "description": "Advantage on melee attacks; attackers gain advantage on you until next turn.",
+      "source": "class"
+    },
+    {
+      "name": "Danger Sense",
+      "description": "Advantage on DEX saves against visible effects.",
+      "source": "class"
+    },
+    {
+      "name": "Primal Path: Berserker",
+      "description": "Subclass chosen at level 3.",
+      "source": "class"
+    },
+    {
+      "name": "Frenzy",
+      "description": "While raging: bonus action melee attack. Suffer exhaustion after rage.",
+      "source": "subclass"
+    },
+    {
+      "name": "Extra Attack",
+      "description": "Attack twice when taking the Attack action.",
+      "source": "class"
+    },
+    {
+      "name": "Fast Movement",
+      "description": "+10 ft speed when not wearing heavy armor.",
+      "source": "class"
+    },
+    {
+      "name": "Darkvision",
+      "description": "60 ft darkvision (Half-Orc).",
+      "source": "race"
+    },
+    {
+      "name": "Savage Attacks",
+      "description": "On crit with melee weapon, roll one damage die extra.",
+      "source": "race"
+    },
+    {
+      "name": "Relentless Endurance",
+      "description": "1/long rest: drop to 1 HP instead of 0.",
+      "source": "race"
+    },
+    {
+      "name": "Wanderer",
+      "description": "Excellent memory for terrain; can forage for food/water.",
+      "source": "background"
+    }
   ],
   "feats": [],
   "backgroundFeature": "Wanderer: Excellent memory for geography and natural features.",
-  "exhaustionLevel": 0
+  "exhaustionLevel": 0,
+  "levelHistory": []
 }

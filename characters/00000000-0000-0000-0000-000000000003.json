@@ -2,7 +2,7 @@
   "id": "00000000-0000-0000-0000-000000000003",
   "version": 1,
   "createdAt": "2026-01-01T00:00:00.000Z",
-  "updatedAt": "2026-06-14T04:36:12.573Z",
+  "updatedAt": "2026-06-14T16:18:28.962Z",
   "name": "Selariel Dawnblade",
   "race": "High Elf",
   "background": "Noble",
@@ -277,5 +277,6 @@
   "backgroundFeature": "Position of Privilege: Welcome in high society. Common folk make every effort to accommodate you.",
   "exhaustionLevel": 0,
   "pendingAbilityScoreImprovements": 0,
-  "pendingASIHalfPoints": 0
+  "pendingASIHalfPoints": 0,
+  "levelHistory": []
 }

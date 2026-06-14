@@ -67,7 +67,7 @@ function makeFighterWithASI(overrides: Partial<CharacterSheet> = {}): CharacterS
     gold: 10,
     level1Features: [],
     allFeatures:    [],
-    feats: [], backgroundFeature: 'Military Rank', exhaustionLevel: 0,
+    feats: [], backgroundFeature: 'Military Rank', exhaustionLevel: 0, levelHistory: [],
     pendingAbilityScoreImprovements: 1,
     pendingASIHalfPoints: 0,
     ...overrides,
@@ -103,7 +103,7 @@ function makeFighter1(): CharacterSheet {
     equipment: [{ name: 'Greatsword', quantity: 1, equipped: true, category: 'weapon' }],
     gold: 10,
     level1Features: [], allFeatures: [],
-    feats: [], backgroundFeature: 'Military Rank', exhaustionLevel: 0,
+    feats: [], backgroundFeature: 'Military Rank', exhaustionLevel: 0, levelHistory: [],
   };
 }
 

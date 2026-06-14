@@ -105,6 +105,7 @@ function makeSheet(overrides: Partial<CharacterSheet> = {}): CharacterSheet {
     feats:             [],
     backgroundFeature: 'Military Rank',
     exhaustionLevel:   0,
+    levelHistory:      [],
   };
   return { ...base, ...overrides };
 }

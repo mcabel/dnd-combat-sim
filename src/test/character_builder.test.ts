@@ -86,7 +86,7 @@ function makeFighter(overrides: Partial<CharacterSheet> = {}): CharacterSheet {
       { name: 'Second Wind', description: 'Regain HP.', source: 'class' },
       { name: 'Darkvision', description: '60 ft.', source: 'race' },
     ],
-    feats: [], backgroundFeature: 'Military Rank', exhaustionLevel: 0,
+    feats: [], backgroundFeature: 'Military Rank', exhaustionLevel: 0, levelHistory: [],
   };
   return { ...base, ...overrides };
 }
@@ -136,7 +136,7 @@ function makeWizard(overrides: Partial<CharacterSheet> = {}): CharacterSheet {
       { name: 'Darkvision', description: '60 ft.', source: 'race' },
       { name: 'Fey Ancestry', description: 'Advantage vs charm.', source: 'race' },
     ],
-    feats: [], backgroundFeature: 'Researcher', exhaustionLevel: 0,
+    feats: [], backgroundFeature: 'Researcher', exhaustionLevel: 0, levelHistory: [],
   };
   return { ...base, ...overrides };
 }

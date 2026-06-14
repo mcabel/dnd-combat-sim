@@ -33,7 +33,7 @@ import {
 } from './characters/storage';
 import { ValidationError }            from './characters/validator';
 import { buildCombatant, buildWarnings } from './characters/builder';
-import { applyLevelUp }               from './characters/leveler';
+import { applyLevelUp, popLevel }          from './characters/leveler';
 import { applyASI, chooseSubclass }   from './characters/improvements';
 import { spawnMonster, Raw5etoolsMonster } from './parser/fivetools';
 import { simulate }                    from './scenarios/simulate';
@@ -679,14 +679,11 @@ router.post('/characters/:id/longrest', async (req: Request, res: Response) => {
 
 // ============================================================
 // POST /api/characters/:id/setlevel
-// Force a character to a target level without XP gates.
-// Only levels UP — use to quickly set DM-controlled level.
+// Force a character to a target level (DM tool).
+// Levels UP by looping applyLevelUp(); levels DOWN by looping popLevel().
+// Requires levelHistory to be populated (characters leveled up via this system).
 // Body:     { level: number; className?: string }
-// Response: { character: CharacterSheet; levelsGained: number }
-//
-// NOTE: leveling down is not supported (too destructive without
-//       full feature-rollback data). Use level 1 create + setlevel
-//       if you need a fresh character at a specific level.
+// Response: { character: CharacterSheet; levelsGained: number; levelsLost: number }
 // ============================================================
 router.post('/characters/:id/setlevel', async (req: Request, res: Response) => {
   try {
@@ -701,33 +698,90 @@ router.post('/characters/:id/setlevel', async (req: Request, res: Response) => {
     if (!sheet) return res.status(404).json({ error: `Character not found: ${id}` });
 
     const currentLvl = totalLevel(sheet);
-    if (targetLevel <= currentLvl) {
+
+    if (targetLevel > currentLvl) {
+      // Level UP path
+      const className: string = (typeof body.className === 'string' && body.className)
+        ? body.className
+        : (sheet.firstClass || (sheet.classLevels?.[0]?.className ?? ''));
+      if (!className) {
+        return res.status(400).json({ error: 'Cannot determine className. Provide it in request body.' });
+      }
+      const levelsGained = targetLevel - currentLvl;
+      for (let i = 0; i < levelsGained; i++) {
+        const result = applyLevelUp(sheet, className, 'average');
+        sheet = result.sheet;
+      }
+      sheet = { ...sheet, experiencePoints: XP_THRESHOLDS[targetLevel - 1] ?? 0 };
+      sheet.updatedAt = new Date().toISOString();
+      await saveCharacter(sheet);
+      return res.json({ character: sheet, levelsGained, levelsLost: 0 });
+
+    } else if (targetLevel < currentLvl) {
+      // Level DOWN path — requires levelHistory
+      if (!sheet.levelHistory || sheet.levelHistory.length === 0) {
+        return res.status(400).json({
+          error: 'Cannot level down: no level history recorded. ' +
+            'This character was created before stack-based leveling was introduced. ' +
+            'Recreate the character from level 1 using the builder.',
+        });
+      }
+      const levelsLost = currentLvl - targetLevel;
+      for (let i = 0; i < levelsLost; i++) {
+        const result = popLevel(sheet);
+        sheet = result.sheet;
+      }
+      sheet = { ...sheet, experiencePoints: XP_THRESHOLDS[targetLevel - 1] ?? 0 };
+      sheet.updatedAt = new Date().toISOString();
+      await saveCharacter(sheet);
+      return res.json({ character: sheet, levelsGained: 0, levelsLost });
+
+    } else {
       return res.status(400).json({
-        error: `Character is already level ${currentLvl}. setlevel only supports leveling up.`,
+        error: `Character is already level ${currentLvl}.`,
       });
     }
-
-    // Class to level up — default to firstClass
-    const className: string = (typeof body.className === 'string' && body.className)
-      ? body.className
-      : (sheet.firstClass || (sheet.classLevels?.[0]?.className ?? ''));
-    if (!className) {
-      return res.status(400).json({ error: 'Cannot determine className. Provide it in request body.' });
-    }
-
-    const levelsGained = targetLevel - currentLvl;
-    for (let i = 0; i < levelsGained; i++) {
-      const result = applyLevelUp(sheet, className, 'average');
-      sheet = result.sheet;
-    }
-
-    // Set XP to minimum for target level (no XP gain, DM fiat)
-    sheet = { ...sheet, experiencePoints: XP_THRESHOLDS[targetLevel - 1] ?? 0 };
-    sheet.updatedAt = new Date().toISOString();
-    await saveCharacter(sheet);
-
-    return res.json({ character: sheet, levelsGained });
   } catch (err) {
     return handleError(res, err);
   }
 });
+
+// ============================================================
+// POST /api/characters/:id/leveldown
+// Pop the most recent level from the stack (undo last level-up).
+// Requires levelHistory. Min level: 1 (cannot pop below level 1).
+// Response: { character: CharacterSheet; poppedLevel: { className, classLevel } }
+// ============================================================
+router.post('/characters/:id/leveldown', async (req: Request, res: Response) => {
+  try {
+    const id    = String(req.params.id);
+    const sheet = loadCharacter(id);
+    if (!sheet) return res.status(404).json({ error: `Character not found: ${id}` });
+
+    if (!sheet.levelHistory || sheet.levelHistory.length === 0) {
+      return res.status(400).json({
+        error: 'Cannot level down: no level history recorded. ' +
+          'This character was created before stack-based leveling was introduced.',
+      });
+    }
+
+    if (totalLevel(sheet) <= 1) {
+      return res.status(400).json({ error: 'Character is already level 1; cannot level down further.' });
+    }
+
+    const result  = popLevel(sheet);
+    const updated = { ...result.sheet, updatedAt: new Date().toISOString() };
+    await saveCharacter(updated);
+
+    return res.json({
+      character:   updated,
+      poppedLevel: {
+        className:  result.poppedRecord.className,
+        classLevel: result.poppedRecord.classLevel,
+      },
+    });
+  } catch (err) {
+    return handleError(res, err);
+  }
+});
+
