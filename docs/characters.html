@@ -348,6 +348,7 @@ button.full { width: 100%; padding: 11px; font-size: 13px; }
     <div class="card-title" id="char-detail-title">Character
       <div class="ct-right">
         <button class="sm secondary" onclick="exportChar()" id="char-export-btn">📥 Export</button>
+        <button class="sm secondary" onclick="doShortRest()" id="char-shortrest-btn" title="Short Rest: spend hit dice, recharge short-rest abilities">☀ Short Rest</button>
         <button class="sm secondary" onclick="doLongRest()" id="char-longrest-btn" title="Long Rest: restore HP, spell slots, resources">🌙 Long Rest</button>
         <button class="sm secondary" onclick="editChar()" id="char-edit-btn">Edit</button>
         <button class="danger" onclick="deleteChar()" id="char-delete-btn">Delete</button>
@@ -897,6 +898,38 @@ async function doLevelUp() {
     showBanner(msg.join(' '), 'ok');
   } catch(e) { showErr(e.message); }
   finally { btn.disabled = false; btn.textContent = 'Level Up'; }
+}
+
+
+// ── Short Rest ────────────────────────────────────────────────
+async function doShortRest() {
+  if (!S.charDetail) return;
+  showErr('');
+  const hdAvail = (S.charDetail.hitDice || []).reduce((s, hd) => s + hd.remaining, 0);
+  let hdInput = 0;
+  if (hdAvail > 0) {
+    const raw = prompt(`Short Rest: spend hit dice to heal? (0–${hdAvail} available)`, '1');
+    if (raw === null) return; // cancelled
+    hdInput = Math.max(0, Math.min(hdAvail, parseInt(raw, 10) || 0));
+  }
+  const btn = document.getElementById('char-shortrest-btn');
+  btn.disabled = true; btn.textContent = '☀ Resting…';
+  try {
+    const data = await api(`/api/characters/${S.charDetail.id}/shortrest`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hitDiceToSpend: hdInput }),
+    });
+    S.charDetail = data.character;
+    refreshChars();
+    renderCharDetail();
+    const parts = [];
+    if (data.hpRegained > 0) parts.push(`+${data.hpRegained} HP`);
+    if (data.hdSpent > 0)    parts.push(`${data.hdSpent} HD spent`);
+    if ((data.restored || []).length > 0) parts.push(`${data.restored.length} resource${data.restored.length===1?'':'s'} recharged`);
+    showBanner(`Short rest: ${parts.length ? parts.join(', ') : 'nothing to restore'}.`, 'ok');
+  } catch(e) { showErr(e.message); }
+  finally { btn.disabled = false; btn.textContent = '☀ Short Rest'; }
 }
 
 // ── Long Rest ─────────────────────────────────────────────────

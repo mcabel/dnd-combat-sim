@@ -623,7 +623,185 @@ async function run() {
     }
   });
 
-  // ── CORS ──────────────────────────────────────────────────
+  // -- short rest --
+
+  await test('POST /api/characters/:id/shortrest returns 404 on missing character', async () => {
+    const { status, json } = await request(BASE, '/api/characters/no-such-char/shortrest', 'POST', {});
+    assert(status === 404, `Expected 404, got ${status}`);
+    assert(typeof json.error === 'string', 'Response should have error field');
+  });
+
+  await test('POST /api/characters/:id/shortrest with 0 hit dice returns baseline fields', async () => {
+    const { status, json } = await request(BASE, `/api/characters/${PALADIN_ID}/shortrest`, 'POST', {});
+    assert(status === 200, `Expected 200, got ${status}. Body: ${JSON.stringify(json)}`);
+    assert(typeof json.hpRegained === 'number', 'hpRegained must be a number');
+    assert(typeof json.hdSpent === 'number', 'hdSpent must be a number');
+    assert(Array.isArray(json.restored), 'restored must be an array');
+    assert(json.hdSpent === 0, `Expected hdSpent=0 with no body, got ${json.hdSpent}`);
+    assert(json.hpRegained === 0, `Expected hpRegained=0 with no body, got ${json.hpRegained}`);
+    resetPaladin();
+  });
+
+  await test('POST /api/characters/:id/shortrest spending hit dice heals HP', async () => {
+    // Wound the Paladin
+    const woundedSheet = JSON.parse(fs.readFileSync(PALADIN_FILE, 'utf-8'));
+    const maxHP        = woundedSheet.maxHP;
+    woundedSheet.currentHP = 1;
+    fs.writeFileSync(PALADIN_FILE, JSON.stringify(woundedSheet));
+
+    const { status, json } = await request(BASE, `/api/characters/${PALADIN_ID}/shortrest`, 'POST', {
+      hitDiceToSpend: 1,
+    });
+    assert(status === 200, `Expected 200, got ${status}. Body: ${JSON.stringify(json)}`);
+    assert(json.hdSpent === 1, `Expected hdSpent=1, got ${json.hdSpent}`);
+    assert(json.hpRegained >= 1, `Expected hpRegained>=1, got ${json.hpRegained}`);
+    assert(json.character.currentHP > 1, 'HP should have increased after spending hit die');
+    assert(json.character.currentHP <= maxHP, 'HP should not exceed maxHP');
+    resetPaladin();
+  });
+
+  await test('POST /api/characters/:id/shortrest cannot heal above maxHP', async () => {
+    // Full HP already
+    const { status, json } = await request(BASE, `/api/characters/${PALADIN_ID}/shortrest`, 'POST', {
+      hitDiceToSpend: 10,
+    });
+    assert(status === 200, `Expected 200, got ${status}`);
+    assert(json.character.currentHP <= json.character.maxHP, 'HP capped at maxHP');
+    resetPaladin();
+  });
+
+  await test('POST /api/characters/:id/shortrest restores Second Wind for Fighter', async () => {
+    // Create a Fighter sheet in the characters dir, call shortrest, verify secondWind restored
+    const fighterId   = 'aaaaaaaa-bbbb-4ccc-8ddd-ff0000000001';
+    const fighterFile = path.join(process.cwd(), 'characters', `${fighterId}.json`);
+    const base        = JSON.parse(fs.readFileSync(PALADIN_FILE, 'utf-8'));
+    // Reuse paladin structure but override to Fighter with secondWind depleted
+    base.id            = fighterId;
+    base.classLevels   = [{ className: 'Fighter', level: 1 }];
+    base.firstClass    = 'Fighter';
+    base.resources     = { secondWind: { max: 1, remaining: 0 } };
+    base.levelHistory  = [];
+    fs.writeFileSync(fighterFile, JSON.stringify(base));
+    try {
+      const { status, json } = await request(BASE, `/api/characters/${fighterId}/shortrest`, 'POST', {});
+      assert(status === 200, `Expected 200, got ${status}. Body: ${JSON.stringify(json)}`);
+      assert(json.character.resources.secondWind.remaining === 1, 'Second Wind should be restored');
+      assert(json.restored.some((r: string) => r.includes('Second Wind')), 'restored[] should mention Second Wind');
+    } finally {
+      if (fs.existsSync(fighterFile)) fs.unlinkSync(fighterFile);
+    }
+  });
+
+  await test('POST /api/characters/:id/shortrest restores Warlock pact slots', async () => {
+    const warlockId   = 'aaaaaaaa-bbbb-4ccc-8ddd-ee0000000001';
+    const warlockFile = path.join(process.cwd(), 'characters', `${warlockId}.json`);
+    const base        = JSON.parse(fs.readFileSync(PALADIN_FILE, 'utf-8'));
+    base.id           = warlockId;
+    base.classLevels  = [{ className: 'Warlock', level: 1 }];
+    base.firstClass   = 'Warlock';
+    base.resources    = {};
+    base.spellcasting = {
+      ability: 'cha', spellAttackBonus: 4, saveDC: 12,
+      slots: {}, slotsUsed: {},
+      pactSlots: { slotLevel: 1, total: 1, used: 1 },
+      cantrips: [], knownSpells: [], preparedSpells: [],
+    };
+    base.levelHistory = [];
+    fs.writeFileSync(warlockFile, JSON.stringify(base));
+    try {
+      const { status, json } = await request(BASE, `/api/characters/${warlockId}/shortrest`, 'POST', {});
+      assert(status === 200, `Expected 200, got ${status}. Body: ${JSON.stringify(json)}`);
+      assert(json.character.spellcasting.pactSlots.used === 0, 'Pact slots restored on short rest');
+      assert(json.restored.some((r: string) => r.includes('Pact')), 'restored[] mentions Pact slots');
+    } finally {
+      if (fs.existsSync(warlockFile)) fs.unlinkSync(warlockFile);
+    }
+  });
+
+  await test('POST /api/characters/:id/shortrest restores Channel Divinity for Cleric', async () => {
+    const clericId   = 'aaaaaaaa-bbbb-4ccc-8ddd-cc0000000001';
+    const clericFile = path.join(process.cwd(), 'characters', `${clericId}.json`);
+    const base       = JSON.parse(fs.readFileSync(PALADIN_FILE, 'utf-8'));
+    base.id          = clericId;
+    base.classLevels = [{ className: 'Cleric', level: 2 }];
+    base.firstClass  = 'Cleric';
+    base.resources   = { channelDivinity: { max: 1, remaining: 0 } };
+    base.levelHistory = [];
+    fs.writeFileSync(clericFile, JSON.stringify(base));
+    try {
+      const { status, json } = await request(BASE, `/api/characters/${clericId}/shortrest`, 'POST', {});
+      assert(status === 200, `Expected 200, got ${status}. Body: ${JSON.stringify(json)}`);
+      assert(json.character.resources.channelDivinity.remaining === 1, 'Channel Divinity restored');
+      assert(json.restored.some((r: string) => r.includes('Channel Divinity')), 'restored[] mentions Channel Divinity');
+    } finally {
+      if (fs.existsSync(clericFile)) fs.unlinkSync(clericFile);
+    }
+  });
+
+  await test('POST /api/characters/:id/shortrest restores Ki for Monk', async () => {
+    const monkId   = 'aaaaaaaa-bbbb-4ccc-8ddd-ee0000000002';
+    const monkFile = path.join(process.cwd(), 'characters', `${monkId}.json`);
+    const base     = JSON.parse(fs.readFileSync(PALADIN_FILE, 'utf-8'));
+    base.id        = monkId;
+    base.classLevels = [{ className: 'Monk', level: 3 }];
+    base.firstClass  = 'Monk';
+    base.resources   = { ki: { max: 3, remaining: 1 } };
+    base.levelHistory = [];
+    fs.writeFileSync(monkFile, JSON.stringify(base));
+    try {
+      const { status, json } = await request(BASE, `/api/characters/${monkId}/shortrest`, 'POST', {});
+      assert(status === 200, `Expected 200, got ${status}. Body: ${JSON.stringify(json)}`);
+      assert(json.character.resources.ki.remaining === 3, `Ki restored to max; got ${json.character.resources.ki.remaining}`);
+      assert(json.restored.some((r: string) => r.includes('Ki')), 'restored[] mentions Ki');
+    } finally {
+      if (fs.existsSync(monkFile)) fs.unlinkSync(monkFile);
+    }
+  });
+
+  await test('POST /api/characters/:id/shortrest does NOT restore Bardic Inspiration without Font of Inspiration', async () => {
+    const bardId   = 'aaaaaaaa-bbbb-4ccc-8ddd-ee0000000003';
+    const bardFile = path.join(process.cwd(), 'characters', `${bardId}.json`);
+    const base     = JSON.parse(fs.readFileSync(PALADIN_FILE, 'utf-8'));
+    base.id        = bardId;
+    base.classLevels = [{ className: 'Bard', level: 3 }];
+    base.firstClass  = 'Bard';
+    base.resources   = { bardicInspiration: { max: 3, remaining: 0, dieSides: 6 } };
+    base.allFeatures = []; // No Font of Inspiration
+    base.levelHistory = [];
+    fs.writeFileSync(bardFile, JSON.stringify(base));
+    try {
+      const { status, json } = await request(BASE, `/api/characters/${bardId}/shortrest`, 'POST', {});
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(json.character.resources.bardicInspiration.remaining === 0, 'BI should NOT restore without Font of Inspiration');
+    } finally {
+      if (fs.existsSync(bardFile)) fs.unlinkSync(bardFile);
+    }
+  });
+
+  await test('POST /api/characters/:id/shortrest restores Bardic Inspiration WITH Font of Inspiration', async () => {
+    const bardId2   = 'aaaaaaaa-bbbb-4ccc-8ddd-ee0000000004';
+    const bardFile2 = path.join(process.cwd(), 'characters', `${bardId2}.json`);
+    const base      = JSON.parse(fs.readFileSync(PALADIN_FILE, 'utf-8'));
+    base.id         = bardId2;
+    base.classLevels = [{ className: 'Bard', level: 5 }];
+    base.firstClass  = 'Bard';
+    base.resources   = { bardicInspiration: { max: 3, remaining: 0, dieSides: 8 } };
+    base.allFeatures = [
+      { name: 'Font of Inspiration', source: 'class', description: 'Bardic Inspiration recharges on short rest.' },
+    ];
+    base.levelHistory = [];
+    fs.writeFileSync(bardFile2, JSON.stringify(base));
+    try {
+      const { status, json } = await request(BASE, `/api/characters/${bardId2}/shortrest`, 'POST', {});
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(json.character.resources.bardicInspiration.remaining === 3, 'BI restored with Font of Inspiration');
+      assert(json.restored.some((r: string) => r.includes('Bardic Inspiration')), 'restored[] mentions BI');
+    } finally {
+      if (fs.existsSync(bardFile2)) fs.unlinkSync(bardFile2);
+    }
+  });
+
+    // ── CORS ──────────────────────────────────────────────────
 
   await test('All responses include CORS header', async () => {
     // Test via Node http — check raw response header

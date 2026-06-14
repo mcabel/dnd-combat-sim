@@ -39,7 +39,7 @@ import { spawnMonster, Raw5etoolsMonster } from './parser/fivetools';
 import { simulate }                    from './scenarios/simulate';
 import { Combatant }                   from './types/core';
 import { EncounterSpec }               from './scenarios/encounter';
-import { totalLevel, XP_THRESHOLDS, crToXP } from './characters/types';
+import { totalLevel, XP_THRESHOLDS, crToXP, abilityModifier } from './characters/types';
 
 // Lazy-loaded bestiary — mirrors getBestiary() in server.ts
 let _bestiary: Map<string, Raw5etoolsMonster> | null = null;
@@ -662,6 +662,14 @@ router.post('/characters/:id/longrest', async (req: Request, res: Response) => {
       r.wardingBond.remaining = 1;
       restored.push('Warding Bond restored');
     }
+    if (r.channelDivinity && r.channelDivinity.remaining < r.channelDivinity.max) {
+      r.channelDivinity.remaining = r.channelDivinity.max;
+      restored.push('Channel Divinity restored');
+    }
+    if (r.ki && r.ki.remaining < r.ki.max) {
+      r.ki.remaining = r.ki.max;
+      restored.push('Ki points restored');
+    }
     // Exhaustion: reduce by 1 on long rest (PHB p.291)
     if (updated.exhaustionLevel && updated.exhaustionLevel > 0) {
       updated.exhaustionLevel -= 1;
@@ -672,6 +680,102 @@ router.post('/characters/:id/longrest', async (req: Request, res: Response) => {
     await saveCharacter(updated);
 
     return res.json({ character: updated, restored });
+  } catch (err) {
+    return handleError(res, err);
+  }
+});
+
+
+// ============================================================
+// POST /api/characters/:id/shortrest
+// Apply a short rest: spend hit dice to recover HP, recharge
+// short-rest resources (Second Wind, Warlock pact slots,
+// Bardic Inspiration at lv5+, Channel Divinity, Ki points).
+// Body:     { hitDiceToSpend?: number }    (default 0)
+// Response: { character: CharacterSheet; hpRegained: number; hdSpent: number; restored: string[] }
+// ============================================================
+router.post('/characters/:id/shortrest', async (req: Request, res: Response) => {
+  try {
+    const id = String(req.params.id);
+    const sheet = loadCharacter(id);
+    if (!sheet) return res.status(404).json({ error: `Character not found: ${id}` });
+
+    const body          = req.body ?? {};
+    const hdToSpend     = Math.max(0, Math.floor(Number(body.hitDiceToSpend ?? 0)));
+
+    const updated       = JSON.parse(JSON.stringify(sheet)); // deep clone
+    const conMod        = abilityModifier(updated.stats.con);
+    const restored: string[] = [];
+    let hpRegained      = 0;
+    let hdSpent         = 0;
+
+    // ---- Hit dice spending ------------------------------------
+    // Each die spent: roll die + CON mod (min 1 per die), add to currentHP capped at maxHP.
+    // PHB p.186. We use average (ceil(sides/2)) per die for determinism.
+    // To use random rolls: Math.floor(Math.random() * dieSides) + 1
+    let remaining = hdToSpend;
+    for (const hd of (updated.hitDice || [])) {
+      if (remaining <= 0) break;
+      const canSpend = Math.min(remaining, hd.remaining);
+      if (canSpend <= 0) continue;
+      for (let i = 0; i < canSpend; i++) {
+        const roll      = Math.floor(hd.dieSides / 2) + 1; // average: ceil(d/2)
+        const gain      = Math.max(1, roll + conMod);
+        hpRegained     += gain;
+      }
+      hd.remaining   -= canSpend;
+      hdSpent        += canSpend;
+      remaining      -= canSpend;
+    }
+    if (hpRegained > 0) {
+      updated.currentHP = Math.min(updated.maxHP, updated.currentHP + hpRegained);
+      // Clamp hpRegained to what was actually applied (can't go above maxHP)
+      hpRegained = updated.currentHP - sheet.currentHP;
+    }
+
+    // ---- Short-rest resource recharge -------------------------
+    const r = updated.resources || {};
+
+    // Fighter — Second Wind (short or long rest, PHB p.72)
+    if (r.secondWind && r.secondWind.remaining < r.secondWind.max) {
+      r.secondWind.remaining = r.secondWind.max;
+      restored.push('Second Wind restored');
+    }
+
+    // Warlock — Pact Magic slots (short or long rest, PHB p.107)
+    if (updated.spellcasting?.pactSlots && updated.spellcasting.pactSlots.used > 0) {
+      updated.spellcasting.pactSlots.used = 0;
+      restored.push('Pact slots restored');
+    }
+
+    // Bard — Bardic Inspiration recharges on short rest only at lv5+ (Font of Inspiration, PHB p.54)
+    // We detect eligibility via allFeatures lookup.
+    if (r.bardicInspiration && r.bardicInspiration.remaining < r.bardicInspiration.max) {
+      const hasFontOfInspiration = (updated.allFeatures || []).some(
+        (f: { name: string }) => f.name === 'Font of Inspiration',
+      );
+      if (hasFontOfInspiration) {
+        r.bardicInspiration.remaining = r.bardicInspiration.max;
+        restored.push('Bardic Inspiration restored (Font of Inspiration)');
+      }
+    }
+
+    // Cleric — Channel Divinity (short or long rest, PHB p.58)
+    if (r.channelDivinity && r.channelDivinity.remaining < r.channelDivinity.max) {
+      r.channelDivinity.remaining = r.channelDivinity.max;
+      restored.push('Channel Divinity restored');
+    }
+
+    // Monk — Ki points (short or long rest, PHB p.78)
+    if (r.ki && r.ki.remaining < r.ki.max) {
+      r.ki.remaining = r.ki.max;
+      restored.push('Ki points restored');
+    }
+
+    updated.updatedAt = new Date().toISOString();
+    await saveCharacter(updated);
+
+    return res.json({ character: updated, hpRegained, hdSpent, restored });
   } catch (err) {
     return handleError(res, err);
   }

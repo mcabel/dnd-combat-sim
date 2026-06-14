@@ -201,6 +201,10 @@ export interface CharacterResources {
   darkOnesBlessing?:  { amount: number };
   // Warding Bond
   wardingBond?:       { remaining: number };
+  // Cleric — Channel Divinity (short or long rest)
+  channelDivinity?:   { max: number; remaining: number };
+  // Monk — Ki points (short or long rest)
+  ki?:                { max: number; remaining: number };
 }
 
 /** Named features from race, class, subclass, background */

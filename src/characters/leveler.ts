@@ -467,6 +467,17 @@ function updateResources(
       res.arcaneRecovery = { usesRemaining: 1 };
       break;
     }
+    case 'Cleric': {
+      // Channel Divinity: 1/rest at lv1, 2/rest at lv6, 3/rest at lv18 (PHB p.58)
+      const cdMax = newClassLevel >= 18 ? 3 : newClassLevel >= 6 ? 2 : 1;
+      res.channelDivinity = { max: cdMax, remaining: cdMax };
+      break;
+    }
+    case 'Monk': {
+      // Ki points = monk level; recharge on short or long rest (PHB p.78)
+      res.ki = { max: newClassLevel, remaining: newClassLevel };
+      break;
+    }
     default:
       break;
   }
