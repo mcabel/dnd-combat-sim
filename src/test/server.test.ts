@@ -913,6 +913,58 @@ async function run() {
     } finally { if (fs.existsSync(wFile)) fs.unlinkSync(wFile); }
   });
 
+  // ── Conditions Tracker (PUT conditions) ──────────────────────
+
+  await test('PUT /api/characters/:id sets conditions array', async () => {
+    const cId   = 'aaaaaaaa-bbbb-4ccc-8ddd-ff0000000030';
+    const cFile = path.join(process.cwd(), 'characters', `${cId}.json`);
+    const base  = JSON.parse(fs.readFileSync(PALADIN_FILE, 'utf-8'));
+    base.id = cId; base.levelHistory = [];
+    fs.writeFileSync(cFile, JSON.stringify(base));
+    try {
+      const { status, json } = await request(BASE, `/api/characters/${cId}`, 'PUT', {
+        conditions: ['Poisoned', 'Prone']
+      });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(Array.isArray(json.character.conditions), 'conditions is array');
+      assert(json.character.conditions.includes('Poisoned'), 'Poisoned in conditions');
+      assert(json.character.conditions.includes('Prone'), 'Prone in conditions');
+    } finally { if (fs.existsSync(cFile)) fs.unlinkSync(cFile); }
+  });
+
+  await test('PUT /api/characters/:id clears a condition (removes one)', async () => {
+    const cId   = 'aaaaaaaa-bbbb-4ccc-8ddd-ff0000000031';
+    const cFile = path.join(process.cwd(), 'characters', `${cId}.json`);
+    const base  = JSON.parse(fs.readFileSync(PALADIN_FILE, 'utf-8'));
+    base.id = cId; base.levelHistory = []; base.conditions = ['Frightened', 'Grappled'];
+    fs.writeFileSync(cFile, JSON.stringify(base));
+    try {
+      // Remove Frightened, keep Grappled
+      const { status, json } = await request(BASE, `/api/characters/${cId}`, 'PUT', {
+        conditions: ['Grappled']
+      });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(json.character.conditions.length === 1, 'One condition remains');
+      assert(!json.character.conditions.includes('Frightened'), 'Frightened removed');
+      assert(json.character.conditions.includes('Grappled'), 'Grappled retained');
+    } finally { if (fs.existsSync(cFile)) fs.unlinkSync(cFile); }
+  });
+
+  await test('PUT /api/characters/:id conditions persist across GET', async () => {
+    const cId   = 'aaaaaaaa-bbbb-4ccc-8ddd-ff0000000032';
+    const cFile = path.join(process.cwd(), 'characters', `${cId}.json`);
+    const base  = JSON.parse(fs.readFileSync(PALADIN_FILE, 'utf-8'));
+    base.id = cId; base.levelHistory = [];
+    fs.writeFileSync(cFile, JSON.stringify(base));
+    try {
+      await request(BASE, `/api/characters/${cId}`, 'PUT', { conditions: ['Stunned'] });
+      const { status, json } = await request(BASE, `/api/characters/${cId}`, 'GET');
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(Array.isArray(json.character.conditions), 'conditions persisted');
+      assert(json.character.conditions.includes('Stunned'), 'Stunned persisted after GET');
+    } finally { if (fs.existsSync(cFile)) fs.unlinkSync(cFile); }
+  });
+
     // ── CORS ──────────────────────────────────────────────────
 
   await test('All responses include CORS header', async () => {

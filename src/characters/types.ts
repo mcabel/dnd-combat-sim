@@ -329,6 +329,10 @@ export interface CharacterSheet {
   // Ordered oldest → newest. Top = last element.
   // Optional for backward compatibility with pre-stack sheets.
   levelHistory?: LevelRecord[];
+
+  // ---- Conditions (PHB p.290) -------------------------------
+  // Active conditions on this character. Optional for backward compat.
+  conditions?: string[];
 }
 
 // ---- Party --------------------------------------------------

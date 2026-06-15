@@ -464,6 +464,10 @@ button.full { width: 100%; padding: 11px; font-size: 13px; }
     <!-- Features -->
     <div class="sec-row mt12"><div class="sec-title">Features</div><div class="sec-line"></div></div>
     <ul class="feat-list" id="char-features"></ul>
+
+    <!-- Conditions -->
+    <div class="sec-row mt12"><div class="sec-title">Conditions</div><div class="sec-line"></div></div>
+    <div id="char-conditions" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px"></div>
   </div>
 </div><!-- /panel-characters -->
 
@@ -878,6 +882,51 @@ function renderCharDetail() {
   } else {
     featEl.innerHTML = '<li style="color:var(--muted)">No features recorded.</li>';
   }
+
+  // Conditions
+  renderConditions(c);
+}
+
+const PHB_CONDITIONS = [
+  'Blinded','Charmed','Deafened','Exhaustion','Frightened','Grappled',
+  'Incapacitated','Invisible','Paralyzed','Petrified','Poisoned',
+  'Prone','Restrained','Stunned','Unconscious'
+];
+
+function renderConditions(c) {
+  const active = new Set(c.conditions || []);
+  const el = document.getElementById('char-conditions');
+  el.innerHTML = PHB_CONDITIONS.map(name => {
+    const on = active.has(name);
+    return `<button
+      onclick="toggleCondition('${name}')"
+      style="
+        padding:3px 8px;font-size:11px;border-radius:12px;cursor:pointer;
+        border:1px solid ${on ? 'var(--danger)' : 'var(--border)'};
+        background:${on ? 'rgba(220,53,69,0.18)' : 'var(--bg)'};
+        color:${on ? 'var(--danger)' : 'var(--muted)'};
+        font-weight:${on ? '700' : '400'};
+      "
+      title="${name}"
+    >${name}</button>`;
+  }).join('');
+}
+
+async function toggleCondition(name) {
+  if (!S.charDetail) return;
+  const c = S.charDetail;
+  const current = new Set(c.conditions || []);
+  if (current.has(name)) current.delete(name); else current.add(name);
+  const conditions = [...current];
+  const res = await fetch(`/api/characters/${c.id}`, {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ conditions })
+  });
+  if (!res.ok) { showBanner('Failed to update conditions', 'error'); return; }
+  const data = await res.json();
+  S.charDetail = data.character;
+  renderConditions(S.charDetail);
 }
 
 function computeProf(c) {
