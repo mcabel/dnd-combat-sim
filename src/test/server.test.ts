@@ -1155,6 +1155,74 @@ async function run() {
     assert(status === 404, `Expected 404, got ${status}`);
   });
 
+  // ── Gold field (PUT gold) ────────────────────────────────
+  {
+    const gId = '00000000-0000-0000-0000-000000000010';
+    const base = JSON.parse(fs.readFileSync(PALADIN_FILE, 'utf-8'));
+
+    await test('PUT /api/characters/:id updates gold field', async () => {
+      base.id = gId; base.levelHistory = []; base.gold = 25;
+      fs.writeFileSync(path.join(process.cwd(), 'characters', `${gId}.json`), JSON.stringify(base));
+      const { status, json } = await request(BASE, `/api/characters/${gId}`, 'PUT', { gold: 150 });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(json.character.gold === 150, `Expected gold=150, got ${json.character.gold}`);
+      fs.unlinkSync(path.join(process.cwd(), 'characters', `${gId}.json`));
+    });
+
+    await test('PUT /api/characters/:id gold persists across GET', async () => {
+      base.id = gId; base.levelHistory = []; base.gold = 0;
+      fs.writeFileSync(path.join(process.cwd(), 'characters', `${gId}.json`), JSON.stringify(base));
+      await request(BASE, `/api/characters/${gId}`, 'PUT', { gold: 999 });
+      const { json } = await request(BASE, `/api/characters/${gId}`);
+      assert(json.character.gold === 999, `Gold not persisted: got ${json.character.gold}`);
+      fs.unlinkSync(path.join(process.cwd(), 'characters', `${gId}.json`));
+    });
+  }
+
+  // ── Equipment array (PUT equipment) ──────────────────────
+  {
+    const eqId = '00000000-0000-0000-0000-000000000011';
+    const base  = JSON.parse(fs.readFileSync(PALADIN_FILE, 'utf-8'));
+
+    await test('PUT /api/characters/:id replaces equipment array', async () => {
+      base.id = eqId; base.levelHistory = [];
+      fs.writeFileSync(path.join(process.cwd(), 'characters', `${eqId}.json`), JSON.stringify(base));
+      const newEquip = [{ name: 'Dagger', quantity: 2, equipped: true, category: 'weapon' }];
+      const { status, json } = await request(BASE, `/api/characters/${eqId}`, 'PUT', { equipment: newEquip });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(json.character.equipment.length === 1, `Expected 1 item, got ${json.character.equipment.length}`);
+      assert(json.character.equipment[0].name === 'Dagger', `Expected Dagger, got ${json.character.equipment[0].name}`);
+      fs.unlinkSync(path.join(process.cwd(), 'characters', `${eqId}.json`));
+    });
+
+    await test('PUT /api/characters/:id appends equipment item (array persists)', async () => {
+      base.id = eqId; base.levelHistory = [];
+      base.equipment = [{ name: 'Longsword', quantity: 1, equipped: true, category: 'weapon' }];
+      fs.writeFileSync(path.join(process.cwd(), 'characters', `${eqId}.json`), JSON.stringify(base));
+      const appended = [...base.equipment, { name: 'Torch', quantity: 5, equipped: false, category: 'gear' }];
+      await request(BASE, `/api/characters/${eqId}`, 'PUT', { equipment: appended });
+      const { json } = await request(BASE, `/api/characters/${eqId}`);
+      assert(json.character.equipment.length === 2, `Expected 2 items, got ${json.character.equipment.length}`);
+      assert(json.character.equipment[1].name === 'Torch', `Expected Torch, got ${json.character.equipment[1].name}`);
+      fs.unlinkSync(path.join(process.cwd(), 'characters', `${eqId}.json`));
+    });
+
+    await test('PUT /api/characters/:id removes equipment item (filtered array)', async () => {
+      base.id = eqId; base.levelHistory = [];
+      base.equipment = [
+        { name: 'Longsword', quantity: 1, equipped: true,  category: 'weapon' },
+        { name: 'Rope',      quantity: 1, equipped: false, category: 'gear'   },
+      ];
+      fs.writeFileSync(path.join(process.cwd(), 'characters', `${eqId}.json`), JSON.stringify(base));
+      const filtered = [base.equipment[0]];
+      await request(BASE, `/api/characters/${eqId}`, 'PUT', { equipment: filtered });
+      const { json } = await request(BASE, `/api/characters/${eqId}`);
+      assert(json.character.equipment.length === 1, `Expected 1 item after removal, got ${json.character.equipment.length}`);
+      assert(json.character.equipment[0].name === 'Longsword', `Expected Longsword, got ${json.character.equipment[0].name}`);
+      fs.unlinkSync(path.join(process.cwd(), 'characters', `${eqId}.json`));
+    });
+  }
+
     // ── CORS ──────────────────────────────────────────────────
 
   await test('All responses include CORS header', async () => {

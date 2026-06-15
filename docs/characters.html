@@ -335,6 +335,11 @@ button.full { width: 100%; padding: 11px; font-size: 13px; }
       </select>
     </div>
 
+    <label style="margin-top:12px">Additional Equipment</label>
+    <div id="cf-extra-equip" style="display:flex;flex-direction:column;gap:5px;margin-bottom:4px"></div>
+    <button type="button" onclick="addEquipFormRow()"
+      style="background:none;border:1px dashed var(--border);border-radius:5px;color:var(--muted);font-family:var(--mono);font-size:11px;padding:5px 12px;cursor:pointer;width:100%;text-align:center;margin-bottom:10px">＋ Add Item</button>
+
     <label style="margin-top:12px">Notes (optional)</label>
     <textarea id="cf-notes" placeholder="Character backstory, build notes…"></textarea>
 
@@ -1025,8 +1030,17 @@ function renderEquipment(c) {
     html += `</div>`;
   }
 
-  // Gold
-  html += `<div style="font-size:12px;color:var(--muted);margin-bottom:${items.length?4:0}px">💰 ${gold} gp</div>`;
+  // Gold (editable)
+  html += `<div style="display:flex;align-items:center;gap:6px;margin-bottom:${items.length?6:0}px">
+    <span style="font-size:13px">💰</span>
+    <input type="number" id="gold-input-${c.id}" value="${gold}" min="0" step="0.01"
+      style="width:80px;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-family:var(--mono);font-size:12px;padding:3px 6px;outline:none"
+      onchange="saveGold('${c.id}', this.value)"
+      onblur="saveGold('${c.id}', this.value)"
+      onkeydown="if(event.key==='Enter')this.blur()"
+      title="Click to edit gold"/>
+    <span style="font-size:12px;color:var(--muted)">gp</span>
+  </div>`;
 
   // Full gear list (collapsible)
   if (items.length > 0) {
@@ -1043,6 +1057,7 @@ function renderEquipment(c) {
               <th style="text-align:center;padding:2px 4px">Qty</th>
               <th style="text-align:center;padding:2px 4px">Cat</th>
               <th style="text-align:center;padding:2px 4px">Equipped</th>
+              <th style="text-align:center;padding:2px 4px;width:28px"></th>
             </tr>
           </thead>
           <tbody>
@@ -1058,14 +1073,61 @@ function renderEquipment(c) {
                     ${e.equipped ? '<span style="color:var(--accent)">✓</span>' : '<span style="color:var(--muted)">—</span>'}
                   </button>
                 </td>
+                <td style="text-align:center;padding:3px 4px">
+                  <button onclick="removeEquipItem('${c.id}', ${i})"
+                    title="Remove item"
+                    style="background:none;border:none;cursor:pointer;padding:2px 6px;font-size:12px;color:var(--muted);line-height:1">✕</button>
+                </td>
               </tr>`).join('')}
           </tbody>
         </table>
       </div>
     </div>`;
   } else if (!weapon && !armor && !shield) {
-    html = `<div style="color:var(--muted);font-size:12px">💰 ${gold} gp &nbsp;·&nbsp; No equipment recorded.</div>`;
+    html += `<div style="color:var(--muted);font-size:12px;margin-bottom:6px">No equipment recorded.</div>`;
   }
+
+  // ── Add Item inline form ──
+  html += `
+    <div id="add-equip-form-${c.id}" style="display:none;margin-top:6px;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:10px 12px">
+      <div style="display:grid;grid-template-columns:2fr 1fr 60px auto;gap:6px;align-items:end">
+        <div>
+          <div style="font-size:10px;color:var(--muted);margin-bottom:3px;letter-spacing:0.05em">ITEM NAME</div>
+          <input type="text" id="add-equip-name-${c.id}" placeholder="Torch, Rope, Shield…"
+            style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-family:var(--mono);font-size:12px;padding:5px 8px;outline:none"/>
+        </div>
+        <div>
+          <div style="font-size:10px;color:var(--muted);margin-bottom:3px;letter-spacing:0.05em">CATEGORY</div>
+          <select id="add-equip-cat-${c.id}"
+            style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-family:var(--mono);font-size:12px;padding:5px 8px;outline:none">
+            <option value="gear">Gear</option>
+            <option value="weapon">Weapon</option>
+            <option value="armor">Armor</option>
+            <option value="shield">Shield</option>
+            <option value="tool">Tool</option>
+            <option value="pack">Pack</option>
+          </select>
+        </div>
+        <div>
+          <div style="font-size:10px;color:var(--muted);margin-bottom:3px;letter-spacing:0.05em">QTY</div>
+          <input type="number" id="add-equip-qty-${c.id}" value="1" min="1"
+            style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-family:var(--mono);font-size:12px;padding:5px 8px;outline:none"/>
+        </div>
+        <button onclick="confirmAddEquipItem('${c.id}')"
+          style="background:var(--accent);border:none;border-radius:5px;color:#000;font-family:var(--mono);font-size:11px;font-weight:600;padding:0 12px;height:31px;cursor:pointer;white-space:nowrap">Add</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;margin-top:8px">
+        <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);cursor:pointer;margin:0">
+          <input type="checkbox" id="add-equip-eq-${c.id}" checked style="accent-color:var(--accent)"/> Equipped
+        </label>
+        <button onclick="hideAddEquipForm('${c.id}')"
+          style="margin-left:auto;background:none;border:1px solid var(--border);border-radius:5px;color:var(--muted);font-family:var(--mono);font-size:11px;padding:4px 10px;cursor:pointer">Cancel</button>
+      </div>
+    </div>
+    <button onclick="showAddEquipForm('${c.id}')"
+      style="margin-top:6px;background:none;border:1px dashed var(--border);border-radius:5px;color:var(--muted);font-family:var(--mono);font-size:11px;padding:5px 12px;cursor:pointer;width:100%;text-align:center"
+      id="add-equip-btn-${c.id}">＋ Add Item</button>
+  `;
 
   el.innerHTML = html;
 }
@@ -1105,6 +1167,103 @@ async function toggleEquip(charId, itemIndex, equipped) {
     }
   } catch (e) {
     showBanner('Network error updating equipment', 'error');
+  }
+}
+
+// ── Gold editing ──────────────────────────────────────────────
+async function saveGold(charId, rawVal) {
+  const gold = parseFloat(rawVal);
+  if (isNaN(gold) || gold < 0) { showBanner('Invalid gold amount', 'error'); return; }
+  try {
+    const r = await fetch(`/api/characters/${charId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ gold })
+    });
+    if (!r.ok) { showBanner('Failed to save gold', 'error'); return; }
+    const { character: c } = await r.json();
+    if (S.charDetail && S.charDetail.id === charId) S.charDetail = c;
+    // update input value in case server normalized
+    const inp = document.getElementById(`gold-input-${charId}`);
+    if (inp) inp.value = c.gold;
+  } catch (e) {
+    showBanner('Network error saving gold', 'error');
+  }
+}
+
+// ── Equipment remove ──────────────────────────────────────────
+async function removeEquipItem(charId, idx) {
+  const c = S.charDetail && S.charDetail.id === charId ? S.charDetail : null;
+  if (!c) return;
+  const updated = c.equipment.filter((_, i) => i !== idx);
+  try {
+    const r = await fetch(`/api/characters/${charId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ equipment: updated })
+    });
+    if (!r.ok) { showBanner('Failed to remove item', 'error'); return; }
+    const { character: saved } = await r.json();
+    S.charDetail = saved;
+    renderEquipment(saved);
+    showBanner('Item removed', 'ok');
+  } catch (e) {
+    showBanner('Network error removing item', 'error');
+  }
+}
+
+// ── Equipment add ─────────────────────────────────────────────
+function showAddEquipForm(charId) {
+  const form = document.getElementById(`add-equip-form-${charId}`);
+  const btn  = document.getElementById(`add-equip-btn-${charId}`);
+  if (form) form.style.display = 'block';
+  if (btn)  btn.style.display  = 'none';
+  const nameEl = document.getElementById(`add-equip-name-${charId}`);
+  if (nameEl) nameEl.focus();
+}
+
+function hideAddEquipForm(charId) {
+  const form = document.getElementById(`add-equip-form-${charId}`);
+  const btn  = document.getElementById(`add-equip-btn-${charId}`);
+  if (form) form.style.display = 'none';
+  if (btn)  btn.style.display  = '';
+}
+
+async function confirmAddEquipItem(charId) {
+  const name     = (document.getElementById(`add-equip-name-${charId}`)?.value || '').trim();
+  const category = document.getElementById(`add-equip-cat-${charId}`)?.value  || 'gear';
+  const qty      = parseInt(document.getElementById(`add-equip-qty-${charId}`)?.value || '1', 10);
+  const equipped = document.getElementById(`add-equip-eq-${charId}`)?.checked ?? false;
+
+  if (!name) { showBanner('Item name required', 'error'); return; }
+  if (isNaN(qty) || qty < 1) { showBanner('Quantity must be ≥ 1', 'error'); return; }
+
+  const c = S.charDetail && S.charDetail.id === charId ? S.charDetail : null;
+  if (!c) return;
+
+  const newItem = { name, quantity: qty, equipped, category };
+  const updated = [...(c.equipment || []), newItem];
+
+  try {
+    const r = await fetch(`/api/characters/${charId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ equipment: updated })
+    });
+    if (!r.ok) { showBanner('Failed to add item', 'error'); return; }
+    const { character: saved } = await r.json();
+    S.charDetail = saved;
+    renderEquipment(saved);
+    showBanner(`${name} added`, 'ok');
+    // reset form fields
+    const nameEl = document.getElementById(`add-equip-name-${charId}`);
+    const qtyEl  = document.getElementById(`add-equip-qty-${charId}`);
+    const eqEl   = document.getElementById(`add-equip-eq-${charId}`);
+    if (nameEl) nameEl.value = '';
+    if (qtyEl)  qtyEl.value  = '1';
+    if (eqEl)   eqEl.checked = true;
+  } catch (e) {
+    showBanner('Network error adding item', 'error');
   }
 }
 
@@ -1512,6 +1671,16 @@ function editChar() {
     document.getElementById('cf-armor').value = arm.name;
     document.getElementById('cf-armor-cat').value = arm.category;
   }
+  // Extra equipment rows (everything except the main weapon + armor)
+  const extraContainer = document.getElementById('cf-extra-equip');
+  if (extraContainer) {
+    extraContainer.innerHTML = '';
+    (c.equipment || []).forEach(item => {
+      const isMainWpn = wpn && item.name === wpn.name && item.category === 'weapon' && item.equipped;
+      const isMainArm = arm && item.name === arm.name && item.category === arm.category && item.equipped;
+      if (!isMainWpn && !isMainArm) addEquipFormRow(item);
+    });
+  }
   document.getElementById('char-form-card').classList.remove('hidden');
   document.getElementById('char-detail-card').classList.add('hidden');
 }
@@ -1565,10 +1734,52 @@ function importChar() {
 }
 
 // ── Create / Edit Form ────────────────────────────────────────
+function addEquipFormRow(item) {
+  const container = document.getElementById('cf-extra-equip');
+  if (!container) return;
+  const idx = container.children.length;
+  const div = document.createElement('div');
+  div.style.cssText = 'display:grid;grid-template-columns:2fr 1fr 55px auto auto;gap:5px;align-items:center';
+  div.innerHTML = `
+    <input type="text" name="xname" placeholder="Item name" value="${item ? item.name : ''}"
+      style="background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-family:var(--mono);font-size:12px;padding:5px 8px;outline:none"/>
+    <select name="xcat"
+      style="background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-family:var(--mono);font-size:12px;padding:5px 8px;outline:none">
+      <option value="gear"${(!item||item.category==='gear')?' selected':''}>Gear</option>
+      <option value="weapon"${item&&item.category==='weapon'?' selected':''}>Weapon</option>
+      <option value="armor"${item&&item.category==='armor'?' selected':''}>Armor</option>
+      <option value="shield"${item&&item.category==='shield'?' selected':''}>Shield</option>
+      <option value="tool"${item&&item.category==='tool'?' selected':''}>Tool</option>
+      <option value="pack"${item&&item.category==='pack'?' selected':''}>Pack</option>
+    </select>
+    <input type="number" name="xqty" min="1" value="${item ? item.quantity : 1}"
+      style="background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-family:var(--mono);font-size:12px;padding:5px 8px;outline:none"/>
+    <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted);cursor:pointer;white-space:nowrap;margin:0">
+      <input type="checkbox" name="xeq"${(!item||item.equipped)?' checked':''} style="accent-color:var(--accent)"/> Eq.
+    </label>
+    <button type="button" onclick="this.closest('div').remove()"
+      style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px;padding:2px 5px">✕</button>
+  `;
+  container.appendChild(div);
+}
+
+function getExtraEquipRows() {
+  const container = document.getElementById('cf-extra-equip');
+  if (!container) return [];
+  return Array.from(container.children).map(div => ({
+    name:     div.querySelector('[name=xname]')?.value.trim() || '',
+    category: div.querySelector('[name=xcat]')?.value || 'gear',
+    quantity: parseInt(div.querySelector('[name=xqty]')?.value || '1', 10) || 1,
+    equipped: div.querySelector('[name=xeq]')?.checked ?? false,
+  })).filter(r => r.name.length > 0);
+}
+
 function newChar() {
   S.editingId = null;
   S.charDetail = null;
   S.pendingSubclass = null;
+  const extraContainer = document.getElementById('cf-extra-equip');
+  if (extraContainer) extraContainer.innerHTML = '';
   document.getElementById('char-form-title').childNodes[0].textContent = 'New Character ';
   document.getElementById('char-form-save-btn').textContent = 'Create Character';
   // Clear form
@@ -1584,6 +1795,8 @@ function newChar() {
 
 function cancelForm() {
   S.editingId = null;
+  const extraContainer = document.getElementById('cf-extra-equip');
+  if (extraContainer) extraContainer.innerHTML = '';
   document.getElementById('char-form-card').classList.add('hidden');
   if (S.charDetail) document.getElementById('char-detail-card').classList.remove('hidden');
 }
@@ -1687,6 +1900,7 @@ async function saveCharForm() {
     equipment: [
       { name: wpnName, quantity: 1, equipped: true,  category: 'weapon' },
       ...(armName && armCat !== 'none' ? [{ name: armName, quantity: 1, equipped: true, category: armCat === 'shield' ? 'shield' : 'armor' }] : []),
+      ...getExtraEquipRows(),
     ],
     gold,
     level1Features: [],
