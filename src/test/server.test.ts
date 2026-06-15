@@ -801,6 +801,54 @@ async function run() {
     }
   });
 
+  // ── Short rest rollMode ───────────────────────────────────
+
+  await test('POST /api/characters/:id/shortrest rollMode average is deterministic', async () => {
+    const woundedSheet   = JSON.parse(fs.readFileSync(PALADIN_FILE, 'utf-8'));
+    woundedSheet.currentHP = 1;
+    fs.writeFileSync(PALADIN_FILE, JSON.stringify(woundedSheet));
+    const { status: s1, json: j1 } = await request(BASE, `/api/characters/${PALADIN_ID}/shortrest`, 'POST', { hitDiceToSpend: 1, rollMode: 'average' });
+    assert(s1 === 200, `Expected 200, got ${s1}`);
+    const hp1 = j1.hpRegained;
+
+    // Reset and do it again — must be the same value
+    resetPaladin();
+    const woundedSheet2   = JSON.parse(fs.readFileSync(PALADIN_FILE, 'utf-8'));
+    woundedSheet2.currentHP = 1;
+    fs.writeFileSync(PALADIN_FILE, JSON.stringify(woundedSheet2));
+    const { json: j2 } = await request(BASE, `/api/characters/${PALADIN_ID}/shortrest`, 'POST', { hitDiceToSpend: 1, rollMode: 'average' });
+    assert(j2.hpRegained === hp1, `Average mode must be deterministic: ${j2.hpRegained} !== ${hp1}`);
+    resetPaladin();
+  });
+
+  await test('POST /api/characters/:id/shortrest rollMode random is in valid range', async () => {
+    const woundedSheet = JSON.parse(fs.readFileSync(PALADIN_FILE, 'utf-8'));
+    woundedSheet.currentHP = 1;
+    const dieSides = (woundedSheet.hitDice?.[0]?.dieSides) ?? 10; // Paladin d10
+    const conMod   = Math.floor((woundedSheet.stats.con - 10) / 2);
+    fs.writeFileSync(PALADIN_FILE, JSON.stringify(woundedSheet));
+    const { status, json } = await request(BASE, `/api/characters/${PALADIN_ID}/shortrest`, 'POST', { hitDiceToSpend: 1, rollMode: 'random' });
+    assert(status === 200, `Expected 200, got ${status}`);
+    const minGain = Math.max(1, 1 + conMod);
+    const maxGain = dieSides + conMod;
+    assert(json.hpRegained >= minGain, `hpRegained ${json.hpRegained} below min ${minGain}`);
+    assert(json.hpRegained <= maxGain, `hpRegained ${json.hpRegained} above max ${maxGain}`);
+    resetPaladin();
+  });
+
+  await test('POST /api/characters/:id/shortrest defaults to average (no rollMode)', async () => {
+    const woundedSheet = JSON.parse(fs.readFileSync(PALADIN_FILE, 'utf-8'));
+    woundedSheet.currentHP = 1;
+    const dieSides = (woundedSheet.hitDice?.[0]?.dieSides) ?? 10;
+    const conMod   = Math.floor((woundedSheet.stats.con - 10) / 2);
+    fs.writeFileSync(PALADIN_FILE, JSON.stringify(woundedSheet));
+    const { status, json } = await request(BASE, `/api/characters/${PALADIN_ID}/shortrest`, 'POST', { hitDiceToSpend: 1 });
+    assert(status === 200, `Expected 200, got ${status}`);
+    const expectedAvg = Math.max(1, Math.floor(dieSides / 2) + 1 + conMod);
+    assert(json.hpRegained === expectedAvg, `Default average: expected ${expectedAvg}, got ${json.hpRegained}`);
+    resetPaladin();
+  });
+
   // ── HP Tracker (PUT currentHP) ────────────────────────────────
 
   await test('PUT /api/characters/:id updates currentHP (take damage)', async () => {

@@ -1197,10 +1197,13 @@ async function doShortRest() {
   showErr('');
   const hdAvail = (S.charDetail.hitDice || []).reduce((s, hd) => s + hd.remaining, 0);
   let hdInput = 0;
+  let rollMode = 'average';
   if (hdAvail > 0) {
-    const raw = prompt(`Short Rest: spend hit dice to heal? (0–${hdAvail} available)`, '1');
+    const raw = prompt(`Short Rest: spend hit dice to heal? (0–${hdAvail} available)\n\nEnter a number, optionally followed by "r" for random rolls (e.g. "2r").\nDefault is average roll.`, '1');
     if (raw === null) return; // cancelled
-    hdInput = Math.max(0, Math.min(hdAvail, parseInt(raw, 10) || 0));
+    const isRandom = raw.trim().toLowerCase().endsWith('r');
+    rollMode = isRandom ? 'random' : 'average';
+    hdInput  = Math.max(0, Math.min(hdAvail, parseInt(raw, 10) || 0));
   }
   const btn = document.getElementById('char-shortrest-btn');
   btn.disabled = true; btn.textContent = '☀ Resting…';
@@ -1208,13 +1211,13 @@ async function doShortRest() {
     const data = await api(`/api/characters/${S.charDetail.id}/shortrest`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ hitDiceToSpend: hdInput }),
+      body: JSON.stringify({ hitDiceToSpend: hdInput, rollMode }),
     });
     S.charDetail = data.character;
     refreshChars();
     renderCharDetail();
     const parts = [];
-    if (data.hpRegained > 0) parts.push(`+${data.hpRegained} HP`);
+    if (data.hpRegained > 0) parts.push(`+${data.hpRegained} HP${rollMode === 'random' ? ' (rolled)' : ''}`);
     if (data.hdSpent > 0)    parts.push(`${data.hdSpent} HD spent`);
     if ((data.restored || []).length > 0) parts.push(`${data.restored.length} resource${data.restored.length===1?'':'s'} recharged`);
     showBanner(`Short rest: ${parts.length ? parts.join(', ') : 'nothing to restore'}.`, 'ok');

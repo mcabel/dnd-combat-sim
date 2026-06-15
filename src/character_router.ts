@@ -702,6 +702,7 @@ router.post('/characters/:id/shortrest', async (req: Request, res: Response) => 
 
     const body          = req.body ?? {};
     const hdToSpend     = Math.max(0, Math.floor(Number(body.hitDiceToSpend ?? 0)));
+    const rollMode: 'average' | 'random' = body.rollMode === 'random' ? 'random' : 'average';
 
     const updated       = JSON.parse(JSON.stringify(sheet)); // deep clone
     const conMod        = abilityModifier(updated.stats.con);
@@ -719,7 +720,9 @@ router.post('/characters/:id/shortrest', async (req: Request, res: Response) => 
       const canSpend = Math.min(remaining, hd.remaining);
       if (canSpend <= 0) continue;
       for (let i = 0; i < canSpend; i++) {
-        const roll      = Math.floor(hd.dieSides / 2) + 1; // average: ceil(d/2)
+        const roll      = rollMode === 'random'
+          ? (Math.floor(Math.random() * hd.dieSides) + 1)
+          : (Math.floor(hd.dieSides / 2) + 1); // average: ceil(d/2)
         const gain      = Math.max(1, roll + conMod);
         hpRegained     += gain;
       }
