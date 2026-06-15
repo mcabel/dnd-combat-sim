@@ -889,3 +889,39 @@ router.post('/characters/:id/leveldown', async (req: Request, res: Response) => 
   }
 });
 
+
+// ============================================================
+// POST /api/characters/:id/equip
+// Toggle equipped status for a single item by index.
+// Body: { itemIndex: number, equipped: boolean }
+// Response: { character: CharacterSheet }
+// ============================================================
+router.post('/characters/:id/equip', async (req: Request, res: Response) => {
+  try {
+    const id    = String(req.params.id);
+    const sheet = loadCharacter(id);
+    if (!sheet) return res.status(404).json({ error: `Character not found: ${id}` });
+
+    const { itemIndex, equipped } = req.body;
+
+    if (typeof itemIndex !== 'number' || !Number.isInteger(itemIndex)) {
+      return res.status(400).json({ error: 'itemIndex must be an integer' });
+    }
+    if (typeof equipped !== 'boolean') {
+      return res.status(400).json({ error: 'equipped must be a boolean' });
+    }
+
+    const items = sheet.equipment || [];
+    if (itemIndex < 0 || itemIndex >= items.length) {
+      return res.status(400).json({ error: `itemIndex ${itemIndex} out of range (0–${items.length - 1})` });
+    }
+
+    const newItems = items.map((item, i) => i === itemIndex ? { ...item, equipped } : item);
+    const updated  = { ...sheet, equipment: newItems, updatedAt: new Date().toISOString() };
+    await saveCharacter(updated);
+
+    return res.json({ character: updated });
+  } catch (err) {
+    return handleError(res, err);
+  }
+});

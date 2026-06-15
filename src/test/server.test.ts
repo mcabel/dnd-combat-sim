@@ -1063,6 +1063,50 @@ async function run() {
     } finally { if (fs.existsSync(nFile)) fs.unlinkSync(nFile); }
   });
 
+  // ── /equip endpoint ────────────────────────────────────────
+
+  await test('POST /api/characters/:id/equip unequips item by index', async () => {
+    // Longsword is index 0, currently equipped: true → set to false
+    resetPaladin();
+    const { status, json } = await request(BASE, `/api/characters/${PALADIN_ID}/equip`, 'POST', { itemIndex: 0, equipped: false });
+    assert(status === 200, `Expected 200, got ${status}: ${JSON.stringify(json)}`);
+    assert(json.character.equipment[0].equipped === false, `Expected equipped false, got ${json.character.equipment[0].equipped}`);
+    assert(json.character.equipment[0].name === 'Longsword', `Expected Longsword, got ${json.character.equipment[0].name}`);
+    resetPaladin();
+  });
+
+  await test('POST /api/characters/:id/equip equips item by index', async () => {
+    // Noble's Pack is index 4, currently equipped: false → set to true
+    resetPaladin();
+    const { status, json } = await request(BASE, `/api/characters/${PALADIN_ID}/equip`, 'POST', { itemIndex: 4, equipped: true });
+    assert(status === 200, `Expected 200, got ${status}: ${JSON.stringify(json)}`);
+    assert(json.character.equipment[4].equipped === true, `Expected equipped true, got ${json.character.equipment[4].equipped}`);
+    resetPaladin();
+  });
+
+  await test('POST /api/characters/:id/equip persists across GET', async () => {
+    resetPaladin();
+    await request(BASE, `/api/characters/${PALADIN_ID}/equip`, 'POST', { itemIndex: 0, equipped: false });
+    const { json: getJson } = await request(BASE, `/api/characters/${PALADIN_ID}`, 'GET');
+    assert(getJson.character.equipment[0].equipped === false, `Expected persisted false, got ${getJson.character.equipment[0].equipped}`);
+    resetPaladin();
+  });
+
+  await test('POST /api/characters/:id/equip 400 on bad itemIndex', async () => {
+    const { status } = await request(BASE, `/api/characters/${PALADIN_ID}/equip`, 'POST', { itemIndex: 99, equipped: false });
+    assert(status === 400, `Expected 400, got ${status}`);
+  });
+
+  await test('POST /api/characters/:id/equip 400 on missing equipped', async () => {
+    const { status } = await request(BASE, `/api/characters/${PALADIN_ID}/equip`, 'POST', { itemIndex: 0 });
+    assert(status === 400, `Expected 400, got ${status}`);
+  });
+
+  await test('POST /api/characters/:id/equip 404 on unknown character', async () => {
+    const { status } = await request(BASE, `/api/characters/no-such-id/equip`, 'POST', { itemIndex: 0, equipped: false });
+    assert(status === 404, `Expected 404, got ${status}`);
+  });
+
     // ── CORS ──────────────────────────────────────────────────
 
   await test('All responses include CORS header', async () => {
