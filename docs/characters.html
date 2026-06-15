@@ -466,9 +466,26 @@ button.full { width: 100%; padding: 11px; font-size: 13px; }
     <div class="sec-row mt12"><div class="sec-title">Features</div><div class="sec-line"></div></div>
     <ul class="feat-list" id="char-features"></ul>
 
+    <!-- Equipment -->
+    <div class="sec-row mt12"><div class="sec-title">Equipment</div><div class="sec-line"></div></div>
+    <div id="char-equipment"></div>
+
     <!-- Conditions -->
     <div class="sec-row mt12"><div class="sec-title">Conditions</div><div class="sec-line"></div></div>
     <div id="char-conditions" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px"></div>
+
+    <!-- Notes -->
+    <div class="sec-row mt12" style="cursor:pointer;user-select:none" onclick="toggleNotes()">
+      <div class="sec-title">Notes</div>
+      <span id="notes-arrow" style="color:var(--muted);font-size:11px;margin-left:4px">▸</span>
+      <div class="sec-line"></div>
+    </div>
+    <div id="notes-section" style="display:none;margin-top:4px">
+      <textarea id="char-notes-input"
+        style="width:100%;min-height:80px;background:var(--card);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:8px;font-size:12px;resize:vertical;box-sizing:border-box;font-family:inherit"
+        placeholder="Character backstory, build notes, session log…"
+        onblur="saveNotes()"></textarea>
+    </div>
   </div>
 </div><!-- /panel-characters -->
 
@@ -922,8 +939,15 @@ function renderCharDetail() {
     featEl.innerHTML = '<li style="color:var(--muted)">No features recorded.</li>';
   }
 
+  // Equipment
+  renderEquipment(c);
+
   // Conditions
   renderConditions(c);
+
+  // Notes
+  const notesTA = document.getElementById('char-notes-input') as HTMLTextAreaElement;
+  if (notesTA) notesTA.value = c.notes || '';
 }
 
 function toggleSpellList(id) {
@@ -975,6 +999,111 @@ async function toggleCondition(name) {
   const data = await res.json();
   S.charDetail = data.character;
   renderConditions(S.charDetail);
+}
+
+// ── Equipment ────────────────────────────────────────────────
+function renderEquipment(c) {
+  const el = document.getElementById('char-equipment');
+  if (!el) return;
+  const items = c.equipment || [];
+  const gold  = c.gold || 0;
+
+  // Equipped items (weapon / armor / shield)
+  const equipped = items.filter(e => e.equipped);
+  const weapon  = equipped.find(e => e.category === 'weapon');
+  const armor   = equipped.find(e => e.category === 'armor');
+  const shield  = equipped.find(e => e.category === 'shield');
+
+  let html = '';
+
+  // Equipped badges
+  if (weapon || armor || shield) {
+    html += `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px">`;
+    if (weapon) html += `<span style="font-size:11px;padding:2px 8px;border-radius:10px;border:1px solid var(--accent);color:var(--accent);background:rgba(200,160,50,0.12)">⚔ ${esc(weapon.name)}</span>`;
+    if (armor)  html += `<span style="font-size:11px;padding:2px 8px;border-radius:10px;border:1px solid var(--border);color:var(--text);background:var(--bg)">🛡 ${esc(armor.name)}</span>`;
+    if (shield) html += `<span style="font-size:11px;padding:2px 8px;border-radius:10px;border:1px solid var(--border);color:var(--text);background:var(--bg)">🔰 ${esc(shield.name)}</span>`;
+    html += `</div>`;
+  }
+
+  // Gold
+  html += `<div style="font-size:12px;color:var(--muted);margin-bottom:${items.length?4:0}px">💰 ${gold} gp</div>`;
+
+  // Full gear list (collapsible)
+  if (items.length > 0) {
+    const listId = `equip-list-${c.id}`;
+    html += `<div>
+      <span style="font-size:11px;color:var(--muted);cursor:pointer" onclick="toggleEquipList('${listId}')">
+        <strong>All Gear (${items.length})</strong> <span id="${listId}-arrow">▸</span>
+      </span>
+      <div id="${listId}" style="display:none;margin-top:4px">
+        <table style="width:100%;border-collapse:collapse;font-size:11px">
+          <thead>
+            <tr style="color:var(--muted);border-bottom:1px solid var(--border)">
+              <th style="text-align:left;padding:2px 4px">Item</th>
+              <th style="text-align:center;padding:2px 4px">Qty</th>
+              <th style="text-align:center;padding:2px 4px">Cat</th>
+              <th style="text-align:center;padding:2px 4px">Equipped</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${items.map(e => `
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.05)">
+                <td style="padding:3px 4px">${esc(e.name)}${e.notes ? `<span style='color:var(--muted)' title='${esc(e.notes)}'> ⓘ</span>` : ''}</td>
+                <td style="text-align:center;padding:3px 4px;color:var(--muted)">${e.quantity}</td>
+                <td style="text-align:center;padding:3px 4px;color:var(--muted)">${e.category}</td>
+                <td style="text-align:center;padding:3px 4px">${e.equipped ? '<span style="color:var(--accent)">✓</span>' : '<span style="color:var(--muted)">—</span>'}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+  } else if (!weapon && !armor && !shield) {
+    html = `<div style="color:var(--muted);font-size:12px">💰 ${gold} gp &nbsp;·&nbsp; No equipment recorded.</div>`;
+  }
+
+  el.innerHTML = html;
+}
+
+function toggleEquipList(id) {
+  const el    = document.getElementById(id);
+  const arrow = document.getElementById(id + '-arrow');
+  if (!el) return;
+  const open = el.style.display === 'none';
+  el.style.display    = open ? 'block' : 'none';
+  arrow.textContent   = open ? '▾' : '▸';
+}
+
+// ── Notes ─────────────────────────────────────────────────────
+function toggleNotes() {
+  const sec   = document.getElementById('notes-section');
+  const arrow = document.getElementById('notes-arrow');
+  if (!sec) return;
+  const open = sec.style.display === 'none';
+  sec.style.display = open ? 'block' : 'none';
+  arrow.textContent = open ? '▾' : '▸';
+  if (open) {
+    const ta = document.getElementById('char-notes-input') as HTMLTextAreaElement;
+    if (ta) ta.focus();
+  }
+}
+
+async function saveNotes() {
+  if (!S.charDetail) return;
+  const ta = document.getElementById('char-notes-input') as HTMLTextAreaElement;
+  if (!ta) return;
+  const notes = ta.value;
+  if (notes === (S.charDetail.notes || '')) return; // no change
+  try {
+    const res = await fetch(`/api/characters/${S.charDetail.id}`, {
+      method: 'PUT',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ notes })
+    });
+    if (!res.ok) { showBanner('Failed to save notes', 'error'); return; }
+    const data = await res.json();
+    S.charDetail = data.character;
+    showBanner('Notes saved', 'ok');
+  } catch(e) { showBanner('Failed to save notes', 'error'); }
 }
 
 function computeProf(c) {

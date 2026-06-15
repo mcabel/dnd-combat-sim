@@ -1022,6 +1022,47 @@ async function run() {
     } finally { if (fs.existsSync(eFile)) fs.unlinkSync(eFile); }
   });
 
+  // ── Notes field (PUT notes) ───────────────────────────────
+  await test('PUT /api/characters/:id sets notes field', async () => {
+    const nId = 'aaaaaaaa-0000-0000-0000-000000000001';
+    const nFile = path.join(process.cwd(), 'characters', `${nId}.json`);
+    const base: any = JSON.parse(JSON.stringify(PALADIN_PRISTINE));
+    base.id = nId; base.levelHistory = []; base.notes = '';
+    fs.writeFileSync(nFile, JSON.stringify(base, null, 2), 'utf-8');
+    try {
+      const { status, json } = await request(BASE, `/api/characters/${nId}`, 'PUT', { notes: 'Seeks redemption for past sins.' });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(json.character.notes === 'Seeks redemption for past sins.', `Expected notes, got ${json.character.notes}`);
+    } finally { if (fs.existsSync(nFile)) fs.unlinkSync(nFile); }
+  });
+
+  await test('PUT /api/characters/:id notes persist across GET', async () => {
+    const nId = 'aaaaaaaa-0000-0000-0000-000000000002';
+    const nFile = path.join(process.cwd(), 'characters', `${nId}.json`);
+    const base: any = JSON.parse(JSON.stringify(PALADIN_PRISTINE));
+    base.id = nId; base.levelHistory = []; base.notes = '';
+    fs.writeFileSync(nFile, JSON.stringify(base, null, 2), 'utf-8');
+    try {
+      await request(BASE, `/api/characters/${nId}`, 'PUT', { notes: 'Oath of Devotion. Favors greatsword.' });
+      const { status, json } = await request(BASE, `/api/characters/${nId}`, 'GET');
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(json.character.notes === 'Oath of Devotion. Favors greatsword.', `Notes not persisted: ${json.character.notes}`);
+    } finally { if (fs.existsSync(nFile)) fs.unlinkSync(nFile); }
+  });
+
+  await test('PUT /api/characters/:id clears notes (empty string)', async () => {
+    const nId = 'aaaaaaaa-0000-0000-0000-000000000003';
+    const nFile = path.join(process.cwd(), 'characters', `${nId}.json`);
+    const base: any = JSON.parse(JSON.stringify(PALADIN_PRISTINE));
+    base.id = nId; base.levelHistory = []; base.notes = 'Old notes';
+    fs.writeFileSync(nFile, JSON.stringify(base, null, 2), 'utf-8');
+    try {
+      const { status, json } = await request(BASE, `/api/characters/${nId}`, 'PUT', { notes: '' });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(json.character.notes === '' || json.character.notes === undefined, `Expected empty notes, got ${json.character.notes}`);
+    } finally { if (fs.existsSync(nFile)) fs.unlinkSync(nFile); }
+  });
+
     // ── CORS ──────────────────────────────────────────────────
 
   await test('All responses include CORS header', async () => {
