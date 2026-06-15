@@ -466,6 +466,7 @@ export interface PlannedAction {
     | 'shieldOfFaith'  // Shield of Faith — +2 AC to one ally (bonus action, concentration)
     | 'hex'            // Hex — bonus action, concentration, +1d6 necrotic on each hit (Warlock)
     | 'mageArmor'      // Mage Armor — self, no concentration, AC = 13 + DEX (Wizard/Sorcerer)
+    | 'magicMissile'   // Magic Missile — 3 auto-hit darts 1d4+1 force each, 120 ft (Wizard/Sorcerer)
     | 'legendary';
   action: Action | null;
   targetId: string | null;

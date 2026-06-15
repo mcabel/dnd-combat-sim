@@ -350,7 +350,7 @@ export function pcToCombatant(
         name,
         isMultiattack: false,
         attackType:  tmpl.attackType,
-        reach:       tmpl.attackType === null ? 5 : tmpl.rangeNormal,  // auto-hit spells use touch/close
+        reach:       tmpl.rangeNormal,  // spell data encodes correct range; touch spells have rangeNormal:5
         range:       tmpl.rangeNormal > 5 ? { normal: tmpl.rangeNormal, long: tmpl.rangeNormal * 2 } : null,
         hitBonus:    tmpl.attackType === 'spell' ? spellAttackBonus : null,
         damage,
