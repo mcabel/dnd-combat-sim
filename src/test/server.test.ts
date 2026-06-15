@@ -1221,6 +1221,31 @@ async function run() {
       assert(json.character.equipment[0].name === 'Longsword', `Expected Longsword, got ${json.character.equipment[0].name}`);
       fs.unlinkSync(path.join(process.cwd(), 'characters', `${eqId}.json`));
     });
+
+    await test('PUT /api/characters/:id updates item quantity', async () => {
+      base.id = eqId; base.levelHistory = [];
+      base.equipment = [{ name: 'Arrow', quantity: 20, equipped: false, category: 'gear' }];
+      fs.writeFileSync(path.join(process.cwd(), 'characters', `${eqId}.json`), JSON.stringify(base));
+      const updated = [{ name: 'Arrow', quantity: 14, equipped: false, category: 'gear' }];
+      const { status, json } = await request(BASE, `/api/characters/${eqId}`, 'PUT', { equipment: updated });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(json.character.equipment[0].quantity === 14, `Expected qty 14, got ${json.character.equipment[0].quantity}`);
+      fs.unlinkSync(path.join(process.cwd(), 'characters', `${eqId}.json`));
+    });
+
+    await test('PUT /api/characters/:id preserves item notes field', async () => {
+      base.id = eqId; base.levelHistory = [];
+      base.equipment = [];
+      fs.writeFileSync(path.join(process.cwd(), 'characters', `${eqId}.json`), JSON.stringify(base));
+      const itemWithNotes = [{ name: 'Cloak of Elvenkind', quantity: 1, equipped: true, category: 'gear', notes: '+1 Stealth checks' }];
+      const { status, json } = await request(BASE, `/api/characters/${eqId}`, 'PUT', { equipment: itemWithNotes });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(json.character.equipment[0].notes === '+1 Stealth checks', `Expected notes to be preserved, got ${json.character.equipment[0].notes}`);
+      // Verify persists across GET
+      const { json: get } = await request(BASE, `/api/characters/${eqId}`);
+      assert(get.character.equipment[0].notes === '+1 Stealth checks', `Notes not persisted in GET`);
+      fs.unlinkSync(path.join(process.cwd(), 'characters', `${eqId}.json`));
+    });
   }
 
     // ── CORS ──────────────────────────────────────────────────

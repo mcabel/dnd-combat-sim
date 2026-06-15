@@ -1063,8 +1063,18 @@ function renderEquipment(c) {
           <tbody>
             ${items.map((e, i) => `
               <tr style="border-bottom:1px solid rgba(255,255,255,0.05)">
-                <td style="padding:3px 4px">${esc(e.name)}${e.notes ? `<span style='color:var(--muted)' title='${esc(e.notes)}'> ⓘ</span>` : ''}</td>
-                <td style="text-align:center;padding:3px 4px;color:var(--muted)">${e.quantity}</td>
+                <td style="padding:3px 4px">
+                  <div>${esc(e.name)}</div>
+                  ${e.notes ? `<div style="font-size:10px;color:var(--muted);margin-top:1px">${esc(e.notes)}</div>` : ''}
+                </td>
+                <td style="text-align:center;padding:3px 4px">
+                  <input type="number" value="${e.quantity}" min="1"
+                    style="width:44px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:11px;padding:2px 4px;text-align:center;outline:none"
+                    onchange="saveEquipQty('${c.id}', ${i}, this.value)"
+                    onblur="saveEquipQty('${c.id}', ${i}, this.value)"
+                    onkeydown="if(event.key==='Enter')this.blur()"
+                    title="Edit quantity"/>
+                </td>
                 <td style="text-align:center;padding:3px 4px;color:var(--muted)">${e.category}</td>
                 <td style="text-align:center;padding:3px 4px">
                   <button onclick="toggleEquip('${c.id}', ${i}, ${!e.equipped})"
@@ -1115,6 +1125,11 @@ function renderEquipment(c) {
         </div>
         <button onclick="confirmAddEquipItem('${c.id}')"
           style="background:var(--accent);border:none;border-radius:5px;color:#000;font-family:var(--mono);font-size:11px;font-weight:600;padding:0 12px;height:31px;cursor:pointer;white-space:nowrap">Add</button>
+      </div>
+      <div style="margin-top:6px">
+        <div style="font-size:10px;color:var(--muted);margin-bottom:3px;letter-spacing:0.05em">NOTES (optional)</div>
+        <input type="text" id="add-equip-notes-${c.id}" placeholder="e.g. +1 magical, attuned…"
+          style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-family:var(--mono);font-size:12px;padding:5px 8px;outline:none;box-sizing:border-box"/>
       </div>
       <div style="display:flex;align-items:center;gap:6px;margin-top:8px">
         <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);cursor:pointer;margin:0">
@@ -1212,8 +1227,29 @@ async function removeEquipItem(charId, idx) {
   }
 }
 
+// ── Equipment qty edit ────────────────────────────────────────
+async function saveEquipQty(charId, idx, rawVal) {
+  const qty = parseInt(rawVal, 10);
+  if (isNaN(qty) || qty < 1) { showBanner('Quantity must be ≥ 1', 'error'); return; }
+  const c = S.charDetail && S.charDetail.id === charId ? S.charDetail : null;
+  if (!c) return;
+  const updated = c.equipment.map((item, i) => i === idx ? { ...item, quantity: qty } : item);
+  try {
+    const r = await fetch(`/api/characters/${charId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ equipment: updated })
+    });
+    if (!r.ok) { showBanner('Failed to update quantity', 'error'); return; }
+    const { character: saved } = await r.json();
+    S.charDetail = saved;
+    // no full re-render needed — input already shows new value
+  } catch (e) {
+    showBanner('Network error updating quantity', 'error');
+  }
+}
+
 // ── Equipment add ─────────────────────────────────────────────
-function showAddEquipForm(charId) {
   const form = document.getElementById(`add-equip-form-${charId}`);
   const btn  = document.getElementById(`add-equip-btn-${charId}`);
   if (form) form.style.display = 'block';
@@ -1234,6 +1270,7 @@ async function confirmAddEquipItem(charId) {
   const category = document.getElementById(`add-equip-cat-${charId}`)?.value  || 'gear';
   const qty      = parseInt(document.getElementById(`add-equip-qty-${charId}`)?.value || '1', 10);
   const equipped = document.getElementById(`add-equip-eq-${charId}`)?.checked ?? false;
+  const notes    = (document.getElementById(`add-equip-notes-${charId}`)?.value || '').trim();
 
   if (!name) { showBanner('Item name required', 'error'); return; }
   if (isNaN(qty) || qty < 1) { showBanner('Quantity must be ≥ 1', 'error'); return; }
@@ -1241,7 +1278,7 @@ async function confirmAddEquipItem(charId) {
   const c = S.charDetail && S.charDetail.id === charId ? S.charDetail : null;
   if (!c) return;
 
-  const newItem = { name, quantity: qty, equipped, category };
+  const newItem = { name, quantity: qty, equipped, category, ...(notes ? { notes } : {}) };
   const updated = [...(c.equipment || []), newItem];
 
   try {
@@ -1256,12 +1293,14 @@ async function confirmAddEquipItem(charId) {
     renderEquipment(saved);
     showBanner(`${name} added`, 'ok');
     // reset form fields
-    const nameEl = document.getElementById(`add-equip-name-${charId}`);
-    const qtyEl  = document.getElementById(`add-equip-qty-${charId}`);
-    const eqEl   = document.getElementById(`add-equip-eq-${charId}`);
-    if (nameEl) nameEl.value = '';
-    if (qtyEl)  qtyEl.value  = '1';
-    if (eqEl)   eqEl.checked = true;
+    const nameEl  = document.getElementById(`add-equip-name-${charId}`);
+    const qtyEl   = document.getElementById(`add-equip-qty-${charId}`);
+    const eqEl    = document.getElementById(`add-equip-eq-${charId}`);
+    const notesEl = document.getElementById(`add-equip-notes-${charId}`);
+    if (nameEl)  nameEl.value  = '';
+    if (qtyEl)   qtyEl.value   = '1';
+    if (eqEl)    eqEl.checked  = true;
+    if (notesEl) notesEl.value = '';
   } catch (e) {
     showBanner('Network error adding item', 'error');
   }
@@ -1739,26 +1778,30 @@ function addEquipFormRow(item) {
   if (!container) return;
   const idx = container.children.length;
   const div = document.createElement('div');
-  div.style.cssText = 'display:grid;grid-template-columns:2fr 1fr 55px auto auto;gap:5px;align-items:center';
+  div.style.cssText = 'display:flex;flex-direction:column;gap:4px;margin-bottom:4px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 8px';
   div.innerHTML = `
-    <input type="text" name="xname" placeholder="Item name" value="${item ? item.name : ''}"
-      style="background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-family:var(--mono);font-size:12px;padding:5px 8px;outline:none"/>
-    <select name="xcat"
-      style="background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-family:var(--mono);font-size:12px;padding:5px 8px;outline:none">
-      <option value="gear"${(!item||item.category==='gear')?' selected':''}>Gear</option>
-      <option value="weapon"${item&&item.category==='weapon'?' selected':''}>Weapon</option>
-      <option value="armor"${item&&item.category==='armor'?' selected':''}>Armor</option>
-      <option value="shield"${item&&item.category==='shield'?' selected':''}>Shield</option>
-      <option value="tool"${item&&item.category==='tool'?' selected':''}>Tool</option>
-      <option value="pack"${item&&item.category==='pack'?' selected':''}>Pack</option>
-    </select>
-    <input type="number" name="xqty" min="1" value="${item ? item.quantity : 1}"
-      style="background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-family:var(--mono);font-size:12px;padding:5px 8px;outline:none"/>
-    <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted);cursor:pointer;white-space:nowrap;margin:0">
-      <input type="checkbox" name="xeq"${(!item||item.equipped)?' checked':''} style="accent-color:var(--accent)"/> Eq.
-    </label>
-    <button type="button" onclick="this.closest('div').remove()"
-      style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px;padding:2px 5px">✕</button>
+    <div style="display:grid;grid-template-columns:2fr 1fr 55px auto auto;gap:5px;align-items:center">
+      <input type="text" name="xname" placeholder="Item name" value="${item ? esc(item.name) : ''}"
+        style="background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-family:var(--mono);font-size:12px;padding:5px 8px;outline:none"/>
+      <select name="xcat"
+        style="background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-family:var(--mono);font-size:12px;padding:5px 8px;outline:none">
+        <option value="gear"${(!item||item.category==='gear')?' selected':''}>Gear</option>
+        <option value="weapon"${item&&item.category==='weapon'?' selected':''}>Weapon</option>
+        <option value="armor"${item&&item.category==='armor'?' selected':''}>Armor</option>
+        <option value="shield"${item&&item.category==='shield'?' selected':''}>Shield</option>
+        <option value="tool"${item&&item.category==='tool'?' selected':''}>Tool</option>
+        <option value="pack"${item&&item.category==='pack'?' selected':''}>Pack</option>
+      </select>
+      <input type="number" name="xqty" min="1" value="${item ? item.quantity : 1}"
+        style="background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-family:var(--mono);font-size:12px;padding:5px 8px;outline:none"/>
+      <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted);cursor:pointer;white-space:nowrap;margin:0">
+        <input type="checkbox" name="xeq"${(!item||item.equipped)?' checked':''} style="accent-color:var(--accent)"/> Eq.
+      </label>
+      <button type="button" onclick="this.closest('div[style*=flex-direction]').remove()"
+        style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px;padding:2px 5px">✕</button>
+    </div>
+    <input type="text" name="xnotes" placeholder="Notes (optional)" value="${item && item.notes ? esc(item.notes) : ''}"
+      style="background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--muted);font-family:var(--mono);font-size:11px;padding:3px 8px;outline:none;width:100%;box-sizing:border-box"/>
   `;
   container.appendChild(div);
 }
@@ -1766,12 +1809,16 @@ function addEquipFormRow(item) {
 function getExtraEquipRows() {
   const container = document.getElementById('cf-extra-equip');
   if (!container) return [];
-  return Array.from(container.children).map(div => ({
-    name:     div.querySelector('[name=xname]')?.value.trim() || '',
-    category: div.querySelector('[name=xcat]')?.value || 'gear',
-    quantity: parseInt(div.querySelector('[name=xqty]')?.value || '1', 10) || 1,
-    equipped: div.querySelector('[name=xeq]')?.checked ?? false,
-  })).filter(r => r.name.length > 0);
+  return Array.from(container.children).map(div => {
+    const notes = div.querySelector('[name=xnotes]')?.value.trim() || '';
+    return {
+      name:     div.querySelector('[name=xname]')?.value.trim() || '',
+      category: div.querySelector('[name=xcat]')?.value || 'gear',
+      quantity: parseInt(div.querySelector('[name=xqty]')?.value || '1', 10) || 1,
+      equipped: div.querySelector('[name=xeq]')?.checked ?? false,
+      ...(notes ? { notes } : {}),
+    };
+  }).filter(r => r.name.length > 0);
 }
 
 function newChar() {
