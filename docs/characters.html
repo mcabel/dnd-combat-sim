@@ -1136,7 +1136,7 @@ async function addTempHP() {
     const data = await res.json();
     S.charDetail = data.character;
     renderDetail();
-    showBanner(`Temp HP: ${newTHP}`, 'info');
+    showBanner(`Temp HP: ${newTHP}`, 'ok');
   } catch(e) { showErr(e.message); }
 }
 
@@ -1151,7 +1151,7 @@ async function clearTempHP() {
     const data = await res.json();
     S.charDetail = data.character;
     renderDetail();
-    showBanner('Temp HP cleared', 'info');
+    showBanner('Temp HP cleared', 'ok');
   } catch(e) { showErr(e.message); }
 }
 
@@ -1173,7 +1173,7 @@ async function changeExhaustion(delta) {
     const msg = next === 0 ? 'Exhaustion cleared'
                : next === 6 ? 'Exhaustion 6 — character dies!'
                : `Exhaustion level ${next}`;
-    showBanner(msg, next >= 5 ? 'error' : 'info');
+    showBanner(msg, next >= 5 ? 'error' : 'ok');
   } catch(e) { showErr(e.message); }
 }
 
