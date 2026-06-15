@@ -965,6 +965,63 @@ async function run() {
     } finally { if (fs.existsSync(cFile)) fs.unlinkSync(cFile); }
   });
 
+  // ── Temporary HP ──────────────────────────────────────────────
+
+  await test('PUT /api/characters/:id sets temporaryHP', async () => {
+    const tId   = 'aaaaaaaa-bbbb-4ccc-8ddd-ff0000000040';
+    const tFile = path.join(process.cwd(), 'characters', `${tId}.json`);
+    const base  = JSON.parse(fs.readFileSync(PALADIN_FILE, 'utf-8'));
+    base.id = tId; base.levelHistory = []; base.temporaryHP = 0;
+    fs.writeFileSync(tFile, JSON.stringify(base));
+    try {
+      const { status, json } = await request(BASE, `/api/characters/${tId}`, 'PUT', { temporaryHP: 10 });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(json.character.temporaryHP === 10, `Expected 10 THP, got ${json.character.temporaryHP}`);
+    } finally { if (fs.existsSync(tFile)) fs.unlinkSync(tFile); }
+  });
+
+  await test('PUT /api/characters/:id clears temporaryHP (set to 0)', async () => {
+    const tId   = 'aaaaaaaa-bbbb-4ccc-8ddd-ff0000000041';
+    const tFile = path.join(process.cwd(), 'characters', `${tId}.json`);
+    const base  = JSON.parse(fs.readFileSync(PALADIN_FILE, 'utf-8'));
+    base.id = tId; base.levelHistory = []; base.temporaryHP = 15;
+    fs.writeFileSync(tFile, JSON.stringify(base));
+    try {
+      const { status, json } = await request(BASE, `/api/characters/${tId}`, 'PUT', { temporaryHP: 0 });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(json.character.temporaryHP === 0, 'THP cleared to 0');
+    } finally { if (fs.existsSync(tFile)) fs.unlinkSync(tFile); }
+  });
+
+  // ── Exhaustion ────────────────────────────────────────────────
+
+  await test('PUT /api/characters/:id increments exhaustionLevel', async () => {
+    const eId   = 'aaaaaaaa-bbbb-4ccc-8ddd-ff0000000042';
+    const eFile = path.join(process.cwd(), 'characters', `${eId}.json`);
+    const base  = JSON.parse(fs.readFileSync(PALADIN_FILE, 'utf-8'));
+    base.id = eId; base.levelHistory = []; base.exhaustionLevel = 0;
+    fs.writeFileSync(eFile, JSON.stringify(base));
+    try {
+      const { status, json } = await request(BASE, `/api/characters/${eId}`, 'PUT', { exhaustionLevel: 2 });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(json.character.exhaustionLevel === 2, `Expected 2, got ${json.character.exhaustionLevel}`);
+    } finally { if (fs.existsSync(eFile)) fs.unlinkSync(eFile); }
+  });
+
+  await test('PUT /api/characters/:id exhaustionLevel persists across GET', async () => {
+    const eId   = 'aaaaaaaa-bbbb-4ccc-8ddd-ff0000000043';
+    const eFile = path.join(process.cwd(), 'characters', `${eId}.json`);
+    const base  = JSON.parse(fs.readFileSync(PALADIN_FILE, 'utf-8'));
+    base.id = eId; base.levelHistory = []; base.exhaustionLevel = 0;
+    fs.writeFileSync(eFile, JSON.stringify(base));
+    try {
+      await request(BASE, `/api/characters/${eId}`, 'PUT', { exhaustionLevel: 3 });
+      const { status, json } = await request(BASE, `/api/characters/${eId}`, 'GET');
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(json.character.exhaustionLevel === 3, `Exhaustion 3 persisted, got ${json.character.exhaustionLevel}`);
+    } finally { if (fs.existsSync(eFile)) fs.unlinkSync(eFile); }
+  });
+
     // ── CORS ──────────────────────────────────────────────────
 
   await test('All responses include CORS header', async () => {

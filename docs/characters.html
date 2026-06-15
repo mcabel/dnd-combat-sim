@@ -107,6 +107,7 @@ button.full { width: 100%; padding: 11px; font-size: 13px; }
 
 /* Stats row */
 .stats-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.stats-5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
 .stat-box { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px; text-align: center; }
 .stat-box .val { font-family: var(--serif); font-size: 20px; color: var(--accent); }
 .stat-box .lbl { font-size: 10px; color: var(--muted); margin-top: 2px; letter-spacing: 0.06em; text-transform: uppercase; }
@@ -367,7 +368,7 @@ button.full { width: 100%; padding: 11px; font-size: 13px; }
     </div>
 
     <!-- Stats -->
-    <div class="stats-3" id="char-stats-row"></div>
+    <div class="stats-5" id="char-stats-row"></div>
 
     <!-- Ability scores -->
     <div class="sec-row mt12"><div class="sec-title">Ability Scores</div><div class="sec-line"></div></div>
@@ -765,6 +766,8 @@ function renderCharDetail() {
   document.getElementById('subclass-alert').classList.toggle('hidden', !S.pendingSubclass);
 
   // Stats row
+  const thp = c.temporaryHP || 0;
+  const exh = c.exhaustionLevel || 0;
   document.getElementById('char-stats-row').innerHTML = `
     <div class="stat-box">
       <div class="val" id="hp-display">${c.currentHP}/${c.maxHP}</div>
@@ -775,7 +778,23 @@ function renderCharDetail() {
       </div>
     </div>
     <div class="stat-box"><div class="val">${c.armorClass}</div><div class="lbl">AC</div></div>
-    <div class="stat-box"><div class="val">${c.speed}</div><div class="lbl">Speed ft</div></div>`;
+    <div class="stat-box"><div class="val">${c.speed}</div><div class="lbl">Speed ft</div></div>
+    <div class="stat-box">
+      <div class="val" id="thp-display" style="color:${thp>0?'var(--accent)':'var(--muted)'}">${thp}</div>
+      <div class="lbl">Temp HP</div>
+      <div style="display:flex;gap:4px;margin-top:6px;justify-content:center">
+        <button class="sm secondary" onclick="addTempHP()" style="padding:2px 6px;font-size:10px" title="Add temp HP">+ Add</button>
+        <button class="sm" onclick="clearTempHP()" style="padding:2px 6px;font-size:10px;opacity:${thp>0?1:0.4}" ${thp<=0?'disabled':''} title="Clear temp HP">✕</button>
+      </div>
+    </div>
+    <div class="stat-box">
+      <div class="val" id="exh-display" style="color:${exh>0?'var(--danger)':'inherit'}">${exh}</div>
+      <div class="lbl">Exhaustion</div>
+      <div style="display:flex;gap:4px;margin-top:6px;justify-content:center">
+        <button class="sm danger" onclick="changeExhaustion(1)" style="padding:2px 6px;font-size:10px" title="Add exhaustion" ${exh>=6?'disabled':''}>+</button>
+        <button class="sm secondary" onclick="changeExhaustion(-1)" style="padding:2px 6px;font-size:10px" title="Remove exhaustion" ${exh<=0?'disabled':''}>−</button>
+      </div>
+    </div>`;
 
   // Ability scores
   const STATS = ['str','dex','con','int','wis','cha'];
@@ -1096,6 +1115,65 @@ async function healChar() {
     S.charDetail = data.character;
     renderCharDetail();
     showBanner(`Healed ${amt} HP. HP: ${newHP}/${S.charDetail.maxHP}.`, 'ok');
+  } catch(e) { showErr(e.message); }
+}
+
+// ── Temporary HP ───────────────────────────────────────────────
+async function addTempHP() {
+  if (!S.charDetail) return;
+  const raw = prompt('Add Temporary HP (new THP replaces old if higher):');
+  if (raw === null) return;
+  const amount = parseInt(raw, 10);
+  if (isNaN(amount) || amount < 0) { showBanner('Invalid amount', 'error'); return; }
+  const current = S.charDetail.temporaryHP || 0;
+  const newTHP = Math.max(current, amount); // THP doesn't stack — take higher
+  try {
+    const res = await fetch(`/api/characters/${S.charDetail.id}`, {
+      method: 'PUT', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ temporaryHP: newTHP })
+    });
+    if (!res.ok) throw new Error('PUT failed');
+    const data = await res.json();
+    S.charDetail = data.character;
+    renderDetail();
+    showBanner(`Temp HP: ${newTHP}`, 'info');
+  } catch(e) { showErr(e.message); }
+}
+
+async function clearTempHP() {
+  if (!S.charDetail) return;
+  try {
+    const res = await fetch(`/api/characters/${S.charDetail.id}`, {
+      method: 'PUT', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ temporaryHP: 0 })
+    });
+    if (!res.ok) throw new Error('PUT failed');
+    const data = await res.json();
+    S.charDetail = data.character;
+    renderDetail();
+    showBanner('Temp HP cleared', 'info');
+  } catch(e) { showErr(e.message); }
+}
+
+// ── Exhaustion ─────────────────────────────────────────────────
+async function changeExhaustion(delta) {
+  if (!S.charDetail) return;
+  const current = S.charDetail.exhaustionLevel || 0;
+  const next = Math.max(0, Math.min(6, current + delta));
+  if (next === current) return;
+  try {
+    const res = await fetch(`/api/characters/${S.charDetail.id}`, {
+      method: 'PUT', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ exhaustionLevel: next })
+    });
+    if (!res.ok) throw new Error('PUT failed');
+    const data = await res.json();
+    S.charDetail = data.character;
+    renderDetail();
+    const msg = next === 0 ? 'Exhaustion cleared'
+               : next === 6 ? 'Exhaustion 6 — character dies!'
+               : `Exhaustion level ${next}`;
+    showBanner(msg, next >= 5 ? 'error' : 'info');
   } catch(e) { showErr(e.message); }
 }
 
