@@ -173,3 +173,17 @@ export function getActiveBlessDie(c: Combatant): number {
     .filter(e => e.effectType === 'bless_die')
     .reduce((max, e) => Math.max(max, e.payload.dieSides ?? 0), 0);
 }
+
+// ---- Hex damage query (used by combat.ts) -------------------
+
+/**
+ * Returns the hex die size (6) if `target` has an active Hex cast by `attackerId`,
+ * or 0 if the target is not hexed by that attacker.
+ * PHB p.251: the bonus damage applies only when the Hex caster hits the hexed target.
+ */
+export function getActiveHexDie(target: Combatant, attackerId: string): number {
+  const effect = target.activeEffects.find(
+    e => e.effectType === 'hex_damage' && e.casterId === attackerId
+  );
+  return effect?.payload.hexDie ?? 0;
+}

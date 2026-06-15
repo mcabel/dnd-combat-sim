@@ -15,6 +15,7 @@ import {
 } from './resources';
 import { shouldCast as shouldCastFaerieFire } from '../spells/faerie_fire';
 import { shouldCast as shouldCastBless } from '../spells/bless';
+import { shouldCast as shouldCastMageArmor } from '../spells/mage_armor';
 import { shouldCast as shouldCastEntangle } from '../spells/entangle';
 import { shouldCast as shouldCastThunderwave } from '../spells/thunderwave';
 import { shouldCast as shouldCastArmsOfHadar } from '../spells/arms_of_hadar';
@@ -742,6 +743,13 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
     }
   }
 
+  // === MAGE ARMOR (action, self) ===
+  // Cast as first action if unarmored and slot available. No concentration needed.
+  if (!plan.action && shouldCastMageArmor(self, battlefield)) {
+    plan.action = { type: 'mageArmor', action: null, targetId: self.id,
+      description: `${self.name} casts Mage Armor` };
+  }
+
   // === SELECT ACTION ===
   let chosenAction = selectAction(self, target, battlefield);
 
@@ -769,7 +777,8 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
     }
   }
 
-  plan.action = chosenAction;
+  // Don't overwrite a self-buff action (e.g. mageArmor) already planned above.
+  if (!plan.action) plan.action = chosenAction;
 
   // === MOVEMENT ===
   const { moveBefore, moveAfter } = planMovement(self, target, chosenAction, battlefield);

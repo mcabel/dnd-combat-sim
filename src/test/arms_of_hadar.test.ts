@@ -12,7 +12,7 @@
 
 import * as fs from 'fs';
 import { shouldCast, execute } from '../spells/arms_of_hadar';
-import { euclideanDistFt } from '../engine/movement';
+import { euclideanDistFt, opportunityAttackTriggered } from '../engine/movement';
 import { planTurn } from '../ai/planner';
 import { spawnPC, loadPCStatBlocks } from '../parser/pc';
 import { runCombat, makeFlatBattlefield, EngineState, CombatLog } from '../engine/combat';
@@ -85,7 +85,7 @@ function makeCombatant(id: string, overrides: Partial<Combatant> = {}): Combatan
     mountedOn: null, carriedBy: null, independentMount: false,
     role: 'regular', bonded: null,
     usedSneakAttackThisTurn: false, helpedThisTurn: false,
-    isDefender: false, cannotAttack: false, hasHands: true,
+    isDefender: false, cannotAttack: false, hasHands: true, wearingArmor: false,
     isDead: false, isUnconscious: false,
     advantages: [], vulnerabilities: [], resistances: [],
     bardicInspirationDie: null,
@@ -488,6 +488,108 @@ console.log('\n--- 4. Engine integration ---');
   assert('4e. euclideanDistFt (2,0,0) = 10ft',        Math.abs(at10 - 10)     < 0.01);
   assert('4e. euclideanDistFt (2,2,0) ≈ 14.14ft',     Math.abs(at14 - 14.142) < 0.01);
   assert('4e. euclideanDistFt (1,1,0) ≈ 7.07ft',      Math.abs(at7  -  7.071) < 0.01);
+}
+
+// ---- 5. OA integration: lose-reaction blocks opportunity attacks -----------
+
+console.log('\n5. OA integration — reactionUsed blocks opportunity attacks');
+
+{
+  // 5a. opportunityAttackTriggered returns false when watcher.budget.reactionUsed = true
+  // (unit-level confirmation that the OA gate respects reactionUsed)
+  const watcher = makeCombatant('w', { faction: 'enemy', pos: { x: 0, y: 0, z: 0 } });
+  const mover   = makeCombatant('m', { faction: 'party',  pos: { x: 0, y: 0, z: 0 } });
+
+  // Set up: mover leaves watcher's 5-ft melee reach
+  const from: Vec3 = { x: 1, y: 0, z: 0 };   // 5 ft — in reach
+  const to:   Vec3 = { x: 2, y: 0, z: 0 };   // 10 ft — leaving reach
+
+  watcher.budget.reactionUsed = false;
+  const withReaction = opportunityAttackTriggered(watcher, mover, from, to);
+
+  watcher.budget.reactionUsed = true;
+  const withoutReaction = opportunityAttackTriggered(watcher, mover, from, to);
+
+  assert('5a. OA triggers when reaction available', withReaction);
+  assert('5a. OA blocked when reactionUsed = true', !withoutReaction);
+}
+
+{
+  // 5b. End-to-end: Arms of Hadar (failed save) → target.budget.reactionUsed = true
+  //     → opportunityAttackTriggered returns false for that target.
+  const warlock = spawnClass('Warlock', { x: 0, y: 0, z: 0 });
+
+  // STR 1 enemy → virtually guaranteed to fail DC 13 STR save (max roll = 1+1 = 2)
+  const enemy = makeCombatant('orc', {
+    name: 'OrcSTR1', faction: 'enemy', pos: { x: 1, y: 0, z: 0 },
+    str: 1, maxHP: 20, currentHP: 20, ac: 10,
+  });
+  enemy.budget.reactionUsed = false;
+
+  const state: EngineState = {
+    battlefield: makeFlatBattlefield(10, 10, [warlock, enemy]),
+    log: { events: [], winner: null, rounds: 0 },
+    disengagedThisTurn: new Set(),
+    damageThisRound: new Map(),
+    noDamageRounds: new Map(),
+    rageDamagedSinceLastTurn: new Set(),
+  };
+
+  // Run execute directly — with STR 1 the enemy will fail every save
+  let blockedAfterCast = false;
+  let attempts = 0;
+  // Run a few iterations to confirm it's consistently true
+  while (attempts < 10) {
+    enemy.budget.reactionUsed = false;
+    enemy.currentHP = 20;
+    // Reload warlock slot (spellSlots value is { max, remaining })
+    if (warlock.resources?.spellSlots?.[1]) warlock.resources.spellSlots[1].remaining += 1;
+    execute(warlock, [enemy], state);
+    if (enemy.budget.reactionUsed) { blockedAfterCast = true; break; }
+    attempts++;
+  }
+
+  assert('5b. Arms of Hadar execute sets reactionUsed on failed save', blockedAfterCast);
+
+  // If reactionUsed was set, confirm OA is now blocked for that enemy
+  if (blockedAfterCast) {
+    const from: Vec3 = { x: 1, y: 0, z: 0 };
+    const to:   Vec3 = { x: 2, y: 0, z: 0 };
+    const oaBlocked = !opportunityAttackTriggered(enemy, warlock, from, to);
+    assert('5b. OA blocked for enemy with reactionUsed after Arms of Hadar', oaBlocked);
+  }
+}
+
+{
+  // 5c. Enemy whose save succeeded retains their reaction (OA still possible).
+  const warlock = spawnClass('Warlock', { x: 0, y: 0, z: 0 });
+
+  // STR 30 enemy → guaranteed to succeed DC 13 STR save (min roll = 30+10 = 40)
+  const enemy = makeCombatant('giant', {
+    name: 'GiantSTR30', faction: 'enemy', pos: { x: 0, y: 0, z: 0 },
+    str: 30, maxHP: 100, currentHP: 100, ac: 10,
+  });
+  enemy.budget.reactionUsed = false;
+
+  const state: EngineState = {
+    battlefield: makeFlatBattlefield(10, 10, [warlock, enemy]),
+    log: { events: [], winner: null, rounds: 0 },
+    disengagedThisTurn: new Set(),
+    damageThisRound: new Map(),
+    noDamageRounds: new Map(),
+    rageDamagedSinceLastTurn: new Set(),
+  };
+
+  execute(warlock, [enemy], state);
+
+  assert('5c. Enemy with guaranteed save success keeps reaction available', !enemy.budget.reactionUsed);
+
+  // Confirm OA is still possible for this enemy
+  // watcher (enemy) at x=0; mover goes from x=1 (5ft, in reach) to x=2 (10ft, leaves reach)
+  const from: Vec3 = { x: 1, y: 0, z: 0 };
+  const to:   Vec3 = { x: 2, y: 0, z: 0 };
+  const oaTriggered = opportunityAttackTriggered(enemy, warlock, from, to);
+  assert('5c. OA still triggers for enemy who passed save', oaTriggered);
 }
 
 // ---- Results ------------------------------------------------

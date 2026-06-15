@@ -46,7 +46,7 @@ function makeCombatant(id = 'c1'): Combatant {
     tempHP: 0, mountedOn: null, carriedBy: null, independentMount: false,
     role: 'regular', bonded: null,
     usedSneakAttackThisTurn: false, helpedThisTurn: false,
-    isDefender: false, cannotAttack: false, hasHands: true,
+    isDefender: false, cannotAttack: false, hasHands: true, wearingArmor: false,
     isDead: false, isUnconscious: false,
     advantages: [], vulnerabilities: [], resistances: [], bardicInspirationDie: null, wardingBond: null, activeEffects: [],
   };

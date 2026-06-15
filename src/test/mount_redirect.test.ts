@@ -56,7 +56,7 @@ function makeCombatant(overrides: Partial<Combatant>): Combatant {
     role: 'regular',
     bonded: null,
     usedSneakAttackThisTurn: false, helpedThisTurn: false,
-    isDefender: false, cannotAttack: false, hasHands: true,
+    isDefender: false, cannotAttack: false, hasHands: true, wearingArmor: false,
     isDead: false, isUnconscious: false,
     advantages: [], vulnerabilities: [], resistances: [], bardicInspirationDie: null, wardingBond: null, activeEffects: [],
     ...overrides,

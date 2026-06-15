@@ -441,6 +441,7 @@ export function pcToCombatant(
     isDefender: false,
     cannotAttack: false,
     hasHands: false,
+    wearingArmor: !/unarmored/i.test(raw.acFormula) && !/draconic/i.test(raw.acFormula),
     isDead:        false,
     isUnconscious: false,
     advantages:      [],

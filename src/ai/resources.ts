@@ -241,20 +241,18 @@ export function bardicInspirationPlan(bard: Combatant, target: Combatant): Plann
  * Returns true if Hex should be cast.
  */
 export function shouldCastHex(warlock: Combatant, targetId: string): boolean {
-  if (!hasSpellSlot(warlock)) return false;
-  // Don't recast Hex if it's already active on any target
-  // (Simple: check if a slot would be wasted — use only once per combat at level 1)
-  // Proxy: if remaining pact slots === max, we haven't cast Hex yet
   const r = warlock.resources?.pactSlots;
-  if (!r) return false;
-  return r.remaining === r.max; // haven't cast anything yet this combat
+  if (!r || r.remaining < 1) return false;
+  if (warlock.concentration?.active) return false;
+  return true;
 }
 
 export function hexPlan(warlock: Combatant, targetId: string): PlannedAction {
+  // Consume the pact slot during planning (slot validation already done in shouldCastHex).
+  // Concentration is set in hex.ts execute() to keep the two concerns separate.
   consumeSpellSlot(warlock, 1);
-  startConcentration_proxy(warlock, 'Hex');
   return {
-    type: 'cast',
+    type: 'hex',
     action: null,
     targetId,
     description: `${warlock.name} casts Hex on target`,

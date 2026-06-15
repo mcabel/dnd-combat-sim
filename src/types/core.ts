@@ -90,7 +90,8 @@ export type SpellEffectType =
   | 'advantage_vs'      // rolls AGAINST this creature get adv/disadv (e.g. Faerie Fire)
   | 'ac_bonus'          // flat AC bonus to this creature (e.g. Shield of Faith +2)
   | 'bless_die'         // add a bonus die to this creature's attack rolls & saves (Bless 1d4)
-  | 'condition_apply';  // apply a condition to this creature (e.g. Entangle → restrained)
+  | 'condition_apply'   // apply a condition to this creature (e.g. Entangle → restrained)
+  | 'hex_damage';       // +1d6 necrotic on each hit by the caster (Hex PHB p.251)
 
 export interface ActiveEffect {
   id: string;               // unique per instance, e.g. 'eff_1'
@@ -107,6 +108,8 @@ export interface ActiveEffect {
     dieSides?: number;                // e.g. 4 for a d4
     // condition_apply
     condition?: Condition;
+    // hex_damage
+    hexDie?: number;   // always 6 (d6); stored for extensibility
   };
   sourceIsConcentration: boolean;     // if true, removed when caster's concentration ends
 }
@@ -336,6 +339,11 @@ export interface Combatant {
   //   Auto-detected by parser; can be set manually.
   hasHands: boolean;
 
+  // wearingArmor: false = unarmored — Mage Armor eligible if also no Unarmored Defense.
+  // Set by pc.ts (from acFormula) and fivetools.ts (from armor data).
+  // Defaults to false for monsters (natural armor != worn armor).
+  wearingArmor: boolean;
+
   // Creature size (PHB p.6). Optional — defaults to 'Medium' in all size-check helpers.
   // Used for grapple/shove enforcement (can't target a creature > 1 size larger, PHB p.195).
   size?: CreatureSize;
@@ -456,6 +464,8 @@ export interface PlannedAction {
     | 'sleep'         // Sleep — 5d8 HP bucket, no save, renders enemies unconscious (no concentration)
     | 'wardingBond'    // Warding Bond — buff adjacent ally (touch range, no concentration)
     | 'shieldOfFaith'  // Shield of Faith — +2 AC to one ally (bonus action, concentration)
+    | 'hex'            // Hex — bonus action, concentration, +1d6 necrotic on each hit (Warlock)
+    | 'mageArmor'      // Mage Armor — self, no concentration, AC = 13 + DEX (Wizard/Sorcerer)
     | 'legendary';
   action: Action | null;
   targetId: string | null;

@@ -57,7 +57,7 @@ function makeC(o: Partial<Combatant> = {}): Combatant {
     budget: { movementFt: speed, actionUsed: false, bonusActionUsed: false, reactionUsed: false, freeObjectUsed: false },
     conditions: new Set(), concentration: null, deathSaves: null, tempHP: 0,
     resources: null, usedSneakAttackThisTurn: false, helpedThisTurn: false,
-    isDefender: false, cannotAttack: false, hasHands: true,
+    isDefender: false, cannotAttack: false, hasHands: true, wearingArmor: false,
     aiProfile: 'attackNearest', perception: { targets: new Map() },
     mountedOn: null, carriedBy: null, independentMount: false,
     role: 'regular', bonded: null,

@@ -60,7 +60,7 @@ function makeC(overrides: Partial<Combatant> = {}): Combatant {
     helpedThisTurn: false,
     isDefender: false,
     cannotAttack: false,
-    hasHands: false,
+    hasHands: false, wearingArmor: false,
     isDead: false, isUnconscious: false,
     advantages: [], vulnerabilities: [], resistances: [], bardicInspirationDie: null, wardingBond: null, activeEffects: [],
     ...overrides,

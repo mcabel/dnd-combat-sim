@@ -33,7 +33,8 @@ import { tickAdvantages, grantSelf, grantVulnerability } from './adv_system';
 import { getSummonEntry }                           from '../summons/registry';
 import { rollGrappleContest, rollShoveContest, canGrappleOrShoveTarget } from './utils';
 import { computeLOS } from './los';
-import { removeEffectsFromCaster, getActiveAcBonus, getActiveBlessDie } from './spell_effects';
+import { removeEffectsFromCaster, getActiveAcBonus, getActiveBlessDie, getActiveHexDie } from './spell_effects';
+import { execute as executeHex } from '../spells/hex';
 import { shouldCast as shouldCastFaerieFire, execute as executeFaerieFire } from '../spells/faerie_fire';
 import { shouldCast as shouldCastBless, execute as executeBless } from '../spells/bless';
 import { shouldCast as shouldCastEntangle, execute as executeEntangle } from '../spells/entangle';
@@ -42,6 +43,7 @@ import { execute as executeArmsOfHadar } from '../spells/arms_of_hadar';
 import { shouldCast as shouldCastSleep, execute as executeSleep } from '../spells/sleep';
 import { execute as executeWardingBond } from '../spells/warding_bond';
 import { execute as executeShieldOfFaith } from '../spells/shield_of_faith';
+import { shouldCast as shouldCastMageArmor, execute as executeMageArmor } from '../spells/mage_armor';
 
 // ---- Combat log ---------------------------------------------
 
@@ -318,6 +320,15 @@ function resolveAttack(
       dmg += rageBonus;
       log(state, 'action', attacker.id,
         `${attacker.name} adds Rage bonus (+${rageBonus} damage)!`, target.id, rageBonus);
+    }
+
+    // Hex damage: +1d6 necrotic when the warlock who hexed the target hits it (PHB p.251)
+    const hexDie = getActiveHexDie(target, attacker.id);
+    if (hexDie > 0) {
+      const hexRoll = rollDie(hexDie);
+      dmg += hexRoll;
+      log(state, 'action', attacker.id,
+        `${attacker.name} deals Hex bonus (+${hexRoll} necrotic) to ${target.name}`, target.id, hexRoll);
     }
 
     // ST-5C: Fighting Style: Interception — rider reduces damage to mount (reaction)
@@ -765,6 +776,23 @@ function executePlannedAction(
       const sleepTargets = shouldCastSleep(actor, bf);
       if (!sleepTargets || sleepTargets.length === 0) break;
       executeSleep(actor, sleepTargets, state);
+      break;
+    }
+
+    case 'hex': {
+      // Hex — PHB p.251: +1d6 necrotic on each hit vs hexed target (bonus action, concentration).
+      // Slot was consumed in hexPlan (resources.ts). Here we apply the effect on the target.
+      const hexTargetId = plan.targetId;
+      if (!hexTargetId) break;
+      const hexTarget = bf.combatants.get(hexTargetId);
+      if (!hexTarget || hexTarget.isDead || hexTarget.isUnconscious) break;
+      executeHex(actor, hexTarget, state);
+      break;
+    }
+
+    case 'mageArmor': {
+      // Mage Armor — PHB p.256: base AC = 13 + DEX mod while unarmored (no concentration).
+      if (shouldCastMageArmor(actor, bf)) executeMageArmor(actor, state);
       break;
     }
 

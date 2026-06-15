@@ -475,6 +475,7 @@ export function monsterToCombatant(
     isDefender: false,
     cannotAttack: false,
     hasHands: hasHandsForType(raw.type, raw),
+    wearingArmor: false,   // monsters use natural armor; Mage Armor can technically apply
     size: parseSizeCode(raw.size),
     isDead: false,
     isUnconscious: false,

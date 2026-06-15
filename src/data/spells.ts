@@ -222,6 +222,35 @@ export const SPELL_DB: Record<string, SpellTemplate> = {
     slotLevel: 1,
   },
 
+  'mage armor': {
+    // 1st-level abjuration, no concentration, touch, 8 hrs.
+    // Sets AC = 13 + DEX mod for unarmored targets. Dispatched via case 'mageArmor'.
+    attackType: null,
+    rangeNormal: 5,
+    damage: null,
+    damageType: null,
+    isAoE: false,
+    aoeRadius: 0,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 1,
+  },
+
+  'hex': {
+    // 1st-level enchantment, concentration, range 90 ft, single target.
+    // Cast as bonus action. +1d6 necrotic on each hit by caster.
+    // attackType: null — dispatched via case 'hex', not selectAction.
+    attackType: null,
+    rangeNormal: 90,
+    damage: { count: 1, sides: 6, bonus: 0, average: 3.5 },
+    damageType: 'necrotic',
+    isAoE: false,
+    aoeRadius: 0,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 1,
+  },
+
 };
 
 // ---- Lookup helper ------------------------------------------

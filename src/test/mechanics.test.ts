@@ -50,7 +50,7 @@ function makeC(o: Partial<Combatant> = {}): Combatant {
     helpedThisTurn: false,
     isDefender: false,
     cannotAttack: false,
-    hasHands: false,
+    hasHands: false, wearingArmor: false,
     aiProfile: 'smart',
     perception: { targets: new Map() },
     isDead: false, isUnconscious: false,

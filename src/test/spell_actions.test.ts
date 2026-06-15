@@ -60,7 +60,7 @@ function makeEnemy(id: string, pos: { x: number; y: number; z: number }, hp = 15
     role: 'regular', bonded: null,
     resources: null, tempHP: 0,
     usedSneakAttackThisTurn: false, helpedThisTurn: false,
-    isDefender: false, cannotAttack: false, hasHands: true,
+    isDefender: false, cannotAttack: false, hasHands: true, wearingArmor: false,
     isDead: false, isUnconscious: false,
     advantages: [], vulnerabilities: [], resistances: [],
     bardicInspirationDie: null, wardingBond: null, activeEffects: [],
@@ -145,7 +145,7 @@ console.log('\n=== 2. Parser — spell actions parsed ===\n');
   const names = wizard.actions.filter(a => a.slotLevel && a.slotLevel >= 1).map(a => a.name);
   assert('Wizard has Magic Missile',  names.includes('Magic Missile'));
   assert('Wizard has Thunderwave',    names.includes('Thunderwave'));
-  assert('Wizard skips Mage Armor (buff)', !names.includes('Mage Armor'));
+  assert('Wizard has Mage Armor',     names.includes('Mage Armor'));   // dispatched via case mageArmor
 }
 {
   const wl = spawnClass('Warlock');
