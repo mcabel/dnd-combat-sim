@@ -762,7 +762,14 @@ function renderCharDetail() {
 
   // Stats row
   document.getElementById('char-stats-row').innerHTML = `
-    <div class="stat-box"><div class="val">${c.maxHP}</div><div class="lbl">Max HP</div></div>
+    <div class="stat-box">
+      <div class="val" id="hp-display">${c.currentHP}/${c.maxHP}</div>
+      <div class="lbl">HP</div>
+      <div style="display:flex;gap:4px;margin-top:6px;justify-content:center">
+        <button class="sm danger" onclick="takeDamage()" style="padding:2px 6px;font-size:10px" title="Take damage">− Dmg</button>
+        <button class="sm secondary" onclick="healChar()" style="padding:2px 6px;font-size:10px" title="Heal">+ Heal</button>
+      </div>
+    </div>
     <div class="stat-box"><div class="val">${c.armorClass}</div><div class="lbl">AC</div></div>
     <div class="stat-box"><div class="val">${c.speed}</div><div class="lbl">Speed ft</div></div>`;
 
@@ -794,22 +801,44 @@ function renderCharDetail() {
   const spl = c.spellcasting;
   const splEl = document.getElementById('char-spellcasting');
   if (spl && (spl.cantrips.length > 0 || Object.keys(spl.slots || {}).length > 0)) {
-    let html = '';
+    let html = `<div style="font-size:11px;color:var(--muted);margin-bottom:4px">DC ${spl.saveDC} · +${spl.spellAttackBonus} to hit · ${spl.ability.toUpperCase()}</div>`;
     if (spl.cantrips && spl.cantrips.length > 0) {
       html += `<div><strong>Cantrips (${spl.cantrips.length})</strong></div>`;
     }
     for (let i=1; i<=9; i++) {
       const key = String(i);
-      const lvlSlots = spl.slots && spl.slots[key];
-      if (lvlSlots) {
-        const avail = lvlSlots.available || 0;
-        const max   = lvlSlots.max || 0;
-        html += `<div>Lvl ${i}: ${avail}/${max} slots</div>`;
-      }
+      const max = (spl.slots && spl.slots[key]) || 0;
+      if (!max) continue;
+      const used  = (spl.slotsUsed && spl.slotsUsed[key]) || 0;
+      const avail = max - used;
+      // pip indicator
+      const pips = Array.from({length: max}, (_, p) =>
+        `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;margin:0 1px;background:${p < avail ? 'var(--accent)' : 'var(--border)'};border:1px solid var(--border)"></span>`
+      ).join('');
+      html += `<div style="display:flex;align-items:center;gap:6px;margin-top:4px">
+        <span style="min-width:36px">Lv ${i}</span>
+        <span>${pips}</span>
+        <span style="color:${avail<=0?'var(--danger)':'inherit'}">${avail}/${max}</span>
+        <button class="sm secondary" style="padding:1px 7px;font-size:10px" onclick="useSlot(${i})" ${avail<=0?'disabled':''}>Use</button>
+        <button class="sm secondary" style="padding:1px 7px;font-size:10px" onclick="restoreSlot(${i})" ${used<=0?'disabled':''}>↩</button>
+      </div>`;
     }
-    splEl.innerHTML = html || '<div style="color:var(--text-muted)">—</div>';
+    // Pact slots (Warlock)
+    if (spl.pactSlots) {
+      const ps = spl.pactSlots;
+      const pavail = ps.total - ps.used;
+      const ppips = Array.from({length: ps.total}, (_, p) =>
+        `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;margin:0 1px;background:${p < pavail ? 'var(--accent)' : 'var(--border)'};border:1px solid var(--border)"></span>`
+      ).join('');
+      html += `<div style="display:flex;align-items:center;gap:6px;margin-top:6px;border-top:1px solid var(--border);padding-top:6px">
+        <span style="min-width:36px;color:var(--muted)">Pact</span>
+        <span>${ppips}</span>
+        <span style="color:${pavail<=0?'var(--danger)':'inherit'}">${pavail}/${ps.total} (Lv${ps.slotLevel})</span>
+      </div>`;
+    }
+    splEl.innerHTML = html;
   } else {
-    splEl.innerHTML = '<div style="color:var(--text-muted)">—</div>';
+    splEl.innerHTML = '<div style="color:var(--muted)">—</div>';
   }
 
   // Level-up class selector
@@ -953,7 +982,84 @@ async function doLongRest() {
   finally { btn.disabled = false; btn.textContent = '🌙 Long Rest'; }
 }
 
-// ── Set Level (DM) ────────────────────────────────────────────
+// ── HP Tracker ────────────────────────────────────────────────
+async function takeDamage() {
+  if (!S.charDetail) return;
+  const raw = prompt(`Take damage (current HP: ${S.charDetail.currentHP}/${S.charDetail.maxHP}):`, '');
+  if (raw === null || raw.trim() === '') return;
+  const dmg = parseInt(raw, 10);
+  if (isNaN(dmg) || dmg < 0) { showErr('Enter a positive number.'); return; }
+  const newHP = Math.max(0, S.charDetail.currentHP - dmg);
+  try {
+    const data = await api(`/api/characters/${S.charDetail.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ currentHP: newHP }),
+    });
+    S.charDetail = data.character;
+    renderCharDetail();
+    showBanner(`Took ${dmg} damage. HP: ${newHP}/${S.charDetail.maxHP}${newHP === 0 ? ' — UNCONSCIOUS!' : ''}.`, newHP === 0 ? 'warn' : 'ok');
+  } catch(e) { showErr(e.message); }
+}
+
+async function healChar() {
+  if (!S.charDetail) return;
+  const raw = prompt(`Heal (current HP: ${S.charDetail.currentHP}/${S.charDetail.maxHP}):`, '');
+  if (raw === null || raw.trim() === '') return;
+  const amt = parseInt(raw, 10);
+  if (isNaN(amt) || amt < 0) { showErr('Enter a positive number.'); return; }
+  const newHP = Math.min(S.charDetail.maxHP, S.charDetail.currentHP + amt);
+  try {
+    const data = await api(`/api/characters/${S.charDetail.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ currentHP: newHP }),
+    });
+    S.charDetail = data.character;
+    renderCharDetail();
+    showBanner(`Healed ${amt} HP. HP: ${newHP}/${S.charDetail.maxHP}.`, 'ok');
+  } catch(e) { showErr(e.message); }
+}
+
+// ── Spell Slot Consumption ─────────────────────────────────────
+async function useSlot(level) {
+  if (!S.charDetail || !S.charDetail.spellcasting) return;
+  const key = String(level);
+  const spl = S.charDetail.spellcasting;
+  const max  = (spl.slots && spl.slots[key]) || 0;
+  const used = (spl.slotsUsed && spl.slotsUsed[key]) || 0;
+  if (used >= max) { showErr(`No Lv${level} slots remaining.`); return; }
+  const newSlotsUsed = { ...spl.slotsUsed, [key]: used + 1 };
+  try {
+    const data = await api(`/api/characters/${S.charDetail.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ spellcasting: { ...spl, slotsUsed: newSlotsUsed } }),
+    });
+    S.charDetail = data.character;
+    renderCharDetail();
+  } catch(e) { showErr(e.message); }
+}
+
+async function restoreSlot(level) {
+  if (!S.charDetail || !S.charDetail.spellcasting) return;
+  const key = String(level);
+  const spl = S.charDetail.spellcasting;
+  const used = (spl.slotsUsed && spl.slotsUsed[key]) || 0;
+  if (used <= 0) { showErr(`No used Lv${level} slots to restore.`); return; }
+  const newSlotsUsed = { ...spl.slotsUsed, [key]: used - 1 };
+  try {
+    const data = await api(`/api/characters/${S.charDetail.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ spellcasting: { ...spl, slotsUsed: newSlotsUsed } }),
+    });
+    S.charDetail = data.character;
+    renderCharDetail();
+  } catch(e) { showErr(e.message); }
+}
+
+
 async function doSetLevel() {
   if (!S.charDetail) return;
   showErr('');

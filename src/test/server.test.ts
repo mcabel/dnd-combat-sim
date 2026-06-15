@@ -32,7 +32,7 @@ function freePort(): Promise<number> {
 function request(
   base: string,
   path: string,
-  method: 'GET' | 'POST' = 'GET',
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET',
   body?: object
 ): Promise<{ status: number; json: any }> {
   return new Promise((resolve, reject) => {
@@ -799,6 +799,118 @@ async function run() {
     } finally {
       if (fs.existsSync(bardFile2)) fs.unlinkSync(bardFile2);
     }
+  });
+
+  // ── HP Tracker (PUT currentHP) ────────────────────────────────
+
+  await test('PUT /api/characters/:id updates currentHP (take damage)', async () => {
+    const pId   = 'aaaaaaaa-bbbb-4ccc-8ddd-ff0000000010';
+    const pFile = path.join(process.cwd(), 'characters', `${pId}.json`);
+    const base  = JSON.parse(fs.readFileSync(PALADIN_FILE, 'utf-8'));
+    base.id = pId; base.maxHP = 30; base.currentHP = 30; base.levelHistory = [];
+    fs.writeFileSync(pFile, JSON.stringify(base));
+    try {
+      const { status, json } = await request(BASE, `/api/characters/${pId}`, 'PUT', { currentHP: 18 });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(json.character.currentHP === 18, `Expected 18 HP, got ${json.character.currentHP}`);
+      assert(json.character.maxHP === 30, 'maxHP unchanged');
+    } finally { if (fs.existsSync(pFile)) fs.unlinkSync(pFile); }
+  });
+
+  await test('PUT /api/characters/:id updates currentHP (heal)', async () => {
+    const pId   = 'aaaaaaaa-bbbb-4ccc-8ddd-ff0000000011';
+    const pFile = path.join(process.cwd(), 'characters', `${pId}.json`);
+    const base  = JSON.parse(fs.readFileSync(PALADIN_FILE, 'utf-8'));
+    base.id = pId; base.maxHP = 30; base.currentHP = 10; base.levelHistory = [];
+    fs.writeFileSync(pFile, JSON.stringify(base));
+    try {
+      const { status, json } = await request(BASE, `/api/characters/${pId}`, 'PUT', { currentHP: 25 });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(json.character.currentHP === 25, `Expected 25 HP, got ${json.character.currentHP}`);
+    } finally { if (fs.existsSync(pFile)) fs.unlinkSync(pFile); }
+  });
+
+  await test('PUT /api/characters/:id currentHP 0 (unconscious)', async () => {
+    const pId   = 'aaaaaaaa-bbbb-4ccc-8ddd-ff0000000012';
+    const pFile = path.join(process.cwd(), 'characters', `${pId}.json`);
+    const base  = JSON.parse(fs.readFileSync(PALADIN_FILE, 'utf-8'));
+    base.id = pId; base.maxHP = 30; base.currentHP = 30; base.levelHistory = [];
+    fs.writeFileSync(pFile, JSON.stringify(base));
+    try {
+      const { status, json } = await request(BASE, `/api/characters/${pId}`, 'PUT', { currentHP: 0 });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(json.character.currentHP === 0, 'HP stored as 0');
+    } finally { if (fs.existsSync(pFile)) fs.unlinkSync(pFile); }
+  });
+
+  // ── Spell Slot Consumption (PUT spellcasting.slotsUsed) ──────
+
+  await test('PUT /api/characters/:id uses a spell slot (slotsUsed increments)', async () => {
+    const wId   = 'aaaaaaaa-bbbb-4ccc-8ddd-ff0000000020';
+    const wFile = path.join(process.cwd(), 'characters', `${wId}.json`);
+    const base  = JSON.parse(fs.readFileSync(PALADIN_FILE, 'utf-8'));
+    base.id = wId; base.levelHistory = [];
+    base.spellcasting = {
+      ability: 'int', spellAttackBonus: 5, saveDC: 13,
+      slots: { '1': 4, '2': 3 }, slotsUsed: { '1': 0, '2': 0 },
+      cantrips: ['Fire Bolt'], knownSpells: [], preparedSpells: [],
+    };
+    fs.writeFileSync(wFile, JSON.stringify(base));
+    try {
+      const newSlotsUsed = { '1': 1, '2': 0 };
+      const { status, json } = await request(BASE, `/api/characters/${wId}`, 'PUT', {
+        spellcasting: { ...base.spellcasting, slotsUsed: newSlotsUsed },
+      });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(json.character.spellcasting.slotsUsed['1'] === 1, 'Lv1 slot used');
+      assert(json.character.spellcasting.slotsUsed['2'] === 0, 'Lv2 slot unchanged');
+      assert(json.character.spellcasting.slots['1'] === 4, 'max slots unchanged');
+    } finally { if (fs.existsSync(wFile)) fs.unlinkSync(wFile); }
+  });
+
+  await test('PUT /api/characters/:id restores a spell slot (slotsUsed decrements)', async () => {
+    const wId   = 'aaaaaaaa-bbbb-4ccc-8ddd-ff0000000021';
+    const wFile = path.join(process.cwd(), 'characters', `${wId}.json`);
+    const base  = JSON.parse(fs.readFileSync(PALADIN_FILE, 'utf-8'));
+    base.id = wId; base.levelHistory = [];
+    base.spellcasting = {
+      ability: 'int', spellAttackBonus: 5, saveDC: 13,
+      slots: { '1': 4, '2': 3 }, slotsUsed: { '1': 2, '2': 1 },
+      cantrips: ['Fire Bolt'], knownSpells: [], preparedSpells: [],
+    };
+    fs.writeFileSync(wFile, JSON.stringify(base));
+    try {
+      const newSlotsUsed = { '1': 1, '2': 1 };
+      const { status, json } = await request(BASE, `/api/characters/${wId}`, 'PUT', {
+        spellcasting: { ...base.spellcasting, slotsUsed: newSlotsUsed },
+      });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(json.character.spellcasting.slotsUsed['1'] === 1, 'Lv1 slot restored (2→1)');
+      assert(json.character.spellcasting.slotsUsed['2'] === 1, 'Lv2 slot unchanged');
+    } finally { if (fs.existsSync(wFile)) fs.unlinkSync(wFile); }
+  });
+
+  await test('PUT /api/characters/:id slotsUsed persists across GET', async () => {
+    const wId   = 'aaaaaaaa-bbbb-4ccc-8ddd-ff0000000022';
+    const wFile = path.join(process.cwd(), 'characters', `${wId}.json`);
+    const base  = JSON.parse(fs.readFileSync(PALADIN_FILE, 'utf-8'));
+    base.id = wId; base.levelHistory = [];
+    base.spellcasting = {
+      ability: 'wis', spellAttackBonus: 4, saveDC: 12,
+      slots: { '1': 2 }, slotsUsed: { '1': 0 },
+      cantrips: [], knownSpells: [], preparedSpells: [],
+    };
+    fs.writeFileSync(wFile, JSON.stringify(base));
+    try {
+      // Use a slot
+      await request(BASE, `/api/characters/${wId}`, 'PUT', {
+        spellcasting: { ...base.spellcasting, slotsUsed: { '1': 1 } },
+      });
+      // Read back
+      const { status, json } = await request(BASE, `/api/characters/${wId}`, 'GET');
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(json.character.spellcasting.slotsUsed['1'] === 1, 'Slot usage persisted after GET');
+    } finally { if (fs.existsSync(wFile)) fs.unlinkSync(wFile); }
   });
 
     // ── CORS ──────────────────────────────────────────────────
