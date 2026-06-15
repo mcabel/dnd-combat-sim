@@ -807,7 +807,8 @@ function renderCharDetail() {
   if (spl && (spl.cantrips.length > 0 || Object.keys(spl.slots || {}).length > 0)) {
     let html = `<div style="font-size:11px;color:var(--muted);margin-bottom:4px">DC ${spl.saveDC} · +${spl.spellAttackBonus} to hit · ${spl.ability.toUpperCase()}</div>`;
     if (spl.cantrips && spl.cantrips.length > 0) {
-      html += `<div><strong>Cantrips (${spl.cantrips.length})</strong></div>`;
+      const names = spl.cantrips.map(n => esc(n)).join(', ');
+      html += `<div style="margin-bottom:2px"><strong>Cantrips (${spl.cantrips.length})</strong> <span style="color:var(--muted);font-size:11px">${names}</span></div>`;
     }
     for (let i=1; i<=9; i++) {
       const key = String(i);
@@ -838,6 +839,25 @@ function renderCharDetail() {
         <span style="min-width:36px;color:var(--muted)">Pact</span>
         <span>${ppips}</span>
         <span style="color:${pavail<=0?'var(--danger)':'inherit'}">${pavail}/${ps.total} (Lv${ps.slotLevel})</span>
+      </div>`;
+    }
+    // Known / prepared spells
+    const spellList = (spl.preparedSpells && spl.preparedSpells.length > 0) ? spl.preparedSpells
+                    : (spl.knownSpells && spl.knownSpells.length > 0) ? spl.knownSpells
+                    : (spl.spellbook && spl.spellbook.length > 0) ? spl.spellbook
+                    : [];
+    if (spellList.length > 0) {
+      const label = (spl.preparedSpells && spl.preparedSpells.length > 0) ? 'Prepared'
+                  : (spl.spellbook && spl.spellbook.length > 0) ? 'Spellbook'
+                  : 'Known';
+      const spellId = `spell-list-${c.id}`;
+      html += `<div style="margin-top:6px;border-top:1px solid var(--border);padding-top:6px">
+        <span style="font-size:11px;color:var(--muted);cursor:pointer" onclick="toggleSpellList('${spellId}')">
+          <strong>${label} Spells (${spellList.length})</strong> <span id="${spellId}-arrow">▸</span>
+        </span>
+        <div id="${spellId}" style="display:none;margin-top:4px;font-size:11px;color:var(--muted);line-height:1.7">
+          ${spellList.map(n => esc(n)).join(' · ')}
+        </div>
       </div>`;
     }
     splEl.innerHTML = html;
@@ -885,6 +905,15 @@ function renderCharDetail() {
 
   // Conditions
   renderConditions(c);
+}
+
+function toggleSpellList(id) {
+  const el = document.getElementById(id);
+  const arrow = document.getElementById(id + '-arrow');
+  if (!el) return;
+  const hidden = el.style.display === 'none';
+  el.style.display = hidden ? 'block' : 'none';
+  if (arrow) arrow.textContent = hidden ? '▾' : '▸';
 }
 
 const PHB_CONDITIONS = [
