@@ -1246,6 +1246,31 @@ async function run() {
       assert(get.character.equipment[0].notes === '+1 Stealth checks', `Notes not persisted in GET`);
       fs.unlinkSync(path.join(process.cwd(), 'characters', `${eqId}.json`));
     });
+
+    await test('PUT /api/characters/:id updates item notes inline', async () => {
+      base.id = eqId; base.levelHistory = [];
+      base.equipment = [{ name: 'Staff', quantity: 1, equipped: true, category: 'gear', notes: 'old note' }];
+      fs.writeFileSync(path.join(process.cwd(), 'characters', `${eqId}.json`), JSON.stringify(base));
+      const updated = [{ name: 'Staff', quantity: 1, equipped: true, category: 'gear', notes: 'new note' }];
+      const { status, json } = await request(BASE, `/api/characters/${eqId}`, 'PUT', { equipment: updated });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(json.character.equipment[0].notes === 'new note', `Expected 'new note', got ${json.character.equipment[0].notes}`);
+      const { json: get } = await request(BASE, `/api/characters/${eqId}`);
+      assert(get.character.equipment[0].notes === 'new note', `Updated notes not persisted`);
+      fs.unlinkSync(path.join(process.cwd(), 'characters', `${eqId}.json`));
+    });
+
+    await test('PUT /api/characters/:id removes item notes when cleared', async () => {
+      base.id = eqId; base.levelHistory = [];
+      base.equipment = [{ name: 'Torch', quantity: 5, equipped: false, category: 'gear', notes: 'remove me' }];
+      fs.writeFileSync(path.join(process.cwd(), 'characters', `${eqId}.json`), JSON.stringify(base));
+      // Send item without notes key (cleared)
+      const updated = [{ name: 'Torch', quantity: 5, equipped: false, category: 'gear' }];
+      const { status, json } = await request(BASE, `/api/characters/${eqId}`, 'PUT', { equipment: updated });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(!json.character.equipment[0].notes, `Expected notes cleared, got ${json.character.equipment[0].notes}`);
+      fs.unlinkSync(path.join(process.cwd(), 'characters', `${eqId}.json`));
+    });
   }
 
     // ── CORS ──────────────────────────────────────────────────
