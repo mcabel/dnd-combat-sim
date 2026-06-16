@@ -372,6 +372,29 @@ button.full { width: 100%; padding: 11px; font-size: 13px; }
       Choose your subclass below.
     </div>
 
+    <!-- Short Rest Panel (inline, no prompt) -->
+    <div id="short-rest-panel" class="hidden" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px 14px;margin-bottom:10px">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.08em">☀ Short Rest — Spend Hit Dice</div>
+      <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+        <div>
+          <div style="font-size:10px;color:var(--muted);margin-bottom:3px">Hit dice to spend</div>
+          <input type="number" id="sr-hd-input" value="1" min="0" max="20" style="width:60px;padding:4px 6px;font-size:13px" />
+        </div>
+        <div>
+          <div style="font-size:10px;color:var(--muted);margin-bottom:3px">Roll mode</div>
+          <div style="display:flex;gap:4px">
+            <button id="sr-avg-btn" class="sm secondary" onclick="setSRMode('average')" style="padding:3px 8px;font-size:10px;border-color:var(--accent);color:var(--accent)">Avg</button>
+            <button id="sr-rnd-btn" class="sm" onclick="setSRMode('random')" style="padding:3px 8px;font-size:10px">Rnd</button>
+          </div>
+        </div>
+        <div style="display:flex;gap:4px">
+          <button class="sm primary" onclick="confirmShortRest()" style="padding:4px 12px;font-size:11px">Rest ☀</button>
+          <button class="sm" onclick="cancelShortRest()" style="padding:4px 8px;font-size:11px">✕</button>
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--muted);margin-top:6px" id="sr-hd-avail"></div>
+    </div>
+
     <!-- Stats -->
     <div class="stats-5" id="char-stats-row"></div>
     <div id="char-death-saves" style="margin-top:6px;display:none"></div>
@@ -799,11 +822,23 @@ function renderCharDetail() {
   const initSign = initMod >= 0 ? '+' : '';
   document.getElementById('char-stats-row').innerHTML = `
     <div class="stat-box">
-      <div class="val" id="hp-display">${c.currentHP}/${c.maxHP}</div>
+      <div style="display:flex;align-items:baseline;justify-content:center;gap:1px">
+        <input type="number" id="hp-cur-input" value="${c.currentHP}" min="0" max="${c.maxHP}"
+          style="width:44px;font-family:var(--serif);font-size:20px;color:var(--accent);text-align:center;background:transparent;border:none;border-bottom:1px solid transparent;padding:0;outline:none;-moz-appearance:textfield"
+          onfocus="this.style.borderBottomColor='var(--accent)'"
+          onblur="this.style.borderBottomColor='transparent';setHPDirect(this.value)"
+          onkeydown="if(event.key==='Enter'){this.blur()}"
+        />
+        <span style="font-family:var(--serif);font-size:14px;color:var(--muted)">/${c.maxHP}</span>
+      </div>
       <div class="lbl">HP</div>
-      <div style="display:flex;gap:4px;margin-top:6px;justify-content:center">
-        <button class="sm danger" onclick="takeDamage()" style="padding:2px 6px;font-size:10px" title="Take damage">− Dmg</button>
-        <button class="sm secondary" onclick="healChar()" style="padding:2px 6px;font-size:10px" title="Heal">+ Heal</button>
+      <div style="display:flex;gap:3px;margin-top:6px;align-items:center;justify-content:center">
+        <input type="number" id="hp-amt" placeholder="amt" min="1"
+          style="width:38px;font-size:11px;text-align:center;padding:2px 3px;border-radius:4px;background:var(--bg);border:1px solid var(--border);color:var(--text);-moz-appearance:textfield"
+          onkeydown="if(event.key==='Enter')applyHPAmt('heal')"
+        />
+        <button class="sm danger" onclick="applyHPAmt('dmg')" style="padding:2px 4px;font-size:10px" title="Take damage">−Dmg</button>
+        <button class="sm secondary" onclick="applyHPAmt('heal')" style="padding:2px 4px;font-size:10px" title="Heal">+Heal</button>
       </div>
     </div>
     <div class="stat-box"><div class="val">${c.armorClass}</div><div class="lbl">AC</div></div>
@@ -812,9 +847,13 @@ function renderCharDetail() {
     <div class="stat-box">
       <div class="val" id="thp-display" style="color:${thp>0?'var(--accent)':'var(--muted)'}">${thp}</div>
       <div class="lbl">Temp HP</div>
-      <div style="display:flex;gap:4px;margin-top:6px;justify-content:center">
-        <button class="sm secondary" onclick="addTempHP()" style="padding:2px 6px;font-size:10px" title="Add temp HP">+ Add</button>
-        <button class="sm" onclick="clearTempHP()" style="padding:2px 6px;font-size:10px;opacity:${thp>0?1:0.4}" ${thp<=0?'disabled':''} title="Clear temp HP">✕</button>
+      <div style="display:flex;gap:3px;margin-top:6px;align-items:center;justify-content:center">
+        <input type="number" id="thp-amt" placeholder="amt" min="1"
+          style="width:38px;font-size:11px;text-align:center;padding:2px 3px;border-radius:4px;background:var(--bg);border:1px solid var(--border);color:var(--text);-moz-appearance:textfield"
+          onkeydown="if(event.key==='Enter')applyTempHP()"
+        />
+        <button class="sm secondary" onclick="applyTempHP()" style="padding:2px 4px;font-size:10px" title="Set temp HP">+Set</button>
+        <button class="sm" onclick="clearTempHP()" style="padding:2px 4px;font-size:10px;opacity:${thp>0?1:0.4}" ${thp<=0?'disabled':''} title="Clear temp HP">✕</button>
       </div>
     </div>
     <div class="stat-box">
@@ -920,6 +959,7 @@ function renderCharDetail() {
     const conc = c.concentrating || null;
     let html = `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
       <span style="font-size:11px;color:var(--muted)">DC ${spl.saveDC} · +${spl.spellAttackBonus} to hit · ${spl.ability.toUpperCase()}</span>
+      <button class="sm" onclick="resetAllSlots()" style="padding:1px 7px;font-size:10px;opacity:0.6" title="Restore all spell slots">↺ Reset Slots</button>
       ${conc
         ? `<span style="display:inline-flex;align-items:center;gap:4px;background:rgba(180,120,30,0.15);border:1px solid var(--accent);border-radius:12px;padding:1px 8px;font-size:10px;color:var(--accent)">
             ◎ ${esc(conc)}
@@ -1544,36 +1584,62 @@ async function doLevelUp() {
 
 
 // ── Short Rest ────────────────────────────────────────────────
-async function doShortRest() {
+let _srMode: 'average' | 'random' = 'average';
+
+function setSRMode(mode: 'average' | 'random') {
+  _srMode = mode;
+  const avgBtn = document.getElementById('sr-avg-btn');
+  const rndBtn = document.getElementById('sr-rnd-btn');
+  if (avgBtn) { avgBtn.style.borderColor = mode === 'average' ? 'var(--accent)' : ''; avgBtn.style.color = mode === 'average' ? 'var(--accent)' : ''; }
+  if (rndBtn) { rndBtn.style.borderColor = mode === 'random'  ? 'var(--accent)' : ''; rndBtn.style.color = mode === 'random'  ? 'var(--accent)' : ''; }
+}
+
+function doShortRest() {
   if (!S.charDetail) return;
-  showErr('');
-  const hdAvail = (S.charDetail.hitDice || []).reduce((s, hd) => s + hd.remaining, 0);
-  let hdInput = 0;
-  let rollMode = 'average';
+  const hdAvail = (S.charDetail.hitDice || []).reduce((s: number, hd: any) => s + hd.remaining, 0);
   if (hdAvail > 0) {
-    const raw = prompt(`Short Rest: spend hit dice to heal? (0–${hdAvail} available)\n\nEnter a number, optionally followed by "r" for random rolls (e.g. "2r").\nDefault is average roll.`, '1');
-    if (raw === null) return; // cancelled
-    const isRandom = raw.trim().toLowerCase().endsWith('r');
-    rollMode = isRandom ? 'random' : 'average';
-    hdInput  = Math.max(0, Math.min(hdAvail, parseInt(raw, 10) || 0));
+    const hdInput = document.getElementById('sr-hd-input') as HTMLInputElement;
+    const hdAvailEl = document.getElementById('sr-hd-avail');
+    if (hdInput)   { hdInput.max = String(hdAvail); hdInput.value = '1'; }
+    if (hdAvailEl) hdAvailEl.textContent = `Available: ${hdAvail} hit ${hdAvail === 1 ? 'die' : 'dice'}`;
+    _srMode = 'average';
+    setSRMode('average');
+    document.getElementById('short-rest-panel')?.classList.remove('hidden');
+  } else {
+    execShortRest(0, 'average');
   }
-  const btn = document.getElementById('char-shortrest-btn');
+}
+
+function cancelShortRest() {
+  document.getElementById('short-rest-panel')?.classList.add('hidden');
+}
+
+async function confirmShortRest() {
+  const hdInput = document.getElementById('sr-hd-input') as HTMLInputElement;
+  const hdAvail = (S.charDetail.hitDice || []).reduce((s: number, hd: any) => s + hd.remaining, 0);
+  const hdToSpend = Math.max(0, Math.min(hdAvail, parseInt(hdInput?.value || '0', 10) || 0));
+  document.getElementById('short-rest-panel')?.classList.add('hidden');
+  await execShortRest(hdToSpend, _srMode);
+}
+
+async function execShortRest(hdToSpend: number, rollMode: string) {
+  const btn = document.getElementById('char-shortrest-btn') as HTMLButtonElement;
   btn.disabled = true; btn.textContent = '☀ Resting…';
   try {
     const data = await api(`/api/characters/${S.charDetail.id}/shortrest`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ hitDiceToSpend: hdInput, rollMode }),
+      body: JSON.stringify({ hitDiceToSpend: hdToSpend, rollMode }),
     });
     S.charDetail = data.character;
     refreshChars();
     renderCharDetail();
-    const parts = [];
+    const parts: string[] = [];
     if (data.hpRegained > 0) parts.push(`+${data.hpRegained} HP${rollMode === 'random' ? ' (rolled)' : ''}`);
     if (data.hdSpent > 0)    parts.push(`${data.hdSpent} HD spent`);
     if ((data.restored || []).length > 0) parts.push(`${data.restored.length} resource${data.restored.length===1?'':'s'} recharged`);
     showBanner(`Short rest: ${parts.length ? parts.join(', ') : 'nothing to restore'}.`, 'ok');
-  } catch(e) { showErr(e.message); }
+  } catch(e: any) { showErr(e.message); }
   finally { btn.disabled = false; btn.textContent = '☀ Short Rest'; }
 }
 
@@ -1615,36 +1681,14 @@ async function doLongRest() {
 }
 
 // ── HP Tracker ────────────────────────────────────────────────
-async function takeDamage() {
+async function setHPDirect(val: string) {
   if (!S.charDetail) return;
-  const raw = prompt(`Take damage (current HP: ${S.charDetail.currentHP}/${S.charDetail.maxHP}):`, '');
-  if (raw === null || raw.trim() === '') return;
-  const dmg = parseInt(raw, 10);
-  if (isNaN(dmg) || dmg < 0) { showErr('Enter a positive number.'); return; }
-  const newHP = Math.max(0, S.charDetail.currentHP - dmg);
-  try {
-    const data = await api(`/api/characters/${S.charDetail.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ currentHP: newHP }),
-    });
-    S.charDetail = data.character;
-    renderCharDetail();
-    showBanner(`Took ${dmg} damage. HP: ${newHP}/${S.charDetail.maxHP}${newHP === 0 ? ' — UNCONSCIOUS!' : ''}.`, newHP === 0 ? 'warn' : 'ok');
-  } catch(e) { showErr(e.message); }
-}
-
-async function healChar() {
-  if (!S.charDetail) return;
-  const raw = prompt(`Heal (current HP: ${S.charDetail.currentHP}/${S.charDetail.maxHP}):`, '');
-  if (raw === null || raw.trim() === '') return;
-  const amt = parseInt(raw, 10);
-  if (isNaN(amt) || amt < 0) { showErr('Enter a positive number.'); return; }
+  const newHP = Math.max(0, Math.min(S.charDetail.maxHP, parseInt(val, 10) || 0));
+  if (newHP === S.charDetail.currentHP) return; // no change
   const wasDown = S.charDetail.currentHP <= 0;
-  const newHP = Math.min(S.charDetail.maxHP, S.charDetail.currentHP + amt);
+  const body: any = { currentHP: newHP };
+  if (wasDown && newHP > 0) body.deathSaves = { successes: 0, failures: 0 };
   try {
-    const body: any = { currentHP: newHP };
-    if (wasDown && newHP > 0) body.deathSaves = { successes: 0, failures: 0 };
     const data = await api(`/api/characters/${S.charDetail.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -1652,16 +1696,40 @@ async function healChar() {
     });
     S.charDetail = data.character;
     renderCharDetail();
-    showBanner(`Healed ${amt} HP. HP: ${newHP}/${S.charDetail.maxHP}.`, 'ok');
+    showBanner(`HP set to ${newHP}/${S.charDetail.maxHP}${newHP === 0 ? ' — UNCONSCIOUS!' : ''}.`, newHP === 0 ? 'error' : 'ok');
+  } catch(e) { showErr(e.message); }
+}
+
+async function applyHPAmt(mode: 'dmg' | 'heal') {
+  if (!S.charDetail) return;
+  const amtEl = document.getElementById('hp-amt') as HTMLInputElement;
+  const amt = parseInt(amtEl?.value || '', 10);
+  if (isNaN(amt) || amt <= 0) { showErr('Enter a positive amount.'); return; }
+  const wasDown = S.charDetail.currentHP <= 0;
+  const newHP = mode === 'dmg'
+    ? Math.max(0, S.charDetail.currentHP - amt)
+    : Math.min(S.charDetail.maxHP, S.charDetail.currentHP + amt);
+  const body: any = { currentHP: newHP };
+  if (wasDown && newHP > 0) body.deathSaves = { successes: 0, failures: 0 };
+  try {
+    const data = await api(`/api/characters/${S.charDetail.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    S.charDetail = data.character;
+    renderCharDetail();
+    const label = mode === 'dmg' ? `Took ${amt} damage` : `Healed ${amt} HP`;
+    const warn  = mode === 'dmg' && newHP === 0 ? ' — UNCONSCIOUS!' : '';
+    showBanner(`${label}. HP: ${newHP}/${S.charDetail.maxHP}${warn}.`, newHP === 0 && mode === 'dmg' ? 'error' : 'ok');
   } catch(e) { showErr(e.message); }
 }
 
 // ── Temporary HP ───────────────────────────────────────────────
-async function addTempHP() {
+async function applyTempHP() {
   if (!S.charDetail) return;
-  const raw = prompt('Add Temporary HP (new THP replaces old if higher):');
-  if (raw === null) return;
-  const amount = parseInt(raw, 10);
+  const amtEl = document.getElementById('thp-amt') as HTMLInputElement;
+  const amount = parseInt(amtEl?.value || '', 10);
   if (isNaN(amount) || amount < 0) { showBanner('Invalid amount', 'error'); return; }
   const current = S.charDetail.temporaryHP || 0;
   const newTHP = Math.max(current, amount); // THP doesn't stack — take higher
@@ -1859,6 +1927,21 @@ async function restoreSlot(level) {
     });
     S.charDetail = data.character;
     renderCharDetail();
+  } catch(e) { showErr(e.message); }
+}
+
+async function resetAllSlots() {
+  if (!S.charDetail?.spellcasting) return;
+  const spl = S.charDetail.spellcasting;
+  try {
+    const data = await api(`/api/characters/${S.charDetail.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ spellcasting: { ...spl, slotsUsed: {} } }),
+    });
+    S.charDetail = data.character;
+    renderCharDetail();
+    showBanner('All spell slots restored.', 'ok');
   } catch(e) { showErr(e.message); }
 }
 
