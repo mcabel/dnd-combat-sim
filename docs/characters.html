@@ -1741,7 +1741,7 @@ async function applyTempHP() {
     if (!res.ok) throw new Error('PUT failed');
     const data = await res.json();
     S.charDetail = data.character;
-    renderDetail();
+    renderCharDetail();
     showBanner(`Temp HP: ${newTHP}`, 'ok');
   } catch(e) { showErr(e.message); }
 }
@@ -1756,7 +1756,7 @@ async function clearTempHP() {
     if (!res.ok) throw new Error('PUT failed');
     const data = await res.json();
     S.charDetail = data.character;
-    renderDetail();
+    renderCharDetail();
     showBanner('Temp HP cleared', 'ok');
   } catch(e) { showErr(e.message); }
 }
@@ -1769,13 +1769,13 @@ async function changeExhaustion(delta) {
   if (next === current) return;
   try {
     const res = await fetch(`/api/characters/${S.charDetail.id}`, {
-      method: 'PUT', headers: {'Content-Type':'application/json'},
+      method: 'PUT', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ exhaustionLevel: next })
     });
     if (!res.ok) throw new Error('PUT failed');
     const data = await res.json();
     S.charDetail = data.character;
-    renderDetail();
+    renderCharDetail();
     const msg = next === 0 ? 'Exhaustion cleared'
                : next === 6 ? 'Exhaustion 6 — character dies!'
                : `Exhaustion level ${next}`;
