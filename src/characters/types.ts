@@ -333,6 +333,10 @@ export interface CharacterSheet {
   // ---- Conditions (PHB p.290) -------------------------------
   // Active conditions on this character. Optional for backward compat.
   conditions?: string[];
+
+  // ---- Death Saves (PHB p.197) ------------------------------
+  // Tracked out-of-combat (reset on heal above 0 or long rest).
+  deathSaves?: { successes: number; failures: number };
 }
 
 // ---- Party --------------------------------------------------

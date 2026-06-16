@@ -1070,6 +1070,51 @@ async function run() {
     } finally { if (fs.existsSync(eFile)) fs.unlinkSync(eFile); }
   });
 
+  // ── Death Saves (PUT deathSaves) ──────────────────────────
+  {
+    const dsId   = 'cccccccc-0000-0000-0000-000000000001';
+    const dsFile = path.join(process.cwd(), 'characters', `${dsId}.json`);
+    const base: any = JSON.parse(JSON.stringify(PALADIN_PRISTINE));
+    base.id = dsId; base.levelHistory = [];
+
+    await test('PUT /api/characters/:id sets deathSaves', async () => {
+      base.currentHP = 0;
+      fs.writeFileSync(dsFile, JSON.stringify(base));
+      const { status, json } = await request(BASE, `/api/characters/${dsId}`, 'PUT', {
+        deathSaves: { successes: 2, failures: 1 }
+      });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(json.character.deathSaves?.successes === 2, `Expected 2 successes`);
+      assert(json.character.deathSaves?.failures === 1, `Expected 1 failure`);
+      fs.unlinkSync(dsFile);
+    });
+
+    await test('PUT /api/characters/:id deathSaves persist across GET', async () => {
+      base.currentHP = 0;
+      fs.writeFileSync(dsFile, JSON.stringify(base));
+      await request(BASE, `/api/characters/${dsId}`, 'PUT', { deathSaves: { successes: 1, failures: 2 } });
+      const { json } = await request(BASE, `/api/characters/${dsId}`);
+      assert(json.character.deathSaves?.successes === 1, `Expected successes 1`);
+      assert(json.character.deathSaves?.failures === 2, `Expected failures 2`);
+      fs.unlinkSync(dsFile);
+    });
+
+    await test('PUT /api/characters/:id clears deathSaves on heal', async () => {
+      base.currentHP = 0;
+      base.deathSaves = { successes: 2, failures: 1 };
+      fs.writeFileSync(dsFile, JSON.stringify(base));
+      // Simulate: heal above 0 clears saves
+      const { status, json } = await request(BASE, `/api/characters/${dsId}`, 'PUT', {
+        currentHP: 10, deathSaves: { successes: 0, failures: 0 }
+      });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(json.character.currentHP === 10, `Expected HP 10`);
+      assert(json.character.deathSaves?.successes === 0, `Expected successes cleared`);
+      assert(json.character.deathSaves?.failures === 0, `Expected failures cleared`);
+      fs.unlinkSync(dsFile);
+    });
+  }
+
   // ── Notes field (PUT notes) ───────────────────────────────
   await test('PUT /api/characters/:id sets notes field', async () => {
     const nId = 'aaaaaaaa-0000-0000-0000-000000000001';

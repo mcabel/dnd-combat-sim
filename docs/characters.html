@@ -374,6 +374,7 @@ button.full { width: 100%; padding: 11px; font-size: 13px; }
 
     <!-- Stats -->
     <div class="stats-5" id="char-stats-row"></div>
+    <div id="char-death-saves" style="margin-top:6px;display:none"></div>
 
     <!-- Ability scores -->
     <div class="sec-row mt12"><div class="sec-title">Ability Scores</div><div class="sec-line"></div></div>
@@ -822,6 +823,9 @@ function renderCharDetail() {
       </div>
       ${exh>0 ? `<div style="font-size:9px;color:var(--danger);margin-top:4px;text-align:center;line-height:1.3">${EXHAUSTION_EFFECTS[exh-1]}</div>` : ''}
     </div>`;
+
+  // Death saves
+  renderDeathSaves(c);
 
   // Ability scores
   const STATS = ['str','dex','con','int','wis','cha'];
@@ -1569,6 +1573,14 @@ async function doLongRest() {
       body: JSON.stringify({}),
     });
     S.charDetail = data.character;
+    // Long rest clears death saves
+    if (S.charDetail.deathSaves && (S.charDetail.deathSaves.successes > 0 || S.charDetail.deathSaves.failures > 0)) {
+      const res = await fetch(`/api/characters/${S.charDetail.id}`, {
+        method: 'PUT', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ deathSaves: { successes: 0, failures: 0 } })
+      });
+      if (res.ok) { const d = await res.json(); S.charDetail = d.character; }
+    }
     refreshChars();
     renderCharDetail();
     const count = (data.restored || []).length;
@@ -1603,12 +1615,15 @@ async function healChar() {
   if (raw === null || raw.trim() === '') return;
   const amt = parseInt(raw, 10);
   if (isNaN(amt) || amt < 0) { showErr('Enter a positive number.'); return; }
+  const wasDown = S.charDetail.currentHP <= 0;
   const newHP = Math.min(S.charDetail.maxHP, S.charDetail.currentHP + amt);
   try {
+    const body: any = { currentHP: newHP };
+    if (wasDown && newHP > 0) body.deathSaves = { successes: 0, failures: 0 };
     const data = await api(`/api/characters/${S.charDetail.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ currentHP: newHP }),
+      body: JSON.stringify(body),
     });
     S.charDetail = data.character;
     renderCharDetail();
@@ -1675,7 +1690,64 @@ async function changeExhaustion(delta) {
   } catch(e) { showErr(e.message); }
 }
 
-// ── Spell Slot Consumption ─────────────────────────────────────
+// ── Death Saves ────────────────────────────────────────────────
+function renderDeathSaves(c) {
+  const el = document.getElementById('char-death-saves');
+  if (!el) return;
+  const ds = c.deathSaves || { successes: 0, failures: 0 };
+  const dying = c.currentHP <= 0;
+  el.style.display = dying ? 'flex' : 'none';
+  if (!dying) return;
+  const dot = (filled, color, title) =>
+    `<span title="${title}" style="display:inline-block;width:10px;height:10px;border-radius:50%;border:1px solid ${color};background:${filled ? color : 'transparent'};margin:0 2px;cursor:pointer"></span>`;
+  const succDots = [0,1,2].map(i => dot(i < ds.successes, 'var(--accent)', `Success ${i+1}`)).join('');
+  const failDots = [0,1,2].map(i => dot(i < ds.failures, 'var(--danger)', `Failure ${i+1}`)).join('');
+  el.style.alignItems = 'center';
+  el.style.justifyContent = 'center';
+  el.style.gap = '10px';
+  el.style.fontSize = '11px';
+  el.innerHTML =
+    `<span style="color:var(--muted)">Death Saves</span>` +
+    `<span onclick="markDeathSave(true)" style="cursor:pointer" title="Mark success">✓ ${succDots}</span>` +
+    `<span onclick="markDeathSave(false)" style="cursor:pointer" title="Mark failure">✗ ${failDots}</span>` +
+    `<button class="sm secondary" style="padding:1px 6px;font-size:10px" onclick="clearDeathSaves()" title="Clear death saves">Reset</button>`;
+}
+
+async function markDeathSave(success) {
+  if (!S.charDetail) return;
+  const ds = S.charDetail.deathSaves || { successes: 0, failures: 0 };
+  const updated = success
+    ? { successes: Math.min(3, ds.successes + 1), failures: ds.failures }
+    : { successes: ds.successes, failures: Math.min(3, ds.failures + 1) };
+  try {
+    const res = await fetch(`/api/characters/${S.charDetail.id}`, {
+      method: 'PUT', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ deathSaves: updated })
+    });
+    if (!res.ok) throw new Error('PUT failed');
+    const data = await res.json();
+    S.charDetail = data.character;
+    renderDeathSaves(S.charDetail);
+    if (updated.successes >= 3) showBanner('3 successes — character stabilizes!', 'ok');
+    else if (updated.failures >= 3) showBanner('3 failures — character dies!', 'error');
+  } catch(e) { showErr(e.message); }
+}
+
+async function clearDeathSaves() {
+  if (!S.charDetail) return;
+  try {
+    const res = await fetch(`/api/characters/${S.charDetail.id}`, {
+      method: 'PUT', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ deathSaves: { successes: 0, failures: 0 } })
+    });
+    if (!res.ok) throw new Error('PUT failed');
+    const data = await res.json();
+    S.charDetail = data.character;
+    renderDeathSaves(S.charDetail);
+  } catch(e) { showErr(e.message); }
+}
+
+
 async function useSlot(level) {
   if (!S.charDetail || !S.charDetail.spellcasting) return;
   const key = String(level);
