@@ -35,6 +35,7 @@ import { rollGrappleContest, rollShoveContest, canGrappleOrShoveTarget } from '.
 import { computeLOS } from './los';
 import { removeEffectsFromCaster, getActiveAcBonus, getActiveBlessDie, getActiveHexDie } from './spell_effects';
 import { execute as executeHex } from '../spells/hex';
+import { execute as executeMagicMissile } from '../spells/magic_missile';
 import { shouldCast as shouldCastFaerieFire, execute as executeFaerieFire } from '../spells/faerie_fire';
 import { shouldCast as shouldCastBless, execute as executeBless } from '../spells/bless';
 import { shouldCast as shouldCastEntangle, execute as executeEntangle } from '../spells/entangle';
@@ -787,6 +788,15 @@ function executePlannedAction(
       const hexTarget = bf.combatants.get(hexTargetId);
       if (!hexTarget || hexTarget.isDead || hexTarget.isUnconscious) break;
       executeHex(actor, hexTarget, state);
+      break;
+    }
+
+    case 'magicMissile': {
+      // Magic Missile — PHB p.257: 3 auto-hit darts, each 1d4+1 force. 120 ft, no concentration.
+      // Slot consumed inside executeMagicMissile.
+      const mmTarget = plan.targetId ? bf.combatants.get(plan.targetId) : null;
+      if (!mmTarget || mmTarget.isDead || mmTarget.isUnconscious) break;
+      executeMagicMissile(actor, mmTarget, state);
       break;
     }
 

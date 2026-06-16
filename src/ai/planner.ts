@@ -16,6 +16,7 @@ import {
 import { shouldCast as shouldCastFaerieFire } from '../spells/faerie_fire';
 import { shouldCast as shouldCastBless } from '../spells/bless';
 import { shouldCast as shouldCastMageArmor } from '../spells/mage_armor';
+import { shouldCast as shouldCastMagicMissile } from '../spells/magic_missile';
 import { shouldCast as shouldCastEntangle } from '../spells/entangle';
 import { shouldCast as shouldCastThunderwave } from '../spells/thunderwave';
 import { shouldCast as shouldCastArmsOfHadar } from '../spells/arms_of_hadar';
@@ -741,6 +742,18 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
       plan.bonusAction = planBonusAction(self, target, battlefield);
       return plan;
     }
+  }
+
+  // === MAGIC MISSILE (action, single-target, ranged) ===
+  // Auto-hit reliable damage. Fire when no AoE/control spell was chosen and target is in range.
+  // Outperforms Fire Bolt (cantrip) in expected damage at the cost of a spell slot.
+  if (!plan.action && target && shouldCastMagicMissile(self, target, battlefield)) {
+    plan.action = {
+      type: 'magicMissile',
+      action: null,
+      targetId: target.id,
+      description: `${self.name} casts Magic Missile at ${target.name}`,
+    };
   }
 
   // === MAGE ARMOR (action, self) ===
