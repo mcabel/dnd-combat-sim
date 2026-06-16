@@ -12,6 +12,7 @@
 - **Do NOT use Larva for testing** — too fragile. Use bestiary-mm-2014.json monsters via `loadBestiaryJson` + `monsterToCombatant`.
 - **Another agent** is working `SHEET-HANDOVER-*.md` — do not touch sheet routes, leveler.ts, or builder.ts.
 - Use `spawnMonster(name, id, pos)` pattern for bestiary enemies in tests (see hex.test.ts).
+- **SPELL DATABASE:** Full JSON data for every spell in the game lives at `testDataSpells/` in the repo (936 spells across 17 source files). PHB spells: `testDataSpells/spells-phb.json` (361 spells). Always consult this before implementing any spell — it has range, school, components, damage type, saving throw, duration, concentration flag, etc. Key fields: `level`, `school`, `time`, `range`, `duration`, `savingThrow`, `damageInflict`, `areaTags`, `concentration`. GitHub: https://github.com/mcabel/dnd-combat-sim/tree/main/testDataSpells
 
 ## Current State
 - **GitHub:** https://github.com/mcabel/dnd-combat-sim (commit `740347c`)
