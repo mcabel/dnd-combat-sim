@@ -379,6 +379,10 @@ button.full { width: 100%; padding: 11px; font-size: 13px; }
     <div class="sec-row mt12"><div class="sec-title">Ability Scores</div><div class="sec-line"></div></div>
     <div class="stat-grid" id="char-ability-grid"></div>
 
+    <!-- Saves & Skills -->
+    <div class="sec-row mt12"><div class="sec-title">Saves & Skills</div><div class="sec-line"></div></div>
+    <div id="char-saves-skills" style="font-size:11px;line-height:1.6"></div>
+
     <!-- Class & Resources -->
     <div class="sec-row mt12"><div class="sec-title">Class & Resources</div><div class="sec-line"></div></div>
     <div id="char-class-info" style="font-size:12px;color:var(--muted);line-height:1.8"></div>
@@ -832,8 +836,63 @@ function renderCharDetail() {
     </div>`;
   }).join('');
 
-  // Class info
+  // Saves & Skills
+  const SKILL_ABILITY: Record<string, string> = {
+    'Athletics': 'str',
+    'Acrobatics': 'dex', 'Sleight of Hand': 'dex', 'Stealth': 'dex',
+    'Arcana': 'int', 'History': 'int', 'Investigation': 'int', 'Nature': 'int', 'Religion': 'int',
+    'Animal Handling': 'wis', 'Insight': 'wis', 'Medicine': 'wis', 'Perception': 'wis', 'Survival': 'wis',
+    'Deception': 'cha', 'Intimidation': 'cha', 'Performance': 'cha', 'Persuasion': 'cha'
+  };
   const profBonus = computeProf(c);
+  const prof = c.proficiencies || { savingThrows: [], skills: [], expertise: [] };
+  const saveMods = ['str','dex','con','int','wis','cha'].map(ab => {
+    const base = Math.floor(((c.stats[ab]||10)-10)/2);
+    const isProficient = (prof.savingThrows || []).includes(ab as any);
+    const total = base + (isProficient ? profBonus : 0);
+    const sign = total >= 0 ? '+' : '';
+    const dot = isProficient
+      ? `<span style="color:var(--accent);margin-right:3px">●</span>`
+      : `<span style="color:var(--border);margin-right:3px">○</span>`;
+    return `<div style="display:flex;align-items:center;gap:2px;padding:1px 0">
+      ${dot}<span style="min-width:20px;color:${total>=0?'inherit':'var(--danger)'}">${sign}${total}</span>
+      <span style="color:var(--muted)">${ab.toUpperCase()}</span>
+    </div>`;
+  }).join('');
+  const skillMods = Object.entries(SKILL_ABILITY).map(([sk, ab]) => {
+    const base = Math.floor(((c.stats[ab]||10)-10)/2);
+    const isExpert = (prof.expertise || []).includes(sk as any);
+    const isProf   = isExpert || (prof.skills || []).includes(sk as any);
+    const mult = isExpert ? 2 : isProf ? 1 : 0;
+    const total = base + mult * profBonus;
+    const sign = total >= 0 ? '+' : '';
+    const dot = isExpert
+      ? `<span style="color:var(--accent);margin-right:3px;font-size:9px">★</span>`
+      : isProf
+        ? `<span style="color:var(--accent);margin-right:3px">●</span>`
+        : `<span style="color:var(--border);margin-right:3px">○</span>`;
+    return `<div style="display:flex;align-items:center;gap:2px;padding:1px 0">
+      ${dot}<span style="min-width:20px;color:${total>=0?'inherit':'var(--danger)'}">${sign}${total}</span>
+      <span>${esc(sk)}</span>
+      <span style="color:var(--muted);font-size:10px;margin-left:2px">(${ab.toUpperCase()})</span>
+    </div>`;
+  }).join('');
+  const passivePerc = 10 + Math.floor(((c.stats.wis||10)-10)/2) +
+    ((prof.skills||[]).includes('Perception') || (prof.expertise||[]).includes('Perception') ? profBonus * ((prof.expertise||[]).includes('Perception') ? 2 : 1) : 0);
+  document.getElementById('char-saves-skills').innerHTML =
+    `<div style="display:grid;grid-template-columns:1fr 1fr;gap:0 16px">
+      <div>
+        <div style="color:var(--muted);font-size:10px;margin-bottom:2px;text-transform:uppercase;letter-spacing:.05em">Saving Throws</div>
+        ${saveMods}
+        <div style="margin-top:4px;color:var(--muted);font-size:10px">Passive Perception ${passivePerc}</div>
+      </div>
+      <div>
+        <div style="color:var(--muted);font-size:10px;margin-bottom:2px;text-transform:uppercase;letter-spacing:.05em">Skills <span style="color:var(--accent)">●</span>=prof <span style="color:var(--accent)">★</span>=exp</div>
+        ${skillMods}
+      </div>
+    </div>`;
+
+  // Class info
   const classInfo = c.classLevels.map(cl => {
     const sub = c.subclassChoices && c.subclassChoices[cl.className] ? ` (${c.subclassChoices[cl.className]})` : '';
     return `${cl.className} ${cl.level}${sub}`;
