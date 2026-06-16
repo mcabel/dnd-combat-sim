@@ -973,20 +973,52 @@ const PHB_CONDITIONS = [
 function renderConditions(c) {
   const active = new Set(c.conditions || []);
   const el = document.getElementById('char-conditions');
-  el.innerHTML = PHB_CONDITIONS.map(name => {
-    const on = active.has(name);
-    return `<button
-      onclick="toggleCondition('${name}')"
-      style="
-        padding:3px 8px;font-size:11px;border-radius:12px;cursor:pointer;
-        border:1px solid ${on ? 'var(--danger)' : 'var(--border)'};
-        background:${on ? 'rgba(220,53,69,0.18)' : 'var(--bg)'};
-        color:${on ? 'var(--danger)' : 'var(--muted)'};
-        font-weight:${on ? '700' : '400'};
-      "
-      title="${name}"
-    >${name}</button>`;
-  }).join('');
+  if (!el) return;
+
+  const activeList = PHB_CONDITIONS.filter(n => active.has(n));
+  const inactiveList = PHB_CONDITIONS.filter(n => !active.has(n));
+
+  let html = '';
+
+  // Active condition chips (removable)
+  if (activeList.length > 0) {
+    html += `<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px">`;
+    html += activeList.map(name => `
+      <span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px 3px 10px;font-size:11px;border-radius:12px;
+        border:1px solid var(--danger);background:rgba(220,53,69,0.15);color:var(--danger);font-weight:700">
+        ${name}
+        <button onclick="toggleCondition('${name}')" title="Remove ${name}"
+          style="background:none;border:none;cursor:pointer;color:var(--danger);font-size:12px;padding:0;line-height:1;margin-left:2px">✕</button>
+      </span>`).join('');
+    html += `</div>`;
+  } else {
+    html += `<div style="color:var(--muted);font-size:11px;margin-bottom:6px">No active conditions.</div>`;
+  }
+
+  // Add condition picker (collapsed)
+  if (inactiveList.length > 0) {
+    const pickerId = `cond-picker-${c.id}`;
+    html += `
+      <div>
+        <button id="cond-add-btn-${c.id}" onclick="toggleCondPicker('${c.id}')"
+          style="background:none;border:1px dashed var(--border);border-radius:12px;color:var(--muted);font-family:var(--mono);font-size:11px;padding:3px 10px;cursor:pointer">＋ Add Condition</button>
+        <div id="${pickerId}" style="display:none;margin-top:6px;display:none;flex-wrap:wrap;gap:5px">
+          ${inactiveList.map(name => `
+            <button onclick="toggleCondition('${name}')" title="Add ${name}"
+              style="padding:3px 8px;font-size:11px;border-radius:12px;cursor:pointer;border:1px solid var(--border);background:var(--bg);color:var(--muted)">
+              ${name}</button>`).join('')}
+        </div>
+      </div>`;
+  }
+
+  el.innerHTML = html;
+}
+
+function toggleCondPicker(charId) {
+  const picker = document.getElementById(`cond-picker-${charId}`);
+  if (!picker) return;
+  const open = picker.style.display === 'flex' || picker.style.display === 'block';
+  picker.style.display = open ? 'none' : 'flex';
 }
 
 async function toggleCondition(name) {
