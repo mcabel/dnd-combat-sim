@@ -850,11 +850,13 @@ function renderCharDetail() {
   const exh = c.exhaustionLevel || 0;
   const initMod = Math.floor(((c.stats.dex||10)-10)/2);
   const initSign = initMod >= 0 ? '+' : '';
+  const hpPct = c.maxHP > 0 ? c.currentHP / c.maxHP : 0;
+  const hpColor = c.currentHP === 0 ? 'var(--muted)' : hpPct < 0.25 ? '#e53935' : hpPct < 0.5 ? '#e6a020' : '#4caf50';
   document.getElementById('char-stats-row').innerHTML = `
     <div class="stat-box">
       <div style="display:flex;align-items:baseline;justify-content:center;gap:1px">
         <input type="number" id="hp-cur-input" value="${c.currentHP}" min="0" max="${c.maxHP}"
-          style="width:44px;font-family:var(--serif);font-size:20px;color:var(--accent);text-align:center;background:transparent;border:none;border-bottom:1px solid transparent;padding:0;outline:none;-moz-appearance:textfield"
+          style="width:44px;font-family:var(--serif);font-size:20px;color:${hpColor};text-align:center;background:transparent;border:none;border-bottom:1px solid transparent;padding:0;outline:none;-moz-appearance:textfield"
           onfocus="this.style.borderBottomColor='var(--accent)'"
           onblur="this.style.borderBottomColor='transparent';setHPDirect(this.value)"
           onkeydown="if(event.key==='Enter'){this.blur()}"
@@ -980,7 +982,7 @@ function renderCharDetail() {
       <span><strong>${classInfo}</strong> · Prof +${profBonus} · XP ${c.experiencePoints}</span>
       <button class="sm ${inspActive ? 'secondary' : ''}" onclick="toggleInspiration()" style="padding:2px 8px;font-size:10px;${inspActive ? 'border-color:var(--accent);color:var(--accent)' : 'opacity:0.5'}" title="Toggle Inspiration">★ Inspiration</button>
     </div>` +
-    (resLines ? `<div style="margin-top:4px;color:var(--muted)">${resLines}</div>` : '');
+    (resLines ? resLines : '');
 
   // Spellcasting
   const spl = c.spellcasting;
@@ -1571,17 +1573,57 @@ function computeProf(c) {
 function buildResourceLines(res) {
   if (!res) return '';
   const parts = [];
-  if (res.rage)              parts.push(`Rage ${res.rage.remaining}/${res.rage.max}`);
-  if (res.secondWind)        parts.push(`Second Wind ${res.secondWind.remaining}/${res.secondWind.max}`);
-  if (res.bardicInspiration) parts.push(`Bardic Insp ${res.bardicInspiration.remaining}/${res.bardicInspiration.max} (d${res.bardicInspiration.dieSides})`);
-  if (res.layOnHands)        parts.push(`Lay on Hands ${res.layOnHands.remaining}/${res.layOnHands.pool}`);
-  if (res.sneakAttackDice)   parts.push(`Sneak Attack ${res.sneakAttackDice}`);
-  if (res.cunningAction)     parts.push(`Cunning Action`);
-  if (res.arcaneRecovery)    parts.push(`Arcane Recovery ${res.arcaneRecovery.usesRemaining}`);
-  return parts.join(' · ');
+  if (res.sneakAttackDice) parts.push(`<span style="color:var(--muted);font-size:11px">Sneak Atk ${res.sneakAttackDice}</span>`);
+  if (res.cunningAction)   parts.push(`<span style="color:var(--muted);font-size:11px">Cunning Action</span>`);
+  if (res.divineSmite)     parts.push(`<span style="color:var(--muted);font-size:11px">Divine Smite</span>`);
+
+  function resBtns(label, cur, max, key, field) {
+    const canSpend = cur > 0;
+    const canRestore = cur < max;
+    const valColor = cur === 0 ? 'var(--muted)' : cur < max ? '#e6a020' : '#4caf50';
+    return `<span style="display:inline-flex;align-items:center;gap:3px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:2px 6px">` +
+      `<span style="font-size:10px;color:var(--muted)">${label}</span>` +
+      `<button onclick="spendRes('${key}','${field}',-1)" style="background:none;border:none;padding:0 2px;cursor:pointer;font-size:13px;line-height:1;color:${canSpend?'var(--text)':'var(--border)'}" ${canSpend?'':'disabled'} title="Spend">&#8722;</button>` +
+      `<span style="font-size:11px;color:${valColor};font-weight:600;min-width:20px;text-align:center">${cur}/${max}</span>` +
+      `<button onclick="spendRes('${key}','${field}',1)" style="background:none;border:none;padding:0 2px;cursor:pointer;font-size:13px;line-height:1;color:${canRestore?'var(--text)':'var(--border)'}" ${canRestore?'':'disabled'} title="Restore">+</button>` +
+      `</span>`;
+  }
+
+  if (res.rage)              parts.push(resBtns('Rage', res.rage.remaining, res.rage.max, 'rage', 'remaining'));
+  if (res.secondWind)        parts.push(resBtns('2nd Wind', res.secondWind.remaining, res.secondWind.max, 'secondWind', 'remaining'));
+  if (res.bardicInspiration) parts.push(resBtns('Bard Insp d'+res.bardicInspiration.dieSides, res.bardicInspiration.remaining, res.bardicInspiration.max, 'bardicInspiration', 'remaining'));
+  if (res.channelDivinity)   parts.push(resBtns('Ch.Div', res.channelDivinity.remaining, res.channelDivinity.max, 'channelDivinity', 'remaining'));
+  if (res.ki)                parts.push(resBtns('Ki', res.ki.remaining, res.ki.max, 'ki', 'remaining'));
+  if (res.layOnHands)        parts.push(resBtns('LoH HP', res.layOnHands.remaining, res.layOnHands.pool, 'layOnHands', 'remaining'));
+  if (res.arcaneRecovery)    parts.push(resBtns('Arc.Rec', res.arcaneRecovery.usesRemaining, 1, 'arcaneRecovery', 'usesRemaining'));
+
+  return parts.length ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;align-items:center">${parts.join('')}</div>` : '';
 }
 
-// ── Level Up ──────────────────────────────────────────────────
+// ── Resource Spend/Restore ─────────────────────────────────────
+async function spendRes(key: string, field: string, delta: number) {
+  if (!S.charDetail) return;
+  const res = S.charDetail.resources;
+  if (!res || !res[key]) return;
+  const entry = res[key];
+  const max = field === 'remaining'
+    ? (entry.max !== undefined ? entry.max : entry.pool)
+    : 1; // arcaneRecovery usesRemaining max is 1
+  const cur = entry[field] ?? 0;
+  const next = Math.max(0, Math.min(max, cur + delta));
+  if (next === cur) return;
+  const updatedRes = { ...res, [key]: { ...entry, [field]: next } };
+  try {
+    const data = await api(`/api/characters/${S.charDetail.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ resources: updatedRes }),
+    });
+    S.charDetail = data.character;
+    renderCharDetail();
+  } catch(e) { showBanner('Failed to update resource', 'error'); }
+}
+
 function onLvlClassChange(val: string) {
   const row = document.getElementById('lvl-newclass-row');
   if (row) row.style.display = val === '__new__' ? 'block' : 'none';
