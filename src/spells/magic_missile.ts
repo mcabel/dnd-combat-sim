@@ -72,6 +72,7 @@ export function shouldCast(
   target: Combatant,
   _bf: Battlefield
 ): boolean {
+  if (!caster.actions.some(a => a.name === 'Magic Missile')) return false;
   if (!hasSpellSlot(caster)) return false;
   if (target.isDead || target.isUnconscious) return false;
   if (distanceFt(caster.pos, target.pos) > 120) return false;

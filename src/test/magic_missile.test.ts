@@ -68,7 +68,14 @@ function makeCombatant(id: string, overrides: Partial<Combatant> = {}): Combatan
 }
 
 function makeWizard(pos: Vec3 = { x: 0, y: 0, z: 0 }): Combatant {
-  return makeCombatant('wizard', { faction: 'party', pos, resources: withSlots(2) });
+  const mmAction: any = {
+    name: 'Magic Missile', costType: 'action', attackType: null,
+    reach: 120, range: { normal: 120, long: 240 },
+    hitBonus: null, damage: { count: 3, sides: 4, bonus: 3, average: 10.5 },
+    damageType: 'force', saveDC: null, saveAbility: null,
+    isAoE: false, isMultiattack: false, slotLevel: 1,
+  };
+  return makeCombatant('wizard', { faction: 'party', pos, resources: withSlots(2), actions: [mmAction] });
 }
 
 function makeEnemy(id: string, pos: Vec3, hp = 20): Combatant {
@@ -248,16 +255,16 @@ console.log('\n=== 2. execute ===\n');
 console.log('\n=== 3. Planner ===\n');
 
 {
-  // Wizard at (0,0), orc at (4,0) = 20ft away — ranged scenario
+  // Wizard at (0,0), orc at (20,0) = 100ft — past Sleep range (90ft), within MM range (120ft)
   const wiz = spawnWizard({ x: 0, y: 0, z: 0 });
-  const orc = spawnMonster('orc', 'orc1', { x: 4, y: 0, z: 0 });
+  const orc = spawnMonster('orc', 'orc1', { x: 20, y: 0, z: 0 });
   const bf = makeBattlefield(wiz, orc);
   // Give Wizard 2 slots
   if (wiz.resources?.spellSlots) {
     (wiz.resources.spellSlots as any)[1].remaining = 2;
   }
   const plan = planTurn(wiz, bf);
-  assert('3a: Wizard plans magicMissile when in range with slot',
+  assert('3a: Wizard plans magicMissile when >90ft (past Sleep range) with slot',
     plan.action?.type === 'magicMissile',
     `got ${plan.action?.type}`);
 }
@@ -277,9 +284,9 @@ console.log('\n=== 3. Planner ===\n');
 }
 
 {
-  // targetId set correctly
+  // targetId set correctly (orc at 100ft — past Sleep range)
   const wiz = spawnWizard({ x: 0, y: 0, z: 0 });
-  const orc = spawnMonster('orc', 'orc1', { x: 4, y: 0, z: 0 });
+  const orc = spawnMonster('orc', 'orc1', { x: 20, y: 0, z: 0 });
   const bf = makeBattlefield(wiz, orc);
   if (wiz.resources?.spellSlots) {
     (wiz.resources.spellSlots as any)[1].remaining = 2;
@@ -357,13 +364,13 @@ console.log('\n=== 4. Slot depletion fallback ===\n');
 }
 
 {
-  // Full combat run: Wizard uses Magic Missile round 1, cantrip later
+  // Full combat run: orc at 100ft (past Sleep 90ft range) — Wizard uses Magic Missile
   const wiz = spawnWizard({ x: 0, y: 0, z: 0 });
   wiz.aiProfile = 'smart';
   if (wiz.resources?.spellSlots) {
     (wiz.resources.spellSlots as any)[1].remaining = 1;
   }
-  const orc = spawnMonster('orc', 'orc1', { x: 4, y: 0, z: 0 });
+  const orc = spawnMonster('orc', 'orc1', { x: 20, y: 0, z: 0 }); // 100ft
   const bf = makeFlatBattlefield(20, 20, [wiz, orc]);
   const log = runCombat(bf, [wiz.id, orc.id]);
   const mmEvent = log.events.find(e => e.description.includes('Magic Missile'));
@@ -379,7 +386,7 @@ console.log('\n=== 4. Slot depletion fallback ===\n');
     if (wiz.resources?.spellSlots) {
       (wiz.resources.spellSlots as any)[1].remaining = 2;
     }
-    const orc = spawnMonster('orc', 'orc1', { x: 4, y: 0, z: 0 });
+    const orc = spawnMonster('orc', 'orc1', { x: 20, y: 0, z: 0 }); // 100ft — past Sleep range
     orc.maxHP = 200; orc.currentHP = 200; // survives long
     const bf = makeFlatBattlefield(20, 20, [wiz, orc]);
     const log = runCombat(bf, [wiz.id, orc.id], { maxRounds: 5 });

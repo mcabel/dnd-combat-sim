@@ -133,8 +133,8 @@ console.log('\n3. Planner');
 {
   // 3a. Wizard plans mageArmor when no higher-priority spell is available
   const wiz = spawn('Wizard', { x: 0, y: 0, z: 0 });
-  // Remove Sleep/Thunderwave so Mage Armor is the best available action
-  wiz.actions = wiz.actions.filter(a => !['Sleep', 'Thunderwave'].includes(a.name));
+  // Remove offensive spells so Mage Armor is the best available action
+  wiz.actions = wiz.actions.filter(a => !['Sleep', 'Thunderwave', 'Magic Missile'].includes(a.name));
   const orc = makeBase({ id: 'orc', faction: 'enemy', pos: { x: 2, y: 0, z: 0 } });
   const plan = planTurn(wiz, makeBF([wiz, orc]));
   assert('3a. Wizard action = mageArmor (no offensive spells)', plan.action?.type === 'mageArmor');
@@ -175,9 +175,9 @@ console.log('\n3. Planner');
 console.log('\n4. Engine integration');
 
 {
-  // 4a. Mage Armor event appears in combat log (filter Sleep so MA fires)
+  // 4a. Mage Armor event appears in combat log (filter offensive spells so MA fires)
   const wiz = spawn('Wizard', { x: 0, y: 0, z: 0 });
-  wiz.actions = wiz.actions.filter(a => !['Sleep','Thunderwave'].includes(a.name));
+  wiz.actions = wiz.actions.filter(a => !['Sleep','Thunderwave','Magic Missile'].includes(a.name));
   const orc = makeBase({ id: 'orc', name: 'Orc', faction: 'enemy',
     pos: { x: 1, y: 0, z: 0 }, ac: 13, maxHP: 15, currentHP: 15 });
   const bf = makeFlatBattlefield(10, 10, [wiz, orc]);
