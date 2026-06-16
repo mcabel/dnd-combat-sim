@@ -337,6 +337,13 @@ export interface CharacterSheet {
   // ---- Death Saves (PHB p.197) ------------------------------
   // Tracked out-of-combat (reset on heal above 0 or long rest).
   deathSaves?: { successes: number; failures: number };
+
+  // ---- Inspiration (PHB p.125) ------------------------------
+  inspiration?: boolean;
+
+  // ---- Concentration (PHB p.203) ----------------------------
+  // Name of the spell currently being concentrated on; null/absent = not concentrating.
+  concentrating?: string | null;
 }
 
 // ---- Party --------------------------------------------------

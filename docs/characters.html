@@ -107,7 +107,7 @@ button.full { width: 100%; padding: 11px; font-size: 13px; }
 
 /* Stats row */
 .stats-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.stats-5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+.stats-5 { display: grid; grid-template-columns: repeat(auto-fit, minmax(70px, 1fr)); gap: 8px; }
 .stat-box { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px; text-align: center; }
 .stat-box .val { font-family: var(--serif); font-size: 20px; color: var(--accent); }
 .stat-box .lbl { font-size: 10px; color: var(--muted); margin-top: 2px; letter-spacing: 0.06em; text-transform: uppercase; }
@@ -795,6 +795,8 @@ function renderCharDetail() {
   // Stats row
   const thp = c.temporaryHP || 0;
   const exh = c.exhaustionLevel || 0;
+  const initMod = Math.floor(((c.stats.dex||10)-10)/2);
+  const initSign = initMod >= 0 ? '+' : '';
   document.getElementById('char-stats-row').innerHTML = `
     <div class="stat-box">
       <div class="val" id="hp-display">${c.currentHP}/${c.maxHP}</div>
@@ -805,6 +807,7 @@ function renderCharDetail() {
       </div>
     </div>
     <div class="stat-box"><div class="val">${c.armorClass}</div><div class="lbl">AC</div></div>
+    <div class="stat-box"><div class="val">${initSign}${initMod}</div><div class="lbl">Initiative</div></div>
     <div class="stat-box"><div class="val">${c.speed}</div><div class="lbl">Speed ft</div></div>
     <div class="stat-box">
       <div class="val" id="thp-display" style="color:${thp>0?'var(--accent)':'var(--muted)'}">${thp}</div>
@@ -902,15 +905,29 @@ function renderCharDetail() {
     return `${cl.className} ${cl.level}${sub}`;
   }).join(', ');
   const resLines = buildResourceLines(c.resources);
+  const inspActive = !!c.inspiration;
   document.getElementById('char-class-info').innerHTML =
-    `<div><strong>${classInfo}</strong> · Prof +${profBonus} · XP ${c.experiencePoints}</div>` +
+    `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <span><strong>${classInfo}</strong> · Prof +${profBonus} · XP ${c.experiencePoints}</span>
+      <button class="sm ${inspActive ? 'secondary' : ''}" onclick="toggleInspiration()" style="padding:2px 8px;font-size:10px;${inspActive ? 'border-color:var(--accent);color:var(--accent)' : 'opacity:0.5'}" title="Toggle Inspiration">★ Inspiration</button>
+    </div>` +
     (resLines ? `<div style="margin-top:4px;color:var(--muted)">${resLines}</div>` : '');
 
   // Spellcasting
   const spl = c.spellcasting;
   const splEl = document.getElementById('char-spellcasting');
   if (spl && (spl.cantrips.length > 0 || Object.keys(spl.slots || {}).length > 0)) {
-    let html = `<div style="font-size:11px;color:var(--muted);margin-bottom:4px">DC ${spl.saveDC} · +${spl.spellAttackBonus} to hit · ${spl.ability.toUpperCase()}</div>`;
+    const conc = c.concentrating || null;
+    let html = `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
+      <span style="font-size:11px;color:var(--muted)">DC ${spl.saveDC} · +${spl.spellAttackBonus} to hit · ${spl.ability.toUpperCase()}</span>
+      ${conc
+        ? `<span style="display:inline-flex;align-items:center;gap:4px;background:rgba(180,120,30,0.15);border:1px solid var(--accent);border-radius:12px;padding:1px 8px;font-size:10px;color:var(--accent)">
+            ◎ ${esc(conc)}
+            <button onclick="clearConcentration()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:11px;padding:0 0 0 2px" title="End concentration">✕</button>
+           </span>`
+        : `<button class="sm" onclick="setConcentration()" style="padding:1px 7px;font-size:10px;opacity:0.6" title="Set concentration spell">◎ Concentrate</button>`
+      }
+    </div>`;
     if (spl.cantrips && spl.cantrips.length > 0) {
       const names = spl.cantrips.map(n => esc(n)).join(', ');
       html += `<div style="margin-bottom:2px"><strong>Cantrips (${spl.cantrips.length})</strong> <span style="color:var(--muted);font-size:11px">${names}</span></div>`;
@@ -1581,6 +1598,14 @@ async function doLongRest() {
       });
       if (res.ok) { const d = await res.json(); S.charDetail = d.character; }
     }
+    // Long rest clears concentration
+    if (S.charDetail.concentrating) {
+      const cr = await fetch(`/api/characters/${S.charDetail.id}`, {
+        method: 'PUT', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ concentrating: null })
+      });
+      if (cr.ok) { const cd = await cr.json(); S.charDetail = cd.character; }
+    }
     refreshChars();
     renderCharDetail();
     const count = (data.restored || []).length;
@@ -1744,6 +1769,58 @@ async function clearDeathSaves() {
     const data = await res.json();
     S.charDetail = data.character;
     renderDeathSaves(S.charDetail);
+  } catch(e) { showErr(e.message); }
+}
+
+// ── Inspiration ───────────────────────────────────────────────
+async function toggleInspiration() {
+  if (!S.charDetail) return;
+  const next = !S.charDetail.inspiration;
+  try {
+    const res = await fetch(`/api/characters/${S.charDetail.id}`, {
+      method: 'PUT', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ inspiration: next })
+    });
+    if (!res.ok) throw new Error('PUT failed');
+    const data = await res.json();
+    S.charDetail = data.character;
+    renderCharDetail();
+    showBanner(next ? 'Inspiration gained!' : 'Inspiration spent.', 'ok');
+  } catch(e) { showErr(e.message); }
+}
+
+// ── Concentration ─────────────────────────────────────────────
+async function setConcentration() {
+  if (!S.charDetail) return;
+  const spellName = prompt('Concentrating on (spell name):', S.charDetail.concentrating || '');
+  if (spellName === null) return;
+  const val = spellName.trim() || null;
+  try {
+    const res = await fetch(`/api/characters/${S.charDetail.id}`, {
+      method: 'PUT', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ concentrating: val })
+    });
+    if (!res.ok) throw new Error('PUT failed');
+    const data = await res.json();
+    S.charDetail = data.character;
+    renderCharDetail();
+    if (val) showBanner(`Concentrating on ${val}.`, 'ok');
+    else showBanner('Concentration ended.', 'ok');
+  } catch(e) { showErr(e.message); }
+}
+
+async function clearConcentration() {
+  if (!S.charDetail) return;
+  try {
+    const res = await fetch(`/api/characters/${S.charDetail.id}`, {
+      method: 'PUT', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ concentrating: null })
+    });
+    if (!res.ok) throw new Error('PUT failed');
+    const data = await res.json();
+    S.charDetail = data.character;
+    renderCharDetail();
+    showBanner('Concentration ended.', 'ok');
   } catch(e) { showErr(e.message); }
 }
 

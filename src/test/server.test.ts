@@ -1335,6 +1335,72 @@ async function run() {
     });
   });
 
+  // ── Inspiration ───────────────────────────────────────────
+  {
+    const inspId = 'bbbbbbbb-0000-0000-0000-000000000001';
+    const inspFile = path.join(process.cwd(), 'characters', `${inspId}.json`);
+    const base: any = JSON.parse(JSON.stringify(PALADIN_PRISTINE));
+    base.id = inspId; base.levelHistory = [];
+
+    await test('PUT /api/characters/:id sets inspiration true', async () => {
+      fs.writeFileSync(inspFile, JSON.stringify(base));
+      const { status, json } = await request(BASE, `/api/characters/${inspId}`, 'PUT', { inspiration: true });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(json.character.inspiration === true, `Expected inspiration true`);
+      fs.unlinkSync(inspFile);
+    });
+
+    await test('PUT /api/characters/:id clears inspiration', async () => {
+      const withInsp: any = { ...base, inspiration: true };
+      fs.writeFileSync(inspFile, JSON.stringify(withInsp));
+      const { status, json } = await request(BASE, `/api/characters/${inspId}`, 'PUT', { inspiration: false });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(!json.character.inspiration, `Expected inspiration false/absent`);
+      fs.unlinkSync(inspFile);
+    });
+
+    await test('PUT /api/characters/:id inspiration persists across GET', async () => {
+      fs.writeFileSync(inspFile, JSON.stringify(base));
+      await request(BASE, `/api/characters/${inspId}`, 'PUT', { inspiration: true });
+      const { json } = await request(BASE, `/api/characters/${inspId}`);
+      assert(json.character.inspiration === true, `Inspiration not persisted`);
+      fs.unlinkSync(inspFile);
+    });
+  }
+
+  // ── Concentration ─────────────────────────────────────────
+  {
+    const concId = 'cccccccc-0000-0000-0000-000000000001';
+    const concFile = path.join(process.cwd(), 'characters', `${concId}.json`);
+    const base: any = JSON.parse(JSON.stringify(PALADIN_PRISTINE));
+    base.id = concId; base.levelHistory = [];
+
+    await test('PUT /api/characters/:id sets concentrating spell name', async () => {
+      fs.writeFileSync(concFile, JSON.stringify(base));
+      const { status, json } = await request(BASE, `/api/characters/${concId}`, 'PUT', { concentrating: 'Bless' });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(json.character.concentrating === 'Bless', `Expected concentrating 'Bless', got ${json.character.concentrating}`);
+      fs.unlinkSync(concFile);
+    });
+
+    await test('PUT /api/characters/:id concentrating persists across GET', async () => {
+      fs.writeFileSync(concFile, JSON.stringify(base));
+      await request(BASE, `/api/characters/${concId}`, 'PUT', { concentrating: 'Hold Person' });
+      const { json } = await request(BASE, `/api/characters/${concId}`);
+      assert(json.character.concentrating === 'Hold Person', `Concentrating not persisted`);
+      fs.unlinkSync(concFile);
+    });
+
+    await test('PUT /api/characters/:id clears concentrating (null)', async () => {
+      const withConc: any = { ...base, concentrating: 'Bless' };
+      fs.writeFileSync(concFile, JSON.stringify(withConc));
+      const { status, json } = await request(BASE, `/api/characters/${concId}`, 'PUT', { concentrating: null });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(!json.character.concentrating, `Expected concentrating cleared, got ${json.character.concentrating}`);
+      fs.unlinkSync(concFile);
+    });
+  }
+
   // ── Tear down ─────────────────────────────────────────────
 
   // Clean up test parties created during this run
