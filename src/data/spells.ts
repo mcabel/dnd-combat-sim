@@ -146,6 +146,19 @@ export const SPELL_DB: Record<string, SpellTemplate> = {
     slotLevel: 1,
   },
 
+  'burning hands': {
+    // 1st-level evocation, NOT concentration, 15-ft cone (Self).
+    // DEX save: fail = 3d6 fire; success = half. Dispatched via case 'burningHands'.
+    attackType: null,
+    rangeNormal: 15,
+    damage: { count: 3, sides: 6, bonus: 0, average: avg(3, 6, 0) },
+    damageType: 'fire',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 1,
+  },
+
   'sleep': {
     // 1st-level enchantment, NOT concentration, range 90ft, 20-ft sphere.
     // No attack roll, no save — HP bucket mechanic handled entirely in the spell module.

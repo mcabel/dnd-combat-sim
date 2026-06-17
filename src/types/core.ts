@@ -467,6 +467,7 @@ export interface PlannedAction {
     | 'hex'            // Hex — bonus action, concentration, +1d6 necrotic on each hit (Warlock)
     | 'mageArmor'      // Mage Armor — self, no concentration, AC = 13 + DEX (Wizard/Sorcerer)
     | 'magicMissile'   // Magic Missile — 3 auto-hit darts 1d4+1 force each, 120 ft (Wizard/Sorcerer)
+    | 'burningHands'   // Burning Hands — DEX save, 3d6 fire, 15-ft cone (Sorcerer/Wizard)
     | 'legendary';
   action: Action | null;
   targetId: string | null;

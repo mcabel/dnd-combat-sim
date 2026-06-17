@@ -36,6 +36,7 @@ import { computeLOS } from './los';
 import { removeEffectsFromCaster, getActiveAcBonus, getActiveBlessDie, getActiveHexDie } from './spell_effects';
 import { execute as executeHex } from '../spells/hex';
 import { execute as executeMagicMissile } from '../spells/magic_missile';
+import { execute as executeBurningHands, shouldCast as shouldCastBurningHands } from '../spells/burning_hands';
 import { shouldCast as shouldCastFaerieFire, execute as executeFaerieFire } from '../spells/faerie_fire';
 import { shouldCast as shouldCastBless, execute as executeBless } from '../spells/bless';
 import { shouldCast as shouldCastEntangle, execute as executeEntangle } from '../spells/entangle';
@@ -797,6 +798,17 @@ function executePlannedAction(
       const mmTarget = plan.targetId ? bf.combatants.get(plan.targetId) : null;
       if (!mmTarget || mmTarget.isDead || mmTarget.isUnconscious) break;
       executeMagicMissile(actor, mmTarget, state);
+      break;
+    }
+
+    case 'burningHands': {
+      // Burning Hands — PHB p.220: 15-ft cone, DEX save, 3d6 fire, half on success. No conc.
+      // shouldCastBurningHands re-evaluated here to get the full target list;
+      // plan.targetId holds only the aimed-at target for animation/log purposes.
+      const bhTargets = shouldCastBurningHands(actor, bf) ?? [];
+      if (bhTargets.length === 0) break;
+      const aimTarget = plan.targetId ? bf.combatants.get(plan.targetId) : bhTargets[0];
+      executeBurningHands(actor, bhTargets, state, aimTarget ?? bhTargets[0]);
       break;
     }
 

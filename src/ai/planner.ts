@@ -20,6 +20,7 @@ import { shouldCast as shouldCastMagicMissile } from '../spells/magic_missile';
 import { shouldCast as shouldCastEntangle } from '../spells/entangle';
 import { shouldCast as shouldCastThunderwave } from '../spells/thunderwave';
 import { shouldCast as shouldCastArmsOfHadar } from '../spells/arms_of_hadar';
+import { shouldCast as shouldCastBurningHands, execute as executeBurningHands } from '../spells/burning_hands';
 import { shouldCast as shouldCastSleep } from '../spells/sleep';
 import { shouldCast as shouldCastWardingBond } from '../spells/warding_bond';
 import { shouldCast as shouldCastShieldOfFaith } from '../spells/shield_of_faith';
@@ -700,6 +701,26 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
         description: `${self.name} casts Thunderwave`,
       };
       plan.targetId = twTargets[0].id;
+      plan.bonusAction = planBonusAction(self, target, battlefield);
+      return plan;
+    }
+  }
+
+  // === BURNING HANDS (15-ft cone fire AoE) — fires when ≥1 enemy in cone range ===
+  // NOT concentration. Sorcerer/Wizard. DEX save: fail = 3d6, success = half.
+  // Cone aims toward nearest enemy; all enemies in that cone are affected.
+  // Fires on ≥1 target — even single-target 3d6 avg 10.5 beats Fire Bolt avg 5.5.
+  // Placed after Thunderwave (15-ft cube) since overlapping range profile.
+  {
+    const bhTargets = shouldCastBurningHands(self, battlefield);
+    if (bhTargets && bhTargets.length >= 1) {
+      plan.action = {
+        type: 'burningHands',
+        action: null,
+        targetId: bhTargets[0].id,
+        description: `${self.name} casts Burning Hands`,
+      };
+      plan.targetId = bhTargets[0].id;
       plan.bonusAction = planBonusAction(self, target, battlefield);
       return plan;
     }

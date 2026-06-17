@@ -328,6 +328,45 @@ export function selectOAAction(attacker: Combatant): Action | null {
   });
 }
 
+// ---- Cone AoE geometry --------------------------------------
+
+/**
+ * Returns true if `test` position is inside a cone originating at `apex`
+ * pointing toward `aimAt`, with the given half-angle and range.
+ *
+ * D&D 5e SAC cone rule (PHB p.204): at distance d, cone width = d.
+ * This yields halfAngle = arctan(0.5) ≈ 26.57°.
+ * For Burning Hands (15-ft cone): halfAngleDeg = 26.57, rangeFt = 15.
+ *
+ * Uses 2D (X/Y plane) for typical flat-grid combat; Z is ignored.
+ * The apex cell itself is excluded (caster not caught in own cone).
+ */
+export function inConeFt(
+  apex: Vec3,
+  aimAt: Vec3,
+  test: Vec3,
+  halfAngleDeg: number,
+  rangeFt: number,
+): boolean {
+  const dx = test.x - apex.x;
+  const dy = test.y - apex.y;
+  const distSq = dx * dx + dy * dy;
+  if (distSq < 0.0001) return false;                // apex cell excluded
+
+  const distFt = Math.sqrt(distSq) * 5;
+  if (distFt > rangeFt) return false;
+
+  const aimDx = aimAt.x - apex.x;
+  const aimDy = aimAt.y - apex.y;
+  const aimLen = Math.sqrt(aimDx * aimDx + aimDy * aimDy);
+  if (aimLen < 0.0001) return false;                // aiming at self — undefined
+
+  // Dot product of unit vectors
+  const dot = (dx * aimDx + dy * aimDy) / (Math.sqrt(distSq) * aimLen);
+  const cosHalf = Math.cos((halfAngleDeg * Math.PI) / 180);
+  return dot >= cosHalf;
+}
+
 // ---- Adjacency helpers --------------------------------------
 
 /** Is `pos` within melee reach (5ft) of `other`? */

@@ -6,42 +6,105 @@
     "background": "Soldier",
     "level": 1,
     "proficiencyBonus": 2,
-    "ability_scores": { "str":17, "dex":13, "con":15, "int":8, "wis":12, "cha":10 },
-    "modifiers":        { "str":3,  "dex":1,  "con":2,  "int":-1,"wis":1,  "cha":0  },
+    "ability_scores": {
+      "str": 17,
+      "dex": 13,
+      "con": 15,
+      "int": 8,
+      "wis": 12,
+      "cha": 10
+    },
+    "modifiers": {
+      "str": 3,
+      "dex": 1,
+      "con": 2,
+      "int": -1,
+      "wis": 1,
+      "cha": 0
+    },
     "hp": 14,
     "ac": 13,
     "acFormula": "Unarmored Defense: 10 + DEX(1) + CON(2)",
     "speed": 30,
-    "savingThrows": { "str":true, "con":true },
+    "savingThrows": {
+      "str": true,
+      "con": true
+    },
     "skills": {
-      "proficient": ["Athletics","Intimidation","Perception","Survival"],
+      "proficient": [
+        "Athletics",
+        "Intimidation",
+        "Perception",
+        "Survival"
+      ],
       "expertise": []
     },
     "weapons": [
-      { "name":"Greataxe",  "bonus":5, "damage":"1d12+3","type":"slashing","range":"melee 5ft","heavy":true,"twoHanded":true },
-      { "name":"Handaxe",   "bonus":5, "damage":"1d6+3", "type":"slashing","range":"melee 5ft / thrown 20/60ft","light":true },
-      { "name":"Javelin",   "bonus":5, "damage":"1d6+3", "type":"piercing","range":"melee 5ft / thrown 30/120ft" }
+      {
+        "name": "Greataxe",
+        "bonus": 5,
+        "damage": "1d12+3",
+        "type": "slashing",
+        "range": "melee 5ft",
+        "heavy": true,
+        "twoHanded": true
+      },
+      {
+        "name": "Handaxe",
+        "bonus": 5,
+        "damage": "1d6+3",
+        "type": "slashing",
+        "range": "melee 5ft / thrown 20/60ft",
+        "light": true
+      },
+      {
+        "name": "Javelin",
+        "bonus": 5,
+        "damage": "1d6+3",
+        "type": "piercing",
+        "range": "melee 5ft / thrown 30/120ft"
+      }
     ],
     "spellcasting": null,
     "resources": {
       "rage": {
-        "uses": 2, "usedToday": 0, "active": false,
+        "uses": 2,
+        "usedToday": 0,
+        "active": false,
         "effect": "+2 damage on STR melee, resistance to B/P/S damage, can't cast or concentrate while raging"
       }
     },
     "level1Features": [
-      { "name":"Rage", "description":"Bonus action. +2 melee STR damage, resistance to B/P/S damage, advantage on STR checks/saves. Lasts 1 minute. 2 uses/long rest." },
-      { "name":"Unarmored Defense", "description":"AC = 10 + DEX mod + CON mod when not wearing armor." },
-      { "name":"Reckless Attack", "description":"Advantage on first STR melee attack roll, but ALL attacks against you have advantage until your next turn." }
+      {
+        "name": "Rage",
+        "description": "Bonus action. +2 melee STR damage, resistance to B/P/S damage, advantage on STR checks/saves. Lasts 1 minute. 2 uses/long rest."
+      },
+      {
+        "name": "Unarmored Defense",
+        "description": "AC = 10 + DEX mod + CON mod when not wearing armor."
+      },
+      {
+        "name": "Reckless Attack",
+        "description": "Advantage on first STR melee attack roll, but ALL attacks against you have advantage until your next turn."
+      }
     ],
     "racialTraits": [
-      { "name":"Relentless Endurance", "description":"When reduced to 0 HP but not killed outright: drop to 1 HP instead. 1/long rest." },
-      { "name":"Savage Attacks", "description":"On a melee weapon critical hit, roll one additional weapon damage die." },
-      { "name":"Darkvision", "description":"60 ft darkvision." }
+      {
+        "name": "Relentless Endurance",
+        "description": "When reduced to 0 HP but not killed outright: drop to 1 HP instead. 1/long rest."
+      },
+      {
+        "name": "Savage Attacks",
+        "description": "On a melee weapon critical hit, roll one additional weapon damage die."
+      },
+      {
+        "name": "Darkvision",
+        "description": "60 ft darkvision."
+      }
     ],
     "notes_data_corrections": [
-      "Action Surge is a level 2 feature — removed from level 1 stat block",
-      "Frenzy (Berserker) is a level 3 feature — not applicable at level 1"
+      "Action Surge is a level 2 feature \u2014 removed from level 1 stat block",
+      "Frenzy (Berserker) is a level 3 feature \u2014 not applicable at level 1"
     ]
   },
   {
@@ -51,44 +114,116 @@
     "background": "Noble",
     "level": 1,
     "proficiencyBonus": 2,
-    "ability_scores": { "str":8, "dex":15, "con":14, "int":10, "wis":12, "cha":17 },
-    "modifiers":        { "str":-1,"dex":2,  "con":2,  "int":0, "wis":1,  "cha":3  },
+    "ability_scores": {
+      "str": 8,
+      "dex": 15,
+      "con": 14,
+      "int": 10,
+      "wis": 12,
+      "cha": 17
+    },
+    "modifiers": {
+      "str": -1,
+      "dex": 2,
+      "con": 2,
+      "int": 0,
+      "wis": 1,
+      "cha": 3
+    },
     "hp": 10,
     "ac": 13,
     "acFormula": "Leather Armor: 11 + DEX(2)",
     "speed": 30,
-    "savingThrows": { "dex":true, "cha":true },
+    "savingThrows": {
+      "dex": true,
+      "cha": true
+    },
     "skills": {
-      "proficient": ["Deception","History","Insight","Performance","Persuasion"],
-      "expertise": ["Persuasion","Deception"]
+      "proficient": [
+        "Deception",
+        "History",
+        "Insight",
+        "Performance",
+        "Persuasion"
+      ],
+      "expertise": [
+        "Persuasion",
+        "Deception"
+      ]
     },
     "weapons": [
-      { "name":"Rapier", "bonus":4, "damage":"1d8+2", "type":"piercing", "range":"melee 5ft", "finesse":true },
-      { "name":"Dagger", "bonus":4, "damage":"1d4+2", "type":"piercing", "range":"melee 5ft / thrown 20/60ft", "finesse":true, "light":true }
+      {
+        "name": "Rapier",
+        "bonus": 4,
+        "damage": "1d8+2",
+        "type": "piercing",
+        "range": "melee 5ft",
+        "finesse": true
+      },
+      {
+        "name": "Dagger",
+        "bonus": 4,
+        "damage": "1d4+2",
+        "type": "piercing",
+        "range": "melee 5ft / thrown 20/60ft",
+        "finesse": true,
+        "light": true
+      }
     ],
     "spellcasting": {
       "ability": "CHA",
       "spellAttackBonus": 5,
       "saveDC": 13,
-      "slots": { "1st": 2 },
-      "cantrips": ["Vicious Mockery","Mage Hand"],
-      "spells_1st": ["Charm Person","Dissonant Whispers","Cure Wounds"]
+      "slots": {
+        "1st": 2
+      },
+      "cantrips": [
+        "Vicious Mockery",
+        "Mage Hand"
+      ],
+      "spells_1st": [
+        "Charm Person",
+        "Dissonant Whispers",
+        "Cure Wounds"
+      ]
     },
     "resources": {
-      "bardicInspiration": { "uses": 3, "usedToday": 0, "die": "d6" }
+      "bardicInspiration": {
+        "uses": 3,
+        "usedToday": 0,
+        "die": "d6"
+      }
     },
     "level1Features": [
-      { "name":"Bardic Inspiration", "description":"Bonus action. Give one creature within 60ft a d6 they can add to one ability check, attack roll, or saving throw in the next 10 min. CHA mod (3) uses/long rest." },
-      { "name":"Spellcasting", "description":"CHA-based. 2 first-level slots at level 1." },
-      { "name":"Jack of All Trades", "description":"Add half proficiency bonus (+1) to any ability check you're not proficient in." }
+      {
+        "name": "Bardic Inspiration",
+        "description": "Bonus action. Give one creature within 60ft a d6 they can add to one ability check, attack roll, or saving throw in the next 10 min. CHA mod (3) uses/long rest."
+      },
+      {
+        "name": "Spellcasting",
+        "description": "CHA-based. 2 first-level slots at level 1."
+      },
+      {
+        "name": "Jack of All Trades",
+        "description": "Add half proficiency bonus (+1) to any ability check you're not proficient in."
+      }
     ],
     "racialTraits": [
-      { "name":"Fey Ancestry", "description":"Advantage on saves vs. charm; can't be magically put to sleep." },
-      { "name":"Skill Versatility", "description":"Proficiency in 2 extra skills of choice (already factored into skills list)." },
-      { "name":"Darkvision", "description":"60 ft darkvision." }
+      {
+        "name": "Fey Ancestry",
+        "description": "Advantage on saves vs. charm; can't be magically put to sleep."
+      },
+      {
+        "name": "Skill Versatility",
+        "description": "Proficiency in 2 extra skills of choice (already factored into skills list)."
+      },
+      {
+        "name": "Darkvision",
+        "description": "60 ft darkvision."
+      }
     ],
     "notes_data_corrections": [
-      "College of Lore features (Cutting Words, etc.) are level 3 — not applicable at level 1",
+      "College of Lore features (Cutting Words, etc.) are level 3 \u2014 not applicable at level 1",
       "Expertise listed in data; only 2 skills get Expertise at level 1 (Persuasion, Deception applied)"
     ]
   },
@@ -99,43 +234,113 @@
     "background": "Acolyte",
     "level": 1,
     "proficiencyBonus": 2,
-    "ability_scores": { "str":14, "dex":10, "con":15, "int":8, "wis":16, "cha":12 },
-    "modifiers":        { "str":2,  "dex":0,  "con":2,  "int":-1,"wis":3,  "cha":1  },
+    "ability_scores": {
+      "str": 14,
+      "dex": 10,
+      "con": 15,
+      "int": 8,
+      "wis": 16,
+      "cha": 12
+    },
+    "modifiers": {
+      "str": 2,
+      "dex": 0,
+      "con": 2,
+      "int": -1,
+      "wis": 3,
+      "cha": 1
+    },
     "hp": 11,
     "acFormula": "Chain Mail(16) + Shield(+2) = 18",
     "ac": 18,
     "speed": 25,
-    "savingThrows": { "wis":true, "cha":true },
+    "savingThrows": {
+      "wis": true,
+      "cha": true
+    },
     "skills": {
-      "proficient": ["Insight","Medicine","Persuasion","Religion"],
+      "proficient": [
+        "Insight",
+        "Medicine",
+        "Persuasion",
+        "Religion"
+      ],
       "expertise": []
     },
     "weapons": [
-      { "name":"Mace",          "bonus":4, "damage":"1d6+2", "type":"bludgeoning","range":"melee 5ft" },
-      { "name":"Sacred Flame",  "bonus":null, "damage":"1d8", "type":"radiant", "range":"60ft","isSave":true,"saveDC":13,"saveAbility":"DEX","noAttackRoll":true }
+      {
+        "name": "Mace",
+        "bonus": 4,
+        "damage": "1d6+2",
+        "type": "bludgeoning",
+        "range": "melee 5ft"
+      },
+      {
+        "name": "Sacred Flame",
+        "bonus": null,
+        "damage": "1d8",
+        "type": "radiant",
+        "range": "60ft",
+        "isSave": true,
+        "saveDC": 13,
+        "saveAbility": "DEX",
+        "noAttackRoll": true
+      }
     ],
     "spellcasting": {
       "ability": "WIS",
       "spellAttackBonus": 5,
       "saveDC": 13,
-      "slots": { "1st": 2 },
-      "cantrips": ["Sacred Flame","Guidance"],
-      "preparedSpells": ["Bless","Cure Wounds","Shield of Faith","Detect Magic","Healing Word"]
+      "slots": {
+        "1st": 2
+      },
+      "cantrips": [
+        "Sacred Flame",
+        "Guidance"
+      ],
+      "preparedSpells": [
+        "Bless",
+        "Cure Wounds",
+        "Shield of Faith",
+        "Detect Magic",
+        "Healing Word"
+      ]
     },
     "resources": {},
     "level1Features": [
-      { "name":"Spellcasting", "description":"WIS-based. Prepared = WIS mod (3) + level (1) = 4 spells. 2 first-level slots." },
-      { "name":"Disciple of Life (Life Domain)", "description":"Whenever you cast a spell of 1st level or higher that restores HP, the target regains additional HP = 2 + spell level." },
-      { "name":"Heavy Armor Proficiency (Life Domain)", "description":"Gain proficiency in heavy armor." }
+      {
+        "name": "Spellcasting",
+        "description": "WIS-based. Prepared = WIS mod (3) + level (1) = 4 spells. 2 first-level slots."
+      },
+      {
+        "name": "Disciple of Life (Life Domain)",
+        "description": "Whenever you cast a spell of 1st level or higher that restores HP, the target regains additional HP = 2 + spell level."
+      },
+      {
+        "name": "Heavy Armor Proficiency (Life Domain)",
+        "description": "Gain proficiency in heavy armor."
+      }
     ],
     "racialTraits": [
-      { "name":"Dwarven Resilience", "description":"Advantage on saves vs. poison; resistance to poison damage." },
-      { "name":"Stonecunning", "description":"Double proficiency on History checks related to stone." },
-      { "name":"Dwarven Toughness", "description":"+1 HP per level (already included in HP total)." },
-      { "name":"Darkvision", "description":"60 ft darkvision." }
+      {
+        "name": "Dwarven Resilience",
+        "description": "Advantage on saves vs. poison; resistance to poison damage."
+      },
+      {
+        "name": "Stonecunning",
+        "description": "Double proficiency on History checks related to stone."
+      },
+      {
+        "name": "Dwarven Toughness",
+        "description": "+1 HP per level (already included in HP total)."
+      },
+      {
+        "name": "Darkvision",
+        "description": "60 ft darkvision."
+      }
     ],
     "notes_data_corrections": [
-      "Channel Divinity is a level 2 feature — removed from level 1 stat block",
+      "Channel Divinity is a level 2 feature \u2014 removed from level 1 stat block",
       "Preserve Life (Channel Divinity) is also level 2"
     ]
   },
@@ -146,45 +351,116 @@
     "background": "Folk Hero",
     "level": 1,
     "proficiencyBonus": 2,
-    "ability_scores": { "str":10, "dex":16, "con":13, "int":8, "wis":16, "cha":12 },
-    "modifiers":        { "str":0,  "dex":3,  "con":1,  "int":-1,"wis":3,  "cha":1  },
+    "ability_scores": {
+      "str": 10,
+      "dex": 16,
+      "con": 13,
+      "int": 8,
+      "wis": 16,
+      "cha": 12
+    },
+    "modifiers": {
+      "str": 0,
+      "dex": 3,
+      "con": 1,
+      "int": -1,
+      "wis": 3,
+      "cha": 1
+    },
     "hp": 9,
     "ac": 16,
     "acFormula": "Leather(11 + DEX 3 = 14) + Wooden Shield(+2) = 16",
     "speed": 35,
-    "savingThrows": { "int":true, "wis":true },
+    "savingThrows": {
+      "int": true,
+      "wis": true
+    },
     "skills": {
-      "proficient": ["Animal Handling","Nature","Perception","Survival"],
+      "proficient": [
+        "Animal Handling",
+        "Nature",
+        "Perception",
+        "Survival"
+      ],
       "expertise": []
     },
     "weapons": [
-      { "name":"Quarterstaff (Shillelagh)", "bonus":5, "damage":"1d8+3", "type":"bludgeoning","range":"melee 5ft","note":"With Shillelagh cantrip active, uses WIS mod" },
-      { "name":"Quarterstaff (no Shillelagh)", "bonus":2,"damage":"1d6",  "type":"bludgeoning","range":"melee 5ft" },
-      { "name":"Thorn Whip", "bonus":5, "damage":"1d6", "type":"piercing","range":"30ft","note":"Pulls target 10ft toward you on hit" }
+      {
+        "name": "Quarterstaff (Shillelagh)",
+        "bonus": 5,
+        "damage": "1d8+3",
+        "type": "bludgeoning",
+        "range": "melee 5ft",
+        "note": "With Shillelagh cantrip active, uses WIS mod"
+      },
+      {
+        "name": "Quarterstaff (no Shillelagh)",
+        "bonus": 2,
+        "damage": "1d6",
+        "type": "bludgeoning",
+        "range": "melee 5ft"
+      },
+      {
+        "name": "Thorn Whip",
+        "bonus": 5,
+        "damage": "1d6",
+        "type": "piercing",
+        "range": "30ft",
+        "note": "Pulls target 10ft toward you on hit"
+      }
     ],
     "spellcasting": {
       "ability": "WIS",
       "spellAttackBonus": 5,
       "saveDC": 13,
-      "slots": { "1st": 2 },
-      "cantrips": ["Shillelagh","Thorn Whip"],
-      "preparedSpells": ["Goodberry","Faerie Fire","Healing Word","Thunderwave","Entangle"]
+      "slots": {
+        "1st": 2
+      },
+      "cantrips": [
+        "Shillelagh",
+        "Thorn Whip"
+      ],
+      "preparedSpells": [
+        "Goodberry",
+        "Faerie Fire",
+        "Healing Word",
+        "Thunderwave",
+        "Entangle"
+      ]
     },
     "resources": {},
     "level1Features": [
-      { "name":"Spellcasting", "description":"WIS-based. Prepared = WIS mod (3) + level (1) = 4 spells. 2 first-level slots." },
-      { "name":"Druidic", "description":"Knows the secret language Druidic." }
+      {
+        "name": "Spellcasting",
+        "description": "WIS-based. Prepared = WIS mod (3) + level (1) = 4 spells. 2 first-level slots."
+      },
+      {
+        "name": "Druidic",
+        "description": "Knows the secret language Druidic."
+      }
     ],
     "racialTraits": [
-      { "name":"Fleet of Foot", "description":"Base speed 35 ft." },
-      { "name":"Mask of the Wild", "description":"Can attempt to hide when lightly obscured by natural phenomena." },
-      { "name":"Trance", "description":"Only need 4 hours of trance for a long rest." },
-      { "name":"Darkvision", "description":"60 ft darkvision." }
+      {
+        "name": "Fleet of Foot",
+        "description": "Base speed 35 ft."
+      },
+      {
+        "name": "Mask of the Wild",
+        "description": "Can attempt to hide when lightly obscured by natural phenomena."
+      },
+      {
+        "name": "Trance",
+        "description": "Only need 4 hours of trance for a long rest."
+      },
+      {
+        "name": "Darkvision",
+        "description": "60 ft darkvision."
+      }
     ],
     "notes_data_corrections": [
-      "Wild Shape is a level 2 feature — removed from level 1 stat block",
+      "Wild Shape is a level 2 feature \u2014 removed from level 1 stat block",
       "Circle of the Land Natural Recovery is also level 2",
-      "Shillelagh cantrip selected (WIS-based melee) — makes Druid viable in melee at level 1"
+      "Shillelagh cantrip selected (WIS-based melee) \u2014 makes Druid viable in melee at level 1"
     ]
   },
   {
@@ -194,38 +470,100 @@
     "background": "Soldier",
     "level": 1,
     "proficiencyBonus": 2,
-    "ability_scores": { "str":17, "dex":10, "con":16, "int":8, "wis":12, "cha":13 },
-    "modifiers":        { "str":3,  "dex":0,  "con":3,  "int":-1,"wis":1,  "cha":1  },
+    "ability_scores": {
+      "str": 17,
+      "dex": 10,
+      "con": 16,
+      "int": 8,
+      "wis": 12,
+      "cha": 13
+    },
+    "modifiers": {
+      "str": 3,
+      "dex": 0,
+      "con": 3,
+      "int": -1,
+      "wis": 1,
+      "cha": 1
+    },
     "hp": 13,
     "ac": 16,
     "acFormula": "Chain Mail: 16",
     "speed": 25,
-    "savingThrows": { "str":true, "con":true },
+    "savingThrows": {
+      "str": true,
+      "con": true
+    },
     "skills": {
-      "proficient": ["Athletics","Intimidation","Perception","Survival"],
+      "proficient": [
+        "Athletics",
+        "Intimidation",
+        "Perception",
+        "Survival"
+      ],
       "expertise": []
     },
     "weapons": [
-      { "name":"Greatsword", "bonus":5, "damage":"2d6+3", "type":"slashing","range":"melee 5ft","heavy":true,"twoHanded":true,"fightingStyle":"Great Weapon Fighting (reroll 1s and 2s on damage dice)" },
-      { "name":"Flail",      "bonus":5, "damage":"1d8+3", "type":"bludgeoning","range":"melee 5ft" },
-      { "name":"Javelin",    "bonus":5, "damage":"1d6+3", "type":"piercing","range":"melee 5ft / thrown 30/120ft" }
+      {
+        "name": "Greatsword",
+        "bonus": 5,
+        "damage": "2d6+3",
+        "type": "slashing",
+        "range": "melee 5ft",
+        "heavy": true,
+        "twoHanded": true,
+        "fightingStyle": "Great Weapon Fighting (reroll 1s and 2s on damage dice)"
+      },
+      {
+        "name": "Flail",
+        "bonus": 5,
+        "damage": "1d8+3",
+        "type": "bludgeoning",
+        "range": "melee 5ft"
+      },
+      {
+        "name": "Javelin",
+        "bonus": 5,
+        "damage": "1d6+3",
+        "type": "piercing",
+        "range": "melee 5ft / thrown 30/120ft"
+      }
     ],
     "spellcasting": null,
     "resources": {
-      "secondWind": { "uses":1, "usedThisRest":false, "effect":"Bonus action: regain 1d10+1 HP" }
+      "secondWind": {
+        "uses": 1,
+        "usedThisRest": false,
+        "effect": "Bonus action: regain 1d10+1 HP"
+      }
     },
     "level1Features": [
-      { "name":"Fighting Style (Great Weapon Fighting)", "description":"When rolling damage for a melee weapon held in two hands, reroll 1s and 2s. Keep new roll." },
-      { "name":"Second Wind", "description":"Bonus action: regain 1d10 + Fighter level (1) HP. 1 use/short or long rest." }
+      {
+        "name": "Fighting Style (Great Weapon Fighting)",
+        "description": "When rolling damage for a melee weapon held in two hands, reroll 1s and 2s. Keep new roll."
+      },
+      {
+        "name": "Second Wind",
+        "description": "Bonus action: regain 1d10 + Fighter level (1) HP. 1 use/short or long rest."
+      }
     ],
     "racialTraits": [
-      { "name":"Dwarven Resilience", "description":"Advantage on saves vs. poison; resistance to poison damage." },
-      { "name":"Stonecunning", "description":"Double proficiency on History checks related to stone." },
-      { "name":"Darkvision", "description":"60 ft darkvision." }
+      {
+        "name": "Dwarven Resilience",
+        "description": "Advantage on saves vs. poison; resistance to poison damage."
+      },
+      {
+        "name": "Stonecunning",
+        "description": "Double proficiency on History checks related to stone."
+      },
+      {
+        "name": "Darkvision",
+        "description": "60 ft darkvision."
+      }
     ],
     "notes_data_corrections": [
-      "Action Surge is a level 2 feature — removed from level 1 stat block",
-      "Champion Improved Critical is a level 3 feature — not applicable at level 1"
+      "Action Surge is a level 2 feature \u2014 removed from level 1 stat block",
+      "Champion Improved Critical is a level 3 feature \u2014 not applicable at level 1"
     ]
   },
   {
@@ -235,36 +573,96 @@
     "background": "Criminal",
     "level": 1,
     "proficiencyBonus": 2,
-    "ability_scores": { "str":10, "dex":17, "con":13, "int":8, "wis":15, "cha":12 },
-    "modifiers":        { "str":0,  "dex":3,  "con":1,  "int":-1,"wis":2,  "cha":1  },
+    "ability_scores": {
+      "str": 10,
+      "dex": 17,
+      "con": 13,
+      "int": 8,
+      "wis": 15,
+      "cha": 12
+    },
+    "modifiers": {
+      "str": 0,
+      "dex": 3,
+      "con": 1,
+      "int": -1,
+      "wis": 2,
+      "cha": 1
+    },
     "hp": 9,
     "ac": 15,
     "acFormula": "Unarmored Defense: 10 + DEX(3) + WIS(2)",
     "speed": 35,
-    "savingThrows": { "str":true, "dex":true },
+    "savingThrows": {
+      "str": true,
+      "dex": true
+    },
     "skills": {
-      "proficient": ["Acrobatics","Deception","Insight","Stealth"],
+      "proficient": [
+        "Acrobatics",
+        "Deception",
+        "Insight",
+        "Stealth"
+      ],
       "expertise": []
     },
     "weapons": [
-      { "name":"Shortsword", "bonus":5, "damage":"1d6+3", "type":"piercing","range":"melee 5ft","finesse":true,"light":true },
-      { "name":"Unarmed Strike", "bonus":5, "damage":"1d4+3", "type":"bludgeoning","range":"melee 5ft","note":"Martial Arts: use DEX instead of STR; damage = 1d4 at level 1 or DEX mod, whichever is higher" },
-      { "name":"Unarmed Bonus Attack", "bonus":5, "damage":"1d4+3", "type":"bludgeoning","range":"melee 5ft","cost":"bonusAction","note":"After attacking with Shortsword or Unarmed, make one Unarmed Strike as bonus action" }
+      {
+        "name": "Shortsword",
+        "bonus": 5,
+        "damage": "1d6+3",
+        "type": "piercing",
+        "range": "melee 5ft",
+        "finesse": true,
+        "light": true
+      },
+      {
+        "name": "Unarmed Strike",
+        "bonus": 5,
+        "damage": "1d4+3",
+        "type": "bludgeoning",
+        "range": "melee 5ft",
+        "note": "Martial Arts: use DEX instead of STR; damage = 1d4 at level 1 or DEX mod, whichever is higher"
+      },
+      {
+        "name": "Unarmed Bonus Attack",
+        "bonus": 5,
+        "damage": "1d4+3",
+        "type": "bludgeoning",
+        "range": "melee 5ft",
+        "cost": "bonusAction",
+        "note": "After attacking with Shortsword or Unarmed, make one Unarmed Strike as bonus action"
+      }
     ],
     "spellcasting": null,
     "resources": {},
     "level1Features": [
-      { "name":"Martial Arts", "description":"Can use DEX instead of STR for unarmed strikes and monk weapons. Unarmed damage = 1d4 (level 1). After Attack action with unarmed or monk weapon, make one unarmed strike as bonus action." },
-      { "name":"Unarmored Defense", "description":"AC = 10 + DEX mod + WIS mod when not wearing armor or shield." }
+      {
+        "name": "Martial Arts",
+        "description": "Can use DEX instead of STR for unarmed strikes and monk weapons. Unarmed damage = 1d4 (level 1). After Attack action with unarmed or monk weapon, make one unarmed strike as bonus action."
+      },
+      {
+        "name": "Unarmored Defense",
+        "description": "AC = 10 + DEX mod + WIS mod when not wearing armor or shield."
+      }
     ],
     "racialTraits": [
-      { "name":"Fleet of Foot", "description":"Base speed 35 ft." },
-      { "name":"Mask of the Wild", "description":"Can attempt to hide when lightly obscured by natural phenomena." },
-      { "name":"Darkvision", "description":"60 ft darkvision." }
+      {
+        "name": "Fleet of Foot",
+        "description": "Base speed 35 ft."
+      },
+      {
+        "name": "Mask of the Wild",
+        "description": "Can attempt to hide when lightly obscured by natural phenomena."
+      },
+      {
+        "name": "Darkvision",
+        "description": "60 ft darkvision."
+      }
     ],
     "notes_data_corrections": [
-      "Ki (Flurry of Blows, Patient Defense, Step of the Wind) is a level 2 feature — removed from level 1",
-      "Open Hand Technique is a level 3 feature — not applicable at level 1",
+      "Ki (Flurry of Blows, Patient Defense, Step of the Wind) is a level 2 feature \u2014 removed from level 1",
+      "Open Hand Technique is a level 3 feature \u2014 not applicable at level 1",
       "Martial Arts bonus action unarmed strike IS available at level 1 (not Ki-based)"
     ]
   },
@@ -275,43 +673,119 @@
     "background": "Noble",
     "level": 1,
     "proficiencyBonus": 2,
-    "ability_scores": { "str":17, "dex":10, "con":14, "int":12, "wis":8, "cha":14 },
-    "modifiers":        { "str":3,  "dex":0,  "con":2,  "int":1, "wis":-1, "cha":2  },
+    "ability_scores": {
+      "str": 17,
+      "dex": 10,
+      "con": 14,
+      "int": 12,
+      "wis": 8,
+      "cha": 14
+    },
+    "modifiers": {
+      "str": 3,
+      "dex": 0,
+      "con": 2,
+      "int": 1,
+      "wis": -1,
+      "cha": 2
+    },
     "hp": 12,
     "ac": 18,
     "acFormula": "Chain Mail(16) + Shield(+2) = 18",
     "speed": 30,
-    "savingThrows": { "wis":true, "cha":true },
+    "savingThrows": {
+      "wis": true,
+      "cha": true
+    },
     "skills": {
-      "proficient": ["Athletics","History","Insight","Persuasion"],
+      "proficient": [
+        "Athletics",
+        "History",
+        "Insight",
+        "Persuasion"
+      ],
       "expertise": []
     },
     "weapons": [
-      { "name":"Longsword",      "bonus":5, "damage":"1d8+3",  "type":"slashing","range":"melee 5ft" },
-      { "name":"Longsword+Smite","bonus":5, "damage":"1d8+3+2d8","type":"slashing+radiant","range":"melee 5ft","note":"Divine Smite: expend 1st-level spell slot on hit for +2d8 radiant" },
-      { "name":"Javelin",        "bonus":5, "damage":"1d6+3",  "type":"piercing","range":"melee 5ft / thrown 30/120ft" }
+      {
+        "name": "Longsword",
+        "bonus": 5,
+        "damage": "1d8+3",
+        "type": "slashing",
+        "range": "melee 5ft"
+      },
+      {
+        "name": "Longsword+Smite",
+        "bonus": 5,
+        "damage": "1d8+3+2d8",
+        "type": "slashing+radiant",
+        "range": "melee 5ft",
+        "note": "Divine Smite: expend 1st-level spell slot on hit for +2d8 radiant"
+      },
+      {
+        "name": "Javelin",
+        "bonus": 5,
+        "damage": "1d6+3",
+        "type": "piercing",
+        "range": "melee 5ft / thrown 30/120ft"
+      }
     ],
     "spellcasting": {
       "ability": "CHA",
       "spellAttackBonus": 4,
       "saveDC": 12,
-      "slots": { "1st": 2 },
-      "preparedSpells": ["Bless","Cure Wounds","Protection from Evil and Good","Shield of Faith"]
+      "slots": {
+        "1st": 2
+      },
+      "preparedSpells": [
+        "Bless",
+        "Cure Wounds",
+        "Protection from Evil and Good",
+        "Shield of Faith"
+      ]
     },
     "resources": {
-      "divineSmite": { "note":"On a hit, expend a spell slot for +2d8 radiant (1st-level) per slot level" },
-      "layOnHands":  { "pool":5, "remaining":5, "note":"Action: restore any HP amount from pool. 5 pts = cure disease/poison instead." },
-      "divineSense": { "uses":3, "usedToday":0, "note":"Action: detect celestials/fiends/undead within 60ft until end of turn. 1+CHA mod uses/long rest." }
+      "divineSmite": {
+        "note": "On a hit, expend a spell slot for +2d8 radiant (1st-level) per slot level"
+      },
+      "layOnHands": {
+        "pool": 5,
+        "remaining": 5,
+        "note": "Action: restore any HP amount from pool. 5 pts = cure disease/poison instead."
+      },
+      "divineSense": {
+        "uses": 3,
+        "usedToday": 0,
+        "note": "Action: detect celestials/fiends/undead within 60ft until end of turn. 1+CHA mod uses/long rest."
+      }
     },
     "level1Features": [
-      { "name":"Divine Sense", "description":"Action: know location of any celestial, fiend, or undead within 60ft until end of turn. 1+CHA mod (3) uses/long rest." },
-      { "name":"Lay on Hands", "description":"Action: restore HP from a 5-HP pool (level × 5). 5 points can cure one disease or one poison instead." },
-      { "name":"Divine Smite", "description":"After a hit with a melee weapon, expend a spell slot to deal additional radiant damage: 2d8 per 1st-level slot (+1d8 per additional slot level, max 5d8)." },
-      { "name":"Fighting Style (Great Weapon Fighting)", "description":"See Fighter." }
+      {
+        "name": "Divine Sense",
+        "description": "Action: know location of any celestial, fiend, or undead within 60ft until end of turn. 1+CHA mod (3) uses/long rest."
+      },
+      {
+        "name": "Lay on Hands",
+        "description": "Action: restore HP from a 5-HP pool (level \u00d7 5). 5 points can cure one disease or one poison instead."
+      },
+      {
+        "name": "Divine Smite",
+        "description": "After a hit with a melee weapon, expend a spell slot to deal additional radiant damage: 2d8 per 1st-level slot (+1d8 per additional slot level, max 5d8)."
+      },
+      {
+        "name": "Fighting Style (Great Weapon Fighting)",
+        "description": "See Fighter."
+      }
     ],
     "racialTraits": [
-      { "name":"Draconic Ancestry (Fire)", "description":"Breath weapon: 15ft cone, DEX DC 13, 2d6 fire. 1/rest." },
-      { "name":"Damage Resistance", "description":"Resistance to fire damage." }
+      {
+        "name": "Draconic Ancestry (Fire)",
+        "description": "Breath weapon: 15ft cone, DEX DC 13, 2d6 fire. 1/rest."
+      },
+      {
+        "name": "Damage Resistance",
+        "description": "Resistance to fire damage."
+      }
     ],
     "notes_data_corrections": [
       "Sacred Weapon and Turn the Unholy (Oath of Devotion Channel Divinity) are level 3 features",
@@ -325,38 +799,107 @@
     "background": "Folk Hero",
     "level": 1,
     "proficiencyBonus": 2,
-    "ability_scores": { "str":8, "dex":17, "con":14, "int":10, "wis":14, "cha":13 },
-    "modifiers":        { "str":-1,"dex":3,  "con":2,  "int":0, "wis":2,  "cha":1  },
+    "ability_scores": {
+      "str": 8,
+      "dex": 17,
+      "con": 14,
+      "int": 10,
+      "wis": 14,
+      "cha": 13
+    },
+    "modifiers": {
+      "str": -1,
+      "dex": 3,
+      "con": 2,
+      "int": 0,
+      "wis": 2,
+      "cha": 1
+    },
     "hp": 12,
     "ac": 15,
     "acFormula": "Studded Leather: 12 + DEX(3)",
     "speed": 25,
-    "savingThrows": { "str":true, "dex":true },
+    "savingThrows": {
+      "str": true,
+      "dex": true
+    },
     "skills": {
-      "proficient": ["Animal Handling","Investigation","Nature","Perception","Stealth","Survival"],
+      "proficient": [
+        "Animal Handling",
+        "Investigation",
+        "Nature",
+        "Perception",
+        "Stealth",
+        "Survival"
+      ],
       "expertise": []
     },
     "weapons": [
-      { "name":"Longbow",   "bonus":5, "damage":"1d8+3", "type":"piercing","range":"ranged 150/600ft","ammo":"20 arrows","fightingStyle":"Archery: +2 to ranged attack rolls (included)" },
-      { "name":"Scimitar",  "bonus":5, "damage":"1d6+3", "type":"slashing","range":"melee 5ft","finesse":true,"light":true },
-      { "name":"Shortsword","bonus":5, "damage":"1d6+3", "type":"piercing","range":"melee 5ft","finesse":true,"light":true }
+      {
+        "name": "Longbow",
+        "bonus": 5,
+        "damage": "1d8+3",
+        "type": "piercing",
+        "range": "ranged 150/600ft",
+        "ammo": "20 arrows",
+        "fightingStyle": "Archery: +2 to ranged attack rolls (included)"
+      },
+      {
+        "name": "Scimitar",
+        "bonus": 5,
+        "damage": "1d6+3",
+        "type": "slashing",
+        "range": "melee 5ft",
+        "finesse": true,
+        "light": true
+      },
+      {
+        "name": "Shortsword",
+        "bonus": 5,
+        "damage": "1d6+3",
+        "type": "piercing",
+        "range": "melee 5ft",
+        "finesse": true,
+        "light": true
+      }
     ],
     "spellcasting": null,
     "resources": {},
     "level1Features": [
-      { "name":"Favored Enemy (one type)", "description":"Advantage on Survival checks to track and on INT checks to recall info about the favored enemy type." },
-      { "name":"Natural Explorer (one terrain)", "description":"Difficult terrain doesn't slow in favored terrain. Various exploration bonuses." },
-      { "name":"Fighting Style (Archery)", "description":"+2 bonus to ranged weapon attack rolls (already factored into Longbow bonus above)." }
+      {
+        "name": "Favored Enemy (one type)",
+        "description": "Advantage on Survival checks to track and on INT checks to recall info about the favored enemy type."
+      },
+      {
+        "name": "Natural Explorer (one terrain)",
+        "description": "Difficult terrain doesn't slow in favored terrain. Various exploration bonuses."
+      },
+      {
+        "name": "Fighting Style (Archery)",
+        "description": "+2 bonus to ranged weapon attack rolls (already factored into Longbow bonus above)."
+      }
     ],
     "racialTraits": [
-      { "name":"Lucky", "description":"When you roll a 1 on a d20, reroll and use the new roll." },
-      { "name":"Brave", "description":"Advantage on saving throws against being frightened." },
-      { "name":"Halfling Nimbleness", "description":"Can move through the space of any creature that is of a larger size." },
-      { "name":"Naturally Stealthy", "description":"Can attempt to hide when obscured by a creature at least one size larger." }
+      {
+        "name": "Lucky",
+        "description": "When you roll a 1 on a d20, reroll and use the new roll."
+      },
+      {
+        "name": "Brave",
+        "description": "Advantage on saving throws against being frightened."
+      },
+      {
+        "name": "Halfling Nimbleness",
+        "description": "Can move through the space of any creature that is of a larger size."
+      },
+      {
+        "name": "Naturally Stealthy",
+        "description": "Can attempt to hide when obscured by a creature at least one size larger."
+      }
     ],
     "notes_data_corrections": [
-      "Ranger spellcasting starts at level 2 — no spell slots at level 1",
-      "Hunter's Mark is a level 2 spell feature — not available at level 1",
+      "Ranger spellcasting starts at level 2 \u2014 no spell slots at level 1",
+      "Hunter's Mark is a level 2 spell feature \u2014 not available at level 1",
       "Colossus Slayer / Hunter's Prey (Hunter subclass) is level 3"
     ]
   },
@@ -367,41 +910,128 @@
     "background": "Criminal",
     "level": 1,
     "proficiencyBonus": 2,
-    "ability_scores": { "str":8, "dex":17, "con":14, "int":13, "wis":12, "cha":14 },
-    "modifiers":        { "str":-1,"dex":3,  "con":2,  "int":1, "wis":1,  "cha":2  },
+    "ability_scores": {
+      "str": 8,
+      "dex": 17,
+      "con": 14,
+      "int": 13,
+      "wis": 12,
+      "cha": 14
+    },
+    "modifiers": {
+      "str": -1,
+      "dex": 3,
+      "con": 2,
+      "int": 1,
+      "wis": 1,
+      "cha": 2
+    },
     "hp": 10,
     "ac": 14,
     "acFormula": "Leather: 11 + DEX(3)",
     "speed": 25,
-    "savingThrows": { "dex":true, "int":true },
+    "savingThrows": {
+      "dex": true,
+      "int": true
+    },
     "skills": {
-      "proficient": ["Acrobatics","Deception","Investigation","Perception","Sleight of Hand","Stealth"],
-      "expertise": ["Stealth","Perception"]
+      "proficient": [
+        "Acrobatics",
+        "Deception",
+        "Investigation",
+        "Perception",
+        "Sleight of Hand",
+        "Stealth"
+      ],
+      "expertise": [
+        "Stealth",
+        "Perception"
+      ]
     },
     "weapons": [
-      { "name":"Shortsword",    "bonus":5, "damage":"1d6+3",     "type":"piercing","range":"melee 5ft","finesse":true,"light":true },
-      { "name":"Shortsword+SA", "bonus":5, "damage":"1d6+3+1d6", "type":"piercing","range":"melee 5ft","note":"Sneak Attack: +1d6 if advantage OR ally adjacent to target, once per turn" },
-      { "name":"Shortbow",      "bonus":5, "damage":"1d6+3",     "type":"piercing","range":"ranged 80/320ft" },
-      { "name":"Shortbow+SA",   "bonus":5, "damage":"1d6+3+1d6", "type":"piercing","range":"ranged 80/320ft","note":"Sneak Attack: same conditions, works with ranged too" },
-      { "name":"Dagger",        "bonus":5, "damage":"1d4+3",     "type":"piercing","range":"melee 5ft / thrown 20/60ft","finesse":true,"light":true }
+      {
+        "name": "Shortsword",
+        "bonus": 5,
+        "damage": "1d6+3",
+        "type": "piercing",
+        "range": "melee 5ft",
+        "finesse": true,
+        "light": true
+      },
+      {
+        "name": "Shortsword+SA",
+        "bonus": 5,
+        "damage": "1d6+3+1d6",
+        "type": "piercing",
+        "range": "melee 5ft",
+        "note": "Sneak Attack: +1d6 if advantage OR ally adjacent to target, once per turn"
+      },
+      {
+        "name": "Shortbow",
+        "bonus": 5,
+        "damage": "1d6+3",
+        "type": "piercing",
+        "range": "ranged 80/320ft"
+      },
+      {
+        "name": "Shortbow+SA",
+        "bonus": 5,
+        "damage": "1d6+3+1d6",
+        "type": "piercing",
+        "range": "ranged 80/320ft",
+        "note": "Sneak Attack: same conditions, works with ranged too"
+      },
+      {
+        "name": "Dagger",
+        "bonus": 5,
+        "damage": "1d4+3",
+        "type": "piercing",
+        "range": "melee 5ft / thrown 20/60ft",
+        "finesse": true,
+        "light": true
+      }
     ],
     "spellcasting": null,
     "resources": {
-      "sneakAttack": { "dice":"1d6", "condition":"Advantage on attack OR ally within 5ft of target (and no disadvantage on attack)" }
+      "sneakAttack": {
+        "dice": "1d6",
+        "condition": "Advantage on attack OR ally within 5ft of target (and no disadvantage on attack)"
+      }
     },
     "level1Features": [
-      { "name":"Sneak Attack", "description":"Once per turn, deal extra 1d6 damage to one target when: (a) advantage on the attack roll, or (b) an ally is within 5ft of the target and you don't have disadvantage. Works with finesse and ranged weapons." },
-      { "name":"Thieves' Cant", "description":"Secret language of criminals." },
-      { "name":"Expertise", "description":"Double proficiency bonus for Stealth and Perception (already applied)." }
+      {
+        "name": "Sneak Attack",
+        "description": "Once per turn, deal extra 1d6 damage to one target when: (a) advantage on the attack roll, or (b) an ally is within 5ft of the target and you don't have disadvantage. Works with finesse and ranged weapons."
+      },
+      {
+        "name": "Thieves' Cant",
+        "description": "Secret language of criminals."
+      },
+      {
+        "name": "Expertise",
+        "description": "Double proficiency bonus for Stealth and Perception (already applied)."
+      }
     ],
     "racialTraits": [
-      { "name":"Lucky", "description":"Reroll 1s on d20." },
-      { "name":"Brave", "description":"Advantage on saves vs. frightened." },
-      { "name":"Halfling Nimbleness", "description":"Move through larger creature's space." },
-      { "name":"Naturally Stealthy", "description":"Hide while obscured by larger creature." }
+      {
+        "name": "Lucky",
+        "description": "Reroll 1s on d20."
+      },
+      {
+        "name": "Brave",
+        "description": "Advantage on saves vs. frightened."
+      },
+      {
+        "name": "Halfling Nimbleness",
+        "description": "Move through larger creature's space."
+      },
+      {
+        "name": "Naturally Stealthy",
+        "description": "Hide while obscured by larger creature."
+      }
     ],
     "notes_data_corrections": [
-      "Cunning Action (Dash/Disengage/Hide as bonus action) is level 2 — removed from level 1",
+      "Cunning Action (Dash/Disengage/Hide as bonus action) is level 2 \u2014 removed from level 1",
       "Thief Fast Hands / Second-Story Work is level 3",
       "Uncanny Dodge is level 5"
     ]
@@ -413,44 +1043,119 @@
     "background": "Noble",
     "level": 1,
     "proficiencyBonus": 2,
-    "ability_scores": { "str":8, "dex":15, "con":14, "int":10, "wis":12, "cha":17 },
-    "modifiers":        { "str":-1,"dex":2,  "con":2,  "int":0, "wis":1,  "cha":3  },
+    "ability_scores": {
+      "str": 8,
+      "dex": 15,
+      "con": 14,
+      "int": 10,
+      "wis": 12,
+      "cha": 17
+    },
+    "modifiers": {
+      "str": -1,
+      "dex": 2,
+      "con": 2,
+      "int": 0,
+      "wis": 1,
+      "cha": 3
+    },
     "hp": 8,
     "ac": 15,
-    "acFormula": "Draconic Resilience: 13 + DEX(2) — no armor needed",
+    "acFormula": "Draconic Resilience: 13 + DEX(2) \u2014 no armor needed",
     "speed": 30,
-    "savingThrows": { "con":true, "cha":true },
+    "savingThrows": {
+      "con": true,
+      "cha": true
+    },
     "skills": {
-      "proficient": ["Deception","History","Insight","Persuasion"],
+      "proficient": [
+        "Deception",
+        "History",
+        "Insight",
+        "Persuasion"
+      ],
       "expertise": []
     },
     "weapons": [
-      { "name":"Fire Bolt",      "bonus":5, "damage":"1d10", "type":"fire",     "range":"120ft","isCantrip":true },
-      { "name":"Chromatic Orb",  "bonus":5, "damage":"3d8",  "type":"variable", "range":"90ft", "note":"1st-level spell: choose acid/cold/fire/lightning/poison/thunder on cast" },
-      { "name":"Spear",          "bonus":1, "damage":"1d6-1","type":"piercing",  "range":"melee 5ft / thrown 20/60ft","note":"Emergency only — not proficient" },
-      { "name":"Dagger",         "bonus":4, "damage":"1d4+2","type":"piercing",  "range":"melee 5ft / thrown 20/60ft","finesse":true }
+      {
+        "name": "Fire Bolt",
+        "bonus": 5,
+        "damage": "1d10",
+        "type": "fire",
+        "range": "120ft",
+        "isCantrip": true
+      },
+      {
+        "name": "Chromatic Orb",
+        "bonus": 5,
+        "damage": "3d8",
+        "type": "variable",
+        "range": "90ft",
+        "note": "1st-level spell: choose acid/cold/fire/lightning/poison/thunder on cast"
+      },
+      {
+        "name": "Spear",
+        "bonus": 1,
+        "damage": "1d6-1",
+        "type": "piercing",
+        "range": "melee 5ft / thrown 20/60ft",
+        "note": "Emergency only \u2014 not proficient"
+      },
+      {
+        "name": "Dagger",
+        "bonus": 4,
+        "damage": "1d4+2",
+        "type": "piercing",
+        "range": "melee 5ft / thrown 20/60ft",
+        "finesse": true
+      }
     ],
     "spellcasting": {
       "ability": "CHA",
       "spellAttackBonus": 5,
       "saveDC": 13,
-      "slots": { "1st": 2 },
-      "cantrips": ["Fire Bolt","Mage Hand"],
-      "spells_1st": ["Shield","Chromatic Orb","Sleep"]
+      "slots": {
+        "1st": 2
+      },
+      "cantrips": [
+        "Fire Bolt",
+        "Mage Hand"
+      ],
+      "spells_1st": [
+        "Shield",
+        "Chromatic Orb",
+        "Sleep",
+        "Burning Hands"
+      ]
     },
     "resources": {},
     "level1Features": [
-      { "name":"Draconic Resilience", "description":"HP max increases by 1 per Sorcerer level. AC = 13 + DEX mod when not wearing armor." },
-      { "name":"Spellcasting", "description":"CHA-based. Knows 4 cantrips, 2 first-level spells. 2 first-level slots." }
+      {
+        "name": "Draconic Resilience",
+        "description": "HP max increases by 1 per Sorcerer level. AC = 13 + DEX mod when not wearing armor."
+      },
+      {
+        "name": "Spellcasting",
+        "description": "CHA-based. Knows 4 cantrips, 2 first-level spells. 2 first-level slots."
+      }
     ],
     "racialTraits": [
-      { "name":"Fey Ancestry", "description":"Advantage on saves vs. charm; can't be magically put to sleep." },
-      { "name":"Skill Versatility", "description":"2 extra skill proficiencies." },
-      { "name":"Darkvision", "description":"60 ft darkvision." }
+      {
+        "name": "Fey Ancestry",
+        "description": "Advantage on saves vs. charm; can't be magically put to sleep."
+      },
+      {
+        "name": "Skill Versatility",
+        "description": "2 extra skill proficiencies."
+      },
+      {
+        "name": "Darkvision",
+        "description": "60 ft darkvision."
+      }
     ],
     "notes_data_corrections": [
-      "Font of Magic (Sorcery Points) is level 2 — not available at level 1",
-      "Metamagic (Subtle Spell, Twinned Spell) is level 3 — not available at level 1",
+      "Font of Magic (Sorcery Points) is level 2 \u2014 not available at level 1",
+      "Metamagic (Subtle Spell, Twinned Spell) is level 3 \u2014 not available at level 1",
       "Spellcasting ability corrected to CHA (was listed with wrong stat in some calculations)",
       "Fire Bolt attack bonus corrected to +5 (prof 2 + CHA 3), not INT-based"
     ]
@@ -462,47 +1167,140 @@
     "background": "Noble",
     "level": 1,
     "proficiencyBonus": 2,
-    "ability_scores": { "str":8, "dex":14, "con":14, "int":12, "wis":10, "cha":17 },
-    "modifiers":        { "str":-1,"dex":2,  "con":2,  "int":1, "wis":0,  "cha":3  },
+    "ability_scores": {
+      "str": 8,
+      "dex": 14,
+      "con": 14,
+      "int": 12,
+      "wis": 10,
+      "cha": 17
+    },
+    "modifiers": {
+      "str": -1,
+      "dex": 2,
+      "con": 2,
+      "int": 1,
+      "wis": 0,
+      "cha": 3
+    },
     "hp": 10,
     "ac": 13,
     "acFormula": "Leather: 11 + DEX(2)",
     "speed": 30,
-    "savingThrows": { "wis":true, "cha":true },
+    "savingThrows": {
+      "wis": true,
+      "cha": true
+    },
     "skills": {
-      "proficient": ["Arcana","History","Investigation","Persuasion"],
+      "proficient": [
+        "Arcana",
+        "History",
+        "Investigation",
+        "Persuasion"
+      ],
       "expertise": []
     },
     "weapons": [
-      { "name":"Eldritch Blast", "bonus":5, "damage":"1d10",  "type":"force",   "range":"120ft","isCantrip":true,"note":"At level 1, no Agonizing Blast — CHA not added to damage" },
-      { "name":"Hellish Rebuke", "bonus":null,"damage":"2d10","type":"fire",    "range":"60ft", "isSave":true,"saveDC":13,"saveAbility":"DEX","cost":"reaction","note":"Tiefling racial: when damaged, reaction to deal 2d10 fire. 1/long rest." },
-      { "name":"Hex (via slot)", "bonus":5,  "damage":"1d6+1d6","type":"force+necrotic","range":"90ft","note":"Hex first, then EB. Hex = bonus action + 1st-level slot; +1d6 necrotic on hits vs. hexed target" },
-      { "name":"Sickle",         "bonus":4,  "damage":"1d4+2","type":"slashing","range":"melee 5ft" },
-      { "name":"Dagger",         "bonus":4,  "damage":"1d4+2","type":"piercing","range":"melee 5ft / thrown 20/60ft","finesse":true,"light":true }
+      {
+        "name": "Eldritch Blast",
+        "bonus": 5,
+        "damage": "1d10",
+        "type": "force",
+        "range": "120ft",
+        "isCantrip": true,
+        "note": "At level 1, no Agonizing Blast \u2014 CHA not added to damage"
+      },
+      {
+        "name": "Hellish Rebuke",
+        "bonus": null,
+        "damage": "2d10",
+        "type": "fire",
+        "range": "60ft",
+        "isSave": true,
+        "saveDC": 13,
+        "saveAbility": "DEX",
+        "cost": "reaction",
+        "note": "Tiefling racial: when damaged, reaction to deal 2d10 fire. 1/long rest."
+      },
+      {
+        "name": "Hex (via slot)",
+        "bonus": 5,
+        "damage": "1d6+1d6",
+        "type": "force+necrotic",
+        "range": "90ft",
+        "note": "Hex first, then EB. Hex = bonus action + 1st-level slot; +1d6 necrotic on hits vs. hexed target"
+      },
+      {
+        "name": "Sickle",
+        "bonus": 4,
+        "damage": "1d4+2",
+        "type": "slashing",
+        "range": "melee 5ft"
+      },
+      {
+        "name": "Dagger",
+        "bonus": 4,
+        "damage": "1d4+2",
+        "type": "piercing",
+        "range": "melee 5ft / thrown 20/60ft",
+        "finesse": true,
+        "light": true
+      }
     ],
     "spellcasting": {
       "ability": "CHA",
       "spellAttackBonus": 5,
       "saveDC": 13,
-      "pactSlots": { "1st": 1, "recovery": "short rest" },
-      "cantrips": ["Eldritch Blast","Prestidigitation"],
-      "spells_1st": ["Hex","Arms of Hadar"]
+      "pactSlots": {
+        "1st": 1,
+        "recovery": "short rest"
+      },
+      "cantrips": [
+        "Eldritch Blast",
+        "Prestidigitation"
+      ],
+      "spells_1st": [
+        "Hex",
+        "Arms of Hadar"
+      ]
     },
     "resources": {
-      "pactMagic": { "slots":1, "level":1, "recovery":"short or long rest" }
+      "pactMagic": {
+        "slots": 1,
+        "level": 1,
+        "recovery": "short or long rest"
+      }
     },
     "level1Features": [
-      { "name":"Pact Magic", "description":"CHA-based. 1 first-level slot. Recovers on short OR long rest." },
-      { "name":"Otherworldly Patron (Fiend) — Dark One's Blessing", "description":"When you reduce a hostile creature to 0 HP, gain temp HP equal to CHA mod (3) + Warlock level (1) = 4 temp HP." }
+      {
+        "name": "Pact Magic",
+        "description": "CHA-based. 1 first-level slot. Recovers on short OR long rest."
+      },
+      {
+        "name": "Otherworldly Patron (Fiend) \u2014 Dark One's Blessing",
+        "description": "When you reduce a hostile creature to 0 HP, gain temp HP equal to CHA mod (3) + Warlock level (1) = 4 temp HP."
+      }
     ],
     "racialTraits": [
-      { "name":"Darkvision", "description":"60 ft darkvision." },
-      { "name":"Hellish Resistance", "description":"Resistance to fire damage." },
-      { "name":"Infernal Legacy", "description":"Know Thaumaturgy cantrip. Level 3: Hellish Rebuke 1/long rest. Level 5: Darkness 1/long rest." },
-      { "name":"Hellish Rebuke", "description":"Reaction when damaged: deal 2d10 fire, DEX save DC 13, 1/long rest." }
+      {
+        "name": "Darkvision",
+        "description": "60 ft darkvision."
+      },
+      {
+        "name": "Hellish Resistance",
+        "description": "Resistance to fire damage."
+      },
+      {
+        "name": "Infernal Legacy",
+        "description": "Know Thaumaturgy cantrip. Level 3: Hellish Rebuke 1/long rest. Level 5: Darkness 1/long rest."
+      },
+      {
+        "name": "Hellish Rebuke",
+        "description": "Reaction when damaged: deal 2d10 fire, DEX save DC 13, 1/long rest."
+      }
     ],
     "notes_data_corrections": [
-      "Eldritch Invocations (Agonizing Blast, Mask of Many Faces) are level 2 — not available at level 1",
+      "Eldritch Invocations (Agonizing Blast, Mask of Many Faces) are level 2 \u2014 not available at level 1",
       "EB damage corrected to 1d10 only at level 1 (no CHA bonus without Agonizing Blast)",
       "Warlock has only 1 spell slot at level 1, recovering on short rest"
     ]
@@ -514,50 +1312,147 @@
     "background": "Sage",
     "level": 1,
     "proficiencyBonus": 2,
-    "ability_scores": { "str":8, "dex":16, "con":13, "int":16, "wis":12, "cha":10 },
-    "modifiers":        { "str":-1,"dex":3,  "con":1,  "int":3, "wis":1,  "cha":0  },
+    "ability_scores": {
+      "str": 8,
+      "dex": 16,
+      "con": 13,
+      "int": 16,
+      "wis": 12,
+      "cha": 10
+    },
+    "modifiers": {
+      "str": -1,
+      "dex": 3,
+      "con": 1,
+      "int": 3,
+      "wis": 1,
+      "cha": 0
+    },
     "hp": 7,
     "ac": 13,
     "acFormula": "Unarmored: 10 + DEX(3) = 13. With Mage Armor: 13 + DEX(3) = 16.",
     "speed": 30,
-    "savingThrows": { "int":true, "wis":true },
+    "savingThrows": {
+      "int": true,
+      "wis": true
+    },
     "skills": {
-      "proficient": ["Arcana","History","Insight","Investigation"],
+      "proficient": [
+        "Arcana",
+        "History",
+        "Insight",
+        "Investigation"
+      ],
       "expertise": []
     },
     "weapons": [
-      { "name":"Fire Bolt",     "bonus":5, "damage":"1d10","type":"fire",  "range":"120ft","isCantrip":true },
-      { "name":"Minor Illusion","bonus":null,"damage":"-", "type":"utility","range":"30ft","isCantrip":true,"note":"High Elf cantrip. Creates sound or image to distract." },
-      { "name":"Quarterstaff",  "bonus":1, "damage":"1d6-1","type":"bludgeoning","range":"melee 5ft","note":"Emergency only" },
-      { "name":"Dagger",        "bonus":5, "damage":"1d4+3","type":"piercing","range":"melee 5ft / thrown 20/60ft","finesse":true,"note":"DEX finesse" }
+      {
+        "name": "Fire Bolt",
+        "bonus": 5,
+        "damage": "1d10",
+        "type": "fire",
+        "range": "120ft",
+        "isCantrip": true
+      },
+      {
+        "name": "Minor Illusion",
+        "bonus": null,
+        "damage": "-",
+        "type": "utility",
+        "range": "30ft",
+        "isCantrip": true,
+        "note": "High Elf cantrip. Creates sound or image to distract."
+      },
+      {
+        "name": "Quarterstaff",
+        "bonus": 1,
+        "damage": "1d6-1",
+        "type": "bludgeoning",
+        "range": "melee 5ft",
+        "note": "Emergency only"
+      },
+      {
+        "name": "Dagger",
+        "bonus": 5,
+        "damage": "1d4+3",
+        "type": "piercing",
+        "range": "melee 5ft / thrown 20/60ft",
+        "finesse": true,
+        "note": "DEX finesse"
+      }
     ],
     "spellcasting": {
       "ability": "INT",
       "spellAttackBonus": 5,
       "saveDC": 13,
-      "slots": { "1st": 2 },
-      "cantrips": ["Fire Bolt","Prestidigitation","Minor Illusion"],
-      "spellbook": ["Mage Armor","Shield","Sleep","Detect Magic","Find Familiar","Magic Missile","Thunderwave"]
+      "slots": {
+        "1st": 2
+      },
+      "cantrips": [
+        "Fire Bolt",
+        "Prestidigitation",
+        "Minor Illusion"
+      ],
+      "spellbook": [
+        "Mage Armor",
+        "Shield",
+        "Sleep",
+        "Detect Magic",
+        "Find Familiar",
+        "Magic Missile",
+        "Thunderwave"
+      ]
     },
     "resources": {
-      "arcaneRecovery": { "uses":1, "usedToday":0, "note":"Once per day during short rest: recover spent spell slots totaling half wizard level (1) rounded up = 1 first-level slot." }
+      "arcaneRecovery": {
+        "uses": 1,
+        "usedToday": 0,
+        "note": "Once per day during short rest: recover spent spell slots totaling half wizard level (1) rounded up = 1 first-level slot."
+      }
     },
     "level1Features": [
-      { "name":"Spellcasting", "description":"INT-based. Spellbook starts with 6 spells. Prepare INT mod (3) + level (1) = 4 spells. 2 first-level slots." },
-      { "name":"Arcane Recovery", "description":"Once per day, during a short rest, recover spell slots totaling Wizard level / 2 rounded up = 1 first-level slot." },
-      { "name":"Ritual Casting", "description":"Can cast spells with Ritual tag without expending a slot (takes 10 min extra). Detect Magic is a ritual." },
-      { "name":"Evocation Savant", "description":"Costs half gold and time to copy evocation spells into spellbook. (Level 1 subclass benefit)" },
-      { "name":"Sculpt Spells", "description":"When casting evocation spell, choose up to 1 + spell level creatures in area. Chosen creatures auto-succeed saves and take no damage. (Level 2 feature — NOT level 1)" }
+      {
+        "name": "Spellcasting",
+        "description": "INT-based. Spellbook starts with 6 spells. Prepare INT mod (3) + level (1) = 4 spells. 2 first-level slots."
+      },
+      {
+        "name": "Arcane Recovery",
+        "description": "Once per day, during a short rest, recover spell slots totaling Wizard level / 2 rounded up = 1 first-level slot."
+      },
+      {
+        "name": "Ritual Casting",
+        "description": "Can cast spells with Ritual tag without expending a slot (takes 10 min extra). Detect Magic is a ritual."
+      },
+      {
+        "name": "Evocation Savant",
+        "description": "Costs half gold and time to copy evocation spells into spellbook. (Level 1 subclass benefit)"
+      },
+      {
+        "name": "Sculpt Spells",
+        "description": "When casting evocation spell, choose up to 1 + spell level creatures in area. Chosen creatures auto-succeed saves and take no damage. (Level 2 feature \u2014 NOT level 1)"
+      }
     ],
     "racialTraits": [
-      { "name":"Darkvision", "description":"60 ft darkvision." },
-      { "name":"Fey Ancestry", "description":"Advantage on saves vs. charm; can't be magically put to sleep." },
-      { "name":"Trance", "description":"4 hours for long rest." },
-      { "name":"Cantrip (Minor Illusion)", "description":"Know one wizard cantrip of choice (INT-based)." }
+      {
+        "name": "Darkvision",
+        "description": "60 ft darkvision."
+      },
+      {
+        "name": "Fey Ancestry",
+        "description": "Advantage on saves vs. charm; can't be magically put to sleep."
+      },
+      {
+        "name": "Trance",
+        "description": "4 hours for long rest."
+      },
+      {
+        "name": "Cantrip (Minor Illusion)",
+        "description": "Know one wizard cantrip of choice (INT-based)."
+      }
     ],
     "notes_data_corrections": [
-      "Sculpt Spells (Evocation subclass) is level 2 — not available at level 1",
-      "Overchannel is level 10 — irrelevant here",
+      "Sculpt Spells (Evocation subclass) is level 2 \u2014 not available at level 1",
+      "Overchannel is level 10 \u2014 irrelevant here",
       "Fire Bolt attack bonus corrected to +5 (prof 2 + INT 3)"
     ]
   }
