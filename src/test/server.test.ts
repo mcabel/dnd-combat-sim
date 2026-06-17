@@ -586,6 +586,40 @@ async function run() {
     assert(typeof json.error === 'string', 'Response should have error field');
   });
 
+  // -- legacy bootstrap (no levelHistory) --
+
+  await test('POST /api/characters/:id/setlevel level-down succeeds for legacy char (no levelHistory)', async () => {
+    // Level up the Paladin via setlevel (builds history), then strip history to simulate legacy
+    await request(BASE, `/api/characters/${PALADIN_ID}/setlevel`, 'POST', { level: 4 });
+    // Directly overwrite file to remove levelHistory (simulate pre-stack legacy)
+    const raw = JSON.parse(fs.readFileSync(PALADIN_FILE, 'utf-8'));
+    raw.levelHistory = undefined;
+    fs.writeFileSync(PALADIN_FILE, JSON.stringify(raw, null, 2), 'utf-8');
+
+    const { status, json } = await request(BASE, `/api/characters/${PALADIN_ID}/setlevel`, 'POST', { level: 2 });
+    assert(status === 200, `Expected 200 for legacy bootstrap, got ${status}. Body: ${JSON.stringify(json)}`);
+    const totalLvl = (json.character.classLevels || []).reduce(
+      (s: number, c: { level: number }) => s + c.level, 0);
+    assert(totalLvl === 2, `Expected total level 2 after legacy level-down, got ${totalLvl}`);
+    assert(json.levelsLost === 2, `Expected levelsLost=2, got ${json.levelsLost}`);
+    resetPaladin();
+  });
+
+  await test('POST /api/characters/:id/leveldown succeeds for legacy char (no levelHistory)', async () => {
+    // Level up to 3, then strip history
+    await request(BASE, `/api/characters/${PALADIN_ID}/setlevel`, 'POST', { level: 3 });
+    const raw = JSON.parse(fs.readFileSync(PALADIN_FILE, 'utf-8'));
+    raw.levelHistory = undefined;
+    fs.writeFileSync(PALADIN_FILE, JSON.stringify(raw, null, 2), 'utf-8');
+
+    const { status, json } = await request(BASE, `/api/characters/${PALADIN_ID}/leveldown`, 'POST', {});
+    assert(status === 200, `Expected 200 for legacy bootstrap leveldown, got ${status}. Body: ${JSON.stringify(json)}`);
+    const totalLvl = (json.character.classLevels || []).reduce(
+      (s: number, c: { level: number }) => s + c.level, 0);
+    assert(totalLvl === 2, `Expected total level 2 after legacy leveldown, got ${totalLvl}`);
+    resetPaladin();
+  });
+
 
 
   await test('POST /api/simulate returns difficulty string', async () => {
