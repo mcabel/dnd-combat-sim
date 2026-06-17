@@ -107,7 +107,7 @@ button.full { width: 100%; padding: 11px; font-size: 13px; }
 
 /* Stats row */
 .stats-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.stats-5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+.stats-5 { display: grid; grid-template-columns: repeat(auto-fit, minmax(70px, 1fr)); gap: 8px; }
 .stat-box { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px; text-align: center; }
 .stat-box .val { font-family: var(--serif); font-size: 20px; color: var(--accent); }
 .stat-box .lbl { font-size: 10px; color: var(--muted); margin-top: 2px; letter-spacing: 0.06em; text-transform: uppercase; }
@@ -372,12 +372,40 @@ button.full { width: 100%; padding: 11px; font-size: 13px; }
       Choose your subclass below.
     </div>
 
+    <!-- Short Rest Panel (inline, no prompt) -->
+    <div id="short-rest-panel" class="hidden" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px 14px;margin-bottom:10px">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.08em">☀ Short Rest — Spend Hit Dice</div>
+      <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+        <div>
+          <div style="font-size:10px;color:var(--muted);margin-bottom:3px">Hit dice to spend</div>
+          <input type="number" id="sr-hd-input" value="1" min="0" max="20" style="width:60px;padding:4px 6px;font-size:13px" />
+        </div>
+        <div>
+          <div style="font-size:10px;color:var(--muted);margin-bottom:3px">Roll mode</div>
+          <div style="display:flex;gap:4px">
+            <button id="sr-avg-btn" class="sm secondary" onclick="setSRMode('average')" style="padding:3px 8px;font-size:10px;border-color:var(--accent);color:var(--accent)">Avg</button>
+            <button id="sr-rnd-btn" class="sm" onclick="setSRMode('random')" style="padding:3px 8px;font-size:10px">Rnd</button>
+          </div>
+        </div>
+        <div style="display:flex;gap:4px">
+          <button class="sm primary" onclick="confirmShortRest()" style="padding:4px 12px;font-size:11px">Rest ☀</button>
+          <button class="sm" onclick="cancelShortRest()" style="padding:4px 8px;font-size:11px">✕</button>
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--muted);margin-top:6px" id="sr-hd-avail"></div>
+    </div>
+
     <!-- Stats -->
     <div class="stats-5" id="char-stats-row"></div>
+    <div id="char-death-saves" style="margin-top:6px;display:none"></div>
 
     <!-- Ability scores -->
     <div class="sec-row mt12"><div class="sec-title">Ability Scores</div><div class="sec-line"></div></div>
     <div class="stat-grid" id="char-ability-grid"></div>
+
+    <!-- Saves & Skills -->
+    <div class="sec-row mt12"><div class="sec-title">Saves & Skills</div><div class="sec-line"></div></div>
+    <div id="char-saves-skills" style="font-size:11px;line-height:1.6"></div>
 
     <!-- Class & Resources -->
     <div class="sec-row mt12"><div class="sec-title">Class & Resources</div><div class="sec-line"></div></div>
@@ -386,13 +414,43 @@ button.full { width: 100%; padding: 11px; font-size: 13px; }
     <!-- Spellcasting -->
     <div class="sec-row mt12"><div class="sec-title">Spellcasting</div><div class="sec-line"></div></div>
     <div id="char-spellcasting" style="font-size:12px;color:var(--muted);line-height:1.6"></div>
+    <!-- Concentration inline input -->
+    <div id="conc-input-panel" class="hidden" style="display:none;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 12px;margin-top:6px">
+      <div style="font-size:10px;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.08em">◎ Concentrating on…</div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <input type="text" id="conc-spell-input" placeholder="Spell name" list="spell-conc-datalist"
+          style="flex:1;padding:4px 8px;font-size:12px"
+          onkeydown="if(event.key==='Enter')confirmConcentration();if(event.key==='Escape')cancelConcentration()" />
+        <datalist id="spell-conc-datalist">
+          <option value="Bless"><option value="Blur"><option value="Call Lightning">
+          <option value="Concentration"><option value="Faerie Fire"><option value="Fly">
+          <option value="Fog Cloud"><option value="Haste"><option value="Hold Person">
+          <option value="Hunter's Mark"><option value="Invisibility"><option value="Polymorph">
+          <option value="Slow"><option value="Spiritual Weapon"><option value="Web">
+          <option value="Warding Bond">
+        </datalist>
+        <button class="sm primary" onclick="confirmConcentration()" style="padding:3px 10px;font-size:11px">Set</button>
+        <button class="sm" onclick="cancelConcentration()" style="padding:3px 8px;font-size:11px">✕</button>
+      </div>
+    </div>
 
     <!-- Level Up -->
     <div class="sec-row mt12"><div class="sec-title">Level Up</div><div class="sec-line"></div></div>
     <div class="inline-row">
       <div>
         <label>Class to advance</label>
-        <select id="lvl-class"></select>
+        <select id="lvl-class" onchange="onLvlClassChange(this.value)"></select>
+        <div id="lvl-newclass-row" style="display:none;margin-top:6px">
+          <input type="text" id="lvl-newclass-input" placeholder="Class name (e.g. Fighter)"
+            list="lvl-class-datalist" style="width:100%"
+            onkeydown="if(event.key==='Enter')doLevelUp()" />
+          <datalist id="lvl-class-datalist">
+            <option value="Barbarian"><option value="Bard"><option value="Cleric">
+            <option value="Druid"><option value="Fighter"><option value="Monk">
+            <option value="Paladin"><option value="Ranger"><option value="Rogue">
+            <option value="Sorcerer"><option value="Warlock"><option value="Wizard">
+          </datalist>
+        </div>
       </div>
       <div>
         <label>HP method</label>
@@ -790,23 +848,44 @@ function renderCharDetail() {
   // Stats row
   const thp = c.temporaryHP || 0;
   const exh = c.exhaustionLevel || 0;
+  const initMod = Math.floor(((c.stats.dex||10)-10)/2);
+  const initSign = initMod >= 0 ? '+' : '';
+  const hpPct = c.maxHP > 0 ? c.currentHP / c.maxHP : 0;
+  const hpColor = c.currentHP === 0 ? 'var(--muted)' : hpPct < 0.25 ? '#e53935' : hpPct < 0.5 ? '#e6a020' : '#4caf50';
   document.getElementById('char-stats-row').innerHTML = `
     <div class="stat-box">
-      <div class="val" id="hp-display">${c.currentHP}/${c.maxHP}</div>
+      <div style="display:flex;align-items:baseline;justify-content:center;gap:1px">
+        <input type="number" id="hp-cur-input" value="${c.currentHP}" min="0" max="${c.maxHP}"
+          style="width:44px;font-family:var(--serif);font-size:20px;color:${hpColor};text-align:center;background:transparent;border:none;border-bottom:1px solid transparent;padding:0;outline:none;-moz-appearance:textfield"
+          onfocus="this.style.borderBottomColor='var(--accent)'"
+          onblur="this.style.borderBottomColor='transparent';setHPDirect(this.value)"
+          onkeydown="if(event.key==='Enter'){this.blur()}"
+        />
+        <span style="font-family:var(--serif);font-size:14px;color:var(--muted)">/${c.maxHP}</span>
+      </div>
       <div class="lbl">HP</div>
-      <div style="display:flex;gap:4px;margin-top:6px;justify-content:center">
-        <button class="sm danger" onclick="takeDamage()" style="padding:2px 6px;font-size:10px" title="Take damage">− Dmg</button>
-        <button class="sm secondary" onclick="healChar()" style="padding:2px 6px;font-size:10px" title="Heal">+ Heal</button>
+      <div style="display:flex;gap:3px;margin-top:6px;align-items:center;justify-content:center">
+        <input type="number" id="hp-amt" placeholder="amt" min="1"
+          style="width:38px;font-size:11px;text-align:center;padding:2px 3px;border-radius:4px;background:var(--bg);border:1px solid var(--border);color:var(--text);-moz-appearance:textfield"
+          onkeydown="if(event.key==='Enter')applyHPAmt('heal')"
+        />
+        <button class="sm danger" onclick="applyHPAmt('dmg')" style="padding:2px 4px;font-size:10px" title="Take damage">−Dmg</button>
+        <button class="sm secondary" onclick="applyHPAmt('heal')" style="padding:2px 4px;font-size:10px" title="Heal">+Heal</button>
       </div>
     </div>
     <div class="stat-box"><div class="val">${c.armorClass}</div><div class="lbl">AC</div></div>
+    <div class="stat-box"><div class="val">${initSign}${initMod}</div><div class="lbl">Initiative</div></div>
     <div class="stat-box"><div class="val">${c.speed}</div><div class="lbl">Speed ft</div></div>
     <div class="stat-box">
       <div class="val" id="thp-display" style="color:${thp>0?'var(--accent)':'var(--muted)'}">${thp}</div>
       <div class="lbl">Temp HP</div>
-      <div style="display:flex;gap:4px;margin-top:6px;justify-content:center">
-        <button class="sm secondary" onclick="addTempHP()" style="padding:2px 6px;font-size:10px" title="Add temp HP">+ Add</button>
-        <button class="sm" onclick="clearTempHP()" style="padding:2px 6px;font-size:10px;opacity:${thp>0?1:0.4}" ${thp<=0?'disabled':''} title="Clear temp HP">✕</button>
+      <div style="display:flex;gap:3px;margin-top:6px;align-items:center;justify-content:center">
+        <input type="number" id="thp-amt" placeholder="amt" min="1"
+          style="width:38px;font-size:11px;text-align:center;padding:2px 3px;border-radius:4px;background:var(--bg);border:1px solid var(--border);color:var(--text);-moz-appearance:textfield"
+          onkeydown="if(event.key==='Enter')applyTempHP()"
+        />
+        <button class="sm secondary" onclick="applyTempHP()" style="padding:2px 4px;font-size:10px" title="Set temp HP">+Set</button>
+        <button class="sm" onclick="clearTempHP()" style="padding:2px 4px;font-size:10px;opacity:${thp>0?1:0.4}" ${thp<=0?'disabled':''} title="Clear temp HP">✕</button>
       </div>
     </div>
     <div class="stat-box">
@@ -816,7 +895,11 @@ function renderCharDetail() {
         <button class="sm danger" onclick="changeExhaustion(1)" style="padding:2px 6px;font-size:10px" title="Add exhaustion" ${exh>=6?'disabled':''}>+</button>
         <button class="sm secondary" onclick="changeExhaustion(-1)" style="padding:2px 6px;font-size:10px" title="Remove exhaustion" ${exh<=0?'disabled':''}>−</button>
       </div>
+      ${exh>0 ? `<div style="font-size:9px;color:var(--danger);margin-top:4px;text-align:center;line-height:1.3">${EXHAUSTION_EFFECTS[exh-1]}</div>` : ''}
     </div>`;
+
+  // Death saves
+  renderDeathSaves(c);
 
   // Ability scores
   const STATS = ['str','dex','con','int','wis','cha'];
@@ -831,22 +914,92 @@ function renderCharDetail() {
     </div>`;
   }).join('');
 
-  // Class info
+  // Saves & Skills
+  const SKILL_ABILITY: Record<string, string> = {
+    'Athletics': 'str',
+    'Acrobatics': 'dex', 'Sleight of Hand': 'dex', 'Stealth': 'dex',
+    'Arcana': 'int', 'History': 'int', 'Investigation': 'int', 'Nature': 'int', 'Religion': 'int',
+    'Animal Handling': 'wis', 'Insight': 'wis', 'Medicine': 'wis', 'Perception': 'wis', 'Survival': 'wis',
+    'Deception': 'cha', 'Intimidation': 'cha', 'Performance': 'cha', 'Persuasion': 'cha'
+  };
   const profBonus = computeProf(c);
+  const prof = c.proficiencies || { savingThrows: [], skills: [], expertise: [] };
+  const saveMods = ['str','dex','con','int','wis','cha'].map(ab => {
+    const base = Math.floor(((c.stats[ab]||10)-10)/2);
+    const isProficient = (prof.savingThrows || []).includes(ab as any);
+    const total = base + (isProficient ? profBonus : 0);
+    const sign = total >= 0 ? '+' : '';
+    const dot = isProficient
+      ? `<span style="color:var(--accent);margin-right:3px">●</span>`
+      : `<span style="color:var(--border);margin-right:3px">○</span>`;
+    return `<div style="display:flex;align-items:center;gap:2px;padding:1px 0">
+      ${dot}<span style="min-width:20px;color:${total>=0?'inherit':'var(--danger)'}">${sign}${total}</span>
+      <span style="color:var(--muted)">${ab.toUpperCase()}</span>
+    </div>`;
+  }).join('');
+  const skillMods = Object.entries(SKILL_ABILITY).map(([sk, ab]) => {
+    const base = Math.floor(((c.stats[ab]||10)-10)/2);
+    const isExpert = (prof.expertise || []).includes(sk as any);
+    const isProf   = isExpert || (prof.skills || []).includes(sk as any);
+    const mult = isExpert ? 2 : isProf ? 1 : 0;
+    const total = base + mult * profBonus;
+    const sign = total >= 0 ? '+' : '';
+    const dot = isExpert
+      ? `<span style="color:var(--accent);margin-right:3px;font-size:9px">★</span>`
+      : isProf
+        ? `<span style="color:var(--accent);margin-right:3px">●</span>`
+        : `<span style="color:var(--border);margin-right:3px">○</span>`;
+    return `<div style="display:flex;align-items:center;gap:2px;padding:1px 0">
+      ${dot}<span style="min-width:20px;color:${total>=0?'inherit':'var(--danger)'}">${sign}${total}</span>
+      <span>${esc(sk)}</span>
+      <span style="color:var(--muted);font-size:10px;margin-left:2px">(${ab.toUpperCase()})</span>
+    </div>`;
+  }).join('');
+  const passivePerc = 10 + Math.floor(((c.stats.wis||10)-10)/2) +
+    ((prof.skills||[]).includes('Perception') || (prof.expertise||[]).includes('Perception') ? profBonus * ((prof.expertise||[]).includes('Perception') ? 2 : 1) : 0);
+  document.getElementById('char-saves-skills').innerHTML =
+    `<div style="display:grid;grid-template-columns:1fr 1fr;gap:0 16px">
+      <div>
+        <div style="color:var(--muted);font-size:10px;margin-bottom:2px;text-transform:uppercase;letter-spacing:.05em">Saving Throws</div>
+        ${saveMods}
+        <div style="margin-top:4px;color:var(--muted);font-size:10px">Passive Perception ${passivePerc}</div>
+      </div>
+      <div>
+        <div style="color:var(--muted);font-size:10px;margin-bottom:2px;text-transform:uppercase;letter-spacing:.05em">Skills <span style="color:var(--accent)">●</span>=prof <span style="color:var(--accent)">★</span>=exp</div>
+        ${skillMods}
+      </div>
+    </div>`;
+
+  // Class info
   const classInfo = c.classLevels.map(cl => {
     const sub = c.subclassChoices && c.subclassChoices[cl.className] ? ` (${c.subclassChoices[cl.className]})` : '';
     return `${cl.className} ${cl.level}${sub}`;
   }).join(', ');
   const resLines = buildResourceLines(c.resources);
+  const inspActive = !!c.inspiration;
   document.getElementById('char-class-info').innerHTML =
-    `<div><strong>${classInfo}</strong> · Prof +${profBonus} · XP ${c.experiencePoints}</div>` +
-    (resLines ? `<div style="margin-top:4px;color:var(--muted)">${resLines}</div>` : '');
+    `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <span><strong>${classInfo}</strong> · Prof +${profBonus} · XP ${c.experiencePoints}</span>
+      <button class="sm ${inspActive ? 'secondary' : ''}" onclick="toggleInspiration()" style="padding:2px 8px;font-size:10px;${inspActive ? 'border-color:var(--accent);color:var(--accent)' : 'opacity:0.5'}" title="Toggle Inspiration">★ Inspiration</button>
+    </div>` +
+    (resLines ? resLines : '');
 
   // Spellcasting
   const spl = c.spellcasting;
   const splEl = document.getElementById('char-spellcasting');
   if (spl && (spl.cantrips.length > 0 || Object.keys(spl.slots || {}).length > 0)) {
-    let html = `<div style="font-size:11px;color:var(--muted);margin-bottom:4px">DC ${spl.saveDC} · +${spl.spellAttackBonus} to hit · ${spl.ability.toUpperCase()}</div>`;
+    const conc = c.concentrating || null;
+    let html = `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
+      <span style="font-size:11px;color:var(--muted)">DC ${spl.saveDC} · +${spl.spellAttackBonus} to hit · ${spl.ability.toUpperCase()}</span>
+      <button class="sm" onclick="resetAllSlots()" style="padding:1px 7px;font-size:10px;opacity:0.6" title="Restore all spell slots">↺ Reset Slots</button>
+      ${conc
+        ? `<span style="display:inline-flex;align-items:center;gap:4px;background:rgba(180,120,30,0.15);border:1px solid var(--accent);border-radius:12px;padding:1px 8px;font-size:10px;color:var(--accent)">
+            ◎ ${esc(conc)}
+            <button onclick="clearConcentration()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:11px;padding:0 0 0 2px" title="End concentration">✕</button>
+           </span>`
+        : `<button class="sm" onclick="showConcInput()" style="padding:1px 7px;font-size:10px;opacity:0.6" title="Set concentration spell">◎ Concentrate</button>`
+      }
+    </div>`;
     if (spl.cantrips && spl.cantrips.length > 0) {
       const names = spl.cantrips.map(n => esc(n)).join(', ');
       html += `<div style="margin-bottom:2px"><strong>Cantrips (${spl.cantrips.length})</strong> <span style="color:var(--muted);font-size:11px">${names}</span></div>`;
@@ -964,6 +1117,15 @@ function toggleSpellList(id) {
   if (arrow) arrow.textContent = hidden ? '▾' : '▸';
 }
 
+const EXHAUSTION_EFFECTS = [
+  'Disadv. on ability checks',
+  'Speed halved',
+  'Disadv. on attacks & saves',
+  'HP maximum halved',
+  'Speed = 0',
+  'Death'
+];
+
 const PHB_CONDITIONS = [
   'Blinded','Charmed','Deafened','Exhaustion','Frightened','Grappled',
   'Incapacitated','Invisible','Paralyzed','Petrified','Poisoned',
@@ -976,18 +1138,20 @@ function renderConditions(c) {
   if (!el) return;
 
   const activeList = PHB_CONDITIONS.filter(n => active.has(n));
+  const customActive = [...active].filter(n => !PHB_CONDITIONS.includes(n));
+  const allActive = [...activeList, ...customActive];
   const inactiveList = PHB_CONDITIONS.filter(n => !active.has(n));
 
   let html = '';
 
   // Active condition chips (removable)
-  if (activeList.length > 0) {
+  if (allActive.length > 0) {
     html += `<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px">`;
-    html += activeList.map(name => `
+    html += allActive.map(name => `
       <span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px 3px 10px;font-size:11px;border-radius:12px;
         border:1px solid var(--danger);background:rgba(220,53,69,0.15);color:var(--danger);font-weight:700">
-        ${name}
-        <button onclick="toggleCondition('${name}')" title="Remove ${name}"
+        ${esc(name)}
+        <button onclick="toggleCondition('${esc(name)}')" title="Remove ${esc(name)}"
           style="background:none;border:none;cursor:pointer;color:var(--danger);font-size:12px;padding:0;line-height:1;margin-left:2px">✕</button>
       </span>`).join('');
     html += `</div>`;
@@ -995,14 +1159,14 @@ function renderConditions(c) {
     html += `<div style="color:var(--muted);font-size:11px;margin-bottom:6px">No active conditions.</div>`;
   }
 
-  // Add condition picker (collapsed)
+  // PHB condition picker (collapsed)
   if (inactiveList.length > 0) {
     const pickerId = `cond-picker-${c.id}`;
     html += `
-      <div>
+      <div style="margin-bottom:6px">
         <button id="cond-add-btn-${c.id}" onclick="toggleCondPicker('${c.id}')"
           style="background:none;border:1px dashed var(--border);border-radius:12px;color:var(--muted);font-family:var(--mono);font-size:11px;padding:3px 10px;cursor:pointer">＋ Add Condition</button>
-        <div id="${pickerId}" style="display:none;margin-top:6px;display:none;flex-wrap:wrap;gap:5px">
+        <div id="${pickerId}" style="display:none;margin-top:6px;flex-wrap:wrap;gap:5px">
           ${inactiveList.map(name => `
             <button onclick="toggleCondition('${name}')" title="Add ${name}"
               style="padding:3px 8px;font-size:11px;border-radius:12px;cursor:pointer;border:1px solid var(--border);background:var(--bg);color:var(--muted)">
@@ -1010,6 +1174,15 @@ function renderConditions(c) {
         </div>
       </div>`;
   }
+
+  // Custom condition input
+  html += `
+    <div style="display:flex;gap:6px;align-items:center;margin-top:2px">
+      <input id="cond-custom-input-${c.id}" type="text" placeholder="Custom condition…"
+        style="flex:1;font-size:11px;padding:3px 8px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text)"
+        onkeydown="if(event.key==='Enter')addCustomCondition('${c.id}')">
+      <button class="sm secondary" onclick="addCustomCondition('${c.id}')" style="font-size:11px;padding:3px 8px">Add</button>
+    </div>`;
 
   el.innerHTML = html;
 }
@@ -1019,6 +1192,15 @@ function toggleCondPicker(charId) {
   if (!picker) return;
   const open = picker.style.display === 'flex' || picker.style.display === 'block';
   picker.style.display = open ? 'none' : 'flex';
+}
+
+async function addCustomCondition(charId) {
+  const inp = document.getElementById(`cond-custom-input-${charId}`);
+  if (!inp) return;
+  const name = inp.value.trim();
+  if (!name) return;
+  inp.value = '';
+  await toggleCondition(name);
 }
 
 async function toggleCondition(name) {
@@ -1097,7 +1279,12 @@ function renderEquipment(c) {
               <tr style="border-bottom:1px solid rgba(255,255,255,0.05)">
                 <td style="padding:3px 4px">
                   <div>${esc(e.name)}</div>
-                  ${e.notes ? `<div style="font-size:10px;color:var(--muted);margin-top:1px">${esc(e.notes)}</div>` : ''}
+                  <input type="text" value="${esc(e.notes || '')}" placeholder="notes…"
+                    style="width:100%;background:transparent;border:none;border-bottom:1px solid transparent;color:var(--muted);font-size:10px;padding:1px 0;outline:none;font-family:inherit"
+                    onfocus="this.style.borderBottomColor='var(--border)'"
+                    onblur="this.style.borderBottomColor='transparent';saveEquipNotes('${c.id}', ${i}, this.value)"
+                    onkeydown="if(event.key==='Enter')this.blur()"
+                    title="Edit notes"/>
                 </td>
                 <td style="text-align:center;padding:3px 4px">
                   <input type="number" value="${e.quantity}" min="1"
@@ -1281,7 +1468,34 @@ async function saveEquipQty(charId, idx, rawVal) {
   }
 }
 
-// ── Equipment add ─────────────────────────────────────────────
+async function saveEquipNotes(charId, idx, rawVal) {
+  const notes = rawVal.trim();
+  const c = S.charDetail && S.charDetail.id === charId ? S.charDetail : null;
+  if (!c) return;
+  const current = c.equipment[idx]?.notes || '';
+  if (notes === current) return; // no change
+  const updated = c.equipment.map((item, i) => {
+    if (i !== idx) return item;
+    const copy = { ...item };
+    if (notes) { copy.notes = notes; } else { delete copy.notes; }
+    return copy;
+  });
+  try {
+    const r = await fetch(`/api/characters/${charId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ equipment: updated })
+    });
+    if (!r.ok) { showBanner('Failed to update notes', 'error'); return; }
+    const { character: saved } = await r.json();
+    S.charDetail = saved;
+    // no full re-render needed
+  } catch (e) {
+    showBanner('Network error updating notes', 'error');
+  }
+}
+
+
   const form = document.getElementById(`add-equip-form-${charId}`);
   const btn  = document.getElementById(`add-equip-btn-${charId}`);
   if (form) form.style.display = 'block';
@@ -1379,25 +1593,70 @@ function computeProf(c) {
 function buildResourceLines(res) {
   if (!res) return '';
   const parts = [];
-  if (res.rage)              parts.push(`Rage ${res.rage.remaining}/${res.rage.max}`);
-  if (res.secondWind)        parts.push(`Second Wind ${res.secondWind.remaining}/${res.secondWind.max}`);
-  if (res.bardicInspiration) parts.push(`Bardic Insp ${res.bardicInspiration.remaining}/${res.bardicInspiration.max} (d${res.bardicInspiration.dieSides})`);
-  if (res.layOnHands)        parts.push(`Lay on Hands ${res.layOnHands.remaining}/${res.layOnHands.pool}`);
-  if (res.sneakAttackDice)   parts.push(`Sneak Attack ${res.sneakAttackDice}`);
-  if (res.cunningAction)     parts.push(`Cunning Action`);
-  if (res.arcaneRecovery)    parts.push(`Arcane Recovery ${res.arcaneRecovery.usesRemaining}`);
-  return parts.join(' · ');
+  if (res.sneakAttackDice) parts.push(`<span style="color:var(--muted);font-size:11px">Sneak Atk ${res.sneakAttackDice}</span>`);
+  if (res.cunningAction)   parts.push(`<span style="color:var(--muted);font-size:11px">Cunning Action</span>`);
+  if (res.divineSmite)     parts.push(`<span style="color:var(--muted);font-size:11px">Divine Smite</span>`);
+
+  function resBtns(label, cur, max, key, field) {
+    const canSpend = cur > 0;
+    const canRestore = cur < max;
+    const valColor = cur === 0 ? 'var(--muted)' : cur < max ? '#e6a020' : '#4caf50';
+    return `<span style="display:inline-flex;align-items:center;gap:3px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:2px 6px">` +
+      `<span style="font-size:10px;color:var(--muted)">${label}</span>` +
+      `<button onclick="spendRes('${key}','${field}',-1)" style="background:none;border:none;padding:0 2px;cursor:pointer;font-size:13px;line-height:1;color:${canSpend?'var(--text)':'var(--border)'}" ${canSpend?'':'disabled'} title="Spend">&#8722;</button>` +
+      `<span style="font-size:11px;color:${valColor};font-weight:600;min-width:20px;text-align:center">${cur}/${max}</span>` +
+      `<button onclick="spendRes('${key}','${field}',1)" style="background:none;border:none;padding:0 2px;cursor:pointer;font-size:13px;line-height:1;color:${canRestore?'var(--text)':'var(--border)'}" ${canRestore?'':'disabled'} title="Restore">+</button>` +
+      `</span>`;
+  }
+
+  if (res.rage)              parts.push(resBtns('Rage', res.rage.remaining, res.rage.max, 'rage', 'remaining'));
+  if (res.secondWind)        parts.push(resBtns('2nd Wind', res.secondWind.remaining, res.secondWind.max, 'secondWind', 'remaining'));
+  if (res.bardicInspiration) parts.push(resBtns('Bard Insp d'+res.bardicInspiration.dieSides, res.bardicInspiration.remaining, res.bardicInspiration.max, 'bardicInspiration', 'remaining'));
+  if (res.channelDivinity)   parts.push(resBtns('Ch.Div', res.channelDivinity.remaining, res.channelDivinity.max, 'channelDivinity', 'remaining'));
+  if (res.ki)                parts.push(resBtns('Ki', res.ki.remaining, res.ki.max, 'ki', 'remaining'));
+  if (res.layOnHands)        parts.push(resBtns('LoH HP', res.layOnHands.remaining, res.layOnHands.pool, 'layOnHands', 'remaining'));
+  if (res.arcaneRecovery)    parts.push(resBtns('Arc.Rec', res.arcaneRecovery.usesRemaining, 1, 'arcaneRecovery', 'usesRemaining'));
+
+  return parts.length ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;align-items:center">${parts.join('')}</div>` : '';
 }
 
-// ── Level Up ──────────────────────────────────────────────────
+// ── Resource Spend/Restore ─────────────────────────────────────
+async function spendRes(key: string, field: string, delta: number) {
+  if (!S.charDetail) return;
+  const res = S.charDetail.resources;
+  if (!res || !res[key]) return;
+  const entry = res[key];
+  const max = field === 'remaining'
+    ? (entry.max !== undefined ? entry.max : entry.pool)
+    : 1; // arcaneRecovery usesRemaining max is 1
+  const cur = entry[field] ?? 0;
+  const next = Math.max(0, Math.min(max, cur + delta));
+  if (next === cur) return;
+  const updatedRes = { ...res, [key]: { ...entry, [field]: next } };
+  try {
+    const data = await api(`/api/characters/${S.charDetail.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ resources: updatedRes }),
+    });
+    S.charDetail = data.character;
+    renderCharDetail();
+  } catch(e) { showBanner('Failed to update resource', 'error'); }
+}
+
+function onLvlClassChange(val: string) {
+  const row = document.getElementById('lvl-newclass-row');
+  if (row) row.style.display = val === '__new__' ? 'block' : 'none';
+}
+
 async function doLevelUp() {
   if (!S.charDetail) return;
   showErr('');
   let className = document.getElementById('lvl-class').value;
   if (className === '__new__') {
-    className = prompt('Enter class name for multiclass:');
-    if (!className || !className.trim()) return;
-    className = className.trim();
+    const inp = document.getElementById('lvl-newclass-input') as HTMLInputElement;
+    className = inp?.value?.trim() || '';
+    if (!className) { showErr('Enter a class name for multiclass.'); return; }
   }
   const hpRollMethod = document.getElementById('lvl-hp-method').value;
   const btn = document.getElementById('lvl-btn');
@@ -1422,36 +1681,62 @@ async function doLevelUp() {
 
 
 // ── Short Rest ────────────────────────────────────────────────
-async function doShortRest() {
+let _srMode: 'average' | 'random' = 'average';
+
+function setSRMode(mode: 'average' | 'random') {
+  _srMode = mode;
+  const avgBtn = document.getElementById('sr-avg-btn');
+  const rndBtn = document.getElementById('sr-rnd-btn');
+  if (avgBtn) { avgBtn.style.borderColor = mode === 'average' ? 'var(--accent)' : ''; avgBtn.style.color = mode === 'average' ? 'var(--accent)' : ''; }
+  if (rndBtn) { rndBtn.style.borderColor = mode === 'random'  ? 'var(--accent)' : ''; rndBtn.style.color = mode === 'random'  ? 'var(--accent)' : ''; }
+}
+
+function doShortRest() {
   if (!S.charDetail) return;
-  showErr('');
-  const hdAvail = (S.charDetail.hitDice || []).reduce((s, hd) => s + hd.remaining, 0);
-  let hdInput = 0;
-  let rollMode = 'average';
+  const hdAvail = (S.charDetail.hitDice || []).reduce((s: number, hd: any) => s + hd.remaining, 0);
   if (hdAvail > 0) {
-    const raw = prompt(`Short Rest: spend hit dice to heal? (0–${hdAvail} available)\n\nEnter a number, optionally followed by "r" for random rolls (e.g. "2r").\nDefault is average roll.`, '1');
-    if (raw === null) return; // cancelled
-    const isRandom = raw.trim().toLowerCase().endsWith('r');
-    rollMode = isRandom ? 'random' : 'average';
-    hdInput  = Math.max(0, Math.min(hdAvail, parseInt(raw, 10) || 0));
+    const hdInput = document.getElementById('sr-hd-input') as HTMLInputElement;
+    const hdAvailEl = document.getElementById('sr-hd-avail');
+    if (hdInput)   { hdInput.max = String(hdAvail); hdInput.value = '1'; }
+    if (hdAvailEl) hdAvailEl.textContent = `Available: ${hdAvail} hit ${hdAvail === 1 ? 'die' : 'dice'}`;
+    _srMode = 'average';
+    setSRMode('average');
+    document.getElementById('short-rest-panel')?.classList.remove('hidden');
+  } else {
+    execShortRest(0, 'average');
   }
-  const btn = document.getElementById('char-shortrest-btn');
+}
+
+function cancelShortRest() {
+  document.getElementById('short-rest-panel')?.classList.add('hidden');
+}
+
+async function confirmShortRest() {
+  const hdInput = document.getElementById('sr-hd-input') as HTMLInputElement;
+  const hdAvail = (S.charDetail.hitDice || []).reduce((s: number, hd: any) => s + hd.remaining, 0);
+  const hdToSpend = Math.max(0, Math.min(hdAvail, parseInt(hdInput?.value || '0', 10) || 0));
+  document.getElementById('short-rest-panel')?.classList.add('hidden');
+  await execShortRest(hdToSpend, _srMode);
+}
+
+async function execShortRest(hdToSpend: number, rollMode: string) {
+  const btn = document.getElementById('char-shortrest-btn') as HTMLButtonElement;
   btn.disabled = true; btn.textContent = '☀ Resting…';
   try {
     const data = await api(`/api/characters/${S.charDetail.id}/shortrest`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ hitDiceToSpend: hdInput, rollMode }),
+      body: JSON.stringify({ hitDiceToSpend: hdToSpend, rollMode }),
     });
     S.charDetail = data.character;
     refreshChars();
     renderCharDetail();
-    const parts = [];
+    const parts: string[] = [];
     if (data.hpRegained > 0) parts.push(`+${data.hpRegained} HP${rollMode === 'random' ? ' (rolled)' : ''}`);
     if (data.hdSpent > 0)    parts.push(`${data.hdSpent} HD spent`);
     if ((data.restored || []).length > 0) parts.push(`${data.restored.length} resource${data.restored.length===1?'':'s'} recharged`);
     showBanner(`Short rest: ${parts.length ? parts.join(', ') : 'nothing to restore'}.`, 'ok');
-  } catch(e) { showErr(e.message); }
+  } catch(e: any) { showErr(e.message); }
   finally { btn.disabled = false; btn.textContent = '☀ Short Rest'; }
 }
 
@@ -1468,6 +1753,22 @@ async function doLongRest() {
       body: JSON.stringify({}),
     });
     S.charDetail = data.character;
+    // Long rest clears death saves
+    if (S.charDetail.deathSaves && (S.charDetail.deathSaves.successes > 0 || S.charDetail.deathSaves.failures > 0)) {
+      const res = await fetch(`/api/characters/${S.charDetail.id}`, {
+        method: 'PUT', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ deathSaves: { successes: 0, failures: 0 } })
+      });
+      if (res.ok) { const d = await res.json(); S.charDetail = d.character; }
+    }
+    // Long rest clears concentration
+    if (S.charDetail.concentrating) {
+      const cr = await fetch(`/api/characters/${S.charDetail.id}`, {
+        method: 'PUT', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ concentrating: null })
+      });
+      if (cr.ok) { const cd = await cr.json(); S.charDetail = cd.character; }
+    }
     refreshChars();
     renderCharDetail();
     const count = (data.restored || []).length;
@@ -1477,50 +1778,55 @@ async function doLongRest() {
 }
 
 // ── HP Tracker ────────────────────────────────────────────────
-async function takeDamage() {
+async function setHPDirect(val: string) {
   if (!S.charDetail) return;
-  const raw = prompt(`Take damage (current HP: ${S.charDetail.currentHP}/${S.charDetail.maxHP}):`, '');
-  if (raw === null || raw.trim() === '') return;
-  const dmg = parseInt(raw, 10);
-  if (isNaN(dmg) || dmg < 0) { showErr('Enter a positive number.'); return; }
-  const newHP = Math.max(0, S.charDetail.currentHP - dmg);
+  const newHP = Math.max(0, Math.min(S.charDetail.maxHP, parseInt(val, 10) || 0));
+  if (newHP === S.charDetail.currentHP) return; // no change
+  const wasDown = S.charDetail.currentHP <= 0;
+  const body: any = { currentHP: newHP };
+  if (wasDown && newHP > 0) body.deathSaves = { successes: 0, failures: 0 };
   try {
     const data = await api(`/api/characters/${S.charDetail.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ currentHP: newHP }),
+      body: JSON.stringify(body),
     });
     S.charDetail = data.character;
     renderCharDetail();
-    showBanner(`Took ${dmg} damage. HP: ${newHP}/${S.charDetail.maxHP}${newHP === 0 ? ' — UNCONSCIOUS!' : ''}.`, newHP === 0 ? 'warn' : 'ok');
+    showBanner(`HP set to ${newHP}/${S.charDetail.maxHP}${newHP === 0 ? ' — UNCONSCIOUS!' : ''}.`, newHP === 0 ? 'error' : 'ok');
   } catch(e) { showErr(e.message); }
 }
 
-async function healChar() {
+async function applyHPAmt(mode: 'dmg' | 'heal') {
   if (!S.charDetail) return;
-  const raw = prompt(`Heal (current HP: ${S.charDetail.currentHP}/${S.charDetail.maxHP}):`, '');
-  if (raw === null || raw.trim() === '') return;
-  const amt = parseInt(raw, 10);
-  if (isNaN(amt) || amt < 0) { showErr('Enter a positive number.'); return; }
-  const newHP = Math.min(S.charDetail.maxHP, S.charDetail.currentHP + amt);
+  const amtEl = document.getElementById('hp-amt') as HTMLInputElement;
+  const amt = parseInt(amtEl?.value || '', 10);
+  if (isNaN(amt) || amt <= 0) { showErr('Enter a positive amount.'); return; }
+  const wasDown = S.charDetail.currentHP <= 0;
+  const newHP = mode === 'dmg'
+    ? Math.max(0, S.charDetail.currentHP - amt)
+    : Math.min(S.charDetail.maxHP, S.charDetail.currentHP + amt);
+  const body: any = { currentHP: newHP };
+  if (wasDown && newHP > 0) body.deathSaves = { successes: 0, failures: 0 };
   try {
     const data = await api(`/api/characters/${S.charDetail.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ currentHP: newHP }),
+      body: JSON.stringify(body),
     });
     S.charDetail = data.character;
     renderCharDetail();
-    showBanner(`Healed ${amt} HP. HP: ${newHP}/${S.charDetail.maxHP}.`, 'ok');
+    const label = mode === 'dmg' ? `Took ${amt} damage` : `Healed ${amt} HP`;
+    const warn  = mode === 'dmg' && newHP === 0 ? ' — UNCONSCIOUS!' : '';
+    showBanner(`${label}. HP: ${newHP}/${S.charDetail.maxHP}${warn}.`, newHP === 0 && mode === 'dmg' ? 'error' : 'ok');
   } catch(e) { showErr(e.message); }
 }
 
 // ── Temporary HP ───────────────────────────────────────────────
-async function addTempHP() {
+async function applyTempHP() {
   if (!S.charDetail) return;
-  const raw = prompt('Add Temporary HP (new THP replaces old if higher):');
-  if (raw === null) return;
-  const amount = parseInt(raw, 10);
+  const amtEl = document.getElementById('thp-amt') as HTMLInputElement;
+  const amount = parseInt(amtEl?.value || '', 10);
   if (isNaN(amount) || amount < 0) { showBanner('Invalid amount', 'error'); return; }
   const current = S.charDetail.temporaryHP || 0;
   const newTHP = Math.max(current, amount); // THP doesn't stack — take higher
@@ -1532,7 +1838,7 @@ async function addTempHP() {
     if (!res.ok) throw new Error('PUT failed');
     const data = await res.json();
     S.charDetail = data.character;
-    renderDetail();
+    renderCharDetail();
     showBanner(`Temp HP: ${newTHP}`, 'ok');
   } catch(e) { showErr(e.message); }
 }
@@ -1547,7 +1853,7 @@ async function clearTempHP() {
     if (!res.ok) throw new Error('PUT failed');
     const data = await res.json();
     S.charDetail = data.character;
-    renderDetail();
+    renderCharDetail();
     showBanner('Temp HP cleared', 'ok');
   } catch(e) { showErr(e.message); }
 }
@@ -1560,13 +1866,13 @@ async function changeExhaustion(delta) {
   if (next === current) return;
   try {
     const res = await fetch(`/api/characters/${S.charDetail.id}`, {
-      method: 'PUT', headers: {'Content-Type':'application/json'},
+      method: 'PUT', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ exhaustionLevel: next })
     });
     if (!res.ok) throw new Error('PUT failed');
     const data = await res.json();
     S.charDetail = data.character;
-    renderDetail();
+    renderCharDetail();
     const msg = next === 0 ? 'Exhaustion cleared'
                : next === 6 ? 'Exhaustion 6 — character dies!'
                : `Exhaustion level ${next}`;
@@ -1574,7 +1880,130 @@ async function changeExhaustion(delta) {
   } catch(e) { showErr(e.message); }
 }
 
-// ── Spell Slot Consumption ─────────────────────────────────────
+// ── Death Saves ────────────────────────────────────────────────
+function renderDeathSaves(c) {
+  const el = document.getElementById('char-death-saves');
+  if (!el) return;
+  const ds = c.deathSaves || { successes: 0, failures: 0 };
+  const dying = c.currentHP <= 0;
+  el.style.display = dying ? 'flex' : 'none';
+  if (!dying) return;
+  const dot = (filled, color, title) =>
+    `<span title="${title}" style="display:inline-block;width:10px;height:10px;border-radius:50%;border:1px solid ${color};background:${filled ? color : 'transparent'};margin:0 2px;cursor:pointer"></span>`;
+  const succDots = [0,1,2].map(i => dot(i < ds.successes, 'var(--accent)', `Success ${i+1}`)).join('');
+  const failDots = [0,1,2].map(i => dot(i < ds.failures, 'var(--danger)', `Failure ${i+1}`)).join('');
+  el.style.alignItems = 'center';
+  el.style.justifyContent = 'center';
+  el.style.gap = '10px';
+  el.style.fontSize = '11px';
+  el.innerHTML =
+    `<span style="color:var(--muted)">Death Saves</span>` +
+    `<span onclick="markDeathSave(true)" style="cursor:pointer" title="Mark success">✓ ${succDots}</span>` +
+    `<span onclick="markDeathSave(false)" style="cursor:pointer" title="Mark failure">✗ ${failDots}</span>` +
+    `<button class="sm secondary" style="padding:1px 6px;font-size:10px" onclick="clearDeathSaves()" title="Clear death saves">Reset</button>`;
+}
+
+async function markDeathSave(success) {
+  if (!S.charDetail) return;
+  const ds = S.charDetail.deathSaves || { successes: 0, failures: 0 };
+  const updated = success
+    ? { successes: Math.min(3, ds.successes + 1), failures: ds.failures }
+    : { successes: ds.successes, failures: Math.min(3, ds.failures + 1) };
+  try {
+    const res = await fetch(`/api/characters/${S.charDetail.id}`, {
+      method: 'PUT', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ deathSaves: updated })
+    });
+    if (!res.ok) throw new Error('PUT failed');
+    const data = await res.json();
+    S.charDetail = data.character;
+    renderDeathSaves(S.charDetail);
+    if (updated.successes >= 3) showBanner('3 successes — character stabilizes!', 'ok');
+    else if (updated.failures >= 3) showBanner('3 failures — character dies!', 'error');
+  } catch(e) { showErr(e.message); }
+}
+
+async function clearDeathSaves() {
+  if (!S.charDetail) return;
+  try {
+    const res = await fetch(`/api/characters/${S.charDetail.id}`, {
+      method: 'PUT', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ deathSaves: { successes: 0, failures: 0 } })
+    });
+    if (!res.ok) throw new Error('PUT failed');
+    const data = await res.json();
+    S.charDetail = data.character;
+    renderDeathSaves(S.charDetail);
+  } catch(e) { showErr(e.message); }
+}
+
+// ── Inspiration ───────────────────────────────────────────────
+async function toggleInspiration() {
+  if (!S.charDetail) return;
+  const next = !S.charDetail.inspiration;
+  try {
+    const res = await fetch(`/api/characters/${S.charDetail.id}`, {
+      method: 'PUT', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ inspiration: next })
+    });
+    if (!res.ok) throw new Error('PUT failed');
+    const data = await res.json();
+    S.charDetail = data.character;
+    renderCharDetail();
+    showBanner(next ? 'Inspiration gained!' : 'Inspiration spent.', 'ok');
+  } catch(e) { showErr(e.message); }
+}
+
+// ── Concentration ─────────────────────────────────────────────
+function showConcInput() {
+  const panel = document.getElementById('conc-input-panel');
+  const inp   = document.getElementById('conc-spell-input') as HTMLInputElement;
+  if (!panel) return;
+  panel.style.display = 'block';
+  panel.classList.remove('hidden');
+  if (inp) { inp.value = S.charDetail?.concentrating || ''; inp.focus(); inp.select(); }
+}
+
+function cancelConcentration() {
+  const panel = document.getElementById('conc-input-panel');
+  if (panel) { panel.style.display = 'none'; panel.classList.add('hidden'); }
+}
+
+async function confirmConcentration() {
+  if (!S.charDetail) return;
+  const inp = document.getElementById('conc-spell-input') as HTMLInputElement;
+  const val = inp?.value?.trim() || null;
+  cancelConcentration();
+  try {
+    const res = await fetch(`/api/characters/${S.charDetail.id}`, {
+      method: 'PUT', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ concentrating: val })
+    });
+    if (!res.ok) throw new Error('PUT failed');
+    const data = await res.json();
+    S.charDetail = data.character;
+    renderCharDetail();
+    if (val) showBanner(`Concentrating on ${val}.`, 'ok');
+    else showBanner('Concentration ended.', 'ok');
+  } catch(e) { showErr(e.message); }
+}
+
+async function clearConcentration() {
+  if (!S.charDetail) return;
+  try {
+    const res = await fetch(`/api/characters/${S.charDetail.id}`, {
+      method: 'PUT', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ concentrating: null })
+    });
+    if (!res.ok) throw new Error('PUT failed');
+    const data = await res.json();
+    S.charDetail = data.character;
+    renderCharDetail();
+    showBanner('Concentration ended.', 'ok');
+  } catch(e) { showErr(e.message); }
+}
+
+
 async function useSlot(level) {
   if (!S.charDetail || !S.charDetail.spellcasting) return;
   const key = String(level);
@@ -1609,6 +2038,21 @@ async function restoreSlot(level) {
     });
     S.charDetail = data.character;
     renderCharDetail();
+  } catch(e) { showErr(e.message); }
+}
+
+async function resetAllSlots() {
+  if (!S.charDetail?.spellcasting) return;
+  const spl = S.charDetail.spellcasting;
+  try {
+    const data = await api(`/api/characters/${S.charDetail.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ spellcasting: { ...spl, slotsUsed: {} } }),
+    });
+    S.charDetail = data.character;
+    renderCharDetail();
+    showBanner('All spell slots restored.', 'ok');
   } catch(e) { showErr(e.message); }
 }
 
@@ -2083,37 +2527,84 @@ function renderMemberList() {
     list.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:8px 0">No members. Add from the dropdown below.</div>';
     return;
   }
-  list.innerHTML = p.characterIds.map(id => {
+
+  let totalCur = 0, totalMax = 0;
+  const rows = p.characterIds.map(id => {
     const c = S.chars.find(ch => ch.id === id);
     const name = c ? c.name : id;
     const sub  = c ? classLevelStr(c.classLevels) : '';
-    // Compact HP and resource summary
+
     let info = '';
+    let extraBadges = '';
     if (c) {
-      info += `HP ${c.currentHP}/${c.maxHP}`;
+      totalCur += c.currentHP || 0;
+      totalMax += c.maxHP || 0;
+
+      const hpPct = c.maxHP ? (c.currentHP / c.maxHP) : 1;
+      const hpColor = c.currentHP <= 0 ? 'var(--muted)'
+        : hpPct < 0.25 ? '#e53935'
+        : hpPct < 0.5  ? '#e6a020'
+        : '#4caf50';
+      info += `HP <span style="color:${hpColor};font-weight:700">${c.currentHP}</span>/${c.maxHP}`;
+
       const r = c.resources || {};
       const bits = [];
-      if (r.rage)               bits.push(`Rage ${r.rage.remaining}/${r.rage.max}`);
-      if (r.secondWind)         bits.push(`2W ${r.secondWind.remaining}/${r.secondWind.max}`);
-      if (r.bardicInspiration)  bits.push(`BI ${r.bardicInspiration.remaining}/${r.bardicInspiration.max}`);
-      if (r.layOnHands)         bits.push(`LoH ${r.layOnHands.remaining}/${r.layOnHands.pool}`);
+      if (r.rage)              bits.push(`Rage ${r.rage.remaining}/${r.rage.max}`);
+      if (r.secondWind)        bits.push(`2W ${r.secondWind.remaining}/${r.secondWind.max}`);
+      if (r.bardicInspiration) bits.push(`BI ${r.bardicInspiration.remaining}/${r.bardicInspiration.max}`);
+      if (r.layOnHands)        bits.push(`LoH ${r.layOnHands.remaining}/${r.layOnHands.pool}`);
       if (c.spellcasting && c.spellcasting.slots) {
-        const used = c.spellcasting.slotsUsed || {};
+        const used  = c.spellcasting.slotsUsed || {};
         const total = Object.values(c.spellcasting.slots).reduce((a,b) => a+b, 0);
         const spent = Object.values(used).reduce((a,b) => a+b, 0);
         bits.push(`Slots ${total-spent}/${total}`);
       }
       if (bits.length) info += ' · ' + bits.join(' · ');
+
+      if (c.concentrating) {
+        extraBadges += `<span style="display:inline-block;padding:1px 6px;font-size:10px;border-radius:8px;border:1px solid var(--accent);color:var(--accent);margin-left:4px" title="Concentrating">◎ ${esc(c.concentrating)}</span>`;
+      }
+      const conds = (c.conditions || []);
+      if (conds.length) {
+        extraBadges += conds.map(cn =>
+          `<span style="display:inline-block;padding:1px 6px;font-size:10px;border-radius:8px;border:1px solid var(--danger);background:rgba(220,53,69,0.1);color:var(--danger);margin-left:4px">${esc(cn)}</span>`
+        ).join('');
+      }
     }
+
+    const viewBtn = c ? `<button class="sm secondary" onclick="viewMemberChar('${id}')" title="Open character sheet" style="font-size:10px;padding:2px 6px;margin-right:4px">↗</button>` : '';
     return `<div class="mem-row">
-      <div>
-        <div class="mem-name">${esc(name)}</div>
-        <div class="mem-sub">${esc(sub)}${info ? '<span style="color:var(--text-muted);font-size:11px;margin-left:6px">' + esc(info) + '</span>' : ''}</div>
+      <div style="flex:1;min-width:0">
+        <div class="mem-name">${esc(name)}${extraBadges}</div>
+        <div class="mem-sub">${esc(sub)}${info ? '<span style="color:var(--text-muted);font-size:11px;margin-left:6px">' + info + '</span>' : ''}</div>
       </div>
-      <button class="danger sm" onclick="removeMember('${id}')">✕</button>
+      <div style="display:flex;align-items:center;gap:2px;flex-shrink:0">
+        ${viewBtn}
+        <button class="danger sm" onclick="removeMember('${id}')">✕</button>
+      </div>
     </div>`;
-  }).join('');
+  });
+
+  const pct = totalMax ? Math.round(totalCur / totalMax * 100) : 0;
+  const barColor = pct < 25 ? '#e53935' : pct < 50 ? '#e6a020' : '#4caf50';
+  const summary = `<div style="margin-top:8px;padding:6px 8px;background:var(--bg);border:1px solid var(--border);border-radius:6px">
+    <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px">
+      <span style="color:var(--muted)">Party HP</span>
+      <span style="font-weight:700;color:${barColor}">${totalCur} / ${totalMax}</span>
+    </div>
+    <div style="height:4px;background:var(--border);border-radius:2px">
+      <div style="height:4px;width:${pct}%;background:${barColor};border-radius:2px;transition:width 0.3s"></div>
+    </div>
+  </div>`;
+
+  list.innerHTML = rows.join('') + (totalMax > 0 ? summary : '');
 }
+
+function viewMemberChar(id) {
+  setTab('characters');
+  loadCharDetail(id);
+}
+
 
 function addMemberToParty() {
   if (!S.selectedParty) return;
