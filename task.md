@@ -2,29 +2,19 @@
 
 ## ACTIVE WORKSTREAM
 
-Core Engine | Sheet UI
-
-Select one.
+Core Engine
 
 ---
 
 ## ACTIVE OBJECTIVE
 
-Single objective currently being executed.
-
-Example:
-
-Implement remaining combat spell modules.
+Implement remaining PHB 1st-level combat spell modules.
 
 ---
 
 ## CURRENT PHASE
 
-Concrete implementation phase.
-
-Example:
-
-Tier 1 PHB combat spell coverage.
+Tier 1 PHB combat spell coverage — 1st-level spells for all classes represented in pc_stat_blocks_lv1.json.
 
 ---
 
@@ -32,92 +22,33 @@ Tier 1 PHB combat spell coverage.
 
 Objective is complete when:
 
-* [ ]
-* [ ]
-* [ ]
-* [ ]
-
-Only include criteria that are still relevant.
-
-Remove completed milestones.
+* [ ] Shield implemented (Wizard/Sorcerer reaction, +5 AC, no concentration)
+* [ ] Guiding Bolt implemented (Cleric ranged spell attack, 4d6 radiant, next attack has advantage)
+* [ ] Healing Word implemented (Bard/Cleric bonus action heal 1d4+mod)
+* [ ] All implemented spells have dedicated test suites passing 0 failures
+* [ ] Full suite baseline maintained (0 persistent failures)
 
 ---
 
 ## CURRENT PRIORITIES
 
-Ordered list.
-
-Highest priority first.
-
-Example:
-
-1. Burning Hands
-2. Magic Missile
-3. Shield
-4. Guiding Bolt
-
-Only include upcoming work.
-
-Do not include completed work.
+1. Shield (Wizard/Sorcerer reaction — +5 AC until next turn, no concentration)
+2. Guiding Bolt (Cleric — ranged spell attack, 4d6 radiant, grants advantage on next hit)
+3. Healing Word (Bard/Cleric — bonus action, 1d4+mod heal, 60 ft range)
 
 ---
 
 ## ACTIVE CONSTRAINTS
 
-Only constraints directly affecting current work.
-
-Examples:
-
-* Use spell database as authoritative source.
-* Reuse existing spell module architecture.
-* Preserve planner behavior.
-* Maintain deterministic simulation behavior.
-
-Do not duplicate project-wide rules.
+* Use testDataSpells/ as authoritative spell data source before implementing.
+* Reuse established spell module architecture (shouldCast / execute / metadata pattern).
+* Do NOT touch sheet routes, leveler.ts, or builder.ts.
+* Spell DB key format: lowercase with spaces ('shield', 'guiding bolt').
+* All inline enemy factories in tests must use loadBestiaryJson + monsterToCombatant pattern.
+* PAT provided verbally at session start — do not paste in files.
 
 ---
 
 ## KNOWN BLOCKERS
 
-Only active blockers.
-
-If none:
-
 None.
-
----
-
-## SUCCESSOR TASKS
-
-Tasks that begin after the current objective is complete.
-
-Do not expand into detailed planning.
-
-Example:
-
-* Expand level 2 combat spell coverage.
-* Improve spell target evaluation heuristics.
-
----
-
-## MAINTENANCE RULES
-
-TASK.md is operational state only.
-
-Update TASK.md when:
-
-* Active objective changes
-* Current phase changes
-* Priority order changes
-* Acceptance criteria changes
-
-Do not use TASK.md as:
-
-* Architecture documentation
-* Session history
-* Progress journal
-* Handover replacement
-
-Target size:
-
-Under 300 words.
