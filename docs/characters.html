@@ -573,6 +573,7 @@ button.full { width: 100%; padding: 11px; font-size: 13px; }
   <div class="card hidden" id="party-editor-card">
     <div class="card-title" id="party-editor-title">Party
       <div class="ct-right">
+        <button class="sm secondary" onclick="refreshMemberData()" title="Re-fetch member HP/resources from server">↻</button>
         <button class="danger" onclick="deleteParty()" id="party-delete-btn">Delete</button>
       </div>
     </div>
@@ -595,6 +596,15 @@ button.full { width: 100%; padding: 11px; font-size: 13px; }
       <select id="pe-add-char" style="flex:1"></select>
       <button onclick="addMemberToParty()" class="sm">Add Member</button>
     </div>
+
+    <!-- Award XP directly -->
+    <div class="sec-row" style="margin-top:12px"><div class="sec-title">Award XP</div><div class="sec-line"></div></div>
+    <div class="inline-row" style="align-items:center;gap:6px">
+      <input type="number" id="pe-xp-amount" placeholder="XP amount" min="0" style="width:120px"/>
+      <button class="sm" onclick="awardPartyXPDirect()">Award XP</button>
+      <span id="pe-xp-note" style="font-size:12px;color:var(--text-muted)"></span>
+    </div>
+    <div id="pe-xp-results" style="margin-top:6px;display:none"></div>
 
     <div class="flex-right mt12">
       <button class="secondary" onclick="cancelPartyEdit()">Cancel</button>
@@ -1010,10 +1020,14 @@ function renderCharDetail() {
       if (!max) continue;
       const used  = (spl.slotsUsed && spl.slotsUsed[key]) || 0;
       const avail = max - used;
-      // pip indicator
-      const pips = Array.from({length: max}, (_, p) =>
-        `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;margin:0 1px;background:${p < avail ? 'var(--accent)' : 'var(--border)'};border:1px solid var(--border)"></span>`
-      ).join('');
+      // pip indicator — click filled pip to use, click empty pip to restore
+      const pips = Array.from({length: max}, (_, p) => {
+        const filled = p < avail;
+        const canAct = filled ? avail > 0 : used > 0;
+        const fn = filled ? `useSlot(${i})` : `restoreSlot(${i})`;
+        const title = filled ? 'Click to use slot' : 'Click to restore slot';
+        return `<span onclick="${canAct ? fn : ''}" title="${canAct ? title : ''}" style="display:inline-block;width:10px;height:10px;border-radius:50%;margin:0 1px;background:${filled ? 'var(--accent)' : 'var(--border)'};border:1px solid var(--border);cursor:${canAct ? 'pointer' : 'default'};transition:opacity 0.15s" onmouseover="if(${canAct}){this.style.opacity='0.7'}" onmouseout="this.style.opacity='1'"></span>`;
+      }).join('');
       html += `<div style="display:flex;align-items:center;gap:6px;margin-top:4px">
         <span style="min-width:36px">Lv ${i}</span>
         <span>${pips}</span>
@@ -1026,13 +1040,19 @@ function renderCharDetail() {
     if (spl.pactSlots) {
       const ps = spl.pactSlots;
       const pavail = ps.total - ps.used;
-      const ppips = Array.from({length: ps.total}, (_, p) =>
-        `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;margin:0 1px;background:${p < pavail ? 'var(--accent)' : 'var(--border)'};border:1px solid var(--border)"></span>`
-      ).join('');
+      const ppips = Array.from({length: ps.total}, (_, p) => {
+        const filled = p < pavail;
+        const canAct = filled ? pavail > 0 : ps.used > 0;
+        const fn = filled ? 'usePactSlot()' : 'restorePactSlot()';
+        const title = filled ? 'Click to use pact slot' : 'Click to restore pact slot';
+        return `<span onclick="${canAct ? fn : ''}" title="${canAct ? title : ''}" style="display:inline-block;width:10px;height:10px;border-radius:50%;margin:0 1px;background:${filled ? 'var(--accent)' : 'var(--border)'};border:1px solid var(--border);cursor:${canAct ? 'pointer' : 'default'};transition:opacity 0.15s" onmouseover="if(${canAct}){this.style.opacity='0.7'}" onmouseout="this.style.opacity='1'"></span>`;
+      }).join('');
       html += `<div style="display:flex;align-items:center;gap:6px;margin-top:6px;border-top:1px solid var(--border);padding-top:6px">
         <span style="min-width:36px;color:var(--muted)">Pact</span>
         <span>${ppips}</span>
         <span style="color:${pavail<=0?'var(--danger)':'inherit'}">${pavail}/${ps.total} (Lv${ps.slotLevel})</span>
+        <button class="sm secondary" style="padding:1px 7px;font-size:10px" onclick="usePactSlot()" ${pavail<=0?'disabled':''}>Use</button>
+        <button class="sm secondary" style="padding:1px 7px;font-size:10px" onclick="restorePactSlot()" ${ps.used<=0?'disabled':''}>↩</button>
       </div>`;
     }
     // Known / prepared spells
@@ -2041,6 +2061,38 @@ async function restoreSlot(level) {
   } catch(e) { showErr(e.message); }
 }
 
+async function usePactSlot() {
+  if (!S.charDetail?.spellcasting?.pactSlots) return;
+  const spl = S.charDetail.spellcasting;
+  const ps = spl.pactSlots;
+  if (ps.used >= ps.total) { showErr('No pact slots remaining.'); return; }
+  try {
+    const data = await api(`/api/characters/${S.charDetail.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ spellcasting: { ...spl, pactSlots: { ...ps, used: ps.used + 1 } } }),
+    });
+    S.charDetail = data.character;
+    renderCharDetail();
+  } catch(e) { showErr(e.message); }
+}
+
+async function restorePactSlot() {
+  if (!S.charDetail?.spellcasting?.pactSlots) return;
+  const spl = S.charDetail.spellcasting;
+  const ps = spl.pactSlots;
+  if (ps.used <= 0) { showErr('No used pact slots to restore.'); return; }
+  try {
+    const data = await api(`/api/characters/${S.charDetail.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ spellcasting: { ...spl, pactSlots: { ...ps, used: ps.used - 1 } } }),
+    });
+    S.charDetail = data.character;
+    renderCharDetail();
+  } catch(e) { showErr(e.message); }
+}
+
 async function resetAllSlots() {
   if (!S.charDetail?.spellcasting) return;
   const spl = S.charDetail.spellcasting;
@@ -2809,6 +2861,55 @@ function showSimResults(r) {
     awardBtn.style.display = 'none';
     awardNote.textContent  = '';
   }
+}
+
+async function refreshMemberData() {
+  if (!S.selectedParty) return;
+  try {
+    const data = await api('/api/characters');
+    S.chars = data.characters || data;
+    renderMemberList();
+    showBanner('Members refreshed.', 'ok');
+  } catch(e) { showErr(e.message); }
+}
+
+async function awardPartyXPDirect() {
+  if (!S.selectedParty || !S.selectedParty.id) return;
+  const amtInput = document.getElementById('pe-xp-amount');
+  const note     = document.getElementById('pe-xp-note');
+  const res      = document.getElementById('pe-xp-results');
+  const xp = parseInt(amtInput.value, 10);
+  if (!xp || xp <= 0) { note.textContent = 'Enter a positive XP amount.'; return; }
+  note.textContent = 'Awarding…';
+  res.style.display = 'none';
+  try {
+    const data = await api(`/api/parties/${S.selectedParty.id}/awardxp`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ xpOverride: xp }),
+    });
+    res.style.display = '';
+    res.innerHTML = `
+      <div style="font-size:13px;margin-bottom:6px">
+        <strong>+${data.xpEach} XP each</strong>
+        <span style="color:var(--text-muted)"> (${data.totalXP} total ÷ ${(data.awarded||[]).length} members)</span>
+      </div>
+      <table class="ctable">
+        <thead><tr><th>Name</th><th>XP Gained</th><th>Total XP</th><th>Status</th></tr></thead>
+        <tbody>${(data.awarded||[]).map(m =>
+          `<tr>
+            <td>${esc(m.name)}</td>
+            <td>+${m.xpAwarded}</td>
+            <td>${m.totalXP}</td>
+            <td>${m.readyToLevel ? '<span class="badge party">⬆ Ready!</span>' : '—'}</td>
+          </tr>`
+        ).join('')}</tbody>
+      </table>`;
+    note.textContent = '✓ XP awarded';
+    amtInput.value = '';
+    await refreshChars();
+    renderMemberList();
+  } catch(e) { note.textContent = '✗ ' + (e.message||'Error'); }
 }
 
 async function awardXP() {

@@ -216,6 +216,67 @@ export interface CharacterFeature {
 
 // ---- Level Stack Record ------------------------------------
 //
+// ---- Level0Record -------------------------------------------
+// Level0Record is the IMMUTABLE stack bottom — the character's state
+// before any class levels are applied.  It captures race, background,
+// and the ability score allotment that was chosen at character creation.
+//
+// Racial ASI uses Tasha's (2020) flexible placement rules, which are
+// accepted as pre-2024 canon: each race has a defined allotment of bonus
+// amounts (e.g. Mountain Dwarf [+2, +2]) but the player freely assigns
+// those amounts to any distinct ability scores.  Normal Human (+1 to all
+// six) is handled by listing six separate 1s.
+//
+// Custom Lineage (Tasha's) is treated as a first-class race with its
+// own allotment of [+2] to one stat of the player's choice.
+//
+// popLevel() refuses to pop a character whose levelHistory is already
+// empty if level0Record is present; the character is at Level 0.
+
+export interface Level0Record {
+  // ---- Race -------------------------------------------------------
+  /** Race name, e.g. "Mountain Dwarf", "High Elf", "Custom Lineage" */
+  race: string;
+  /**
+   * Racial bonus allotment (amounts only, not destinations).
+   * Examples:
+   *   Most races      → [2, 1]
+   *   Mountain Dwarf  → [2, 2]
+   *   Normal Human    → [1, 1, 1, 1, 1, 1]
+   *   Human Variant   → [1, 1]
+   *   Custom Lineage  → [2]
+   */
+  racialASIAllotment: number[];
+  /**
+   * How the allotment was actually distributed.
+   * Keys are ability-score names; values are the bonus applied.
+   * The sum per key may span multiple allotment slots (e.g. a race
+   * with [2, 1] whose player puts both on STR would give { str: 3 }).
+   */
+  appliedRacialASI: Partial<CharacterAbilityScores>;
+
+  // ---- Ability Scores -------------------------------------------
+  /**
+   * Base scores BEFORE any racial bonus was applied.
+   * Preserves the raw array / point-buy allocation.
+   */
+  baseScores: CharacterAbilityScores;
+
+  // ---- Background -----------------------------------------------
+  /** Background name, e.g. "Acolyte", "Soldier" */
+  background: string;
+  /** Skill proficiencies granted by this background */
+  backgroundSkills: string[];
+  /** Tool proficiencies granted by this background */
+  backgroundTools: string[];
+  /** Extra languages granted by this background */
+  backgroundLanguages: string[];
+  /** Starting gold from this background */
+  backgroundGold: number;
+  /** Name of the background feature, e.g. "Shelter of the Faithful" */
+  backgroundFeature: string;
+}
+
 // LevelRecord captures EXACTLY what one call to applyLevelUp() added.
 // CharacterSheet.levelHistory is a stack (oldest-first).
 // popLevel() reads the top record and fully reverses the changes,
@@ -329,6 +390,12 @@ export interface CharacterSheet {
   // Ordered oldest → newest. Top = last element.
   // Optional for backward compatibility with pre-stack sheets.
   levelHistory?: LevelRecord[];
+
+  // ---- Level 0 (stack bottom) --------------------------------
+  // Immutable record of race + background + base scores from character
+  // creation.  When present, popLevel() refuses to pop below level 1.
+  // New characters should always carry this; legacy characters may not.
+  level0Record?: Level0Record;
 
   // ---- Conditions (PHB p.290) -------------------------------
   // Active conditions on this character. Optional for backward compat.

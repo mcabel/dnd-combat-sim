@@ -444,6 +444,24 @@ async function run() {
     assert(Array.isArray(json.awarded) && json.awarded.length === 1, 'One member in award list');
   });
 
+  await test('POST /api/parties/:id/awardxp awards XP via xpOverride', async () => {
+    if (!testPartyId) { throw new Error('testPartyId not set'); }
+    const { status, json } = await request(BASE, `/api/parties/${testPartyId}/awardxp`, 'POST', {
+      xpOverride: 300,
+    });
+    assert(status === 200, `Expected 200, got ${status}. Body: ${JSON.stringify(json)}`);
+    assert(json.totalXP === 300, `Expected totalXP 300, got ${json.totalXP}`);
+    assert(json.xpEach === 300, `Expected xpEach 300 (1 member), got ${json.xpEach}`);
+    assert(Array.isArray(json.awarded) && json.awarded.length === 1, 'One member in award list');
+  });
+
+  await test('POST /api/parties/:id/awardxp 400 when neither enemies nor xpOverride given', async () => {
+    if (!testPartyId) { throw new Error('testPartyId not set'); }
+    const { status, json } = await request(BASE, `/api/parties/${testPartyId}/awardxp`, 'POST', {});
+    assert(status === 400, `Expected 400, got ${status}. Body: ${JSON.stringify(json)}`);
+    assert(typeof json.error === 'string', 'Response should have error field');
+  });
+
   // -- awardxp error cases --
 
   await test('POST /api/parties/:id/awardxp 404 on missing party', async () => {
@@ -566,6 +584,40 @@ async function run() {
     });
     assert(status === 400, `Expected 400, got ${status}. Body: ${JSON.stringify(json)}`);
     assert(typeof json.error === 'string', 'Response should have error field');
+  });
+
+  // -- legacy bootstrap (no levelHistory) --
+
+  await test('POST /api/characters/:id/setlevel level-down succeeds for legacy char (no levelHistory)', async () => {
+    // Level up the Paladin via setlevel (builds history), then strip history to simulate legacy
+    await request(BASE, `/api/characters/${PALADIN_ID}/setlevel`, 'POST', { level: 4 });
+    // Directly overwrite file to remove levelHistory (simulate pre-stack legacy)
+    const raw = JSON.parse(fs.readFileSync(PALADIN_FILE, 'utf-8'));
+    raw.levelHistory = undefined;
+    fs.writeFileSync(PALADIN_FILE, JSON.stringify(raw, null, 2), 'utf-8');
+
+    const { status, json } = await request(BASE, `/api/characters/${PALADIN_ID}/setlevel`, 'POST', { level: 2 });
+    assert(status === 200, `Expected 200 for legacy bootstrap, got ${status}. Body: ${JSON.stringify(json)}`);
+    const totalLvl = (json.character.classLevels || []).reduce(
+      (s: number, c: { level: number }) => s + c.level, 0);
+    assert(totalLvl === 2, `Expected total level 2 after legacy level-down, got ${totalLvl}`);
+    assert(json.levelsLost === 2, `Expected levelsLost=2, got ${json.levelsLost}`);
+    resetPaladin();
+  });
+
+  await test('POST /api/characters/:id/leveldown succeeds for legacy char (no levelHistory)', async () => {
+    // Level up to 3, then strip history
+    await request(BASE, `/api/characters/${PALADIN_ID}/setlevel`, 'POST', { level: 3 });
+    const raw = JSON.parse(fs.readFileSync(PALADIN_FILE, 'utf-8'));
+    raw.levelHistory = undefined;
+    fs.writeFileSync(PALADIN_FILE, JSON.stringify(raw, null, 2), 'utf-8');
+
+    const { status, json } = await request(BASE, `/api/characters/${PALADIN_ID}/leveldown`, 'POST', {});
+    assert(status === 200, `Expected 200 for legacy bootstrap leveldown, got ${status}. Body: ${JSON.stringify(json)}`);
+    const totalLvl = (json.character.classLevels || []).reduce(
+      (s: number, c: { level: number }) => s + c.level, 0);
+    assert(totalLvl === 2, `Expected total level 2 after legacy leveldown, got ${totalLvl}`);
+    resetPaladin();
   });
 
 
@@ -715,6 +767,42 @@ async function run() {
       assert(json.restored.some((r: string) => r.includes('Pact')), 'restored[] mentions Pact slots');
     } finally {
       if (fs.existsSync(warlockFile)) fs.unlinkSync(warlockFile);
+    }
+  });
+
+  await test('PUT /api/characters/:id uses pact slot via spellcasting body', async () => {
+    const wlId   = 'aaaaaaaa-bbbb-4ccc-8ddd-ee0000000002';
+    const wlFile = path.join(process.cwd(), 'characters', `${wlId}.json`);
+    const base   = JSON.parse(fs.readFileSync(PALADIN_FILE, 'utf-8'));
+    base.id      = wlId;
+    base.spellcasting = { cantrips: [], slots: {}, slotsUsed: {}, saveDC: 13, spellAttackBonus: 5, ability: 'cha',
+      pactSlots: { slotLevel: 1, total: 2, used: 0 } };
+    fs.writeFileSync(wlFile, JSON.stringify(base));
+    try {
+      const spl = { ...base.spellcasting, pactSlots: { slotLevel: 1, total: 2, used: 1 } };
+      const { status, json } = await request(BASE, `/api/characters/${wlId}`, 'PUT', { spellcasting: spl });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(json.character.spellcasting.pactSlots.used === 1, 'pactSlots.used incremented to 1');
+    } finally {
+      if (fs.existsSync(wlFile)) fs.unlinkSync(wlFile);
+    }
+  });
+
+  await test('PUT /api/characters/:id restores pact slot via spellcasting body', async () => {
+    const wlId   = 'aaaaaaaa-bbbb-4ccc-8ddd-ee0000000003';
+    const wlFile = path.join(process.cwd(), 'characters', `${wlId}.json`);
+    const base   = JSON.parse(fs.readFileSync(PALADIN_FILE, 'utf-8'));
+    base.id      = wlId;
+    base.spellcasting = { cantrips: [], slots: {}, slotsUsed: {}, saveDC: 13, spellAttackBonus: 5, ability: 'cha',
+      pactSlots: { slotLevel: 1, total: 2, used: 2 } };
+    fs.writeFileSync(wlFile, JSON.stringify(base));
+    try {
+      const spl = { ...base.spellcasting, pactSlots: { slotLevel: 1, total: 2, used: 1 } };
+      const { status, json } = await request(BASE, `/api/characters/${wlId}`, 'PUT', { spellcasting: spl });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(json.character.spellcasting.pactSlots.used === 1, 'pactSlots.used decremented to 1');
+    } finally {
+      if (fs.existsSync(wlFile)) fs.unlinkSync(wlFile);
     }
   });
 

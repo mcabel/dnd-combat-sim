@@ -33,7 +33,7 @@ import {
 } from './characters/storage';
 import { ValidationError }            from './characters/validator';
 import { buildCombatant, buildWarnings } from './characters/builder';
-import { applyLevelUp, popLevel }          from './characters/leveler';
+import { applyLevelUp, popLevel, bootstrapLevelHistory } from './characters/leveler';
 import { applyASI, chooseSubclass }   from './characters/improvements';
 import { spawnMonster, Raw5etoolsMonster } from './parser/fivetools';
 import { simulate }                    from './scenarios/simulate';
@@ -295,12 +295,14 @@ router.get('/parties/:id/members', (req: Request, res: Response) => {
 // ============================================================
 router.post('/parties/:id/awardxp', async (req: Request, res: Response) => {
   try {
-    const partyId = String(req.params.id);
-    const body    = req.body ?? {};
-    const enemies = body.enemies as { name: string; count?: number }[] | undefined;
+    const partyId   = String(req.params.id);
+    const body      = req.body ?? {};
+    const enemies   = body.enemies as { name: string; count?: number }[] | undefined;
+    const xpOverride = typeof body.xpOverride === 'number' ? body.xpOverride : null;
 
-    if (!Array.isArray(enemies) || enemies.length === 0) {
-      return res.status(400).json({ error: 'enemies must be a non-empty array' });
+    // Require either enemies array OR xpOverride
+    if (xpOverride === null && (!Array.isArray(enemies) || enemies.length === 0)) {
+      return res.status(400).json({ error: 'Provide enemies array or xpOverride (number)' });
     }
 
     const party = loadParty(partyId);
@@ -309,21 +311,27 @@ router.post('/parties/:id/awardxp', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Party has no members' });
     }
 
-    // Sum total XP from defeated monsters
-    const bestiary = getBestiary();
     let totalXP = 0;
-    const unknownNames: string[] = [];
-    for (const cfg of enemies) {
-      const count   = Math.max(cfg.count ?? 1, 1);
-      const monster = bestiary.get(cfg.name.toLowerCase());
-      if (!monster) { unknownNames.push(cfg.name); continue; }
-      totalXP += crToXP(monster.cr) * count;
-    }
-    // If every supplied enemy was unrecognized, return 400
-    if (unknownNames.length === enemies.length) {
-      return res.status(400).json({
-        error: `None of the supplied enemies were found in the bestiary: ${unknownNames.join(', ')}`,
-      });
+
+    if (xpOverride !== null) {
+      // Direct XP override — skip bestiary lookup
+      totalXP = Math.max(0, Math.floor(xpOverride));
+    } else {
+      // Sum total XP from defeated monsters
+      const bestiary = getBestiary();
+      const unknownNames: string[] = [];
+      for (const cfg of enemies!) {
+        const count   = Math.max(cfg.count ?? 1, 1);
+        const monster = bestiary.get(cfg.name.toLowerCase());
+        if (!monster) { unknownNames.push(cfg.name); continue; }
+        totalXP += crToXP(monster.cr) * count;
+      }
+      // If every supplied enemy was unrecognized, return 400
+      if (unknownNames.length === enemies!.length) {
+        return res.status(400).json({
+          error: `None of the supplied enemies were found in the bestiary: ${unknownNames.join(', ')}`,
+        });
+      }
     }
 
     const memberCount = party.characterIds.length;
@@ -825,13 +833,19 @@ router.post('/characters/:id/setlevel', async (req: Request, res: Response) => {
       return res.json({ character: sheet, levelsGained, levelsLost: 0 });
 
     } else if (targetLevel < currentLvl) {
-      // Level DOWN path — requires levelHistory
+      // Level DOWN path
       if (!sheet.levelHistory || sheet.levelHistory.length === 0) {
-        return res.status(400).json({
-          error: 'Cannot level down: no level history recorded. ' +
-            'This character was created before stack-based leveling was introduced. ' +
-            'Recreate the character from level 1 using the builder.',
-        });
+        // Legacy character: no history. Attempt automatic bootstrap.
+        try {
+          sheet = bootstrapLevelHistory(sheet);
+        } catch (bootstrapErr: unknown) {
+          return res.status(400).json({
+            error:
+              'Cannot level down: no level history recorded. ' +
+              'Automatic bootstrap failed: ' +
+              (bootstrapErr instanceof Error ? bootstrapErr.message : String(bootstrapErr)),
+          });
+        }
       }
       const levelsLost = currentLvl - targetLevel;
       for (let i = 0; i < levelsLost; i++) {
@@ -862,14 +876,25 @@ router.post('/characters/:id/setlevel', async (req: Request, res: Response) => {
 router.post('/characters/:id/leveldown', async (req: Request, res: Response) => {
   try {
     const id    = String(req.params.id);
-    const sheet = loadCharacter(id);
+    let   sheet = loadCharacter(id);
     if (!sheet) return res.status(404).json({ error: `Character not found: ${id}` });
 
     if (!sheet.levelHistory || sheet.levelHistory.length === 0) {
-      return res.status(400).json({
-        error: 'Cannot level down: no level history recorded. ' +
-          'This character was created before stack-based leveling was introduced.',
-      });
+      // Legacy character: no history. Attempt automatic bootstrap.
+      try {
+        sheet = bootstrapLevelHistory(sheet);
+      } catch (bootstrapErr: unknown) {
+        return res.status(400).json({
+          error:
+            'Cannot level down: no level history recorded. ' +
+            'Automatic bootstrap failed: ' +
+            (bootstrapErr instanceof Error ? bootstrapErr.message : String(bootstrapErr)),
+        });
+      }
+      // After bootstrap, check again — level 1 chars bootstrap to empty history
+      if (sheet.levelHistory!.length === 0) {
+        return res.status(400).json({ error: 'Character is already level 1; cannot level down further.' });
+      }
     }
 
     if (totalLevel(sheet) <= 1) {

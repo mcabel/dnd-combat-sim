@@ -907,6 +907,108 @@ export function popLevel(sheet: CharacterSheet): PopLevelResult {
   return { sheet: updated, poppedRecord };
 }
 
+// ---- bootstrapLevelHistory ----------------------------------
+
+/**
+ * For legacy characters that have no levelHistory, reconstructs an
+ * approximate history by running applyLevelUp on a minimal "ghost"
+ * from level 1 up to the character's current level.
+ *
+ * The resulting records are patched so that:
+ *  - statsBefore is set to the CURRENT stats for every record, meaning
+ *    popping levels will NOT revert ability score improvements.  This is
+ *    the correct trade-off: we cannot know which levels an ASI was taken.
+ *  - pendingASIBefore / pendingASIHalfBefore are similarly frozen to
+ *    the current values, preserving any pending choices.
+ *  - HP gains use average rolls (Math.floor(die/2)+1+CON), which may
+ *    differ from the original method.  Acceptable for a DM tool.
+ *
+ * After bootstrap the character can use popLevel() normally.
+ *
+ * @throws if the character already has levelHistory (use existing stack)
+ * @throws if the character has more than one class (multiclass order
+ *         cannot be inferred from the current sheet)
+ * @throws if the character is already level 1 (nothing to bootstrap)
+ */
+export function bootstrapLevelHistory(sheet: CharacterSheet): CharacterSheet {
+  if (sheet.levelHistory && sheet.levelHistory.length > 0) {
+    throw new Error(
+      'bootstrapLevelHistory: character already has a levelHistory stack. ' +
+      'Call popLevel() directly.',
+    );
+  }
+
+  const currentLevel = totalLevel(sheet);
+  if (currentLevel <= 1) {
+    // Nothing to bootstrap — the character is already at level 1.
+    return { ...sheet, levelHistory: [] };
+  }
+
+  if (sheet.classLevels.length > 1) {
+    throw new Error(
+      'bootstrapLevelHistory: cannot reconstruct level history for a ' +
+      'multiclassed character because the order in which classes were ' +
+      'taken cannot be determined from the current sheet. ' +
+      'Recreate this character from level 1 to enable level-down.',
+    );
+  }
+
+  const cn = sheet.firstClass as ClassName;
+  if (!VALID_CLASSES.has(cn)) {
+    throw new Error(
+      `bootstrapLevelHistory: unknown class "${cn}".`,
+    );
+  }
+
+  // Build a minimal ghost at level 1 using the real character's stats
+  // so that HP calculations use the correct CON modifier.
+  const hitDie  = CLASS_HIT_DICE[cn];
+  const conMod  = abilityModifier(sheet.stats.con);
+  const lv1HP   = Math.max(1, hitDie + conMod);  // PHB: max hit die at level 1
+
+  const ghost: CharacterSheet = {
+    ...sheet,
+    classLevels:   [{ className: cn, level: 1 }],
+    hitDice:       [{ className: cn, dieSides: hitDie, total: 1, remaining: 1 }],
+    maxHP:         lv1HP,
+    currentHP:     lv1HP,
+    temporaryHP:   0,
+    resources:     {},
+    spellcasting:  undefined,
+    allFeatures:   [...(sheet.level1Features ?? [])],
+    feats:         [],
+    levelHistory:  [],
+    subclassChoices:                      {},
+    pendingAbilityScoreImprovements:      0,
+    pendingASIHalfPoints:                 0,
+  };
+
+  // Advance the ghost from level 2 to currentLevel, building levelHistory.
+  let advanced: CharacterSheet = ghost;
+  for (let lvl = 2; lvl <= currentLevel; lvl++) {
+    const result = applyLevelUp(advanced, cn, 'average');
+    advanced = result.sheet;
+  }
+
+  // Patch every record so that ASI state reflects the real character's
+  // current values rather than the ghost's (which has no ASIs).
+  const frozenStats       = { ...sheet.stats };
+  const frozenPendingASI  = sheet.pendingAbilityScoreImprovements ?? 0;
+  const frozenHalfPoints  = sheet.pendingASIHalfPoints ?? 0;
+
+  const patchedHistory: LevelRecord[] = (advanced.levelHistory ?? []).map(record => ({
+    ...record,
+    statsBefore:          frozenStats,
+    pendingASIBefore:     frozenPendingASI,
+    pendingASIHalfBefore: frozenHalfPoints,
+  }));
+
+  return {
+    ...sheet,
+    levelHistory: patchedHistory,
+  };
+}
+
 // ---- Exports (table data for testing) -----------------------
 
 export {

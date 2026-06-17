@@ -7,6 +7,7 @@ import { randomUUID } from 'crypto';
 import {
   applyLevelUp,
   popLevel,
+  bootstrapLevelHistory,
   computeStandardSlots,
   FULL_CASTER_SLOTS,
   HALF_CASTER_SLOTS,
@@ -923,6 +924,94 @@ console.log('\n=== 19. popLevel — Stack Reversal ===\n');
   eq('p1 totalLevel = 1', totalLevel(p1), 1);
   eq('p1 levelHistory empty', p1.levelHistory?.length, 0);
   eq('p1 maxHP = f1 maxHP', p1.maxHP, f1.maxHP);
+}
+
+// ---- Section 20: bootstrapLevelHistory ----------------------
+
+{
+  // --- 20a. level-1 character returns empty history (no-op) ---
+  const f1 = makeFighter();
+  const result = bootstrapLevelHistory(f1);
+  eq('bootstrap lv1: totalLevel unchanged', totalLevel(result), 1);
+  eq('bootstrap lv1: history is empty', result.levelHistory?.length, 0);
+}
+
+{
+  // --- 20b. throws if history already present -----------------
+  const f1 = makeFighter();
+  const f2 = applyLevelUp(f1, 'Fighter').sheet;
+  let threw = false;
+  try { bootstrapLevelHistory(f2); } catch { threw = true; }
+  assert('bootstrap throws when history already present', threw);
+}
+
+{
+  // --- 20c. single-class Fighter 5 — produces correct record count ---
+  const base = makeFighter();
+  // Build a legacy level-5 char (strip history to simulate legacy)
+  let sheet = base;
+  for (let i = 0; i < 4; i++) sheet = applyLevelUp(sheet, 'Fighter').sheet;
+  const legacyLv5 = { ...sheet, levelHistory: [] };  // strip history
+
+  const bootstrapped = bootstrapLevelHistory(legacyLv5);
+  eq('bootstrap F5: 4 records', bootstrapped.levelHistory?.length, 4);
+  eq('bootstrap F5: totalLevel still 5', totalLevel(bootstrapped), 5);
+}
+
+{
+  // --- 20d. bootstrapped records allow popLevel to work -------
+  const base = makeFighter();
+  let sheet = base;
+  for (let i = 0; i < 3; i++) sheet = applyLevelUp(sheet, 'Fighter').sheet;
+  const legacyLv4 = { ...sheet, levelHistory: [] };
+
+  const bootstrapped = bootstrapLevelHistory(legacyLv4);
+  eq('before pop: totalLevel 4', totalLevel(bootstrapped), 4);
+
+  const { sheet: popped } = popLevel(bootstrapped);
+  eq('after pop: totalLevel 3', totalLevel(popped), 3);
+  eq('after pop: history length 2', popped.levelHistory?.length, 2);
+}
+
+{
+  // --- 20e. bootstrapped records do NOT revert stats (ASI preservation) ---
+  // Simulate a char who received an ASI: bump STR before stripping history.
+  const base = makeFighter();
+  let sheet = base;
+  for (let i = 0; i < 3; i++) sheet = applyLevelUp(sheet, 'Fighter').sheet;
+  // Manually apply an ASI to STR (simulating applyASI having run)
+  const modifiedStats = { ...sheet.stats, str: sheet.stats.str + 2 };
+  const legacyWithASI = { ...sheet, stats: modifiedStats, levelHistory: [] };
+
+  const bootstrapped = bootstrapLevelHistory(legacyWithASI);
+  const { sheet: popped } = popLevel(bootstrapped);
+  // Stats must NOT be reverted — statsBefore was frozen to current stats
+  eq('pop preserves ASI-modified STR', popped.stats.str, modifiedStats.str);
+}
+
+{
+  // --- 20f. throws for multiclassed legacy character ----------
+  const f1 = makeFighter({ stats: { str: 15, dex: 14, con: 16, int: 8, wis: 12, cha: 10 } });
+  const { sheet: f1r1 } = applyLevelUp(f1, 'Rogue');
+  const legacyMulti = { ...f1r1, levelHistory: [] };
+
+  let threw = false;
+  try { bootstrapLevelHistory(legacyMulti); } catch { threw = true; }
+  assert('bootstrap throws for multiclass', threw);
+}
+
+{
+  // --- 20g. Wizard 3 bootstrap — spell slots appear correctly ---
+  const wiz = makeWizard();
+  let sheet = wiz;
+  for (let i = 0; i < 2; i++) sheet = applyLevelUp(sheet, 'Wizard').sheet;
+  const legacyWiz3 = { ...sheet, levelHistory: [] };
+
+  const bootstrapped = bootstrapLevelHistory(legacyWiz3);
+  eq('wizard bootstrap: 2 records', bootstrapped.levelHistory?.length, 2);
+  // Pop once → should be a Wizard 2 state on the stack
+  const { sheet: wiz2 } = popLevel(bootstrapped);
+  eq('wiz pop to level 2', totalLevel(wiz2), 2);
 }
 
 // ---- Results ------------------------------------------------
