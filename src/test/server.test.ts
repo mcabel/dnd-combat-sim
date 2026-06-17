@@ -444,6 +444,24 @@ async function run() {
     assert(Array.isArray(json.awarded) && json.awarded.length === 1, 'One member in award list');
   });
 
+  await test('POST /api/parties/:id/awardxp awards XP via xpOverride', async () => {
+    if (!testPartyId) { throw new Error('testPartyId not set'); }
+    const { status, json } = await request(BASE, `/api/parties/${testPartyId}/awardxp`, 'POST', {
+      xpOverride: 300,
+    });
+    assert(status === 200, `Expected 200, got ${status}. Body: ${JSON.stringify(json)}`);
+    assert(json.totalXP === 300, `Expected totalXP 300, got ${json.totalXP}`);
+    assert(json.xpEach === 300, `Expected xpEach 300 (1 member), got ${json.xpEach}`);
+    assert(Array.isArray(json.awarded) && json.awarded.length === 1, 'One member in award list');
+  });
+
+  await test('POST /api/parties/:id/awardxp 400 when neither enemies nor xpOverride given', async () => {
+    if (!testPartyId) { throw new Error('testPartyId not set'); }
+    const { status, json } = await request(BASE, `/api/parties/${testPartyId}/awardxp`, 'POST', {});
+    assert(status === 400, `Expected 400, got ${status}. Body: ${JSON.stringify(json)}`);
+    assert(typeof json.error === 'string', 'Response should have error field');
+  });
+
   // -- awardxp error cases --
 
   await test('POST /api/parties/:id/awardxp 404 on missing party', async () => {

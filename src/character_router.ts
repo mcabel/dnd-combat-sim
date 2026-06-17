@@ -295,12 +295,14 @@ router.get('/parties/:id/members', (req: Request, res: Response) => {
 // ============================================================
 router.post('/parties/:id/awardxp', async (req: Request, res: Response) => {
   try {
-    const partyId = String(req.params.id);
-    const body    = req.body ?? {};
-    const enemies = body.enemies as { name: string; count?: number }[] | undefined;
+    const partyId   = String(req.params.id);
+    const body      = req.body ?? {};
+    const enemies   = body.enemies as { name: string; count?: number }[] | undefined;
+    const xpOverride = typeof body.xpOverride === 'number' ? body.xpOverride : null;
 
-    if (!Array.isArray(enemies) || enemies.length === 0) {
-      return res.status(400).json({ error: 'enemies must be a non-empty array' });
+    // Require either enemies array OR xpOverride
+    if (xpOverride === null && (!Array.isArray(enemies) || enemies.length === 0)) {
+      return res.status(400).json({ error: 'Provide enemies array or xpOverride (number)' });
     }
 
     const party = loadParty(partyId);
@@ -309,21 +311,27 @@ router.post('/parties/:id/awardxp', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Party has no members' });
     }
 
-    // Sum total XP from defeated monsters
-    const bestiary = getBestiary();
     let totalXP = 0;
-    const unknownNames: string[] = [];
-    for (const cfg of enemies) {
-      const count   = Math.max(cfg.count ?? 1, 1);
-      const monster = bestiary.get(cfg.name.toLowerCase());
-      if (!monster) { unknownNames.push(cfg.name); continue; }
-      totalXP += crToXP(monster.cr) * count;
-    }
-    // If every supplied enemy was unrecognized, return 400
-    if (unknownNames.length === enemies.length) {
-      return res.status(400).json({
-        error: `None of the supplied enemies were found in the bestiary: ${unknownNames.join(', ')}`,
-      });
+
+    if (xpOverride !== null) {
+      // Direct XP override — skip bestiary lookup
+      totalXP = Math.max(0, Math.floor(xpOverride));
+    } else {
+      // Sum total XP from defeated monsters
+      const bestiary = getBestiary();
+      const unknownNames: string[] = [];
+      for (const cfg of enemies!) {
+        const count   = Math.max(cfg.count ?? 1, 1);
+        const monster = bestiary.get(cfg.name.toLowerCase());
+        if (!monster) { unknownNames.push(cfg.name); continue; }
+        totalXP += crToXP(monster.cr) * count;
+      }
+      // If every supplied enemy was unrecognized, return 400
+      if (unknownNames.length === enemies!.length) {
+        return res.status(400).json({
+          error: `None of the supplied enemies were found in the bestiary: ${unknownNames.join(', ')}`,
+        });
+      }
     }
 
     const memberCount = party.characterIds.length;
