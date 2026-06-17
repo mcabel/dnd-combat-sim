@@ -228,13 +228,14 @@ console.log('\n=== 6. Leveled spell selected over weaker weapon ===\n');
 
 {
   // Bard adjacent to enemy — Dissonant Whispers (3d6=avg10.5) > Rapier (1d8+3=avg7.5)
+  // Now dispatched via dedicated 'dissonantWhispers' planner type (not generic 'cast').
   const bard   = spawnClass('Bard', { x: 5, y: 5, z: 0 });
   const enemy  = makeEnemy('e1', { x: 6, y: 5, z: 0 }); // adjacent
   const plan   = planTurn(bard, makeBF([bard], [enemy]));
 
-  eq('Bard adjacent: picks Dissonant Whispers over Rapier',
-    plan.action?.action?.name, 'Dissonant Whispers');
-  eq('Type is cast (not attack)', plan.action?.type, 'cast');
+  eq('Bard adjacent: plans dissonantWhispers (dedicated type)',
+    plan.action?.type, 'dissonantWhispers');
+  assert('Bard DW target set', !!plan.targetId);
 }
 {
   // Sorcerer at range — Chromatic Orb (3d8=avg13.5) > any weapon.

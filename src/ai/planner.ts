@@ -21,6 +21,7 @@ import { shouldCast as shouldCastEntangle } from '../spells/entangle';
 import { shouldCast as shouldCastThunderwave } from '../spells/thunderwave';
 import { shouldCast as shouldCastArmsOfHadar } from '../spells/arms_of_hadar';
 import { shouldCast as shouldCastBurningHands, execute as executeBurningHands } from '../spells/burning_hands';
+import { shouldCast as shouldCastDissonantWhispers } from '../spells/dissonant_whispers';
 import { shouldCast as shouldCastSleep } from '../spells/sleep';
 import { shouldCast as shouldCastWardingBond } from '../spells/warding_bond';
 import { shouldCast as shouldCastShieldOfFaith } from '../spells/shield_of_faith';
@@ -761,6 +762,25 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
       };
       plan.targetId = ffTargets[0].id;
       plan.bonusAction = planBonusAction(self, target, battlefield);
+      return plan;
+    }
+  }
+
+  // === DISSONANT WHISPERS (action, single-target, Bard) ===
+  // WIS save: fail = 3d6 psychic + forced flee at full speed (reaction used).
+  // Success = half, no movement. No concentration. Range 60 ft.
+  // Bard's primary offensive spell. Fires when no higher-priority spell was chosen.
+  if (!plan.action) {
+    const dwTarget = shouldCastDissonantWhispers(self, battlefield);
+    if (dwTarget) {
+      plan.action = {
+        type: 'dissonantWhispers',
+        action: null,
+        targetId: dwTarget.id,
+        description: `${self.name} casts Dissonant Whispers on ${dwTarget.name}`,
+      };
+      plan.targetId = dwTarget.id;
+      plan.bonusAction = planBonusAction(self, dwTarget, battlefield);
       return plan;
     }
   }

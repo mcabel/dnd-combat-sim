@@ -37,6 +37,7 @@ import { removeEffectsFromCaster, getActiveAcBonus, getActiveBlessDie, getActive
 import { execute as executeHex } from '../spells/hex';
 import { execute as executeMagicMissile } from '../spells/magic_missile';
 import { execute as executeBurningHands, shouldCast as shouldCastBurningHands } from '../spells/burning_hands';
+import { execute as executeDissonantWhispers, shouldCast as shouldCastDissonantWhispers } from '../spells/dissonant_whispers';
 import { shouldCast as shouldCastFaerieFire, execute as executeFaerieFire } from '../spells/faerie_fire';
 import { shouldCast as shouldCastBless, execute as executeBless } from '../spells/bless';
 import { shouldCast as shouldCastEntangle, execute as executeEntangle } from '../spells/entangle';
@@ -809,6 +810,15 @@ function executePlannedAction(
       if (bhTargets.length === 0) break;
       const aimTarget = plan.targetId ? bf.combatants.get(plan.targetId) : bhTargets[0];
       executeBurningHands(actor, bhTargets, state, aimTarget ?? bhTargets[0]);
+      break;
+    }
+
+    case 'dissonantWhispers': {
+      // Dissonant Whispers — PHB p.234: WIS save, 3d6 psychic. Fail: forced flee at full speed.
+      // Single target; deafened creatures auto-succeed (handled inside execute).
+      const dwTarget = plan.targetId ? bf.combatants.get(plan.targetId) : null;
+      if (!dwTarget || dwTarget.isDead || dwTarget.isUnconscious) break;
+      executeDissonantWhispers(actor, dwTarget, state);
       break;
     }
 
