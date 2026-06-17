@@ -1040,13 +1040,19 @@ function renderCharDetail() {
     if (spl.pactSlots) {
       const ps = spl.pactSlots;
       const pavail = ps.total - ps.used;
-      const ppips = Array.from({length: ps.total}, (_, p) =>
-        `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;margin:0 1px;background:${p < pavail ? 'var(--accent)' : 'var(--border)'};border:1px solid var(--border)"></span>`
-      ).join('');
+      const ppips = Array.from({length: ps.total}, (_, p) => {
+        const filled = p < pavail;
+        const canAct = filled ? pavail > 0 : ps.used > 0;
+        const fn = filled ? 'usePactSlot()' : 'restorePactSlot()';
+        const title = filled ? 'Click to use pact slot' : 'Click to restore pact slot';
+        return `<span onclick="${canAct ? fn : ''}" title="${canAct ? title : ''}" style="display:inline-block;width:10px;height:10px;border-radius:50%;margin:0 1px;background:${filled ? 'var(--accent)' : 'var(--border)'};border:1px solid var(--border);cursor:${canAct ? 'pointer' : 'default'};transition:opacity 0.15s" onmouseover="if(${canAct}){this.style.opacity='0.7'}" onmouseout="this.style.opacity='1'"></span>`;
+      }).join('');
       html += `<div style="display:flex;align-items:center;gap:6px;margin-top:6px;border-top:1px solid var(--border);padding-top:6px">
         <span style="min-width:36px;color:var(--muted)">Pact</span>
         <span>${ppips}</span>
         <span style="color:${pavail<=0?'var(--danger)':'inherit'}">${pavail}/${ps.total} (Lv${ps.slotLevel})</span>
+        <button class="sm secondary" style="padding:1px 7px;font-size:10px" onclick="usePactSlot()" ${pavail<=0?'disabled':''}>Use</button>
+        <button class="sm secondary" style="padding:1px 7px;font-size:10px" onclick="restorePactSlot()" ${ps.used<=0?'disabled':''}>↩</button>
       </div>`;
     }
     // Known / prepared spells
@@ -2049,6 +2055,38 @@ async function restoreSlot(level) {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ spellcasting: { ...spl, slotsUsed: newSlotsUsed } }),
+    });
+    S.charDetail = data.character;
+    renderCharDetail();
+  } catch(e) { showErr(e.message); }
+}
+
+async function usePactSlot() {
+  if (!S.charDetail?.spellcasting?.pactSlots) return;
+  const spl = S.charDetail.spellcasting;
+  const ps = spl.pactSlots;
+  if (ps.used >= ps.total) { showErr('No pact slots remaining.'); return; }
+  try {
+    const data = await api(`/api/characters/${S.charDetail.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ spellcasting: { ...spl, pactSlots: { ...ps, used: ps.used + 1 } } }),
+    });
+    S.charDetail = data.character;
+    renderCharDetail();
+  } catch(e) { showErr(e.message); }
+}
+
+async function restorePactSlot() {
+  if (!S.charDetail?.spellcasting?.pactSlots) return;
+  const spl = S.charDetail.spellcasting;
+  const ps = spl.pactSlots;
+  if (ps.used <= 0) { showErr('No used pact slots to restore.'); return; }
+  try {
+    const data = await api(`/api/characters/${S.charDetail.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ spellcasting: { ...spl, pactSlots: { ...ps, used: ps.used - 1 } } }),
     });
     S.charDetail = data.character;
     renderCharDetail();

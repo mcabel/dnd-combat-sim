@@ -736,6 +736,42 @@ async function run() {
     }
   });
 
+  await test('PUT /api/characters/:id uses pact slot via spellcasting body', async () => {
+    const wlId   = 'aaaaaaaa-bbbb-4ccc-8ddd-ee0000000002';
+    const wlFile = path.join(process.cwd(), 'characters', `${wlId}.json`);
+    const base   = JSON.parse(fs.readFileSync(PALADIN_FILE, 'utf-8'));
+    base.id      = wlId;
+    base.spellcasting = { cantrips: [], slots: {}, slotsUsed: {}, saveDC: 13, spellAttackBonus: 5, ability: 'cha',
+      pactSlots: { slotLevel: 1, total: 2, used: 0 } };
+    fs.writeFileSync(wlFile, JSON.stringify(base));
+    try {
+      const spl = { ...base.spellcasting, pactSlots: { slotLevel: 1, total: 2, used: 1 } };
+      const { status, json } = await request(BASE, `/api/characters/${wlId}`, 'PUT', { spellcasting: spl });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(json.character.spellcasting.pactSlots.used === 1, 'pactSlots.used incremented to 1');
+    } finally {
+      if (fs.existsSync(wlFile)) fs.unlinkSync(wlFile);
+    }
+  });
+
+  await test('PUT /api/characters/:id restores pact slot via spellcasting body', async () => {
+    const wlId   = 'aaaaaaaa-bbbb-4ccc-8ddd-ee0000000003';
+    const wlFile = path.join(process.cwd(), 'characters', `${wlId}.json`);
+    const base   = JSON.parse(fs.readFileSync(PALADIN_FILE, 'utf-8'));
+    base.id      = wlId;
+    base.spellcasting = { cantrips: [], slots: {}, slotsUsed: {}, saveDC: 13, spellAttackBonus: 5, ability: 'cha',
+      pactSlots: { slotLevel: 1, total: 2, used: 2 } };
+    fs.writeFileSync(wlFile, JSON.stringify(base));
+    try {
+      const spl = { ...base.spellcasting, pactSlots: { slotLevel: 1, total: 2, used: 1 } };
+      const { status, json } = await request(BASE, `/api/characters/${wlId}`, 'PUT', { spellcasting: spl });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(json.character.spellcasting.pactSlots.used === 1, 'pactSlots.used decremented to 1');
+    } finally {
+      if (fs.existsSync(wlFile)) fs.unlinkSync(wlFile);
+    }
+  });
+
   await test('POST /api/characters/:id/shortrest restores Channel Divinity for Cleric', async () => {
     const clericId   = 'aaaaaaaa-bbbb-4ccc-8ddd-cc0000000001';
     const clericFile = path.join(process.cwd(), 'characters', `${clericId}.json`);
