@@ -81,52 +81,62 @@ export function validateCharacterSheet(sheet: CharacterSheet): string[] {
   }
 
   // ---- Class & Level ----
-  if (!sheet.firstClass || !VALID_CLASSES.has(sheet.firstClass)) {
-    errors.push(`firstClass must be one of the 12 PHB classes (got "${sheet.firstClass}")`);
+  // A Level 0 character (race+background chosen, no class yet) has classLevels: [].
+  // All class-dependent checks are skipped for Level 0 sheets.
+  const isLevel0 = Array.isArray(sheet.classLevels) && sheet.classLevels.length === 0;
+
+  if (!isLevel0) {
+    if (!sheet.firstClass || !VALID_CLASSES.has(sheet.firstClass)) {
+      errors.push(`firstClass must be one of the 12 PHB classes (got "${sheet.firstClass}")`);
+    }
   }
-  if (!Array.isArray(sheet.classLevels) || sheet.classLevels.length === 0) {
-    errors.push('classLevels must be a non-empty array');
-  } else {
-    for (const cl of sheet.classLevels) {
-      if (!VALID_CLASSES.has(cl.className)) {
-        errors.push(`unknown class in classLevels: "${cl.className}"`);
-      }
-      if (!Number.isInteger(cl.level) || cl.level < 1 || cl.level > 20) {
-        errors.push(`classLevels ${cl.className} level must be 1–20 (got ${cl.level})`);
-      }
-    }
-    const lvl = totalLevel(sheet);
-    if (lvl < 1 || lvl > 20) {
-      errors.push(`total character level must be 1–20 (got ${lvl})`);
-    }
-
-    // firstClass must appear in classLevels
-    const hasFirst = sheet.classLevels.some(cl => cl.className === sheet.firstClass);
-    if (!hasFirst) {
-      errors.push(`firstClass "${sheet.firstClass}" not found in classLevels`);
-    }
-
-    // Multiclass prerequisites check (only if more than 1 class)
-    if (sheet.classLevels.length > 1) {
+  if (!Array.isArray(sheet.classLevels)) {
+    errors.push('classLevels must be an array');
+  } else if (!isLevel0) {
+    if (sheet.classLevels.length === 0) {
+      errors.push('classLevels must be non-empty for a levelled character');
+    } else {
       for (const cl of sheet.classLevels) {
-        if (cl.className === sheet.firstClass) continue; // first class exempt
-        const reqs = MULTICLASS_PREREQS[cl.className as ClassName];
-        if (!reqs) continue;
+        if (!VALID_CLASSES.has(cl.className)) {
+          errors.push(`unknown class in classLevels: "${cl.className}"`);
+        }
+        if (!Number.isInteger(cl.level) || cl.level < 1 || cl.level > 20) {
+          errors.push(`classLevels ${cl.className} level must be 1–20 (got ${cl.level})`);
+        }
+      }
+      const lvl = totalLevel(sheet);
+      if (lvl < 1 || lvl > 20) {
+        errors.push(`total character level must be 1–20 (got ${lvl})`);
+      }
 
-        if (cl.className === 'Fighter') {
-          // Fighter: STR 13 OR DEX 13
-          const str = sheet.stats?.str ?? 0;
-          const dex = sheet.stats?.dex ?? 0;
-          if (str < 13 && dex < 13) {
-            errors.push(`Multiclassing into Fighter requires STR 13 or DEX 13`);
-          }
-        } else {
-          for (const req of reqs) {
-            const score = sheet.stats?.[req.ability] ?? 0;
-            if (score < req.min) {
-              errors.push(
-                `Multiclassing into ${cl.className} requires ${req.ability.toUpperCase()} ≥ ${req.min} (got ${score})`
-              );
+      // firstClass must appear in classLevels
+      const hasFirst = sheet.classLevels.some(cl => cl.className === sheet.firstClass);
+      if (!hasFirst) {
+        errors.push(`firstClass "${sheet.firstClass}" not found in classLevels`);
+      }
+
+      // Multiclass prerequisites check (only if more than 1 class)
+      if (sheet.classLevels.length > 1) {
+        for (const cl of sheet.classLevels) {
+          if (cl.className === sheet.firstClass) continue; // first class exempt
+          const reqs = MULTICLASS_PREREQS[cl.className as ClassName];
+          if (!reqs) continue;
+
+          if (cl.className === 'Fighter') {
+            // Fighter: STR 13 OR DEX 13
+            const str = sheet.stats?.str ?? 0;
+            const dex = sheet.stats?.dex ?? 0;
+            if (str < 13 && dex < 13) {
+              errors.push(`Multiclassing into Fighter requires STR 13 or DEX 13`);
+            }
+          } else {
+            for (const req of reqs) {
+              const score = sheet.stats?.[req.ability] ?? 0;
+              if (score < req.min) {
+                errors.push(
+                  `Multiclassing into ${cl.className} requires ${req.ability.toUpperCase()} ≥ ${req.min} (got ${score})`
+                );
+              }
             }
           }
         }
@@ -161,8 +171,10 @@ export function validateCharacterSheet(sheet: CharacterSheet): string[] {
   }
 
   // ---- Combat Stats ----
-  if (typeof sheet.maxHP !== 'number' || sheet.maxHP < 1) {
-    errors.push('maxHP must be at least 1');
+  // Level 0 characters (no class) have maxHP 0 until a class is chosen.
+  const minHP = isLevel0 ? 0 : 1;
+  if (typeof sheet.maxHP !== 'number' || sheet.maxHP < minHP) {
+    errors.push(`maxHP must be at least ${minHP}${isLevel0 ? ' (Level 0 character)' : ''}`);
   }
   if (typeof sheet.currentHP !== 'number' || sheet.currentHP < 0) {
     errors.push('currentHP must be non-negative');

@@ -39,7 +39,9 @@ import { spawnMonster, Raw5etoolsMonster } from './parser/fivetools';
 import { simulate }                    from './scenarios/simulate';
 import { Combatant }                   from './types/core';
 import { EncounterSpec }               from './scenarios/encounter';
-import { totalLevel, XP_THRESHOLDS, crToXP, abilityModifier } from './characters/types';
+import { totalLevel, XP_THRESHOLDS, crToXP, abilityModifier, CharacterAbilityScores } from './characters/types';
+import { RACE_DATA, RACE_NAMES }             from './characters/race_data';
+import { BACKGROUND_DATA, BACKGROUND_NAMES } from './characters/background_data';
 
 // Lazy-loaded bestiary — mirrors getBestiary() in server.ts
 let _bestiary: Map<string, Raw5etoolsMonster> | null = null;
@@ -949,6 +951,229 @@ router.post('/characters/:id/equip', async (req: Request, res: Response) => {
     await saveCharacter(updated);
 
     return res.json({ character: updated });
+  } catch (err) {
+    return handleError(res, err);
+  }
+});
+
+// ============================================================
+// Race & Background reference data
+// ============================================================
+
+// ---- GET /api/races -----------------------------------------
+// Returns all playable races/subraces from PHB 2014 + Custom Lineage.
+router.get('/races', (_req: Request, res: Response) => {
+  const races = RACE_NAMES.map(name => RACE_DATA[name]);
+  return res.json({ races });
+});
+
+// ---- GET /api/backgrounds -----------------------------------
+// Returns all 13 PHB 2014 backgrounds.
+router.get('/backgrounds', (_req: Request, res: Response) => {
+  const backgrounds = BACKGROUND_NAMES.map(name => BACKGROUND_DATA[name]);
+  return res.json({ backgrounds });
+});
+
+// ============================================================
+// Level 0 character creation
+// ============================================================
+
+// ---- POST /api/characters/create-level0 ---------------------
+// Creates a Level 0 character: race + background + ability scores
+// locked in; no class chosen yet.
+//
+// Body:
+//   race          string   — must match a key in RACE_DATA
+//   background    string   — must match a key in BACKGROUND_DATA
+//   baseScores    object   — { str, dex, con, int, wis, cha } BEFORE racial bonus (each 1–30)
+//   asiAssignment object?  — Partial<CharacterAbilityScores>: how racial bonus is distributed
+//                            (required when race has no defaultASI, e.g. Half-Elf, Human Variant)
+//   name          string?  — character name (default: 'New Character')
+//   alignment     string?  — default: 'True Neutral'
+//   languages     string[] — languages the player has already chosen for background choices
+//
+// Returns 201 { character } on success.
+router.post('/characters/create-level0', async (req: Request, res: Response) => {
+  try {
+    const {
+      race: raceName,
+      background: bgName,
+      baseScores,
+      asiAssignment,
+      name = 'New Character',
+      alignment = 'True Neutral',
+      languages: extraLanguages = [],
+    } = req.body as {
+      race: string;
+      background: string;
+      baseScores: CharacterAbilityScores;
+      asiAssignment?: Partial<CharacterAbilityScores>;
+      name?: string;
+      alignment?: string;
+      languages?: string[];
+    };
+
+    // ── Validate race ───────────────────────────────────────
+    if (!raceName || typeof raceName !== 'string') {
+      return res.status(400).json({ error: 'race is required' });
+    }
+    const raceEntry = RACE_DATA[raceName];
+    if (!raceEntry) {
+      return res.status(400).json({
+        error: `Unknown race "${raceName}". Valid races: ${RACE_NAMES.join(', ')}`,
+      });
+    }
+
+    // ── Validate background ─────────────────────────────────
+    if (!bgName || typeof bgName !== 'string') {
+      return res.status(400).json({ error: 'background is required' });
+    }
+    const bgEntry = BACKGROUND_DATA[bgName];
+    if (!bgEntry) {
+      return res.status(400).json({
+        error: `Unknown background "${bgName}". Valid backgrounds: ${BACKGROUND_NAMES.join(', ')}`,
+      });
+    }
+
+    // ── Validate baseScores ─────────────────────────────────
+    const abilities = ['str', 'dex', 'con', 'int', 'wis', 'cha'] as const;
+    if (!baseScores || typeof baseScores !== 'object') {
+      return res.status(400).json({ error: 'baseScores is required' });
+    }
+    for (const ab of abilities) {
+      const v = (baseScores as any)[ab];
+      if (!Number.isInteger(v) || v < 1 || v > 30) {
+        return res.status(400).json({ error: `baseScores.${ab} must be an integer 1–30 (got ${v})` });
+      }
+    }
+
+    // ── Resolve ASI assignment ──────────────────────────────
+    const allotmentSum = raceEntry.allotment.reduce((a, b) => a + b, 0);
+    let appliedRacialASI: Partial<CharacterAbilityScores>;
+
+    if (asiAssignment) {
+      // Validate provided assignment
+      if (typeof asiAssignment !== 'object') {
+        return res.status(400).json({ error: 'asiAssignment must be an object' });
+      }
+      // Each value must be a positive integer
+      for (const [ab, val] of Object.entries(asiAssignment)) {
+        if (!abilities.includes(ab as any)) {
+          return res.status(400).json({ error: `asiAssignment has unknown ability "${ab}"` });
+        }
+        if (!Number.isInteger(val) || (val as number) <= 0) {
+          return res.status(400).json({ error: `asiAssignment.${ab} must be a positive integer (got ${val})` });
+        }
+      }
+      // Sum must equal allotment total
+      const assignedSum = Object.values(asiAssignment).reduce((a, b) => a + (b as number), 0);
+      if (assignedSum !== allotmentSum) {
+        return res.status(400).json({
+          error: `asiAssignment total (${assignedSum}) must equal racial allotment total (${allotmentSum}) for ${raceName}`,
+        });
+      }
+      appliedRacialASI = asiAssignment;
+    } else if (raceEntry.defaultASI) {
+      appliedRacialASI = raceEntry.defaultASI;
+    } else {
+      return res.status(400).json({
+        error: `asiAssignment is required for ${raceName} (no fixed default in PHB 2014)`,
+      });
+    }
+
+    // ── Compute final stats ─────────────────────────────────
+    const stats: CharacterAbilityScores = { ...baseScores };
+    for (const ab of abilities) {
+      const bonus = (appliedRacialASI as any)[ab] ?? 0;
+      stats[ab] = Math.min(30, baseScores[ab] + bonus);
+    }
+
+    // ── Build Level0Record ──────────────────────────────────
+    const level0Record = {
+      race: raceName,
+      racialASIAllotment: raceEntry.allotment,
+      appliedRacialASI,
+      baseScores: { ...baseScores },
+      background: bgName,
+      backgroundSkills: bgEntry.skills,
+      backgroundTools: bgEntry.tools,
+      backgroundLanguages: extraLanguages,
+      backgroundGold: bgEntry.gold,
+      backgroundFeature: bgEntry.feature,
+    };
+
+    // ── Build minimal CharacterSheet ────────────────────────
+    const now = new Date().toISOString();
+    const id  = require('crypto').randomUUID() as string;
+
+    // Build languages: always include Common, add any player-chosen extras
+    const languages = ['Common', ...extraLanguages.filter((l: string) => l !== 'Common')];
+
+    const sheet = {
+      id,
+      version: 1,
+      createdAt: now,
+      updatedAt: now,
+      name: String(name).trim() || 'New Character',
+      race: raceName,
+      background: bgName,
+      alignment,
+
+      // Level 0 — no class yet
+      firstClass: '',
+      classLevels: [],
+      subclassChoices: {},
+      experiencePoints: 0,
+
+      // Ability scores
+      baseStats: { ...baseScores },
+      stats,
+
+      // Combat stats — zeroed until a class is chosen
+      maxHP: 0,
+      currentHP: 0,
+      temporaryHP: 0,
+      armorClass: 10,
+      acFormula: 'Unarmored 10',
+      speed: raceEntry.speed,
+
+      // Hit dice — empty until class chosen
+      hitDice: [],
+
+      // Proficiencies from background only
+      proficiencies: {
+        armor:         [],
+        weapons:       [],
+        tools:         bgEntry.tools,
+        savingThrows:  [],
+        skills:        bgEntry.skills,
+        expertise:     [],
+      },
+      languages,
+
+      // Resources & equipment
+      resources:  {},
+      equipment:  [],
+      gold:       bgEntry.gold,
+
+      // Features — none yet
+      level1Features: [],
+      allFeatures:    [],
+      feats:          [],
+      backgroundFeature: bgEntry.feature,
+
+      // Status
+      exhaustionLevel: 0,
+
+      // Level history (empty — no class levels yet)
+      levelHistory:  [],
+      level0Record,
+    } as any;
+
+    const { saveCharacter } = await import('./characters/storage');
+    const saved = saveCharacter(sheet);
+
+    return res.status(201).json({ character: saved });
   } catch (err) {
     return handleError(res, err);
   }

@@ -1489,6 +1489,216 @@ async function run() {
     });
   }
 
+
+  // ── GET /api/races ─────────────────────────────────────────
+  await test('GET /api/races returns array of race entries', async () => {
+    const { status, json } = await request(BASE, '/api/races');
+    assert(status === 200, `Expected 200, got ${status}`);
+    assert(Array.isArray(json.races), 'Expected races array');
+    assert(json.races.length === 16, `Expected 16 races, got ${json.races.length}`);
+  });
+
+  await test('GET /api/races each entry has required fields', async () => {
+    const { json } = await request(BASE, '/api/races');
+    for (const r of json.races) {
+      assert(typeof r.name === 'string' && r.name.length > 0, `Race missing name: ${JSON.stringify(r)}`);
+      assert(Array.isArray(r.allotment) && r.allotment.length > 0, `Race ${r.name} missing allotment`);
+      assert(typeof r.speed === 'number' && r.speed > 0, `Race ${r.name} missing speed`);
+      assert(r.size === 'Medium' || r.size === 'Small', `Race ${r.name} invalid size "${r.size}"`);
+      assert(Array.isArray(r.traits), `Race ${r.name} missing traits`);
+    }
+  });
+
+  await test('GET /api/races includes PHB races', async () => {
+    const { json } = await request(BASE, '/api/races');
+    const names: string[] = json.races.map((r: any) => r.name);
+    for (const expected of ['Hill Dwarf', 'Mountain Dwarf', 'High Elf', 'Wood Elf', 'Dark Elf (Drow)',
+        'Lightfoot Halfling', 'Stout Halfling', 'Human', 'Human (Variant)',
+        'Dragonborn', 'Forest Gnome', 'Rock Gnome', 'Half-Elf', 'Half-Orc', 'Tiefling', 'Custom Lineage']) {
+      assert(names.includes(expected), `Missing race: ${expected}`);
+    }
+  });
+
+  await test('GET /api/races allotment sums are canonical', async () => {
+    const { json } = await request(BASE, '/api/races');
+    const byName: Record<string, any> = {};
+    for (const r of json.races) byName[r.name] = r;
+    const sum = (arr: number[]) => arr.reduce((a: number, b: number) => a + b, 0);
+    assert(sum(byName['Mountain Dwarf'].allotment) === 4, 'Mountain Dwarf allotment should sum to 4');
+    assert(sum(byName['Human'].allotment) === 6, 'Human allotment should sum to 6');
+    assert(sum(byName['Human (Variant)'].allotment) === 2, 'Human Variant allotment should sum to 2');
+    assert(sum(byName['Custom Lineage'].allotment) === 2, 'Custom Lineage allotment should sum to 2');
+    assert(sum(byName['Half-Elf'].allotment) === 4, 'Half-Elf allotment should sum to 4');
+    assert(byName['Wood Elf'].speed === 35, `Wood Elf speed should be 35, got ${byName['Wood Elf'].speed}`);
+    assert(byName['Lightfoot Halfling'].size === 'Small', 'Halfling should be Small');
+    assert(byName['Dark Elf (Drow)'].darkvision === 120, 'Drow darkvision should be 120');
+  });
+
+  // ── GET /api/backgrounds ───────────────────────────────────
+  await test('GET /api/backgrounds returns 13 entries', async () => {
+    const { status, json } = await request(BASE, '/api/backgrounds');
+    assert(status === 200, `Expected 200, got ${status}`);
+    assert(Array.isArray(json.backgrounds), 'Expected backgrounds array');
+    assert(json.backgrounds.length === 13, `Expected 13 backgrounds, got ${json.backgrounds.length}`);
+  });
+
+  await test('GET /api/backgrounds each entry has required fields', async () => {
+    const { json } = await request(BASE, '/api/backgrounds');
+    for (const b of json.backgrounds) {
+      assert(typeof b.name === 'string' && b.name.length > 0, `Background missing name`);
+      assert(Array.isArray(b.skills) && b.skills.length === 2, `${b.name} must have exactly 2 skills`);
+      assert(Array.isArray(b.tools), `${b.name} missing tools`);
+      assert(typeof b.languageChoices === 'number', `${b.name} missing languageChoices`);
+      assert(typeof b.gold === 'number' && b.gold > 0, `${b.name} missing gold`);
+      assert(typeof b.feature === 'string', `${b.name} missing feature`);
+      assert(typeof b.featureDesc === 'string', `${b.name} missing featureDesc`);
+    }
+  });
+
+  await test('GET /api/backgrounds canonical spot-checks', async () => {
+    const { json } = await request(BASE, '/api/backgrounds');
+    const byName: Record<string, any> = {};
+    for (const b of json.backgrounds) byName[b.name] = b;
+    assert(byName['Acolyte'].languageChoices === 2, 'Acolyte should have 2 language choices');
+    assert(byName['Sage'].languageChoices === 2, 'Sage should have 2 language choices');
+    assert(byName['Noble'].gold === 25, 'Noble gold should be 25gp');
+    assert(byName['Hermit'].gold === 5, 'Hermit gold should be 5gp');
+    assert(byName['Charlatan'].tools.includes('Disguise Kit'), 'Charlatan should have Disguise Kit');
+    assert(byName['Criminal'].tools.length === 2, 'Criminal should have 2 tools');
+    assert(byName['Soldier'].languageChoices === 0, 'Soldier has no language choices');
+  });
+
+  // ── POST /api/characters/create-level0 ────────────────────
+  {
+    const BASE_SCORES = { str: 10, dex: 14, con: 12, int: 13, wis: 11, cha: 8 };
+
+    await test('POST /api/characters/create-level0 creates valid Level 0 character', async () => {
+      const { status, json } = await request(BASE, '/api/characters/create-level0', 'POST', {
+        race: 'High Elf',
+        background: 'Sage',
+        baseScores: BASE_SCORES,
+        name: 'Aelthas',
+      });
+      assert(status === 201, `Expected 201, got ${status}: ${JSON.stringify(json)}`);
+      const c = json.character;
+      assert(c.name === 'Aelthas', `name mismatch: ${c.name}`);
+      assert(c.race === 'High Elf', `race mismatch: ${c.race}`);
+      assert(c.background === 'Sage', `background mismatch: ${c.background}`);
+      assert(Array.isArray(c.classLevels) && c.classLevels.length === 0, 'classLevels should be empty');
+      assert(c.maxHP === 0, `maxHP should be 0 for Level 0, got ${c.maxHP}`);
+      assert(c.speed === 30, `speed should be 30, got ${c.speed}`);
+      assert(c.stats.dex === 16, `dex should be 16 (14+2), got ${c.stats.dex}`);
+      assert(c.stats.int === 14, `int should be 14 (13+1), got ${c.stats.int}`);
+      assert(c.level0Record, 'level0Record should be present');
+      assert(c.level0Record.race === 'High Elf', 'level0Record.race mismatch');
+      assert(JSON.stringify(c.level0Record.racialASIAllotment) === JSON.stringify([2, 1]), 'allotment mismatch');
+      assert(c.proficiencies.skills.includes('Arcana'), 'Should have Arcana from Sage');
+      assert(c.proficiencies.skills.includes('History'), 'Should have History from Sage');
+      assert(c.gold === 10, `gold should be 10 from Sage, got ${c.gold}`);
+      assert(c.languages.includes('Common'), 'Should have Common');
+      // Clean up
+      const { deleteCharacter } = require('../characters/storage');
+      try { deleteCharacter(c.id); } catch {}
+    });
+
+    await test('POST /api/characters/create-level0 accepts explicit asiAssignment', async () => {
+      const { status, json } = await request(BASE, '/api/characters/create-level0', 'POST', {
+        race: 'Half-Elf',
+        background: 'Noble',
+        baseScores: BASE_SCORES,
+        asiAssignment: { cha: 2, str: 1, dex: 1 },
+        name: 'Liriel',
+      });
+      assert(status === 201, `Expected 201, got ${status}: ${JSON.stringify(json)}`);
+      const c = json.character;
+      assert(c.stats.cha === 10, `cha should be 10 (8+2), got ${c.stats.cha}`);
+      assert(c.stats.str === 11, `str should be 11 (10+1), got ${c.stats.str}`);
+      assert(c.stats.dex === 15, `dex should be 15 (14+1), got ${c.stats.dex}`);
+      assert(c.gold === 25, `Noble gold should be 25gp, got ${c.gold}`);
+      const { deleteCharacter } = require('../characters/storage');
+      try { deleteCharacter(c.id); } catch {}
+    });
+
+    await test('POST /api/characters/create-level0 uses Human defaultASI when no assignment given', async () => {
+      const { status, json } = await request(BASE, '/api/characters/create-level0', 'POST', {
+        race: 'Human',
+        background: 'Folk Hero',
+        baseScores: BASE_SCORES,
+      });
+      assert(status === 201, `Expected 201, got ${status}: ${JSON.stringify(json)}`);
+      const c = json.character;
+      // Human default: +1 to all six
+      assert(c.stats.str === 11, `str should be 11, got ${c.stats.str}`);
+      assert(c.stats.dex === 15, `dex should be 15, got ${c.stats.dex}`);
+      assert(c.stats.con === 13, `con should be 13, got ${c.stats.con}`);
+      const { deleteCharacter } = require('../characters/storage');
+      try { deleteCharacter(c.id); } catch {}
+    });
+
+    await test('POST /api/characters/create-level0 400 on unknown race', async () => {
+      const { status } = await request(BASE, '/api/characters/create-level0', 'POST', {
+        race: 'Githyanki',
+        background: 'Sage',
+        baseScores: BASE_SCORES,
+      });
+      assert(status === 400, `Expected 400, got ${status}`);
+    });
+
+    await test('POST /api/characters/create-level0 400 on unknown background', async () => {
+      const { status } = await request(BASE, '/api/characters/create-level0', 'POST', {
+        race: 'Human',
+        background: 'Far Traveler',
+        baseScores: BASE_SCORES,
+      });
+      assert(status === 400, `Expected 400, got ${status}`);
+    });
+
+    await test('POST /api/characters/create-level0 400 when asiAssignment sum is wrong', async () => {
+      const { status, json } = await request(BASE, '/api/characters/create-level0', 'POST', {
+        race: 'High Elf',
+        background: 'Sage',
+        baseScores: BASE_SCORES,
+        asiAssignment: { dex: 1, int: 1 }, // sums to 2, should be 3
+      });
+      assert(status === 400, `Expected 400, got ${status}: ${JSON.stringify(json)}`);
+    });
+
+    await test('POST /api/characters/create-level0 400 when asiAssignment required but missing (Half-Elf)', async () => {
+      const { status } = await request(BASE, '/api/characters/create-level0', 'POST', {
+        race: 'Half-Elf',
+        background: 'Sage',
+        baseScores: BASE_SCORES,
+        // no asiAssignment — Half-Elf has no defaultASI
+      });
+      assert(status === 400, `Expected 400, got ${status}`);
+    });
+
+    await test('POST /api/characters/create-level0 400 on out-of-range baseScore', async () => {
+      const { status } = await request(BASE, '/api/characters/create-level0', 'POST', {
+        race: 'Human',
+        background: 'Sage',
+        baseScores: { ...BASE_SCORES, str: 0 },  // 0 is invalid
+      });
+      assert(status === 400, `Expected 400, got ${status}`);
+    });
+
+    await test('POST /api/characters/create-level0 persists to disk (GET retrieves it)', async () => {
+      const { json: created } = await request(BASE, '/api/characters/create-level0', 'POST', {
+        race: 'Tiefling',
+        background: 'Criminal',
+        baseScores: BASE_SCORES,
+        name: 'Zariel',
+      });
+      const id = created.character.id;
+      const { status, json } = await request(BASE, `/api/characters/${id}`);
+      assert(status === 200, `Expected 200 on GET, got ${status}`);
+      assert(json.character.name === 'Zariel', 'Persisted character name mismatch');
+      assert(json.character.race === 'Tiefling', 'Persisted character race mismatch');
+      const { deleteCharacter } = require('../characters/storage');
+      try { deleteCharacter(id); } catch {}
+    });
+  }
+
   // ── Tear down ─────────────────────────────────────────────
 
   // Clean up test parties created during this run
