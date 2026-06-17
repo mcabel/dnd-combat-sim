@@ -7,7 +7,7 @@ This roadmap outlines the structural pillars, core architectural milestones, and
 ## 1. Core Architectural Principles & Constraints (Immutable)
 
 Any incoming agent must strictly adhere to these fundamental project rules established in the specifications and early design phases:
-- **Rule Systems:** Adhere exclusively to PHB 2014, MM 2014, and Sage Advice Compendium v2.7 rulesets. Do not introduce post-2024/OneD&D mechanics under any circumstance.
+- **Rule Systems:** Adhere exclusively to official, canonical pre-2024 D&D 5e rulesets, official expansions (e.g., Xanathar's, Tasha's), errata, and Sage Advice Compendium v2.7. Reject all >=2024 rules, revisions, or playtest mechanics under any circumstance.
 - **Movement Hierarchy:** The engine operates on Chebyshev 3D grid space calculations. Standard Euclidean math is reserved exclusively for calculating specific circular area-of-effect bounds.
 - **Line of Sight (LOS):** Ray-casting is performed at flat 2D Level-1 precision across 4x4 corner sub-coordinates to calculate dynamic cover (+2/+5 AC and Dexterity saves). High-overhead 3D voxelization and creature-based soft-cover algorithms are explicitly out of scope.
 - **State Processing:** The combat loop runs deterministically via an asynchronous state machine pool. User interactions on the frontend must interact with live state transitions via inline number and button stepper components, completely bypassing blocking browser routines.
