@@ -101,6 +101,10 @@ button.full { width: 100%; padding: 11px; font-size: 13px; }
 /* Ability scores grid */
 .stat-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
 .stat-cell { text-align: center; }
+/* Wizard */
+.wiz-dot { display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--border);cursor:pointer;transition:background 0.15s; }
+.wiz-dot.done { background:var(--accent);opacity:0.55; }
+.wiz-dot.active { background:var(--accent);box-shadow:0 0 0 2px var(--bg),0 0 0 3px var(--accent); }
 .stat-cell label { font-size: 10px; margin-bottom: 3px; }
 .stat-cell input { text-align: center; padding: 6px 4px; font-size: 14px; }
 .stat-cell .mod { font-size: 10px; color: var(--muted); text-align: center; margin-top: 2px; }
@@ -238,11 +242,161 @@ button.full { width: 100%; padding: 11px; font-size: 13px; }
       <div class="ct-right">
         <button class="sm secondary" onclick="refreshChars()">↻</button>
         <button class="sm secondary" onclick="importChar()">📤 Import</button>
-        <button class="sm" onclick="newChar()">+ New</button>
+        <button class="sm secondary" onclick="newChar()">+ New</button>
+        <button class="sm" onclick="openWizard()">✦ Guide</button>
       </div>
     </div>
     <div class="char-grid" id="char-grid">
       <div style="color:var(--muted);font-size:12px">Connect to server to load characters.</div>
+    </div>
+  </div>
+
+
+  <!-- Character Creation Wizard -->
+  <div class="card hidden" id="char-wizard-card">
+    <div class="card-title">
+      <span id="wiz-title-label">Create Character</span>
+      <div class="ct-right">
+        <button class="danger" onclick="cancelWizard()">✕ Cancel</button>
+      </div>
+    </div>
+
+    <!-- Step progress dots -->
+    <div style="display:flex;gap:6px;align-items:center;margin-bottom:16px">
+      <span style="font-size:10px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;flex-shrink:0">Step</span>
+      <div style="display:flex;gap:5px;align-items:center">
+        <span class="wiz-dot" id="wiz-dot-1" onclick="wizGoTo(1)"></span>
+        <span class="wiz-dot" id="wiz-dot-2" onclick="wizGoTo(2)"></span>
+        <span class="wiz-dot" id="wiz-dot-3" onclick="wizGoTo(3)"></span>
+        <span class="wiz-dot" id="wiz-dot-4" onclick="wizGoTo(4)"></span>
+        <span class="wiz-dot" id="wiz-dot-5" onclick="wizGoTo(5)"></span>
+      </div>
+      <span style="font-size:10px;color:var(--muted)" id="wiz-step-names"></span>
+    </div>
+
+    <!-- Error banner -->
+    <div class="alert warn hidden" id="wiz-error" style="margin-bottom:10px"></div>
+
+    <!-- Step 1: Race -->
+    <div id="wiz-s1" class="hidden">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div>
+          <label>Race</label>
+          <select id="wiz-race-sel" onchange="wizOnRaceChange()" style="width:100%">
+            <option value="">— choose —</option>
+          </select>
+          <div id="wiz-race-asi-hint" style="font-size:10px;color:var(--accent);margin-top:5px"></div>
+        </div>
+        <div id="wiz-race-info" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px;font-size:11px;color:var(--muted);min-height:80px">
+          Choose a race to see traits.
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 2: Background -->
+    <div id="wiz-s2" class="hidden">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div>
+          <label>Background</label>
+          <select id="wiz-bg-sel" onchange="wizOnBgChange()" style="width:100%">
+            <option value="">— choose —</option>
+          </select>
+        </div>
+        <div id="wiz-bg-info" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px;font-size:11px;color:var(--muted);min-height:80px">
+          Choose a background to see grants.
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 3: Class -->
+    <div id="wiz-s3" class="hidden">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div>
+          <label>Class</label>
+          <select id="wiz-class-sel" onchange="wizOnClassChange()" style="width:100%">
+            <option value="Barbarian">Barbarian</option>
+            <option value="Bard">Bard</option>
+            <option value="Cleric">Cleric</option>
+            <option value="Druid">Druid</option>
+            <option value="Fighter" selected>Fighter</option>
+            <option value="Monk">Monk</option>
+            <option value="Paladin">Paladin</option>
+            <option value="Ranger">Ranger</option>
+            <option value="Rogue">Rogue</option>
+            <option value="Sorcerer">Sorcerer</option>
+            <option value="Warlock">Warlock</option>
+            <option value="Wizard">Wizard</option>
+          </select>
+        </div>
+        <div id="wiz-class-info" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px;font-size:11px;color:var(--muted);min-height:80px">
+          Choose a class to see details.
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 4: Stats -->
+    <div id="wiz-s4" class="hidden">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+        <span style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em">Standard Array [15,14,13,12,10,8]</span>
+        <button class="sm secondary" onclick="wizAutoFill()" style="padding:3px 10px;font-size:10px">✦ Auto-assign</button>
+        <button class="sm" onclick="wizClearStats()" style="padding:3px 8px;font-size:10px">Clear</button>
+      </div>
+      <!-- Stat assignment grid -->
+      <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:5px;margin-bottom:12px" id="wiz-stat-grid">
+        <!-- rendered by wizRenderStatGrid() -->
+      </div>
+      <!-- Flexible ASI panel (shown only for flexible-ASI races) -->
+      <div id="wiz-asi-panel" class="hidden" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px;margin-bottom:10px">
+        <div style="font-size:10px;color:var(--accent);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">
+          Racial ASI — Distribute <span id="wiz-asi-total-lbl"></span> points
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:5px" id="wiz-asi-inputs">
+          <!-- rendered by wizRenderAsiInputs() -->
+        </div>
+        <div style="font-size:10px;color:var(--muted);margin-top:6px">
+          Remaining: <span id="wiz-asi-remaining" style="color:var(--warn);font-weight:500">—</span>
+        </div>
+      </div>
+      <!-- Final scores preview -->
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 12px">
+        <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Final Scores (base + racial)</div>
+        <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:5px" id="wiz-final-scores">
+          <!-- rendered by wizUpdateFinalScores() -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 5: Identity + Confirm -->
+    <div id="wiz-s5" class="hidden">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div>
+          <label>Character Name</label>
+          <input type="text" id="wiz-name" placeholder="Enter name…"/>
+        </div>
+        <div>
+          <label>Alignment</label>
+          <select id="wiz-alignment">
+            <option>Lawful Good</option><option>Neutral Good</option><option>Chaotic Good</option>
+            <option>Lawful Neutral</option><option selected>True Neutral</option><option>Chaotic Neutral</option>
+            <option>Lawful Evil</option><option>Neutral Evil</option><option>Chaotic Evil</option>
+          </select>
+        </div>
+      </div>
+      <label style="margin-top:12px">HP at Level 1</label>
+      <div style="display:flex;gap:6px;margin-top:4px">
+        <button id="wiz-hp-avg-btn" class="sm secondary" onclick="wizSetHPMode('average')"
+          style="padding:4px 12px;font-size:11px;border-color:var(--accent);color:var(--accent)">Average (recommended)</button>
+        <button id="wiz-hp-max-btn" class="sm" onclick="wizSetHPMode('max')"
+          style="padding:4px 12px;font-size:11px">Max</button>
+      </div>
+      <!-- Review summary -->
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:12px;margin-top:14px" id="wiz-summary"></div>
+    </div>
+
+    <!-- Navigation -->
+    <div style="display:flex;justify-content:space-between;margin-top:16px">
+      <button class="secondary" id="wiz-back-btn" onclick="wizBack()" style="visibility:hidden">← Back</button>
+      <button class="primary" id="wiz-next-btn" onclick="wizNext()">Next →</button>
     </div>
   </div>
 
@@ -2959,6 +3113,541 @@ async function awardXP() {
 function esc(s) {
   return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+
+// ═══════════════════════════════════════════════════════════
+// CHARACTER CREATION WIZARD
+// ═══════════════════════════════════════════════════════════
+
+const WIZ_STEP_NAMES = ['Race', 'Background', 'Class', 'Stats', 'Identity'];
+const WIZ_STATS = ['str','dex','con','int','wis','cha'];
+const WIZ_STD_ARRAY = [15,14,13,12,10,8];
+
+const CLASS_HIT_DICE = {
+  Barbarian:12, Fighter:10, Paladin:10, Ranger:10,
+  Bard:8, Cleric:8, Druid:8, Monk:8, Rogue:8, Warlock:8,
+  Sorcerer:6, Wizard:6,
+};
+const CLASS_SAVES = {
+  Barbarian:['STR','CON'], Bard:['DEX','CHA'], Cleric:['WIS','CHA'],
+  Druid:['INT','WIS'], Fighter:['STR','CON'], Monk:['STR','DEX'],
+  Paladin:['WIS','CHA'], Ranger:['STR','DEX'], Rogue:['DEX','INT'],
+  Sorcerer:['CON','CHA'], Warlock:['WIS','CHA'], Wizard:['INT','WIS'],
+};
+
+let wizState = {
+  step: 1,
+  races: [],        // RaceEntry[]
+  backgrounds: [],  // BackgroundEntry[]
+  race: null,       // selected RaceEntry
+  bg: null,         // selected BackgroundEntry
+  className: 'Fighter',
+  optimizer: null,  // StatOptimizerResult
+  // Step 4 — stat assignment
+  baseScores: { str:0, dex:0, con:0, int:0, wis:0, cha:0 },
+  asiPoints: { str:0, dex:0, con:0, int:0, wis:0, cha:0 },
+  // Step 5 — identity
+  name: '',
+  alignment: 'True Neutral',
+  hpMode: 'average',
+};
+
+async function openWizard() {
+  wizState = {
+    step: 1,
+    races: [],
+    backgrounds: [],
+    race: null,
+    bg: null,
+    className: 'Fighter',
+    optimizer: null,
+    baseScores: { str:0, dex:0, con:0, int:0, wis:0, cha:0 },
+    asiPoints: { str:0, dex:0, con:0, int:0, wis:0, cha:0 },
+    name: '',
+    alignment: 'True Neutral',
+    hpMode: 'average',
+  };
+  // Hide other panels
+  document.getElementById('char-form-card').classList.add('hidden');
+  document.getElementById('char-detail-card').classList.add('hidden');
+  const card = document.getElementById('char-wizard-card');
+  card.classList.remove('hidden');
+
+  // Fetch races + backgrounds in parallel
+  try {
+    const [raceRes, bgRes] = await Promise.all([
+      fetch(BASE + '/api/races'),
+      fetch(BASE + '/api/backgrounds'),
+    ]);
+    const raceData = await raceRes.json();
+    const bgData   = await bgRes.json();
+    wizState.races       = raceData.races       || [];
+    wizState.backgrounds = bgData.backgrounds   || [];
+  } catch(e) {
+    wizShowErr('Failed to load race/background data. Is the server running?');
+  }
+
+  // Populate dropdowns
+  const raceSel = document.getElementById('wiz-race-sel');
+  raceSel.innerHTML = '<option value="">— choose —</option>' +
+    wizState.races.map(r => `<option value="${esc(r.name)}">${esc(r.name)}</option>`).join('');
+
+  const bgSel = document.getElementById('wiz-bg-sel');
+  bgSel.innerHTML = '<option value="">— choose —</option>' +
+    wizState.backgrounds.map(b => `<option value="${esc(b.name)}">${esc(b.name)}</option>`).join('');
+
+  // Pre-select class info for Fighter
+  wizOnClassChange();
+  wizRenderStep();
+}
+
+function cancelWizard() {
+  document.getElementById('char-wizard-card').classList.add('hidden');
+  if (wizState._savedId) {
+    // refresh if we partially created something
+    refreshChars();
+  }
+}
+
+function wizShowErr(msg) {
+  const el = document.getElementById('wiz-error');
+  el.textContent = msg;
+  el.classList.remove('hidden');
+}
+function wizClearErr() {
+  document.getElementById('wiz-error').classList.add('hidden');
+}
+
+// Navigate via dots (only to completed steps)
+function wizGoTo(n) {
+  if (n < wizState.step) {
+    wizState.step = n;
+    wizRenderStep();
+  }
+}
+
+async function wizNext() {
+  wizClearErr();
+  if (!wizValidateStep()) return;
+
+  if (wizState.step === 5) {
+    await wizSubmit();
+    return;
+  }
+
+  if (wizState.step === 3) {
+    // After class selected, fetch optimizer
+    await wizFetchOptimizer();
+    wizRenderStatGrid();
+    wizRenderAsiInputs();
+    wizUpdateFinalScores();
+  }
+
+  wizState.step++;
+  wizRenderStep();
+}
+
+function wizBack() {
+  if (wizState.step > 1) {
+    wizState.step--;
+    wizRenderStep();
+  }
+}
+
+function wizValidateStep() {
+  const s = wizState.step;
+  if (s === 1) {
+    if (!wizState.race) { wizShowErr('Please choose a race.'); return false; }
+  }
+  if (s === 2) {
+    if (!wizState.bg) { wizShowErr('Please choose a background.'); return false; }
+  }
+  if (s === 3) {
+    if (!wizState.className) { wizShowErr('Please choose a class.'); return false; }
+  }
+  if (s === 4) {
+    // All 6 base scores must be assigned (non-zero)
+    const vals = WIZ_STATS.map(k => wizState.baseScores[k]);
+    const sorted = [...vals].sort((a,b)=>b-a);
+    if (JSON.stringify(sorted) !== JSON.stringify(WIZ_STD_ARRAY)) {
+      wizShowErr('Assign each standard array value [15,14,13,12,10,8] exactly once.');
+      return false;
+    }
+    // Flexible ASI: remaining must be 0
+    if (wizState.race && !wizState.race.defaultASI) {
+      const total = wizState.race.allotment.reduce((a,b)=>a+b,0);
+      const used  = WIZ_STATS.reduce((a,k)=>a+(wizState.asiPoints[k]||0),0);
+      if (used !== total) {
+        wizShowErr(`Distribute all ${total} racial ASI points (${used} used so far).`);
+        return false;
+      }
+    }
+  }
+  if (s === 5) {
+    const n = document.getElementById('wiz-name').value.trim();
+    if (!n) { wizShowErr('Please enter a character name.'); return false; }
+    wizState.name      = n;
+    wizState.alignment = document.getElementById('wiz-alignment').value;
+  }
+  return true;
+}
+
+function wizRenderStep() {
+  const s = wizState.step;
+  // Show/hide step panels
+  for (let i=1;i<=5;i++) {
+    document.getElementById('wiz-s'+i).classList.toggle('hidden', i !== s);
+  }
+  // Update dots
+  for (let i=1;i<=5;i++) {
+    const dot = document.getElementById('wiz-dot-'+i);
+    dot.className = 'wiz-dot' + (i < s ? ' done' : i === s ? ' active' : '');
+  }
+  // Step name
+  document.getElementById('wiz-step-names').textContent = WIZ_STEP_NAMES[s-1];
+  document.getElementById('wiz-title-label').textContent =
+    `Create Character — ${WIZ_STEP_NAMES[s-1]}`;
+  // Back button
+  document.getElementById('wiz-back-btn').style.visibility = s > 1 ? 'visible' : 'hidden';
+  // Next button label
+  const nextBtn = document.getElementById('wiz-next-btn');
+  nextBtn.textContent = s === 5 ? '✦ Create Character' : 'Next →';
+
+  // Step-specific render
+  if (s === 4) {
+    wizRenderStatGrid();
+    wizRenderAsiInputs();
+    wizUpdateFinalScores();
+  }
+  if (s === 5) {
+    wizRenderSummary();
+  }
+  wizClearErr();
+}
+
+// ── Step 1: Race ───────────────────────────────────────────
+
+function wizOnRaceChange() {
+  const name = document.getElementById('wiz-race-sel').value;
+  wizState.race = wizState.races.find(r => r.name === name) || null;
+  wizClearErr();
+
+  const info = document.getElementById('wiz-race-info');
+  const hint = document.getElementById('wiz-race-asi-hint');
+
+  if (!wizState.race) {
+    info.innerHTML = 'Choose a race to see traits.';
+    hint.textContent = '';
+    return;
+  }
+  const r = wizState.race;
+  const hasDefault = r.defaultASI && Object.keys(r.defaultASI).length > 0;
+  const asiStr = hasDefault
+    ? Object.entries(r.defaultASI).map(([k,v])=>`+${v} ${k.toUpperCase()}`).join(', ')
+    : `Flexible +${r.allotment.join('/')} (you choose)`;
+
+  hint.textContent = `ASI: ${asiStr}`;
+  info.innerHTML = `<div style="font-family:var(--serif);font-size:12px;color:var(--accent);margin-bottom:6px">${esc(r.name)}</div>` +
+    `<div style="margin-bottom:4px">Speed ${r.speed} ft · ${r.size}${r.darkvision ? ' · Darkvision '+r.darkvision+'ft' : ''}</div>` +
+    r.traits.slice(0,4).map(t=>`<div style="margin-bottom:2px;color:var(--text)">· ${esc(t)}</div>`).join('');
+
+  // Reset ASI points when race changes
+  wizState.asiPoints = { str:0, dex:0, con:0, int:0, wis:0, cha:0 };
+  wizState.optimizer = null;
+}
+
+// ── Step 2: Background ─────────────────────────────────────
+
+function wizOnBgChange() {
+  const name = document.getElementById('wiz-bg-sel').value;
+  wizState.bg = wizState.backgrounds.find(b => b.name === name) || null;
+  wizClearErr();
+
+  const info = document.getElementById('wiz-bg-info');
+  if (!wizState.bg) {
+    info.innerHTML = 'Choose a background to see grants.';
+    return;
+  }
+  const b = wizState.bg;
+  const toolStr = b.tools && b.tools.length ? b.tools.join(', ') : '—';
+  const langStr = b.languageChoices ? `${b.languageChoices} language choice(s)` : '—';
+  info.innerHTML =
+    `<div style="font-family:var(--serif);font-size:12px;color:var(--accent);margin-bottom:6px">${esc(b.name)}</div>` +
+    `<div style="margin-bottom:3px">Skills: <span style="color:var(--text)">${esc((b.skills||[]).join(', '))}</span></div>` +
+    `<div style="margin-bottom:3px">Tools: <span style="color:var(--text)">${esc(toolStr)}</span></div>` +
+    `<div style="margin-bottom:3px">Languages: <span style="color:var(--text)">${esc(langStr)}</span></div>` +
+    `<div>Gold: <span style="color:var(--accent)">${b.gold} gp</span></div>`;
+}
+
+// ── Step 3: Class ──────────────────────────────────────────
+
+function wizOnClassChange() {
+  wizState.className = document.getElementById('wiz-class-sel').value;
+  wizClearErr();
+  const cls = wizState.className;
+  const hd  = CLASS_HIT_DICE[cls] || 8;
+  const sv  = (CLASS_SAVES[cls]||[]).join(' & ');
+  const info = document.getElementById('wiz-class-info');
+  info.innerHTML =
+    `<div style="font-family:var(--serif);font-size:12px;color:var(--accent);margin-bottom:6px">${esc(cls)}</div>` +
+    `<div style="margin-bottom:3px">Hit Die: <span style="color:var(--text)">d${hd}</span></div>` +
+    `<div style="margin-bottom:3px">Saving Throws: <span style="color:var(--text)">${esc(sv)}</span></div>` +
+    `<div style="color:var(--muted);font-size:10px;margin-top:6px">Stat priority will be shown on the next step.</div>`;
+  // Invalidate optimizer since class changed
+  wizState.optimizer = null;
+}
+
+// ── Step 4: Stats ──────────────────────────────────────────
+
+async function wizFetchOptimizer() {
+  if (!wizState.race || !wizState.className) return;
+  try {
+    const r = await fetch(
+      BASE + '/api/stat-optimizer?race=' +
+      encodeURIComponent(wizState.race.name) + '&class=' +
+      encodeURIComponent(wizState.className)
+    );
+    if (r.ok) {
+      wizState.optimizer = await r.json();
+    }
+  } catch(e) {
+    // Non-fatal: wizard still works without optimizer suggestion
+  }
+}
+
+function wizRenderStatGrid() {
+  const grid = document.getElementById('wiz-stat-grid');
+  grid.innerHTML = WIZ_STATS.map(stat => {
+    const cur = wizState.baseScores[stat] || 0;
+    const takenElsewhere = WIZ_STATS.filter(s => s !== stat && wizState.baseScores[s] !== 0)
+      .map(s => wizState.baseScores[s]);
+    const opts = WIZ_STD_ARRAY.map(v => {
+      const disabled = takenElsewhere.includes(v) ? 'disabled' : '';
+      const sel = cur === v ? 'selected' : '';
+      return `<option value="${v}" ${disabled} ${sel}>${v}</option>`;
+    }).join('');
+    return `<div class="stat-cell">
+      <label>${stat.toUpperCase()}</label>
+      <select id="wiz-base-${stat}" onchange="wizOnStatChange('${stat}')"
+        style="text-align:center;padding:4px 2px;font-size:14px;width:100%">
+        <option value="0">—</option>
+        ${opts}
+      </select>
+    </div>`;
+  }).join('');
+}
+
+function wizOnStatChange(stat) {
+  const v = parseInt(document.getElementById('wiz-base-'+stat).value, 10) || 0;
+  wizState.baseScores[stat] = v;
+  wizRenderStatGrid(); // re-render to update disabled states
+  wizUpdateFinalScores();
+}
+
+function wizAutoFill() {
+  if (wizState.optimizer) {
+    wizState.baseScores = { ...wizState.optimizer.baseScores };
+    if (wizState.optimizer.isFlexibleASI && wizState.optimizer.suggestedAsiAssignment) {
+      wizState.asiPoints = { str:0, dex:0, con:0, int:0, wis:0, cha:0 };
+      for (const [k,v] of Object.entries(wizState.optimizer.suggestedAsiAssignment)) {
+        wizState.asiPoints[k] = v;
+      }
+      wizRenderAsiInputs();
+    }
+  } else {
+    // Fallback: assign in alphabetical order (basic)
+    const vals = [...WIZ_STD_ARRAY];
+    WIZ_STATS.forEach((s, i) => { wizState.baseScores[s] = vals[i]; });
+  }
+  wizRenderStatGrid();
+  wizUpdateFinalScores();
+}
+
+function wizClearStats() {
+  wizState.baseScores = { str:0, dex:0, con:0, int:0, wis:0, cha:0 };
+  wizRenderStatGrid();
+  wizUpdateFinalScores();
+}
+
+// ── ASI inputs (flexible races) ────────────────────────────
+
+function wizRenderAsiInputs() {
+  const panel = document.getElementById('wiz-asi-panel');
+  const race  = wizState.race;
+  if (!race || race.defaultASI) {
+    panel.classList.add('hidden');
+    return;
+  }
+  panel.classList.remove('hidden');
+  const total = race.allotment.reduce((a,b)=>a+b,0);
+  document.getElementById('wiz-asi-total-lbl').textContent = total;
+
+  const inputs = document.getElementById('wiz-asi-inputs');
+  inputs.innerHTML = WIZ_STATS.map(stat => {
+    const v = wizState.asiPoints[stat] || 0;
+    return `<div class="stat-cell">
+      <label>${stat.toUpperCase()}</label>
+      <input type="number" id="wiz-asi-${stat}" value="${v}" min="0" max="${total}"
+        style="text-align:center;padding:4px 2px;font-size:14px;width:100%"
+        oninput="wizOnAsiChange('${stat}')"/>
+    </div>`;
+  }).join('');
+
+  wizUpdateAsiRemaining();
+}
+
+function wizOnAsiChange(stat) {
+  const v = Math.max(0, parseInt(document.getElementById('wiz-asi-'+stat).value, 10) || 0);
+  wizState.asiPoints[stat] = v;
+  wizUpdateAsiRemaining();
+  wizUpdateFinalScores();
+}
+
+function wizUpdateAsiRemaining() {
+  const race = wizState.race;
+  if (!race || race.defaultASI) return;
+  const total = race.allotment.reduce((a,b)=>a+b,0);
+  const used  = WIZ_STATS.reduce((a,k)=>a+(wizState.asiPoints[k]||0),0);
+  const rem   = total - used;
+  const el    = document.getElementById('wiz-asi-remaining');
+  if (el) {
+    el.textContent = rem === 0 ? '✓ All assigned' : rem + ' pts left';
+    el.style.color = rem === 0 ? 'var(--success)' : 'var(--warn)';
+  }
+}
+
+// ── Final scores ───────────────────────────────────────────
+
+function wizUpdateFinalScores() {
+  const race = wizState.race;
+  const container = document.getElementById('wiz-final-scores');
+  if (!container) return;
+
+  container.innerHTML = WIZ_STATS.map(stat => {
+    const base  = wizState.baseScores[stat] || 0;
+    let racial  = 0;
+    if (race) {
+      if (race.defaultASI) {
+        racial = (race.defaultASI[stat] || 0);
+      } else {
+        racial = wizState.asiPoints[stat] || 0;
+      }
+    }
+    const final = Math.min(30, base + racial);
+    const mod   = Math.floor((final - 10) / 2);
+    const modS  = (mod >= 0 ? '+' : '') + mod;
+    return `<div class="stat-cell">
+      <label style="color:var(--accent);font-size:9px">${stat.toUpperCase()}</label>
+      <div style="font-size:18px;font-weight:600;color:var(--text)">${base ? final : '—'}</div>
+      <div style="font-size:10px;color:var(--muted)">${base ? modS : ''}</div>
+      ${racial ? `<div style="font-size:9px;color:var(--success)">+${racial} racial</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+// ── HP mode toggle ──────────────────────────────────────────
+
+function wizSetHPMode(mode) {
+  wizState.hpMode = mode;
+  document.getElementById('wiz-hp-avg-btn').style.cssText =
+    mode === 'average'
+      ? 'padding:4px 12px;font-size:11px;border-color:var(--accent);color:var(--accent)'
+      : 'padding:4px 12px;font-size:11px';
+  document.getElementById('wiz-hp-max-btn').style.cssText =
+    mode === 'max'
+      ? 'padding:4px 12px;font-size:11px;border-color:var(--accent);color:var(--accent)'
+      : 'padding:4px 12px;font-size:11px';
+}
+
+// ── Step 5: Summary ────────────────────────────────────────
+
+function wizRenderSummary() {
+  const race = wizState.race;
+  const bg   = wizState.bg;
+  const cls  = wizState.className;
+
+  // Compute final scores for summary
+  const scores = { ...wizState.baseScores };
+  if (race) {
+    WIZ_STATS.forEach(s => {
+      const racial = race.defaultASI ? (race.defaultASI[s]||0) : (wizState.asiPoints[s]||0);
+      scores[s] = Math.min(30, (scores[s]||0) + racial);
+    });
+  }
+  const scoreStr = WIZ_STATS.map(s => `${s.toUpperCase()}:${scores[s]}`).join(' · ');
+  const hd = CLASS_HIT_DICE[cls] || 8;
+
+  document.getElementById('wiz-summary').innerHTML =
+    `<div style="font-family:var(--serif);font-size:13px;color:var(--accent);margin-bottom:10px">Review</div>` +
+    `<div style="display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:12px">` +
+    `<span style="color:var(--muted)">Race</span><span>${esc(race ? race.name : '—')}</span>` +
+    `<span style="color:var(--muted)">Background</span><span>${esc(bg ? bg.name : '—')}</span>` +
+    `<span style="color:var(--muted)">Class</span><span>${esc(cls)} (d${hd})</span>` +
+    `<span style="color:var(--muted)">HP Roll</span><span>${wizState.hpMode === 'max' ? 'Max HP' : 'Average'}</span>` +
+    `<span style="color:var(--muted)">Scores</span><span style="font-size:10px">${scoreStr}</span>` +
+    `</div>`;
+}
+
+// ── Submit ──────────────────────────────────────────────────
+
+async function wizSubmit() {
+  const nextBtn = document.getElementById('wiz-next-btn');
+  nextBtn.disabled = true;
+  nextBtn.textContent = 'Creating…';
+
+  try {
+    const race = wizState.race;
+
+    // Build baseScores (standard array assignment)
+    const baseScores = { ...wizState.baseScores };
+
+    // Build asiAssignment for flexible races
+    let asiAssignment;
+    if (race && !race.defaultASI) {
+      const nonZero = {};
+      WIZ_STATS.forEach(s => { if (wizState.asiPoints[s]) nonZero[s] = wizState.asiPoints[s]; });
+      asiAssignment = nonZero;
+    }
+
+    // 1. Create Level 0
+    const body0 = {
+      race: race.name,
+      background: wizState.bg.name,
+      baseScores,
+      name: wizState.name || 'Unnamed Hero',
+      alignment: wizState.alignment,
+      ...(asiAssignment ? { asiAssignment } : {}),
+    };
+    const r0 = await fetch(BASE + '/api/characters/create-level0', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body0),
+    });
+    const d0 = await r0.json();
+    if (!r0.ok) { wizShowErr(d0.error || 'create-level0 failed'); nextBtn.disabled=false; nextBtn.textContent='✦ Create Character'; return; }
+
+    const charId = d0.character.id;
+
+    // 2. Level up to 1
+    const r1 = await fetch(BASE + '/api/' + charId + '/levelup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ className: wizState.className, hpRollMethod: wizState.hpMode }),
+    });
+    const d1 = await r1.json();
+    if (!r1.ok) { wizShowErr(d1.error || 'levelup failed'); nextBtn.disabled=false; nextBtn.textContent='✦ Create Character'; return; }
+
+    // Success — hide wizard, load the new character
+    document.getElementById('char-wizard-card').classList.add('hidden');
+    showBanner(`${wizState.name || 'Character'} created at Level 1!`, 'success');
+    await loadCharDetail(charId);
+    refreshChars();
+  } catch(e) {
+    wizShowErr('Network error: ' + e.message);
+    nextBtn.disabled = false;
+    nextBtn.textContent = '✦ Create Character';
+  }
+}
+
 </script>
 </body>
 </html>
