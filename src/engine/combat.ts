@@ -34,7 +34,7 @@ import { getSummonEntry }                           from '../summons/registry';
 import { rollGrappleContest, rollShoveContest, canGrappleOrShoveTarget } from './utils';
 import { computeLOS } from './los';
 import { removeEffectsFromCaster, getActiveAcBonus, getActiveBlessDie, getActiveHexDie } from './spell_effects';
-import { applyCantripEffect } from './cantrip_effects';
+import { applyCantripEffect, getCantripAttackAdvantage } from './cantrip_effects';
 import { execute as executeHex } from '../spells/hex';
 import { execute as executeMagicMissile } from '../spells/magic_missile';
 import { execute as executeBurningHands, shouldCast as shouldCastBurningHands } from '../spells/burning_hands';
@@ -208,7 +208,9 @@ function resolveAttack(
   // Standard attack roll — include Pack Tactics advantage, Prone modifier, and Help action
   const advState = resolveAttackAdvantage(attacker, target, action.attackType);
   const { advantage: baseAdv, disadvantage: baseDisadv } = advState;
-  const advantage = baseAdv || packTacticsAdvantage || attacker.helpedThisTurn;
+  // Cantrip intrinsic advantage (pre-roll): e.g. Shocking Grasp vs metal armor (PHB p.275)
+  const cantripAdv = getCantripAttackAdvantage(attacker, target, action.name);
+  const advantage = baseAdv || packTacticsAdvantage || attacker.helpedThisTurn || cantripAdv;
 
   // Cunning Action: Hide — hidden attacker is revealed on attack, hit or miss (PHB p.177/194).
   // Advantage was already captured above by resolveAttackAdvantage reading the 'hidden' condition.
