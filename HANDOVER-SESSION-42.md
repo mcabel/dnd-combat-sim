@@ -1,4 +1,5 @@
 # HANDOVER-SESSION-42
+<!-- STREAM: Core Engine | See AGENTS.md for workstream rules and startup priority -->
 
 ## REPOSITORY
 

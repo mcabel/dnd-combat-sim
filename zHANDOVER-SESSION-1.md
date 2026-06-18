@@ -1,4 +1,5 @@
 # zHANDOVER-SESSION-1
+<!-- STREAM: Cantrip / z | See AGENTS.md for workstream rules and startup priority -->
 
 ## REPOSITORY
 

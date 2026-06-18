@@ -1,5 +1,8 @@
 # TASK.md
 
+> **MULTI-AGENT PROJECT** — See `AGENTS.md` for workstream boundaries and startup rules.
+> If the user uploads a handover at session start, that handover takes priority over this file.
+
 ## ACTIVE WORKSTREAM
 
 Core Engine
