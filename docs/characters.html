@@ -1790,6 +1790,9 @@ function buildResourceLines(res) {
   if (res.ki)                parts.push(resBtns('Ki', res.ki.remaining, res.ki.max, 'ki', 'remaining'));
   if (res.layOnHands)        parts.push(resBtns('LoH HP', res.layOnHands.remaining, res.layOnHands.pool, 'layOnHands', 'remaining'));
   if (res.arcaneRecovery)    parts.push(resBtns('Arc.Rec', res.arcaneRecovery.usesRemaining, 1, 'arcaneRecovery', 'usesRemaining'));
+  if (res.actionSurge)       parts.push(resBtns('Action Surge', res.actionSurge.remaining, res.actionSurge.max, 'actionSurge', 'remaining'));
+  if (res.sorceryPoints)     parts.push(resBtns('Sorc.Pts', res.sorceryPoints.remaining, res.sorceryPoints.max, 'sorceryPoints', 'remaining'));
+  if (res.wildShape)         parts.push(resBtns('Wild Shape', res.wildShape.remaining, res.wildShape.max, 'wildShape', 'remaining'));
 
   return parts.length ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;align-items:center">${parts.join('')}</div>` : '';
 }

@@ -442,8 +442,15 @@ function updateResources(
       break;
     }
     case 'Fighter': {
-      // Second Wind: always 1 use
+      // Second Wind: always 1 use (short or long rest, PHB p.72)
       res.secondWind = { max: 1, remaining: 1 };
+      // Action Surge: 1 use at lv2, 2 uses at lv17 (short or long rest, PHB p.72)
+      if (newClassLevel >= 2) {
+        const aMax = newClassLevel >= 17 ? 2 : 1;
+        // Preserve remaining unless max changed (level-up grant)
+        const aCur = res.actionSurge ? Math.min(res.actionSurge.remaining, aMax) : aMax;
+        res.actionSurge = { max: aMax, remaining: aCur };
+      }
       break;
     }
     case 'Paladin': {
@@ -476,6 +483,24 @@ function updateResources(
     case 'Monk': {
       // Ki points = monk level; recharge on short or long rest (PHB p.78)
       res.ki = { max: newClassLevel, remaining: newClassLevel };
+      break;
+    }
+    case 'Sorcerer': {
+      // Sorcery Points: = sorcerer level, unlocks at lv2 (long rest, PHB p.101)
+      if (newClassLevel >= 2) {
+        const spMax = newClassLevel; // 1 per sorcerer level
+        const spCur = res.sorceryPoints ? Math.min(res.sorceryPoints.remaining, spMax) : spMax;
+        res.sorceryPoints = { max: spMax, remaining: spCur };
+      }
+      break;
+    }
+    case 'Druid': {
+      // Wild Shape: 2 uses (short or long rest, PHB p.66; unlocks at lv2)
+      if (newClassLevel >= 2) {
+        const wsMax = 2;
+        const wsCur = res.wildShape ? Math.min(res.wildShape.remaining, wsMax) : wsMax;
+        res.wildShape = { max: wsMax, remaining: wsCur };
+      }
       break;
     }
     default:

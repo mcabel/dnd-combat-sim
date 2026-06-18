@@ -1699,6 +1699,136 @@ async function run() {
     });
   }
 
+  // ── Action Surge / Sorcery Points / Wild Shape — rest recharge ───
+
+  await test('Fighter lv2 has actionSurge, short rest restores it', async () => {
+    // Create a fighter, level to 2, spend action surge, short rest
+    const createRes = await fetch(BASE + '/api/characters', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'TestFighterSurge', race: 'Human', background: 'Soldier', alignment: 'Lawful Good',
+        firstClass: 'Fighter', classLevels: [{ className: 'Fighter', level: 2 }],
+        subclassChoices: {}, experiencePoints: 0,
+        baseStats: { str:16, dex:10, con:14, int:8, wis:12, cha:10 },
+        stats:     { str:16, dex:10, con:14, int:8, wis:12, cha:10 },
+        maxHP:19, currentHP:19, temporaryHP:0, armorClass:16, acFormula:'Chain Mail', speed:30,
+        hitDice:[{className:'Fighter',dieSides:10,total:2,remaining:2}],
+        proficiencies:{ armor:['light','medium','heavy','shield'], weapons:['simple-melee','simple-ranged','martial-melee','martial-ranged'], tools:[], savingThrows:['str','con'], skills:['Athletics','Intimidation'], expertise:[] },
+        languages:['Common'], gold:10, equipment:[],
+        resources:{ secondWind:{max:1,remaining:1}, actionSurge:{max:1,remaining:0} },
+        level1Features:[], allFeatures:[], feats:[], backgroundFeature:'Military Rank', exhaustionLevel:0,
+      }),
+    });
+    const { character: fighter } = await createRes.json();
+    assert(fighter.resources.actionSurge?.remaining === 0, 'action surge spent before rest');
+
+    const restRes = await fetch(BASE + `/api/characters/${fighter.id}/shortrest`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hitDiceToSpend: 0 }),
+    });
+    const { character: rested, restored } = await restRes.json();
+    assert(rested.resources.actionSurge?.remaining === 1, `action surge should restore on short rest, got ${rested.resources.actionSurge?.remaining}`);
+    assert(restored.some((s: string) => s.includes('Action Surge')), 'restored list should mention Action Surge');
+    const { deleteCharacter: dc1 } = require('../characters/storage');
+    try { dc1(fighter.id); } catch {}
+  });
+
+  await test('Sorcerer lv2 has sorceryPoints, long rest restores them', async () => {
+    const createRes = await fetch(BASE + '/api/characters', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'TestSorcererPoints', race: 'Human', background: 'Hermit', alignment: 'True Neutral',
+        firstClass: 'Sorcerer', classLevels: [{ className: 'Sorcerer', level: 2 }],
+        subclassChoices: {}, experiencePoints: 0,
+        baseStats: { str:8, dex:14, con:14, int:10, wis:12, cha:16 },
+        stats:     { str:8, dex:14, con:14, int:10, wis:12, cha:16 },
+        maxHP:12, currentHP:12, temporaryHP:0, armorClass:12, acFormula:'DEX Unarmored', speed:30,
+        hitDice:[{className:'Sorcerer',dieSides:6,total:2,remaining:2}],
+        proficiencies:{ armor:[], weapons:['simple-melee','simple-ranged'], tools:[], savingThrows:['con','cha'], skills:['Arcana','Deception'], expertise:[] },
+        languages:['Common'], gold:15, equipment:[],
+        resources:{ sorceryPoints:{max:2,remaining:0} },
+        spellcasting:{ ability:'cha', spellAttackBonus:5, saveDC:13, slots:{'1':3}, slotsUsed:{'1':0}, cantrips:[], knownSpells:[], preparedSpells:[], spellbook:[] },
+        level1Features:[], allFeatures:[], feats:[], backgroundFeature:'Discovery', exhaustionLevel:0,
+      }),
+    });
+    const { character: sorc } = await createRes.json();
+    assert(sorc.resources.sorceryPoints?.remaining === 0, 'sorcery points spent before rest');
+
+    const restRes = await fetch(BASE + `/api/characters/${sorc.id}/longrest`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+    });
+    const { character: rested, restored } = await restRes.json();
+    assert(rested.resources.sorceryPoints?.remaining === 2, `sorcery points should restore on long rest, got ${rested.resources.sorceryPoints?.remaining}`);
+    assert(restored.some((s: string) => s.includes('Sorcery Points')), 'restored list should mention Sorcery Points');
+    const { deleteCharacter: dc2 } = require('../characters/storage');
+    try { dc2(sorc.id); } catch {}
+  });
+
+  await test('Druid lv2 has wildShape, short rest restores it', async () => {
+    const createRes = await fetch(BASE + '/api/characters', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'TestDruidShape', race: 'Human', background: 'Hermit', alignment: 'Neutral Good',
+        firstClass: 'Druid', classLevels: [{ className: 'Druid', level: 2 }],
+        subclassChoices: {}, experiencePoints: 0,
+        baseStats: { str:10, dex:14, con:14, int:12, wis:16, cha:8 },
+        stats:     { str:10, dex:14, con:14, int:12, wis:16, cha:8 },
+        maxHP:17, currentHP:17, temporaryHP:0, armorClass:13, acFormula:'Medium Armor', speed:30,
+        hitDice:[{className:'Druid',dieSides:8,total:2,remaining:2}],
+        proficiencies:{ armor:['light','medium','shield'], weapons:['simple-melee','simple-ranged'], tools:[], savingThrows:['int','wis'], skills:['Nature','Survival'], expertise:[] },
+        languages:['Common'], gold:10, equipment:[],
+        resources:{ wildShape:{max:2,remaining:0} },
+        spellcasting:{ ability:'wis', spellAttackBonus:5, saveDC:13, slots:{'1':3}, slotsUsed:{'1':0}, cantrips:[], knownSpells:[], preparedSpells:[], spellbook:[] },
+        level1Features:[], allFeatures:[], feats:[], backgroundFeature:'Discovery', exhaustionLevel:0,
+      }),
+    });
+    const { character: druid } = await createRes.json();
+    assert(druid.resources.wildShape?.remaining === 0, 'wild shape spent before rest');
+
+    const restRes = await fetch(BASE + `/api/characters/${druid.id}/shortrest`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hitDiceToSpend: 0 }),
+    });
+    const { character: rested, restored } = await restRes.json();
+    assert(rested.resources.wildShape?.remaining === 2, `wild shape should restore on short rest, got ${rested.resources.wildShape?.remaining}`);
+    assert(restored.some((s: string) => s.includes('Wild Shape')), 'restored list should mention Wild Shape');
+    const { deleteCharacter: dc3 } = require('../characters/storage');
+    try { dc3(druid.id); } catch {}
+  });
+
+  await test('Action Surge also restores on long rest', async () => {
+    const createRes = await fetch(BASE + '/api/characters', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'TestFighterLongRest', race: 'Human', background: 'Soldier', alignment: 'Lawful Good',
+        firstClass: 'Fighter', classLevels: [{ className: 'Fighter', level: 2 }],
+        subclassChoices: {}, experiencePoints: 0,
+        baseStats: { str:16, dex:10, con:14, int:8, wis:12, cha:10 },
+        stats:     { str:16, dex:10, con:14, int:8, wis:12, cha:10 },
+        maxHP:19, currentHP:10, temporaryHP:0, armorClass:16, acFormula:'Chain Mail', speed:30,
+        hitDice:[{className:'Fighter',dieSides:10,total:2,remaining:2}],
+        proficiencies:{ armor:['light','medium','heavy','shield'], weapons:['simple-melee','simple-ranged','martial-melee','martial-ranged'], tools:[], savingThrows:['str','con'], skills:['Athletics','Intimidation'], expertise:[] },
+        languages:['Common'], gold:10, equipment:[],
+        resources:{ secondWind:{max:1,remaining:1}, actionSurge:{max:1,remaining:0} },
+        level1Features:[], allFeatures:[], feats:[], backgroundFeature:'Military Rank', exhaustionLevel:0,
+      }),
+    });
+    const { character: fighter } = await createRes.json();
+
+    const restRes = await fetch(BASE + `/api/characters/${fighter.id}/longrest`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+    });
+    const { character: rested } = await restRes.json();
+    assert(rested.resources.actionSurge?.remaining === 1, `action surge should restore on long rest`);
+    assert(rested.currentHP === 19, 'HP should be full after long rest');
+    const { deleteCharacter: dc4 } = require('../characters/storage');
+    try { dc4(fighter.id); } catch {}
+  });
+
   // ── GET /api/stat-optimizer ────────────────────────────────
 
   await test('GET /api/stat-optimizer 400 without race', async () => {

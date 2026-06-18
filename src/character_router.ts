@@ -681,6 +681,22 @@ router.post('/characters/:id/longrest', async (req: Request, res: Response) => {
       r.ki.remaining = r.ki.max;
       restored.push('Ki points restored');
     }
+    // Fighter — Action Surge (short or long rest, PHB p.72)
+    if (r.actionSurge && r.actionSurge.remaining < r.actionSurge.max) {
+      r.actionSurge.remaining = r.actionSurge.max;
+      restored.push('Action Surge restored');
+    }
+    // Sorcerer — Sorcery Points (long rest only, PHB p.101)
+    if (r.sorceryPoints && r.sorceryPoints.remaining < r.sorceryPoints.max) {
+      r.sorceryPoints.remaining = r.sorceryPoints.max;
+      restored.push('Sorcery Points restored');
+    }
+    // Druid — Wild Shape (short or long rest, PHB p.66)
+    if (r.wildShape && r.wildShape.remaining < r.wildShape.max) {
+      r.wildShape.remaining = r.wildShape.max;
+      restored.push('Wild Shape uses restored');
+    }
+
     // Exhaustion: reduce by 1 on long rest (PHB p.291)
     if (updated.exhaustionLevel && updated.exhaustionLevel > 0) {
       updated.exhaustionLevel -= 1;
@@ -784,6 +800,18 @@ router.post('/characters/:id/shortrest', async (req: Request, res: Response) => 
     if (r.ki && r.ki.remaining < r.ki.max) {
       r.ki.remaining = r.ki.max;
       restored.push('Ki points restored');
+    }
+
+    // Fighter — Action Surge (short or long rest, PHB p.72)
+    if (r.actionSurge && r.actionSurge.remaining < r.actionSurge.max) {
+      r.actionSurge.remaining = r.actionSurge.max;
+      restored.push('Action Surge restored');
+    }
+
+    // Druid — Wild Shape (short or long rest, PHB p.66)
+    if (r.wildShape && r.wildShape.remaining < r.wildShape.max) {
+      r.wildShape.remaining = r.wildShape.max;
+      restored.push('Wild Shape uses restored');
     }
 
     updated.updatedAt = new Date().toISOString();

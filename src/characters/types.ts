@@ -205,6 +205,12 @@ export interface CharacterResources {
   channelDivinity?:   { max: number; remaining: number };
   // Monk — Ki points (short or long rest)
   ki?:                { max: number; remaining: number };
+  // Fighter — Action Surge (short or long rest, PHB p.72; unlocks at lv2)
+  actionSurge?:       { max: number; remaining: number };
+  // Sorcerer — Sorcery Points (long rest only, PHB p.101; unlocks at lv2)
+  sorceryPoints?:     { max: number; remaining: number };
+  // Druid — Wild Shape (short or long rest, PHB p.66; unlocks at lv2)
+  wildShape?:         { max: number; remaining: number };
 }
 
 /** Named features from race, class, subclass, background */

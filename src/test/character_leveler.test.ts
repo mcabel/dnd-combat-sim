@@ -208,6 +208,88 @@ function makePaladin(overrides: Partial<CharacterSheet> = {}): CharacterSheet {
   return { ...base, ...overrides };
 }
 
+/** Sorcerer level-1 sheet (CHA 16, CON 14). */
+function makeSorcerer(overrides: Partial<CharacterSheet> = {}): CharacterSheet {
+  const base: CharacterSheet = {
+    id: randomUUID(), version: 1,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    name: 'Lyra', race: 'Tiefling', background: 'Hermit',
+    alignment: 'Chaotic Neutral',
+    firstClass: 'Sorcerer',
+    classLevels: [{ className: 'Sorcerer', level: 1 }],
+    subclassChoices: {},
+    experiencePoints: 0,
+    baseStats: { str: 8, dex: 14, con: 14, int: 10, wis: 12, cha: 16 },
+    stats:     { str: 8, dex: 14, con: 14, int: 10, wis: 12, cha: 18 },
+    maxHP: 8, currentHP: 8, temporaryHP: 0,
+    armorClass: 12, acFormula: 'DEX Unarmored', speed: 30,
+    hitDice: [{ className: 'Sorcerer', dieSides: 6, total: 1, remaining: 1 }],
+    proficiencies: {
+      armor: [], weapons: ['simple-melee','simple-ranged'],
+      tools: [], savingThrows: ['con','cha'],
+      skills: ['Arcana','Deception'], expertise: [],
+    },
+    languages: ['Common', 'Infernal'],
+    resources: {},
+    spellcasting: {
+      ability: 'cha', spellAttackBonus: 6, saveDC: 14,
+      slots: { '1': 2 }, slotsUsed: { '1': 0 },
+      cantrips: ['Fire Bolt', 'Prestidigitation'],
+      knownSpells: ['Burning Hands'],
+      preparedSpells: [],
+      spellbook: [],
+    },
+    equipment: [{ name: 'Quarterstaff', quantity: 1, equipped: true, category: 'weapon' }],
+    gold: 15,
+    level1Features: [{ name: 'Spellcasting', description: 'CHA caster.', source: 'class' }],
+    allFeatures:    [{ name: 'Spellcasting', description: 'CHA caster.', source: 'class' }],
+    feats: [], backgroundFeature: 'Discovery', exhaustionLevel: 0, levelHistory: [],
+  };
+  return { ...base, ...overrides };
+}
+
+/** Druid level-1 sheet (WIS 16, CON 14). */
+function makeDruid(overrides: Partial<CharacterSheet> = {}): CharacterSheet {
+  const base: CharacterSheet = {
+    id: randomUUID(), version: 1,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    name: 'Rowan', race: 'Wood Elf', background: 'Hermit',
+    alignment: 'Neutral Good',
+    firstClass: 'Druid',
+    classLevels: [{ className: 'Druid', level: 1 }],
+    subclassChoices: {},
+    experiencePoints: 0,
+    baseStats: { str: 10, dex: 14, con: 14, int: 12, wis: 16, cha: 8 },
+    stats:     { str: 10, dex: 15, con: 14, int: 12, wis: 17, cha: 8 },
+    maxHP: 9, currentHP: 9, temporaryHP: 0,
+    armorClass: 13, acFormula: 'Medium Armor', speed: 35,
+    hitDice: [{ className: 'Druid', dieSides: 8, total: 1, remaining: 1 }],
+    proficiencies: {
+      armor: ['light','medium','shield'], weapons: ['simple-melee','simple-ranged'],
+      tools: ['herbalism-kit'], savingThrows: ['int','wis'],
+      skills: ['Nature','Survival'], expertise: [],
+    },
+    languages: ['Common', 'Elvish', 'Druidic'],
+    resources: {},
+    spellcasting: {
+      ability: 'wis', spellAttackBonus: 5, saveDC: 13,
+      slots: { '1': 2 }, slotsUsed: { '1': 0 },
+      cantrips: ['Shillelagh', 'Druidcraft'],
+      knownSpells: [],
+      preparedSpells: ['Entangle', 'Healing Word'],
+      spellbook: [],
+    },
+    equipment: [{ name: 'Scimitar', quantity: 1, equipped: true, category: 'weapon' }],
+    gold: 10,
+    level1Features: [{ name: 'Spellcasting', description: 'WIS caster.', source: 'class' }],
+    allFeatures:    [{ name: 'Spellcasting', description: 'WIS caster.', source: 'class' }],
+    feats: [], backgroundFeature: 'Discovery', exhaustionLevel: 0, levelHistory: [],
+  };
+  return { ...base, ...overrides };
+}
+
 /** Helper to bump a sheet to a target level by repeatedly calling applyLevelUp. */
 function levelTo(sheet: CharacterSheet, targetLevel: number, className?: string): CharacterSheet {
   const cn = className ?? sheet.firstClass;
@@ -1012,6 +1094,79 @@ console.log('\n=== 19. popLevel — Stack Reversal ===\n');
   // Pop once → should be a Wizard 2 state on the stack
   const { sheet: wiz2 } = popLevel(bootstrapped);
   eq('wiz pop to level 2', totalLevel(wiz2), 2);
+}
+
+
+// =============================================================
+// 21. New class resources — Action Surge, Sorcery Points, Wild Shape
+// =============================================================
+
+{
+  // --- 21a. Fighter level 1 has NO actionSurge ---
+  const f1 = makeFighter();
+  assert('fighter lv1: no actionSurge', f1.resources.actionSurge === undefined);
+}
+
+{
+  // --- 21b. Fighter level 2 gains Action Surge (1 use) ---
+  const f1 = makeFighter();
+  const { sheet: f2 } = applyLevelUp(f1, 'Fighter');
+  assert('fighter lv2: actionSurge exists', f2.resources.actionSurge !== undefined);
+  eq('fighter lv2: actionSurge max=1', f2.resources.actionSurge!.max, 1);
+  eq('fighter lv2: actionSurge remaining=1', f2.resources.actionSurge!.remaining, 1);
+}
+
+{
+  // --- 21c. Fighter level 17 gets 2 Action Surges ---
+  let sheet = makeFighter();
+  for (let i = 1; i < 17; i++) sheet = applyLevelUp(sheet, 'Fighter').sheet;
+  eq('fighter lv17: actionSurge max=2', sheet.resources.actionSurge!.max, 2);
+}
+
+{
+  // --- 21d. Sorcerer level 1 has no sorceryPoints ---
+  assert('sorcerer lv1: no sorceryPoints', makeSorcerer().resources.sorceryPoints === undefined);
+}
+
+{
+  // --- 21e. Sorcerer level 2 gains Sorcery Points = 2 ---
+  const { sheet: s2 } = applyLevelUp(makeSorcerer(), 'Sorcerer');
+  assert('sorcerer lv2: sorceryPoints exists', s2.resources.sorceryPoints !== undefined);
+  eq('sorcerer lv2: sorceryPoints max=2', s2.resources.sorceryPoints!.max, 2);
+  eq('sorcerer lv2: sorceryPoints remaining=2', s2.resources.sorceryPoints!.remaining, 2);
+}
+
+{
+  // --- 21f. Sorcerer level 5 has 5 Sorcery Points ---
+  let sheet = levelTo(makeSorcerer(), 5, 'Sorcerer');
+  eq('sorcerer lv5: sorceryPoints max=5', sheet.resources.sorceryPoints!.max, 5);
+}
+
+{
+  // --- 21g. Druid level 1 has no wildShape ---
+  assert('druid lv1: no wildShape', makeDruid().resources.wildShape === undefined);
+}
+
+{
+  // --- 21h. Druid level 2 gains Wild Shape (2 uses) ---
+  const { sheet: d2 } = applyLevelUp(applyLevelUp(makeDruid(), 'Druid').sheet, 'Druid');
+  assert('druid lv2: wildShape exists', d2.resources.wildShape !== undefined);
+  eq('druid lv2: wildShape max=2', d2.resources.wildShape!.max, 2);
+  eq('druid lv2: wildShape remaining=2', d2.resources.wildShape!.remaining, 2);
+}
+
+{
+  // --- 21i. Druid level 5 still has 2 Wild Shape uses ---
+  let sheet = levelTo(makeDruid(), 5, 'Druid');
+  eq('druid lv5: wildShape max=2', sheet.resources.wildShape!.max, 2);
+}
+
+{
+  // --- 21j. popLevel removes Action Surge when reverting Fighter lv2 ---
+  const f1 = makeFighter();
+  const { sheet: f2 } = applyLevelUp(f1, 'Fighter');
+  const { sheet: f1again } = popLevel(f2);
+  assert('fighter pop lv2: actionSurge removed', f1again.resources.actionSurge === undefined);
 }
 
 // ---- Results ------------------------------------------------
