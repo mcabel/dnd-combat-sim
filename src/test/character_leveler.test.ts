@@ -333,6 +333,175 @@ function makeRanger(overrides: Partial<CharacterSheet> = {}): CharacterSheet {
   return { ...base, ...overrides };
 }
 
+/** Bard level-1 sheet (CHA 16, DEX 14). */
+function makeBard(overrides: Partial<CharacterSheet> = {}): CharacterSheet {
+  const base: CharacterSheet = {
+    id: randomUUID(), version: 1,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    name: 'Melodia', race: 'Half-Elf', background: 'Entertainer',
+    alignment: 'Chaotic Good',
+    firstClass: 'Bard',
+    classLevels: [{ className: 'Bard', level: 1 }],
+    subclassChoices: {},
+    experiencePoints: 0,
+    baseStats: { str: 8, dex: 14, con: 12, int: 10, wis: 10, cha: 16 },
+    stats:     { str: 8, dex: 14, con: 12, int: 10, wis: 10, cha: 18 },
+    maxHP: 9, currentHP: 9, temporaryHP: 0,
+    armorClass: 14, acFormula: 'Leather + DEX', speed: 30,
+    hitDice: [{ className: 'Bard', dieSides: 8, total: 1, remaining: 1 }],
+    proficiencies: {
+      armor: ['light'], weapons: ['simple-melee','simple-ranged','martial-melee'],
+      tools: ['lute'], savingThrows: ['dex','cha'],
+      skills: ['Persuasion','Performance','Deception'], expertise: ['Persuasion'],
+    },
+    languages: ['Common', 'Elvish', 'Gnomish'],
+    resources: {
+      bardicInspiration: { max: 4, remaining: 4, dieSides: 6 },
+    },
+    spellcasting: {
+      ability: 'cha', spellAttackBonus: 6, saveDC: 14,
+      slots: { '1': 2 }, slotsUsed: { '1': 0 },
+      cantrips: ['Vicious Mockery', 'Minor Illusion'],
+      knownSpells: ['Healing Word', 'Dissonant Whispers'],
+      preparedSpells: [],
+      spellbook: [],
+    },
+    equipment: [{ name: 'Rapier', quantity: 1, equipped: true, category: 'weapon' }],
+    gold: 15,
+    level1Features: [{ name: 'Bardic Inspiration (d6)', description: 'Grant a d6 die to an ally.', source: 'class' },
+                     { name: 'Spellcasting',             description: 'CHA caster.',                source: 'class' }],
+    allFeatures:    [{ name: 'Bardic Inspiration (d6)', description: 'Grant a d6 die to an ally.', source: 'class' },
+                     { name: 'Spellcasting',             description: 'CHA caster.',                source: 'class' }],
+    feats: [], backgroundFeature: 'By Popular Demand', exhaustionLevel: 0, levelHistory: [],
+  };
+  return { ...base, ...overrides };
+}
+
+/** Cleric level-1 sheet (WIS 16, CON 14). */
+function makeCleric(overrides: Partial<CharacterSheet> = {}): CharacterSheet {
+  const base: CharacterSheet = {
+    id: randomUUID(), version: 1,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    name: 'Aldric', race: 'Human', background: 'Acolyte',
+    alignment: 'Lawful Good',
+    firstClass: 'Cleric',
+    classLevels: [{ className: 'Cleric', level: 1 }],
+    subclassChoices: {},
+    experiencePoints: 0,
+    baseStats: { str: 14, dex: 10, con: 14, int: 10, wis: 16, cha: 12 },
+    stats:     { str: 15, dex: 10, con: 14, int: 10, wis: 17, cha: 12 },
+    maxHP: 10, currentHP: 10, temporaryHP: 0,
+    armorClass: 16, acFormula: 'Chain Mail', speed: 30,
+    hitDice: [{ className: 'Cleric', dieSides: 8, total: 1, remaining: 1 }],
+    proficiencies: {
+      armor: ['light','medium','shield'], weapons: ['simple-melee','simple-ranged'],
+      tools: [], savingThrows: ['wis','cha'],
+      skills: ['Religion','Medicine'], expertise: [],
+    },
+    languages: ['Common', 'Celestial'],
+    resources: {
+      channelDivinity: { max: 1, remaining: 1 },
+    },
+    spellcasting: {
+      ability: 'wis', spellAttackBonus: 5, saveDC: 13,
+      slots: { '1': 2 }, slotsUsed: { '1': 0 },
+      cantrips: ['Sacred Flame', 'Guidance'],
+      knownSpells: [],
+      preparedSpells: ['Cure Wounds', 'Bless', 'Guiding Bolt'],
+      spellbook: [],
+    },
+    equipment: [{ name: 'Mace', quantity: 1, equipped: true, category: 'weapon' }],
+    gold: 15,
+    level1Features: [{ name: 'Spellcasting',     description: 'WIS caster.',              source: 'class' },
+                     { name: 'Divine Domain',     description: 'Choose your Divine Domain.', source: 'subclass' }],
+    allFeatures:    [{ name: 'Spellcasting',     description: 'WIS caster.',              source: 'class' },
+                     { name: 'Divine Domain',     description: 'Choose your Divine Domain.', source: 'subclass' }],
+    feats: [], backgroundFeature: 'Shelter of the Faithful', exhaustionLevel: 0, levelHistory: [],
+  };
+  return { ...base, ...overrides };
+}
+
+/** Monk level-1 sheet (DEX 16, WIS 14). */
+function makeMonk(overrides: Partial<CharacterSheet> = {}): CharacterSheet {
+  const base: CharacterSheet = {
+    id: randomUUID(), version: 1,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    name: 'Jian', race: 'Human', background: 'Hermit',
+    alignment: 'Lawful Neutral',
+    firstClass: 'Monk',
+    classLevels: [{ className: 'Monk', level: 1 }],
+    subclassChoices: {},
+    experiencePoints: 0,
+    baseStats: { str: 12, dex: 16, con: 12, int: 10, wis: 14, cha: 8 },
+    stats:     { str: 12, dex: 17, con: 12, int: 10, wis: 15, cha: 8 },
+    maxHP: 9, currentHP: 9, temporaryHP: 0,
+    armorClass: 15, acFormula: 'Unarmored (DEX+WIS)', speed: 30,
+    hitDice: [{ className: 'Monk', dieSides: 8, total: 1, remaining: 1 }],
+    proficiencies: {
+      armor: [], weapons: ['simple-melee','simple-ranged'],
+      tools: ['herbalism-kit'], savingThrows: ['str','dex'],
+      skills: ['Acrobatics','Insight'], expertise: [],
+    },
+    languages: ['Common', 'Dwarvish'],
+    resources: {},
+    equipment: [{ name: 'Shortsword', quantity: 1, equipped: true, category: 'weapon' }],
+    gold: 5,
+    level1Features: [{ name: 'Martial Arts', description: 'Use DEX for unarmed attacks; unarmed strike deals 1d4.', source: 'class' },
+                     { name: 'Unarmored Defense (Monk)', description: 'AC = 10 + DEX mod + WIS mod when unarmored.', source: 'class' }],
+    allFeatures:    [{ name: 'Martial Arts', description: 'Use DEX for unarmed attacks; unarmed strike deals 1d4.', source: 'class' },
+                     { name: 'Unarmored Defense (Monk)', description: 'AC = 10 + DEX mod + WIS mod when unarmored.', source: 'class' }],
+    feats: [], backgroundFeature: 'Discovery', exhaustionLevel: 0, levelHistory: [],
+  };
+  return { ...base, ...overrides };
+}
+
+/** Warlock level-1 sheet (CHA 16, CON 14). */
+function makeWarlock(overrides: Partial<CharacterSheet> = {}): CharacterSheet {
+  const base: CharacterSheet = {
+    id: randomUUID(), version: 1,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    name: 'Vesper', race: 'Tiefling', background: 'Charlatan',
+    alignment: 'Chaotic Neutral',
+    firstClass: 'Warlock',
+    classLevels: [{ className: 'Warlock', level: 1 }],
+    subclassChoices: {},
+    experiencePoints: 0,
+    baseStats: { str: 8, dex: 14, con: 14, int: 12, wis: 10, cha: 16 },
+    stats:     { str: 8, dex: 14, con: 14, int: 12, wis: 10, cha: 18 },
+    maxHP: 9, currentHP: 9, temporaryHP: 0,
+    armorClass: 12, acFormula: 'Leather + DEX', speed: 30,
+    hitDice: [{ className: 'Warlock', dieSides: 8, total: 1, remaining: 1 }],
+    proficiencies: {
+      armor: ['light'], weapons: ['simple-melee','simple-ranged'],
+      tools: [], savingThrows: ['wis','cha'],
+      skills: ['Deception','Arcana'], expertise: [],
+    },
+    languages: ['Common', 'Infernal', 'Abyssal'],
+    resources: {},
+    spellcasting: {
+      ability: 'cha', spellAttackBonus: 6, saveDC: 14,
+      slots: {}, slotsUsed: {},
+      pactSlots: { slotLevel: 1, total: 1, used: 0 },
+      cantrips: ['Eldritch Blast', 'Chill Touch'],
+      knownSpells: ['Hex'],
+      preparedSpells: [],
+      spellbook: [],
+    },
+    equipment: [{ name: 'Light Crossbow', quantity: 1, equipped: true, category: 'weapon' }],
+    gold: 15,
+    level1Features: [{ name: 'Otherworldly Patron', description: 'Gain your patron feature.', source: 'subclass' },
+                     { name: 'Pact Magic',           description: 'CHA Pact Magic caster.',   source: 'class' }],
+    allFeatures:    [{ name: 'Otherworldly Patron', description: 'Gain your patron feature.', source: 'subclass' },
+                     { name: 'Pact Magic',           description: 'CHA Pact Magic caster.',   source: 'class' }],
+    feats: [], backgroundFeature: 'False Identity', exhaustionLevel: 0, levelHistory: [],
+  };
+  return { ...base, ...overrides };
+}
+
 // =============================================================
 // 1. Immutability
 // =============================================================
@@ -1269,6 +1438,77 @@ console.log('\n=== 22. Subclass prompts (Sorcerer / Druid / Ranger) ===\n');
   const r2chosen = { ...r2, subclassChoices: { Ranger: 'Hunter' } };
   const { subclassPrompt } = applyLevelUp(r2chosen, 'Ranger');
   assert('Ranger lv3 already chosen: no prompt', subclassPrompt === undefined);
+}
+
+
+{
+  // --- 22i. Bard lv1→2: no subclass prompt guard (Bard College at lv3, PHB p.54) ---
+  const { subclassPrompt } = applyLevelUp(makeBard(), 'Bard');
+  assert('Bard lv2: no subclass prompt', subclassPrompt === undefined);
+}
+
+{
+  // --- 22j. Bard lv2→3: subclass prompt fires (PHB p.54 — Bard College) ---
+  const b2 = levelTo(makeBard(), 2, 'Bard');
+  const { subclassPrompt } = applyLevelUp(b2, 'Bard');
+  eq('Bard lv3: subclass prompt = Bard', subclassPrompt, 'Bard');
+}
+
+{
+  // --- 22k. Bard lv3 with college already chosen: no prompt ---
+  const b2 = levelTo(makeBard(), 2, 'Bard');
+  const b2chosen = { ...b2, subclassChoices: { Bard: 'College of Lore' } };
+  const { subclassPrompt } = applyLevelUp(b2chosen, 'Bard');
+  assert('Bard lv3 already chosen: no prompt', subclassPrompt === undefined);
+}
+
+{
+  // --- 22l. Cleric lv0→1: subclass prompt fires (PHB p.56 — Divine Domain) ---
+  const lv0 = { ...makeCleric(), classLevels: [{ className: 'Cleric' as const, level: 0 }], subclassChoices: {} };
+  const { subclassPrompt } = applyLevelUp(lv0 as CharacterSheet, 'Cleric');
+  eq('Cleric lv1: subclass prompt = Cleric', subclassPrompt, 'Cleric');
+}
+
+{
+  // --- 22m. Cleric lv0→1 with domain already chosen: no prompt ---
+  const lv0chosen = { ...makeCleric(), classLevels: [{ className: 'Cleric' as const, level: 0 }], subclassChoices: { Cleric: 'Life' } };
+  const { subclassPrompt } = applyLevelUp(lv0chosen as CharacterSheet, 'Cleric');
+  assert('Cleric lv1 already chosen: no prompt', subclassPrompt === undefined);
+}
+
+{
+  // --- 22n. Monk lv1→2: no subclass prompt (Monastic Tradition at lv3, PHB p.78) ---
+  const { subclassPrompt } = applyLevelUp(makeMonk(), 'Monk');
+  assert('Monk lv2: no subclass prompt', subclassPrompt === undefined);
+}
+
+{
+  // --- 22o. Monk lv2→3: subclass prompt fires (PHB p.78 — Monastic Tradition) ---
+  const m2 = levelTo(makeMonk(), 2, 'Monk');
+  const { subclassPrompt } = applyLevelUp(m2, 'Monk');
+  eq('Monk lv3: subclass prompt = Monk', subclassPrompt, 'Monk');
+}
+
+{
+  // --- 22p. Monk lv3 with tradition already chosen: no prompt ---
+  const m2 = levelTo(makeMonk(), 2, 'Monk');
+  const m2chosen = { ...m2, subclassChoices: { Monk: 'Way of the Open Hand' } };
+  const { subclassPrompt } = applyLevelUp(m2chosen, 'Monk');
+  assert('Monk lv3 already chosen: no prompt', subclassPrompt === undefined);
+}
+
+{
+  // --- 22q. Warlock lv0→1: subclass prompt fires (PHB p.107 — Otherworldly Patron) ---
+  const lv0 = { ...makeWarlock(), classLevels: [{ className: 'Warlock' as const, level: 0 }], subclassChoices: {} };
+  const { subclassPrompt } = applyLevelUp(lv0 as CharacterSheet, 'Warlock');
+  eq('Warlock lv1: subclass prompt = Warlock', subclassPrompt, 'Warlock');
+}
+
+{
+  // --- 22r. Warlock lv0→1 with patron already chosen: no prompt ---
+  const lv0chosen = { ...makeWarlock(), classLevels: [{ className: 'Warlock' as const, level: 0 }], subclassChoices: { Warlock: 'The Fiend' } };
+  const { subclassPrompt } = applyLevelUp(lv0chosen as CharacterSheet, 'Warlock');
+  assert('Warlock lv1 already chosen: no prompt', subclassPrompt === undefined);
 }
 
 // ---- Results ------------------------------------------------
