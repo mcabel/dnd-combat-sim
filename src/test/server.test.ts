@@ -1699,6 +1699,100 @@ async function run() {
     });
   }
 
+  // ── GET /api/stat-optimizer ────────────────────────────────
+
+  await test('GET /api/stat-optimizer 400 without race', async () => {
+    const { status } = await request(BASE, '/api/stat-optimizer?class=Fighter');
+    assert(status === 400, `Expected 400, got ${status}`);
+  });
+
+  await test('GET /api/stat-optimizer 400 without class', async () => {
+    const { status } = await request(BASE, '/api/stat-optimizer?race=Human');
+    assert(status === 400, `Expected 400, got ${status}`);
+  });
+
+  await test('GET /api/stat-optimizer 400 on unknown race', async () => {
+    const { status } = await request(BASE, '/api/stat-optimizer?race=Klingon&class=Fighter');
+    assert(status === 400, `Expected 400, got ${status}`);
+  });
+
+  await test('GET /api/stat-optimizer 400 on unknown class', async () => {
+    const { status } = await request(BASE, '/api/stat-optimizer?race=Human&class=Ninja');
+    assert(status === 400, `Expected 400, got ${status}`);
+  });
+
+  await test('GET /api/stat-optimizer returns expected shape', async () => {
+    const { status, json } = await request(BASE, '/api/stat-optimizer?race=Human&class=Fighter');
+    assert(status === 200, `Expected 200, got ${status}`);
+    assert(json.race === 'Human', `Expected race Human, got ${json.race}`);
+    assert(json.class === 'Fighter', `Expected class Fighter, got ${json.class}`);
+    assert(Array.isArray(json.standardArray), 'standardArray should be array');
+    assert(Array.isArray(json.priorityOrder) && json.priorityOrder.length === 6, 'priorityOrder should have 6 entries');
+    assert(json.baseScores && typeof json.baseScores === 'object', 'baseScores required');
+    assert(json.finalScores && typeof json.finalScores === 'object', 'finalScores required');
+    assert(typeof json.isFlexibleASI === 'boolean', 'isFlexibleASI should be boolean');
+  });
+
+  await test('GET /api/stat-optimizer standard array values are [15,14,13,12,10,8]', async () => {
+    const { json } = await request(BASE, '/api/stat-optimizer?race=Human&class=Fighter');
+    const vals: number[] = [...json.standardArray].sort((a: number, b: number) => b - a);
+    assert(JSON.stringify(vals) === JSON.stringify([15,14,13,12,10,8]),
+      `Standard array mismatch: ${JSON.stringify(vals)}`);
+  });
+
+  await test('GET /api/stat-optimizer baseScores use all standard array values exactly once', async () => {
+    const { json } = await request(BASE, '/api/stat-optimizer?race=Tiefling&class=Warlock');
+    const bases = (Object.values(json.baseScores) as number[]).sort((a, b) => b - a);
+    assert(JSON.stringify(bases) === JSON.stringify([15,14,13,12,10,8]),
+      `baseScores should be standard array permutation, got ${JSON.stringify(bases)}`);
+  });
+
+  await test('GET /api/stat-optimizer fixed-ASI race: finalScores = baseScores + defaultASI', async () => {
+    // Hill Dwarf: defaultASI = {con:2, wis:1}
+    // Barbarian priority: str, con, dex, wis, cha, int => base str=15, con=14, dex=13, wis=12, cha=10, int=8
+    // final con = 14+2=16, wis = 12+1=13
+    const { json } = await request(BASE, '/api/stat-optimizer?race=Hill%20Dwarf&class=Barbarian');
+    assert(json.isFlexibleASI === false, 'Hill Dwarf should not be flexible');
+    assert(json.finalScores.str === 15, `Expected STR=15, got ${json.finalScores.str}`);
+    assert(json.finalScores.con === 16, `Expected CON=16, got ${json.finalScores.con}`);
+    assert(json.finalScores.wis === 13, `Expected WIS=13, got ${json.finalScores.wis}`);
+    assert(json.priorityOrder[0] === 'str', `Barbarian rank-1 should be str, got ${json.priorityOrder[0]}`);
+  });
+
+  await test('GET /api/stat-optimizer flexible-ASI race: suggestedAsiAssignment on top-priority stats', async () => {
+    // Human (Variant): allotment [1,1], no defaultASI => flexible
+    // Wizard priority: int, con, dex, wis, cha, str => suggested int+1, con+1
+    const { json } = await request(BASE, '/api/stat-optimizer?race=Human%20(Variant)&class=Wizard');
+    assert(json.isFlexibleASI === true, 'Human Variant should be flexible');
+    assert(json.suggestedAsiAssignment.int === 1, `Expected int+1 in ASI, got ${json.suggestedAsiAssignment.int}`);
+    assert(json.suggestedAsiAssignment.con === 1, `Expected con+1 in ASI, got ${json.suggestedAsiAssignment.con}`);
+    assert(json.finalScores.int === 16, `Expected INT final=16, got ${json.finalScores.int}`);
+  });
+
+  await test('GET /api/stat-optimizer Custom Lineage Paladin: +2 on STR (top priority)', async () => {
+    // Custom Lineage: allotment [2], flexible
+    // Paladin priority: str, cha, con, dex, wis, int => +2 on str
+    const { json } = await request(BASE, '/api/stat-optimizer?race=Custom%20Lineage&class=Paladin');
+    assert(json.isFlexibleASI === true, 'Custom Lineage should be flexible');
+    assert(json.suggestedAsiAssignment.str === 2, `Expected str+2, got ${JSON.stringify(json.suggestedAsiAssignment)}`);
+    assert(json.finalScores.str === 17, `Expected STR final=17, got ${json.finalScores.str}`);
+  });
+
+  await test('GET /api/stat-optimizer Wizard returns int as rank-1 priority', async () => {
+    const { json } = await request(BASE, '/api/stat-optimizer?race=High%20Elf&class=Wizard');
+    assert(json.priorityOrder[0] === 'int', `Wizard rank-1 should be int, got ${json.priorityOrder[0]}`);
+    assert(json.baseScores.int === 15, `Wizard highest base score should go to INT, got ${json.baseScores.int}`);
+  });
+
+  await test('GET /api/stat-optimizer Monk: dex is rank-1, wis is rank-2', async () => {
+    const { json } = await request(BASE, '/api/stat-optimizer?race=Wood%20Elf&class=Monk');
+    assert(json.priorityOrder[0] === 'dex', `Monk rank-1 should be dex, got ${json.priorityOrder[0]}`);
+    assert(json.priorityOrder[1] === 'wis', `Monk rank-2 should be wis, got ${json.priorityOrder[1]}`);
+    assert(json.baseScores.dex === 15, `Monk highest base should go to DEX`);
+    assert(json.baseScores.wis === 14, `Monk second base should go to WIS`);
+  });
+
+
   // ── Tear down ─────────────────────────────────────────────
 
   // Clean up test parties created during this run

@@ -42,6 +42,7 @@ import { EncounterSpec }               from './scenarios/encounter';
 import { totalLevel, XP_THRESHOLDS, crToXP, abilityModifier, CharacterAbilityScores } from './characters/types';
 import { RACE_DATA, RACE_NAMES }             from './characters/race_data';
 import { BACKGROUND_DATA, BACKGROUND_NAMES } from './characters/background_data';
+import { computeStatRecommendation, CLASS_STAT_PRIORITY } from './characters/stat_optimizer';
 
 // Lazy-loaded bestiary — mirrors getBestiary() in server.ts
 let _bestiary: Map<string, Raw5etoolsMonster> | null = null;
@@ -972,6 +973,40 @@ router.get('/races', (_req: Request, res: Response) => {
 router.get('/backgrounds', (_req: Request, res: Response) => {
   const backgrounds = BACKGROUND_NAMES.map(name => BACKGROUND_DATA[name]);
   return res.json({ backgrounds });
+});
+
+// ---- GET /api/stat-optimizer --------------------------------
+// Returns the recommended standard-array assignment for a given
+// race + class combination.
+//
+// Query params: race (string), class (string)
+// Response: StatOptimizerResult
+router.get('/stat-optimizer', (req: Request, res: Response) => {
+  const raceName  = typeof req.query.race  === 'string' ? req.query.race  : '';
+  const className = typeof req.query.class === 'string' ? req.query.class : '';
+
+  if (!raceName) {
+    return res.status(400).json({ error: 'race query parameter is required' });
+  }
+  if (!className) {
+    return res.status(400).json({ error: 'class query parameter is required' });
+  }
+
+  const raceEntry = RACE_DATA[raceName];
+  if (!raceEntry) {
+    return res.status(400).json({
+      error: `Unknown race "${raceName}". Valid races: ${RACE_NAMES.join(', ')}`,
+    });
+  }
+
+  if (!(className in CLASS_STAT_PRIORITY)) {
+    return res.status(400).json({
+      error: `Unknown class "${className}". Valid classes: ${Object.keys(CLASS_STAT_PRIORITY).join(', ')}`,
+    });
+  }
+
+  const result = computeStatRecommendation(className as any, raceEntry);
+  return res.json(result);
 });
 
 // ============================================================
