@@ -34,6 +34,7 @@ import { getSummonEntry }                           from '../summons/registry';
 import { rollGrappleContest, rollShoveContest, canGrappleOrShoveTarget } from './utils';
 import { computeLOS } from './los';
 import { removeEffectsFromCaster, getActiveAcBonus, getActiveBlessDie, getActiveHexDie } from './spell_effects';
+import { applyCantripEffect } from './cantrip_effects';
 import { execute as executeHex } from '../spells/hex';
 import { execute as executeMagicMissile } from '../spells/magic_missile';
 import { execute as executeBurningHands, shouldCast as shouldCastBurningHands } from '../spells/burning_hands';
@@ -364,6 +365,8 @@ function resolveAttack(
       // Track for rage-end check: target took damage since their last turn
       state.rageDamagedSinceLastTurn.add(target.id);
     }
+    // Apply cantrip special effects (e.g., Thorn Whip pull, Ray of Frost slow)
+    applyCantripEffect(attacker, target, action.name, state);
     applyWardingBondRedirect(target, dealt, state);
     checkDeath(target, state);
   }
