@@ -384,6 +384,22 @@ export interface Combatant {
   // Managed by src/engine/spell_effects.ts — use applySpellEffect / removeEffectsFromCaster
   // rather than mutating this array directly.
   activeEffects: ActiveEffect[];
+
+  // ---- Cantrip internal scratch fields ----------------------
+  // These are transient flags/values set by cantrip modules in src/spells/ and
+  // cleared by each module's cleanup() called from resetBudget() in utils.ts.
+  // They are optional (undefined = effect not active) and never persisted.
+  //
+  // Ray of Frost (PHB p.271): speed reduction scratch state.
+  _rayOfFrostOriginalSpeed?: number;
+  _hasRayOfFrost?: boolean;
+
+  // ---- Armor material (for cantrips like Shocking Grasp, PHB p.275) ----
+  // True when the creature wears metal armor (chain shirt, scale mail, breastplate,
+  // half plate, ring mail, chain mail, splint, plate). Optional — undefined is
+  // treated as "no metal armor". Populated by the parser when armor data is
+  // available; tests may set it directly.
+  hasMetalArmor?: boolean;
 }
 
 // ---- Obstacle -----------------------------------------------
