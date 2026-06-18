@@ -300,6 +300,39 @@ function levelTo(sheet: CharacterSheet, targetLevel: number, className?: string)
   return s;
 }
 
+/** Ranger level-1 sheet (DEX 16, WIS 14). */
+function makeRanger(overrides: Partial<CharacterSheet> = {}): CharacterSheet {
+  const base: CharacterSheet = {
+    id: randomUUID(), version: 1,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    name: 'Sylvara', race: 'Wood Elf', background: 'Outlander',
+    alignment: 'Neutral Good',
+    firstClass: 'Ranger',
+    classLevels: [{ className: 'Ranger', level: 1 }],
+    subclassChoices: {},
+    experiencePoints: 0,
+    baseStats: { str: 12, dex: 16, con: 14, int: 10, wis: 14, cha: 8 },
+    stats:     { str: 12, dex: 17, con: 14, int: 10, wis: 15, cha: 8 },
+    maxHP: 11, currentHP: 11, temporaryHP: 0,
+    armorClass: 14, acFormula: 'Scale Mail', speed: 35,
+    hitDice: [{ className: 'Ranger', dieSides: 10, total: 1, remaining: 1 }],
+    proficiencies: {
+      armor: ['light','medium','shield'], weapons: ['simple-melee','simple-ranged','martial-melee','martial-ranged'],
+      tools: [], savingThrows: ['str','dex'],
+      skills: ['Perception','Stealth'], expertise: [],
+    },
+    languages: ['Common', 'Elvish'],
+    resources: {},
+    equipment: [{ name: 'Longbow', quantity: 1, equipped: true, category: 'weapon' }],
+    gold: 15,
+    level1Features: [{ name: 'Favored Enemy', description: 'Choose a favored enemy type.', source: 'class' }],
+    allFeatures:    [{ name: 'Favored Enemy', description: 'Choose a favored enemy type.', source: 'class' }],
+    feats: [], backgroundFeature: 'Wanderer', exhaustionLevel: 0, levelHistory: [],
+  };
+  return { ...base, ...overrides };
+}
+
 // =============================================================
 // 1. Immutability
 // =============================================================
@@ -1167,6 +1200,75 @@ console.log('\n=== 19. popLevel — Stack Reversal ===\n');
   const { sheet: f2 } = applyLevelUp(f1, 'Fighter');
   const { sheet: f1again } = popLevel(f2);
   assert('fighter pop lv2: actionSurge removed', f1again.resources.actionSurge === undefined);
+}
+
+// =============================================================
+// 22. Subclass prompt tests — Sorcerer, Druid, Ranger
+// =============================================================
+
+console.log('\n=== 22. Subclass prompts (Sorcerer / Druid / Ranger) ===\n');
+
+{
+  // --- 22a. Sorcerer level 1 triggers subclass prompt (PHB p.99 — Origin chosen at lv1) ---
+  // The factory starts at lv1, so the prompt fires during that first applyLevelUp.
+  // We check via a fresh lv0-like sheet to simulate first level-up.
+  const base = makeSorcerer();
+  // Sorcerer SUBCLASS_LEVEL = 1, so a fresh lv1 sheet should already have
+  // the prompt; simulate by starting from a pre-lv1 state.
+  // Instead: verify the prompt fires when subclassChoices is empty at lv1.
+  const lv1NoChoice = { ...base, classLevels: [{ className: 'Sorcerer', level: 0 }], subclassChoices: {} };
+  const { subclassPrompt } = applyLevelUp(lv1NoChoice as CharacterSheet, 'Sorcerer');
+  eq('Sorcerer lv1: subclass prompt = Sorcerer', subclassPrompt, 'Sorcerer');
+}
+
+{
+  // --- 22b. Sorcerer lv1 with subclass already chosen: no prompt ---
+  const base = makeSorcerer();
+  const lv1NoChoice = { ...base, classLevels: [{ className: 'Sorcerer', level: 0 }], subclassChoices: { Sorcerer: 'Wild Magic' } };
+  const { subclassPrompt } = applyLevelUp(lv1NoChoice as CharacterSheet, 'Sorcerer');
+  assert('Sorcerer lv1 already chosen: no prompt', subclassPrompt === undefined);
+}
+
+{
+  // --- 22c. Druid level 1→2 triggers Circle subclass prompt (PHB p.67) ---
+  const { subclassPrompt } = applyLevelUp(makeDruid(), 'Druid');
+  eq('Druid lv2: subclass prompt = Druid', subclassPrompt, 'Druid');
+}
+
+{
+  // --- 22d. Druid lv1 does not trigger prompt ---
+  const d0 = { ...makeDruid(), classLevels: [{ className: 'Druid', level: 0 }], subclassChoices: {} };
+  // lv0→lv1: subclass level is 2, so no prompt yet
+  const { subclassPrompt } = applyLevelUp(d0 as CharacterSheet, 'Druid');
+  assert('Druid lv1: no subclass prompt', subclassPrompt === undefined);
+}
+
+{
+  // --- 22e. Druid lv2 with subclass already chosen: no prompt ---
+  const d1 = { ...makeDruid(), subclassChoices: { Druid: 'Circle of the Moon' } };
+  const { subclassPrompt } = applyLevelUp(d1, 'Druid');
+  assert('Druid lv2 already chosen: no prompt', subclassPrompt === undefined);
+}
+
+{
+  // --- 22f. Ranger lv1→2: no subclass prompt (archetype at lv3) ---
+  const { subclassPrompt: p2 } = applyLevelUp(makeRanger(), 'Ranger');
+  assert('Ranger lv2: no subclass prompt', p2 === undefined);
+}
+
+{
+  // --- 22g. Ranger lv2→3: subclass prompt fires (PHB p.92 — Ranger Archetype) ---
+  const r2 = levelTo(makeRanger(), 2, 'Ranger');
+  const { subclassPrompt } = applyLevelUp(r2, 'Ranger');
+  eq('Ranger lv3: subclass prompt = Ranger', subclassPrompt, 'Ranger');
+}
+
+{
+  // --- 22h. Ranger lv3 with subclass already chosen: no prompt ---
+  const r2 = levelTo(makeRanger(), 2, 'Ranger');
+  const r2chosen = { ...r2, subclassChoices: { Ranger: 'Hunter' } };
+  const { subclassPrompt } = applyLevelUp(r2chosen, 'Ranger');
+  assert('Ranger lv3 already chosen: no prompt', subclassPrompt === undefined);
 }
 
 // ---- Results ------------------------------------------------

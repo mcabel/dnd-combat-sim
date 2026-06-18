@@ -989,6 +989,7 @@ function classLevelStr(cls) {
 // ── Character Detail ──────────────────────────────────────────
 async function loadCharDetail(id) {
   showErr('');
+  _spellEditMode = false;
   try {
     const data = await api(`/api/characters/${id}`);
     S.charDetail = data.character;
@@ -1060,7 +1061,20 @@ function renderCharDetail() {
         <button class="sm secondary" onclick="changeExhaustion(-1)" style="padding:2px 6px;font-size:10px" title="Remove exhaustion" ${exh<=0?'disabled':''}>−</button>
       </div>
       ${exh>0 ? `<div style="font-size:9px;color:var(--danger);margin-top:4px;text-align:center;line-height:1.3">${EXHAUSTION_EFFECTS[exh-1]}</div>` : ''}
-    </div>`;
+    </div>
+    ${(() => {
+      const hd = c.hitDice || [];
+      const hdRem = hd.reduce((s: number, d: any) => s + d.remaining, 0);
+      const hdTot = hd.reduce((s: number, d: any) => s + d.total, 0);
+      const dieLabel = hd.length === 0 ? '' : hd.length === 1
+        ? `d${hd[0].dieSides}`
+        : [...new Set(hd.map((d: any) => `d${d.dieSides}`))].join('/');
+      const hdColor = hdRem === 0 ? 'var(--muted)' : hdRem < hdTot ? '#e6a020' : 'inherit';
+      return `<div class="stat-box">
+        <div style="font-family:var(--serif);font-size:20px;color:${hdColor}">${hdRem}<span style="font-size:12px;color:var(--muted)">/${hdTot}</span></div>
+        <div class="lbl">HD ${dieLabel}</div>
+      </div>`;
+    })()}`;
 
   // Death saves
   renderDeathSaves(c);
@@ -1156,6 +1170,7 @@ function renderCharDetail() {
     let html = `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
       <span style="font-size:11px;color:var(--muted)">DC ${spl.saveDC} · +${spl.spellAttackBonus} to hit · ${spl.ability.toUpperCase()}</span>
       <button class="sm" onclick="resetAllSlots()" style="padding:1px 7px;font-size:10px;opacity:0.6" title="Restore all spell slots">↺ Reset Slots</button>
+      <button class="sm ${_spellEditMode ? 'secondary' : ''}" onclick="toggleSpellEdit()" style="padding:1px 7px;font-size:10px;${_spellEditMode ? 'border-color:var(--accent);color:var(--accent)' : 'opacity:0.6'}" title="Edit known/prepared spells">✎ Edit Spells</button>
       ${conc
         ? `<span style="display:inline-flex;align-items:center;gap:4px;background:rgba(180,120,30,0.15);border:1px solid var(--accent);border-radius:12px;padding:1px 8px;font-size:10px;color:var(--accent)">
             ◎ ${esc(conc)}
@@ -1164,9 +1179,29 @@ function renderCharDetail() {
         : `<button class="sm" onclick="showConcInput()" style="padding:1px 7px;font-size:10px;opacity:0.6" title="Set concentration spell">◎ Concentrate</button>`
       }
     </div>`;
-    if (spl.cantrips && spl.cantrips.length > 0) {
-      const names = spl.cantrips.map(n => esc(n)).join(', ');
-      html += `<div style="margin-bottom:2px"><strong>Cantrips (${spl.cantrips.length})</strong> <span style="color:var(--muted);font-size:11px">${names}</span></div>`;
+    if (spl.cantrips && (spl.cantrips.length > 0 || _spellEditMode)) {
+      if (_spellEditMode) {
+        const badges = spl.cantrips.map(n =>
+          `<span style="display:inline-flex;align-items:center;gap:2px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:1px 6px;font-size:11px">
+            ${esc(n)}
+            <button onclick="removeSpell('cantrips','${esc(n).replace(/'/g,"\\'")}') " style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:11px;padding:0 0 0 2px;line-height:1" title="Remove">✕</button>
+          </span>`
+        ).join(' ');
+        html += `<div style="margin-bottom:4px">
+          <strong style="font-size:11px">Cantrips (${spl.cantrips.length})</strong>
+          <div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:3px;align-items:center">
+            ${badges}
+            <span style="display:inline-flex;gap:3px;align-items:center">
+              <input id="spell-add-input-cantrips" type="text" placeholder="Add cantrip…" style="font-size:11px;padding:1px 5px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);width:110px"
+                onkeydown="if(event.key==='Enter')addSpell('cantrips')" />
+              <button class="sm secondary" onclick="addSpell('cantrips')" style="padding:1px 6px;font-size:10px">＋</button>
+            </span>
+          </div>
+        </div>`;
+      } else {
+        const names = spl.cantrips.map(n => esc(n)).join(', ');
+        html += `<div style="margin-bottom:2px"><strong>Cantrips (${spl.cantrips.length})</strong> <span style="color:var(--muted);font-size:11px">${names}</span></div>`;
+      }
     }
     for (let i=1; i<=9; i++) {
       const key = String(i);
@@ -1209,24 +1244,52 @@ function renderCharDetail() {
         <button class="sm secondary" style="padding:1px 7px;font-size:10px" onclick="restorePactSlot()" ${ps.used<=0?'disabled':''}>↩</button>
       </div>`;
     }
-    // Known / prepared spells
-    const spellList = (spl.preparedSpells && spl.preparedSpells.length > 0) ? spl.preparedSpells
-                    : (spl.knownSpells && spl.knownSpells.length > 0) ? spl.knownSpells
-                    : (spl.spellbook && spl.spellbook.length > 0) ? spl.spellbook
-                    : [];
-    if (spellList.length > 0) {
-      const label = (spl.preparedSpells && spl.preparedSpells.length > 0) ? 'Prepared'
-                  : (spl.spellbook && spl.spellbook.length > 0) ? 'Spellbook'
-                  : 'Known';
-      const spellId = `spell-list-${c.id}`;
-      html += `<div style="margin-top:6px;border-top:1px solid var(--border);padding-top:6px">
-        <span style="font-size:11px;color:var(--muted);cursor:pointer" onclick="toggleSpellList('${spellId}')">
-          <strong>${label} Spells (${spellList.length})</strong> <span id="${spellId}-arrow">▸</span>
-        </span>
-        <div id="${spellId}" style="display:none;margin-top:4px;font-size:11px;color:var(--muted);line-height:1.7">
-          ${spellList.map(n => esc(n)).join(' · ')}
-        </div>
-      </div>`;
+    // Known / prepared / spellbook — editable in edit mode
+    function spellSection(label: string, listKey: string, spells: string[]) {
+      if (spells.length === 0 && !_spellEditMode) return '';
+      const topBorder = 'margin-top:6px;border-top:1px solid var(--border);padding-top:6px';
+      if (_spellEditMode) {
+        const badges = spells.map(n =>
+          `<span style="display:inline-flex;align-items:center;gap:2px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:1px 6px;font-size:11px">
+            ${esc(n)}
+            <button onclick="removeSpell('${listKey}','${n.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}') " style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:11px;padding:0 0 0 2px;line-height:1" title="Remove">✕</button>
+          </span>`
+        ).join(' ');
+        return `<div style="${topBorder}">
+          <strong style="font-size:11px">${label} (${spells.length})</strong>
+          <div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:3px;align-items:center">
+            ${badges}
+            <span style="display:inline-flex;gap:3px;align-items:center">
+              <input id="spell-add-input-${listKey}" type="text" placeholder="Add spell…" style="font-size:11px;padding:1px 5px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);width:120px"
+                onkeydown="if(event.key==='Enter')addSpell('${listKey}')" />
+              <button class="sm secondary" onclick="addSpell('${listKey}')" style="padding:1px 6px;font-size:10px">＋</button>
+            </span>
+          </div>
+        </div>`;
+      } else {
+        const spellId = `spell-list-${listKey}-${c.id}`;
+        return `<div style="${topBorder}">
+          <span style="font-size:11px;color:var(--muted);cursor:pointer" onclick="toggleSpellList('${spellId}')">
+            <strong>${label} (${spells.length})</strong> <span id="${spellId}-arrow">▸</span>
+          </span>
+          <div id="${spellId}" style="display:none;margin-top:4px;font-size:11px;color:var(--muted);line-height:1.7">
+            ${spells.map(n => esc(n)).join(' · ')}
+          </div>
+        </div>`;
+      }
+    }
+    // Determine which lists to show
+    const hasKnown    = spl.knownSpells    && spl.knownSpells.length > 0;
+    const hasPrepared = spl.preparedSpells && spl.preparedSpells.length > 0;
+    const hasSpellbook= spl.spellbook      && spl.spellbook.length > 0;
+    if (hasSpellbook || hasPrepared) {
+      // Wizard (or Artificer): show spellbook + prepared separately
+      html += spellSection('Spellbook', 'spellbook', spl.spellbook || []);
+      html += spellSection('Prepared', 'preparedSpells', spl.preparedSpells || []);
+    } else if (hasKnown || _spellEditMode) {
+      html += spellSection('Known', 'knownSpells', spl.knownSpells || []);
+    } else if (hasPrepared || _spellEditMode) {
+      html += spellSection('Prepared', 'preparedSpells', spl.preparedSpells || []);
     }
     splEl.innerHTML = html;
   } else {
@@ -1856,6 +1919,47 @@ async function doLevelUp() {
   finally { btn.disabled = false; btn.textContent = 'Level Up'; }
 }
 
+
+// ── Spell Management ──────────────────────────────────────────
+let _spellEditMode = false;
+
+function toggleSpellEdit() {
+  _spellEditMode = !_spellEditMode;
+  renderCharDetail();
+}
+
+async function addSpell(listKey: string) {
+  if (!S.charDetail?.spellcasting) return;
+  const input = document.getElementById(`spell-add-input-${listKey}`) as HTMLInputElement;
+  const name = input?.value?.trim();
+  if (!name) return;
+  const spl = S.charDetail.spellcasting;
+  const list: string[] = [...((spl as any)[listKey] || [])];
+  if (list.includes(name)) { showBanner('Spell already in list.', 'error'); return; }
+  list.push(name);
+  try {
+    const data = await api(`/api/characters/${S.charDetail.id}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ spellcasting: { ...spl, [listKey]: list } }),
+    });
+    S.charDetail = data.character;
+    renderCharDetail();
+  } catch(e) { showBanner('Failed to add spell', 'error'); }
+}
+
+async function removeSpell(listKey: string, name: string) {
+  if (!S.charDetail?.spellcasting) return;
+  const spl = S.charDetail.spellcasting;
+  const list: string[] = ((spl as any)[listKey] || []).filter((n: string) => n !== name);
+  try {
+    const data = await api(`/api/characters/${S.charDetail.id}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ spellcasting: { ...spl, [listKey]: list } }),
+    });
+    S.charDetail = data.character;
+    renderCharDetail();
+  } catch(e) { showBanner('Failed to remove spell', 'error'); }
+}
 
 // ── Short Rest ────────────────────────────────────────────────
 let _srMode: 'average' | 'random' = 'average';
