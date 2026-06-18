@@ -49,6 +49,10 @@ import { execute as executeWardingBond } from '../spells/warding_bond';
 import { execute as executeShieldOfFaith } from '../spells/shield_of_faith';
 import { shouldCast as shouldCastMageArmor, execute as executeMageArmor } from '../spells/mage_armor';
 import { shouldCast as shouldCastShield, execute as executeShield } from '../spells/shield';
+import {
+  shouldCast as shouldCastGuidingBolt, execute as executeGuidingBolt,
+  cleanupMarks as cleanupGuidingBoltMarks, consumeMark as consumeGuidingBoltMark,
+} from '../spells/guiding_bolt';
 
 // ---- Combat log ---------------------------------------------
 
@@ -211,6 +215,15 @@ function resolveAttack(
   // Cantrip intrinsic advantage (pre-roll): e.g. Shocking Grasp vs metal armor (PHB p.275)
   const cantripAdv = getCantripAttackAdvantage(attacker, target, action.name);
   const advantage = baseAdv || packTacticsAdvantage || attacker.helpedThisTurn || cantripAdv;
+
+  // Guiding Bolt mark: consume on the first attack roll against the illuminated target (PHB p.248).
+  // Advantage from the mark is already captured in advState above; consuming it now ensures
+  // only one attack benefits regardless of multiattack or multiple attackers.
+  const gbConsumed = consumeGuidingBoltMark(target);
+  if (gbConsumed) {
+    log(state, 'condition_remove', attacker.id,
+      `Guiding Bolt's illumination fades from ${target.name} (consumed by this attack).`, target.id);
+  }
 
   // Cunning Action: Hide — hidden attacker is revealed on attack, hit or miss (PHB p.177/194).
   // Advantage was already captured above by resolveAttackAdvantage reading the 'hidden' condition.
@@ -950,6 +963,15 @@ function executePlannedAction(
       executeShield(actor, state, triggeringAttack);
       break;
     }
+
+    case 'guidingBolt': {
+      // Guiding Bolt — PHB p.248: ranged spell attack, 4d6 radiant, marks target.
+      // Next attack roll against marked target before end of caster's next turn has advantage.
+      const gbTarget = plan.targetId ? bf.combatants.get(plan.targetId) : null;
+      if (!gbTarget || gbTarget.isDead || gbTarget.isUnconscious) break;
+      if (shouldCastGuidingBolt(actor, gbTarget, bf)) executeGuidingBolt(actor, gbTarget, state);
+      break;
+    }
   }
 }
 
@@ -1229,6 +1251,10 @@ export function runCombat(
 
       // Reset budget (movement, action, bonus, reaction)
       resetBudget(actor);
+
+      // Guiding Bolt fallback expiry: remove any marks this caster placed last turn (PHB p.248).
+      // Primary expiry happens in resolveAttack (consumeGuidingBoltMark); this is the safety net.
+      cleanupGuidingBoltMarks(actor, battlefield);
 
       // Plan the turn
       const plan = planTurn(actor, battlefield);

@@ -106,6 +106,21 @@ export const SPELL_DB: Record<string, SpellTemplate> = {
     // costType defaults to 'action'
   },
 
+  // ---- Cleric ---------------------------------------------
+
+  'guiding bolt': {
+    // Ranged spell attack, 120 ft. On hit: 4d6 radiant + next attack vs target has advantage.
+    // PHB p.248. Dispatched via case 'guidingBolt'.
+    attackType: 'spell',
+    rangeNormal: 120,
+    damage: { count: 4, sides: 6, bonus: 0, average: avg(4, 6) },
+    damageType: 'radiant',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 1,
+  },
+
   // ---- Bard -----------------------------------------------
 
   'dissonant whispers': {

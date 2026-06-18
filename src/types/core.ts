@@ -486,6 +486,7 @@ export interface PlannedAction {
     | 'burningHands'   // Burning Hands — DEX save, 3d6 fire, 15-ft cone (Sorcerer/Wizard)
     | 'dissonantWhispers' // Dissonant Whispers — WIS save, 3d6 psychic + forced flee (Bard)
     | 'shield'         // Shield — reaction, +5 AC, blocks Magic Missile (Wizard/Sorcerer)
+    | 'guidingBolt'    // Guiding Bolt — ranged spell attack, 4d6 radiant, next attack vs target has advantage (Cleric)
     | 'legendary';
   action: Action | null;
   targetId: string | null;

@@ -22,6 +22,7 @@ import { shouldCast as shouldCastThunderwave } from '../spells/thunderwave';
 import { shouldCast as shouldCastArmsOfHadar } from '../spells/arms_of_hadar';
 import { shouldCast as shouldCastBurningHands, execute as executeBurningHands } from '../spells/burning_hands';
 import { shouldCast as shouldCastDissonantWhispers } from '../spells/dissonant_whispers';
+import { shouldCast as shouldCastGuidingBolt } from '../spells/guiding_bolt';
 import { shouldCast as shouldCastSleep } from '../spells/sleep';
 import { shouldCast as shouldCastWardingBond } from '../spells/warding_bond';
 import { shouldCast as shouldCastShieldOfFaith } from '../spells/shield_of_faith';
@@ -783,6 +784,21 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
       plan.bonusAction = planBonusAction(self, dwTarget, battlefield);
       return plan;
     }
+  }
+
+  // === GUIDING BOLT (action, single-target, Cleric) ===
+  // Ranged spell attack, 120 ft. On hit: 4d6 radiant + next attack vs target has advantage.
+  // Cleric's primary offensive spell. Fires when no AoE/control spell was chosen.
+  if (!plan.action && target && shouldCastGuidingBolt(self, target, battlefield)) {
+    plan.action = {
+      type: 'guidingBolt',
+      action: null,
+      targetId: target.id,
+      description: `${self.name} casts Guiding Bolt at ${target.name}`,
+    };
+    plan.targetId = target.id;
+    plan.bonusAction = planBonusAction(self, target, battlefield);
+    return plan;
   }
 
   // === MAGIC MISSILE (action, single-target, ranged) ===
