@@ -6,6 +6,7 @@
 import { Combatant, Action, DiceExpression, Condition, ActionBudget, Battlefield, CreatureSize, DamageType } from '../types/core';
 import { querySelf, queryVulnerability } from './adv_system';
 import { getActiveBlessDie } from './spell_effects';
+import { cleanup as cleanupShield } from '../spells/shield';
 
 // ---- Dice rolling -------------------------------------------
 
@@ -214,6 +215,9 @@ export function removeCondition(target: Combatant, condition: Condition): void {
 
 /** Reset a combatant's action budget at the start of their turn (PHB Ch.9). */
 export function resetBudget(c: Combatant): void {
+  // Shield expires at start of caster's next turn (PHB p.275)
+  cleanupShield(c);
+
   const speed = effectiveSpeed(c);
   c.budget = {
     movementFt: speed,

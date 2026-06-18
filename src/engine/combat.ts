@@ -47,6 +47,7 @@ import { shouldCast as shouldCastSleep, execute as executeSleep } from '../spell
 import { execute as executeWardingBond } from '../spells/warding_bond';
 import { execute as executeShieldOfFaith } from '../spells/shield_of_faith';
 import { shouldCast as shouldCastMageArmor, execute as executeMageArmor } from '../spells/mage_armor';
+import { shouldCast as shouldCastShield, execute as executeShield } from '../spells/shield';
 
 // ---- Combat log ---------------------------------------------
 
@@ -935,6 +936,13 @@ function executePlannedAction(
       } else {
         log(state, 'action', actor.id, plan.description);
       }
+      break;
+    }
+    case 'shield': {
+      // Shield — PHB p.275: reaction, +5 AC until start of next turn, blocks Magic Missile
+      // Plan.targetId stores the triggering attack name for logging purposes
+      const triggeringAttack = plan.targetId ?? undefined;
+      executeShield(actor, state, triggeringAttack);
       break;
     }
   }

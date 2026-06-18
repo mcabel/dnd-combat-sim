@@ -469,6 +469,7 @@ export interface PlannedAction {
     | 'magicMissile'   // Magic Missile — 3 auto-hit darts 1d4+1 force each, 120 ft (Wizard/Sorcerer)
     | 'burningHands'   // Burning Hands — DEX save, 3d6 fire, 15-ft cone (Sorcerer/Wizard)
     | 'dissonantWhispers' // Dissonant Whispers — WIS save, 3d6 psychic + forced flee (Bard)
+    | 'shield'         // Shield — reaction, +5 AC, blocks Magic Missile (Wizard/Sorcerer)
     | 'legendary';
   action: Action | null;
   targetId: string | null;
