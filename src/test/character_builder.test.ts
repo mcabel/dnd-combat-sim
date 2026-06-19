@@ -431,6 +431,76 @@ const smart = buildCombatant(makeFighter(), { x: 0, y: 0, z: 0 }, 'smart');
 eq('aiProfile=smart set', smart.aiProfile, 'smart');
 
 // =============================================================
+// 9. Ranger spellcasting (half-caster, gains slots at lv2)
+// =============================================================
+
+console.log('\n=== 9. Ranger Spellcasting (Half-Caster) ===\n');
+
+import { applyLevelUp } from '../characters/leveler';
+
+function levelToN(sheet: CharacterSheet, targetLevel: number, className: string): CharacterSheet {
+  let s = sheet;
+  while ((s.classLevels.find(c => c.className === className)?.level ?? 0) < targetLevel) {
+    ({ sheet: s } = applyLevelUp(s, className));
+  }
+  return s;
+}
+
+/** Ranger level-1 sheet used as starting point for lv-up tests. */
+function makeRangerSheet(): CharacterSheet {
+  return {
+    id: randomUUID(), version: 1,
+    createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    name: 'Sylvara', race: 'Wood Elf', background: 'Outlander',
+    alignment: 'Neutral Good', firstClass: 'Ranger',
+    classLevels: [{ className: 'Ranger', level: 1 }],
+    subclassChoices: {}, experiencePoints: 0,
+    baseStats: { str: 12, dex: 16, con: 14, int: 10, wis: 14, cha: 8 },
+    stats:     { str: 12, dex: 17, con: 14, int: 10, wis: 15, cha: 8 },
+    maxHP: 11, currentHP: 11, temporaryHP: 0,
+    armorClass: 14, acFormula: 'Scale Mail', speed: 35,
+    hitDice: [{ className: 'Ranger', dieSides: 10, total: 1, remaining: 1 }],
+    proficiencies: {
+      armor: ['light','medium','shield'],
+      weapons: ['simple-melee','simple-ranged','martial-melee','martial-ranged'],
+      tools: [], savingThrows: ['str','dex'], skills: ['Perception','Stealth'], expertise: [],
+    },
+    languages: ['Common','Elvish'], resources: {},
+    equipment: [{ name: 'Longbow', quantity: 1, equipped: true, category: 'weapon' }],
+    gold: 15, spellcasting: undefined,
+    level1Features: [{ name: 'Favored Enemy', description: 'Choose a favored enemy type.', source: 'class' }],
+    allFeatures:    [{ name: 'Favored Enemy', description: 'Choose a favored enemy type.', source: 'class' }],
+    feats: [], backgroundFeature: 'Wanderer', exhaustionLevel: 0, levelHistory: [],
+  };
+}
+
+// Ranger lv1: no spellcasting, no slots
+const ranger1 = makeRangerSheet();
+const rc1 = buildCombatant(ranger1);
+assert('Ranger lv1: no spell slots in resources',
+  rc1.resources?.spellSlots === undefined || Object.keys(rc1.resources.spellSlots ?? {}).length === 0);
+
+// Ranger lv2: gains first spell slot (2× 1st-level, PHB p.92)
+const ranger2 = levelToN(makeRangerSheet(), 2, 'Ranger');
+assert('Ranger lv2: sheet has spellcasting', ranger2.spellcasting !== null);
+eq('Ranger lv2: sheet slot[1] === 2', ranger2.spellcasting?.slots?.['1'], 2);
+eq('Ranger lv2: spellcasting ability is wis', ranger2.spellcasting?.ability, 'wis');
+
+const rc2 = buildCombatant(ranger2);
+assert('Ranger lv2: buildCombatant has spellSlots', rc2.resources?.spellSlots !== undefined);
+eq('Ranger lv2: combatant spellSlots[1].max === 2', rc2.resources?.spellSlots?.[1]?.max, 2);
+eq('Ranger lv2: combatant spellSlots[1].remaining === 2', rc2.resources?.spellSlots?.[1]?.remaining, 2);
+
+// Ranger lv5: 4× 1st-level + 2× 2nd-level (PHB Ranger table p.92)
+const ranger5 = levelToN(makeRangerSheet(), 5, 'Ranger');
+eq('Ranger lv5: sheet slot[1] === 4', ranger5.spellcasting?.slots?.['1'], 4);
+eq('Ranger lv5: sheet slot[2] === 2', ranger5.spellcasting?.slots?.['2'], 2);
+
+const rc5 = buildCombatant(ranger5);
+eq('Ranger lv5: combatant spellSlots[1].max === 4', rc5.resources?.spellSlots?.[1]?.max, 4);
+eq('Ranger lv5: combatant spellSlots[2].max === 2', rc5.resources?.spellSlots?.[2]?.max, 2);
+
+// =============================================================
 // Results
 // =============================================================
 

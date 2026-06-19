@@ -43,6 +43,10 @@ import { totalLevel, XP_THRESHOLDS, crToXP, abilityModifier, CharacterAbilitySco
 import { RACE_DATA, RACE_NAMES }             from './characters/race_data';
 import { BACKGROUND_DATA, BACKGROUND_NAMES } from './characters/background_data';
 import { computeStatRecommendation, CLASS_STAT_PRIORITY } from './characters/stat_optimizer';
+import {
+  CLASS_SPELL_LISTS, CLASS_SPELL_LIST_ALIASES, SPELLCASTING_CLASS_NAMES,
+  SpellcastingClassName,
+} from './characters/class_spell_lists';
 
 // Lazy-loaded bestiary — mirrors getBestiary() in server.ts
 let _bestiary: Map<string, Raw5etoolsMonster> | null = null;
@@ -1001,6 +1005,104 @@ router.get('/races', (_req: Request, res: Response) => {
 router.get('/backgrounds', (_req: Request, res: Response) => {
   const backgrounds = BACKGROUND_NAMES.map(name => BACKGROUND_DATA[name]);
   return res.json({ backgrounds });
+});
+
+// ---- Spell data cache (lazy-loaded from testDataSpells/) -----
+// Maps spell name → spell level (0–9) for all pre-2024 sources.
+let _allSpellsByName: Map<string, number> | null = null;
+
+function getAllSpells(): Map<string, number> {
+  if (_allSpellsByName) return _allSpellsByName;
+  const spellMap = new Map<string, number>();
+  const spellDir = path.join(__dirname, '../testDataSpells');
+  try {
+    const files = require('fs').readdirSync(spellDir) as string[];
+    for (const fn of files) {
+      // Exclude post-2024 (XPHB) content
+      if (!fn.startsWith('spells-') || fn.includes('xphb')) continue;
+      const raw = require('fs').readFileSync(path.join(spellDir, fn), 'utf8');
+      const d = JSON.parse(raw) as { spell?: { name: string; level: number }[] };
+      for (const sp of d.spell ?? []) {
+        if (!spellMap.has(sp.name)) spellMap.set(sp.name, sp.level);
+      }
+    }
+  } catch {
+    // If testDataSpells is unavailable, return empty map gracefully
+  }
+  _allSpellsByName = spellMap;
+  return spellMap;
+}
+
+// ---- GET /api/spells ----------------------------------------
+// Returns spell names filtered by optional class and/or level.
+//
+// Query params:
+//   class  — spellcasting class name (e.g. "Wizard", "Cleric")
+//   level  — spell level 0–9 (0 = cantrips)
+//
+// Both params are optional. With no params, returns all pre-2024
+// spell names (sorted). With class only, returns all spells on
+// that class's list. With level only, returns all spells of that
+// level. With both, returns the intersection.
+//
+// Response: { spells: string[], class?: string, level?: number }
+router.get('/spells', (req: Request, res: Response) => {
+  const classParam = typeof req.query.class === 'string' ? req.query.class.trim() : '';
+  const levelParam = typeof req.query.level === 'string' ? req.query.level.trim() : '';
+
+  // Validate level if provided
+  let spellLevel: number | null = null;
+  if (levelParam !== '') {
+    spellLevel = parseInt(levelParam, 10);
+    if (isNaN(spellLevel) || spellLevel < 0 || spellLevel > 9) {
+      return res.status(400).json({ error: 'level must be an integer 0–9' });
+    }
+  }
+
+  // Resolve class alias (e.g. "Eldritch Knight" → "Wizard")
+  let resolvedClass: SpellcastingClassName | null = null;
+  if (classParam !== '') {
+    const alias = CLASS_SPELL_LIST_ALIASES[classParam];
+    if (alias) {
+      resolvedClass = alias;
+    } else if (SPELLCASTING_CLASS_NAMES.includes(classParam)) {
+      resolvedClass = classParam as SpellcastingClassName;
+    } else {
+      return res.status(400).json({
+        error: `Unknown spellcasting class "${classParam}". ` +
+               `Valid: ${SPELLCASTING_CLASS_NAMES.concat(Object.keys(CLASS_SPELL_LIST_ALIASES)).join(', ')}`,
+      });
+    }
+  }
+
+  let spells: string[];
+
+  if (resolvedClass !== null) {
+    // Use canonical class spell list
+    const levels = CLASS_SPELL_LISTS[resolvedClass];
+    if (spellLevel !== null) {
+      spells = [...(levels[spellLevel] ?? [])];
+    } else {
+      spells = levels.flat();
+    }
+  } else {
+    // No class filter — use all pre-2024 spell data
+    const allSpells = getAllSpells();
+    if (spellLevel !== null) {
+      spells = [];
+      for (const [name, lvl] of allSpells) {
+        if (lvl === spellLevel) spells.push(name);
+      }
+    } else {
+      spells = [...allSpells.keys()];
+    }
+  }
+
+  spells.sort();
+  const responseBody: Record<string, unknown> = { spells };
+  if (resolvedClass !== null) responseBody.class = resolvedClass;
+  if (spellLevel !== null) responseBody.level = spellLevel;
+  return res.json(responseBody);
 });
 
 // ---- GET /api/stat-optimizer --------------------------------

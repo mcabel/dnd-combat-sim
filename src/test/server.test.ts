@@ -1922,6 +1922,89 @@ async function run() {
     assert(json.baseScores.wis === 14, `Monk second base should go to WIS`);
   });
 
+  // ── GET /api/spells ───────────────────────────────────────
+
+  await test('GET /api/spells?class=Wizard&level=1 returns Wizard lv1 spells', async () => {
+    const { status, json } = await request(BASE, '/api/spells?class=Wizard&level=1');
+    assert(status === 200, `Expected 200, got ${status}`);
+    assert(Array.isArray(json.spells), 'spells should be an array');
+    assert(json.spells.includes('Magic Missile'), 'Wizard lv1 should include Magic Missile');
+    assert(json.spells.includes('Shield'), 'Wizard lv1 should include Shield');
+    assert(json.spells.includes('Mage Armor'), 'Wizard lv1 should include Mage Armor');
+    assert(!json.spells.includes('Eldritch Blast'), 'Wizard lv1 should not include Eldritch Blast');
+    assert(json.class === 'Wizard', `class should be "Wizard", got ${json.class}`);
+    assert(json.level === 1, `level should be 1, got ${json.level}`);
+  });
+
+  await test('GET /api/spells?class=Cleric&level=0 returns Cleric cantrips', async () => {
+    const { status, json } = await request(BASE, '/api/spells?class=Cleric&level=0');
+    assert(status === 200, `Expected 200, got ${status}`);
+    assert(json.spells.includes('Guidance'), 'Cleric cantrips should include Guidance');
+    assert(json.spells.includes('Sacred Flame'), 'Cleric cantrips should include Sacred Flame');
+    assert(!json.spells.includes('Eldritch Blast'), 'Cleric cantrips should not include Eldritch Blast');
+  });
+
+  await test('GET /api/spells?class=Bard&level=1 returns Bard lv1 spells', async () => {
+    const { status, json } = await request(BASE, '/api/spells?class=Bard&level=1');
+    assert(status === 200, `Expected 200, got ${status}`);
+    assert(json.spells.includes('Healing Word'), 'Bard lv1 should include Healing Word');
+    assert(json.spells.includes('Dissonant Whispers'), 'Bard lv1 should include Dissonant Whispers');
+    assert(!json.spells.includes('Magic Missile'), 'Bard lv1 should not include Magic Missile');
+  });
+
+  await test('GET /api/spells?class=Warlock&level=0 returns Warlock cantrips', async () => {
+    const { status, json } = await request(BASE, '/api/spells?class=Warlock&level=0');
+    assert(status === 200, `Expected 200, got ${status}`);
+    assert(json.spells.includes('Eldritch Blast'), 'Warlock cantrips should include Eldritch Blast');
+    assert(!json.spells.includes('Guidance'), 'Warlock cantrips should not include Guidance');
+  });
+
+  await test('GET /api/spells?class=Ranger&level=0 returns empty array (no Ranger cantrips)', async () => {
+    const { status, json } = await request(BASE, '/api/spells?class=Ranger&level=0');
+    assert(status === 200, `Expected 200, got ${status}`);
+    assert(Array.isArray(json.spells), 'spells should be an array');
+    assert(json.spells.length === 0, `Ranger has no cantrips, got ${json.spells.length}`);
+  });
+
+  await test('GET /api/spells?class=Ranger&level=1 returns Ranger lv1 spells', async () => {
+    const { status, json } = await request(BASE, `/api/spells?class=Ranger&level=1`);
+    assert(status === 200, `Expected 200, got ${status}`);
+    assert(json.spells.includes("Hunter's Mark"), "Ranger lv1 should include Hunter's Mark");
+    assert(json.spells.includes('Fog Cloud'), 'Ranger lv1 should include Fog Cloud');
+    assert(!json.spells.includes('Magic Missile'), 'Ranger lv1 should not include Magic Missile');
+  });
+
+  await test('GET /api/spells?class=Eldritch+Knight resolves to Wizard list', async () => {
+    const { status, json } = await request(BASE, '/api/spells?class=Eldritch+Knight&level=1');
+    assert(status === 200, `Expected 200, got ${status}`);
+    assert(json.class === 'Wizard', `Eldritch Knight should resolve to Wizard, got ${json.class}`);
+    assert(json.spells.includes('Magic Missile'), 'Eldritch Knight (Wizard alias) lv1 should include Magic Missile');
+  });
+
+  await test('GET /api/spells?class=Unknown returns 400', async () => {
+    const { status } = await request(BASE, '/api/spells?class=Unknown');
+    assert(status === 400, `Expected 400, got ${status}`);
+  });
+
+  await test('GET /api/spells?level=10 returns 400', async () => {
+    const { status } = await request(BASE, '/api/spells?level=10');
+    assert(status === 400, `Expected 400, got ${status}`);
+  });
+
+  await test('GET /api/spells?level=0 with no class returns all cantrips from all sources', async () => {
+    const { status, json } = await request(BASE, '/api/spells?level=0');
+    assert(status === 200, `Expected 200, got ${status}`);
+    assert(json.spells.includes('Eldritch Blast'), 'All cantrips should include Eldritch Blast');
+    assert(json.spells.includes('Druidcraft'), 'All cantrips should include Druidcraft');
+    assert(json.spells.length >= 27, `Should have at least 27 PHB cantrips, got ${json.spells.length}`);
+  });
+
+  await test('GET /api/spells result is sorted alphabetically', async () => {
+    const { json } = await request(BASE, '/api/spells?class=Wizard&level=1');
+    const sorted = [...json.spells].sort();
+    assert(JSON.stringify(json.spells) === JSON.stringify(sorted), 'Spells should be sorted alphabetically');
+  });
+
 
   // ── Tear down ─────────────────────────────────────────────
 
