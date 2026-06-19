@@ -279,6 +279,81 @@ export const SPELL_DB: Record<string, SpellTemplate> = {
     slotLevel: 1,
   },
 
+  // ---- Level 2 spells (PHB p.211–273) ----------------------
+  // Added by Cantrip-z workstream pivot (Session 15 → 16). These are
+  // leveled spells, NOT cantrips — the Cantrip-z workstream pivoted to
+  // level-2 spell implementation per user instruction; see
+  // zHANDOVER-SESSION-16.md for the pivot rationale. Each spell is
+  // dispatched via a case branch in combat.ts (not selectAction) —
+  // attackType: null means the planner's selectAction skips them.
+
+  'aid': {
+    // 2nd-level abjuration, action, range 30 ft, no concentration, 8 hr.
+    // Up to 3 allies: +5 max HP & +5 current HP each.
+    attackType: null,
+    rangeNormal: 30,
+    damage: null,
+    damageType: null,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 2,
+  },
+
+  'barkskin': {
+    // 2nd-level transmutation, action, touch, concentration 1 hr.
+    // Target's AC can't be less than 16 (ac_floor effect).
+    attackType: null,
+    rangeNormal: 5,    // touch
+    damage: null,
+    damageType: null,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 2,
+  },
+
+  'blur': {
+    // 2nd-level illusion, action, self, concentration 1 min.
+    // Disadvantage on attack rolls vs caster (advantage_vs disadv attack).
+    attackType: null,
+    rangeNormal: 0,    // self
+    damage: null,
+    damageType: null,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 2,
+  },
+
+  'blindness/deafness': {
+    // 2nd-level necromancy, action, range 30 ft, NO concentration (1 min).
+    // CON save or blinded (v1 always picks blinded).
+    attackType: 'save',
+    rangeNormal: 30,
+    damage: null,
+    damageType: null,
+    saveAbility: 'con',
+    isAoE: false,
+    isControl: true,        // imposes a debilitating condition
+    requiresConcentration: false,
+    slotLevel: 2,
+  },
+
+  'branding smite': {
+    // 2nd-level evocation, BONUS ACTION, self, concentration 1 min.
+    // Next weapon hit deals +2d6 radiant (consumed on next hit).
+    attackType: null,
+    rangeNormal: 0,    // self
+    damage: { count: 2, sides: 6, bonus: 0, average: avg(2, 6) },
+    damageType: 'radiant',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 2,
+    bonusAction: true,
+  },
+
 };
 
 // ---- Lookup helper ------------------------------------------

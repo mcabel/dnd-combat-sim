@@ -89,6 +89,7 @@ export interface AdvantageEntry {
 export type SpellEffectType =
   | 'advantage_vs'      // rolls AGAINST this creature get adv/disadv (e.g. Faerie Fire)
   | 'ac_bonus'          // flat AC bonus to this creature (e.g. Shield of Faith +2)
+  | 'ac_floor'          // AC minimum / floor (e.g. Barkskin sets AC ≥ 16 — PHB p.217)
   | 'bless_die'         // add a bonus die to this creature's attack rolls & saves (Bless 1d4)
   | 'condition_apply'   // apply a condition to this creature (e.g. Entangle → restrained)
   | 'hex_damage';       // +1d6 necrotic on each hit by the caster (Hex PHB p.251)
@@ -104,6 +105,8 @@ export interface ActiveEffect {
     advScope?: D20TestScope;
     // ac_bonus
     acBonus?:  number;
+    // ac_floor
+    acFloor?:  number;                // e.g. 16 for Barkskin (PHB p.217)
     // bless_die
     dieSides?: number;                // e.g. 4 for a d4
     // condition_apply
@@ -750,6 +753,63 @@ export interface Combatant {
   // flag and Spare the Dying's `_isStabilized` flag (also touch
   // cantrips).
   _mended?: boolean;
+
+  // ---- Aid (PHB p.211) scratch field ----
+  // Set on the TARGET when it is buffed by Aid (2nd-level abjuration,
+  // PHB p.211: "Each target's hit point maximum and current hit points
+  // increase by 5 for the duration."). v1 simplification: the spell's
+  // 8-hour duration >> combat length, so the buff is applied directly
+  // to maxHP and currentHP with no cleanup (the HP increase persists
+  // for the combat). The `_aidHPBonus` field tracks how much HP was
+  // added so a future cleanup subsystem (or dispel magic) can reverse
+  // it — forward-compat TODO via the metadata flag
+  // `aidHPCleanupV1Implemented: false`. v1 NEVER reads this field; it
+  // is set for future use only.
+  //
+  // Distinct from Warding Bond (also a 2nd-level buff): Warding Bond
+  // uses a structured `wardingBond: { casterId }` field on Combatant
+  // (read by combat.ts for +1 AC, +1 saves, damage redirect). Aid uses
+  // a simple number scratch field because its only effect is +max HP
+  // (applied directly to maxHP/currentHP at cast time).
+  _aidHPBonus?: number;
+
+  // ---- Branding Smite (PHB p.219) scratch field ----
+  // Set on the CASTER when it casts Branding Smite (2nd-level
+  // evocation, bonus action, PHB p.219: "The next time you hit a
+  // creature with a weapon attack before this spell ends, the weapon
+  // gleams with astral radiance as you strike. The attack deals an
+  // extra 2d6 radiant damage to the target...").
+  //
+  // While `_brandingSmiteActive === true`, resolveAttack's damage
+  // section — when `action.attackType === 'melee' || 'ranged'`
+  // (weapon attacks, NOT spell attacks — PHB p.219 explicitly says
+  // "weapon attack") — rolls an extra 2d6 radiant damage and adds it
+  // to the damage total, then CONSUMES the flag (sets to false —
+  // one-shot, mirror Shillelagh's +1d8 radiant pattern but
+  // one-shot-consume instead of per-attack). Crit doubles the dice
+  // (PHB p.196 — mirror Shillelagh's crit handling).
+  //
+  // v1 simplifications:
+  //   1. Duration: canon 1 min (10 rounds) concentration → v1 1-round
+  //      scratch flag, clears at the start of the caster's NEXT turn
+  //      via cleanup() called from resetBudget() (mirror True Strike
+  //      / Blade Ward / Shillelagh timing). Documented via the
+  //      metadata flag `brandingSmiteDurationV1Simplified: true`.
+  //   2. Concentration: canonically a concentration spell, but v1
+  //      treats it as a 1-round self-buff (concentration not enforced
+  //      — forward-compat TODO; see TG-002 in TEAMGOALS.md).
+  //   3. Invisibility suppression: PHB p.219 also says the target
+  //      "becomes visible if it's invisible, and the target sheds dim
+  //      light in a 5-foot radius and can't become invisible until
+  //      the spell ends." v1 does NOT model this (no invisibility
+  //      subsystem — forward-compat TODO via the metadata flag
+  //      `brandingSmiteInvisibilitySuppressionV1Implemented: false`).
+  //
+  // Mirrors Shillelagh (PHB p.275) — same self-buff + radiant damage
+  // pattern, but:
+  //   Shillelagh:     _shillelaghActive     = true  [melee-only, persistent, +1d8 radiant]
+  //   Branding Smite: _brandingSmiteActive  = true  [weapon-only, one-shot, +2d6 radiant]
+  _brandingSmiteActive?: boolean;
 }
 
 // ---- Obstacle -----------------------------------------------
@@ -838,6 +898,11 @@ export interface PlannedAction {
     | 'shield'         // Shield — reaction, +5 AC, blocks Magic Missile (Wizard/Sorcerer)
     | 'guidingBolt'    // Guiding Bolt — ranged spell attack, 4d6 radiant, next attack vs target has advantage (Cleric)
     | 'healingWord'    // Healing Word — bonus action, 1d4+WIS heal at 60 ft (Cleric/Druid/Bard)
+    | 'aid'              // Aid — multi-ally HP buff (+5 max & current HP), 8 hr, no concentration (Cleric/Paladin)
+    | 'barkskin'         // Barkskin — touch, AC floor 16, concentration 1 hr (Druid/Ranger)
+    | 'blur'             // Blur — self, disadv on attacks vs caster, concentration 1 min (Wizard/Sorcerer)
+    | 'blindnessDeafness'// Blindness/Deafness — CON save or blinded, 1 min, NO concentration (Cleric/Sorcerer/Wizard)
+    | 'brandingSmite'    // Branding Smite — bonus action, next weapon hit +2d6 radiant, concentration 1 min (Paladin/Ranger)
     | 'legendary';
   action: Action | null;
   targetId: string | null;

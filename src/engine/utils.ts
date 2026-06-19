@@ -22,6 +22,7 @@ import { cleanup as cleanupGuidance } from '../spells/guidance';
 import { cleanup as cleanupFriends } from '../spells/friends';
 import { cleanup as cleanupLight } from '../spells/light';
 import { cleanup as cleanupMending } from '../spells/mending';
+import { cleanup as cleanupBrandingSmite } from '../spells/branding_smite';
 
 // Damage types resisted by Blade Ward (PHB p.218) — bludgeoning/piercing/slashing.
 const BLADE_WARD_PHYSICAL_TYPES: DamageType[] = ['bludgeoning', 'piercing', 'slashing'];
@@ -527,6 +528,15 @@ export function resetBudget(c: Combatant): void {
   // The cleanup also defensively clears the flag from ANY combatant that
   // has it set (no-op if the flag isn't set).
   cleanupMending(c);
+  // Branding Smite self-buff (PHB p.219) — v1 simplification: 1-round
+  // duration, clears at the start of the caster's next turn (canonically
+  // concentration, up to 1 minute). While `_brandingSmiteActive === true`,
+  // resolveAttack's damage branch rolls +2d6 radiant on the next weapon
+  // hit (melee OR ranged, NOT spell) and CONSUMES the flag (one-shot —
+  // PHB p.219: "the next time you hit a creature with a weapon attack",
+  // singular). Cleanup is a safety net (clears the flag if the caster
+  // makes no weapon attack before their next turn).
+  cleanupBrandingSmite(c);
 
   const speed = effectiveSpeed(c);
   c.budget = {

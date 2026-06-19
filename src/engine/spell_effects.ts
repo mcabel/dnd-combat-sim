@@ -75,6 +75,7 @@ export function applySpellEffect(
       break;
 
     case 'ac_bonus':
+    case 'ac_floor':
     case 'bless_die':
       // No immediate side-effect — read at resolution time.
       break;
@@ -93,6 +94,7 @@ export function applySpellEffect(
  *   advantage_vs    → removeBySource(target, spellName)
  *   condition_apply → target.conditions.delete(condition)
  *   ac_bonus        → no undo needed (read from array at resolve time)
+ *   ac_floor        → no undo needed (read from array at resolve time)
  *   bless_die       → no undo needed (read from array at resolve time)
  */
 export function removeEffectsFromCaster(casterId: string, bf: Battlefield): void {
@@ -143,6 +145,7 @@ function _undoEffect(target: Combatant, effect: ActiveEffect): void {
       break;
 
     case 'ac_bonus':
+    case 'ac_floor':
     case 'bless_die':
       // Read-only at resolution — nothing to undo structurally.
       break;
@@ -159,6 +162,22 @@ export function getActiveAcBonus(c: Combatant): number {
   return c.activeEffects
     .filter(e => e.effectType === 'ac_bonus')
     .reduce((sum, e) => sum + (e.payload.acBonus ?? 0), 0);
+}
+
+// ---- AC floor query (used by combat.ts resolveAttack) -------
+
+/**
+ * Returns the highest ac_floor value currently active on a combatant, or 0 if
+ * none. PHB p.217 (Barkskin): "the target's AC can't be less than 16". When
+ * multiple ac_floor effects are active (e.g. from different casters — rare but
+ * possible), the highest floor wins (mirror getActiveBlessDie's max-roll
+ * semantics). Called inline by resolveAttack when computing effectiveAC —
+ * effective AC = max(natural AC, ac_floor) + ac_bonus + wardingBond + cover.
+ */
+export function getActiveAcFloor(c: Combatant): number {
+  return c.activeEffects
+    .filter(e => e.effectType === 'ac_floor')
+    .reduce((max, e) => Math.max(max, e.payload.acFloor ?? 0), 0);
 }
 
 // ---- Bless die query (used by combat.ts / utils.ts) ---------

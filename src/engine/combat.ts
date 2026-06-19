@@ -33,7 +33,7 @@ import { tickAdvantages, grantSelf, grantVulnerability } from './adv_system';
 import { getSummonEntry }                           from '../summons/registry';
 import { rollGrappleContest, rollShoveContest, canGrappleOrShoveTarget } from './utils';
 import { computeLOS } from './los';
-import { removeEffectsFromCaster, getActiveAcBonus, getActiveBlessDie, getActiveHexDie } from './spell_effects';
+import { removeEffectsFromCaster, getActiveAcBonus, getActiveAcFloor, getActiveBlessDie, getActiveHexDie } from './spell_effects';
 import { applyCantripEffect, getCantripAttackAdvantage, resolveCantripAction, resolveCantripAoE, resolveCantripTouchEffect } from './cantrip_effects';
 import { execute as executeHex } from '../spells/hex';
 import { execute as executeMagicMissile } from '../spells/magic_missile';
@@ -55,6 +55,11 @@ import {
 } from '../spells/guiding_bolt';
 import { execute as executeHealingWord } from '../spells/healing_word';
 import { rollDiceString as rollBoomingBladeDice } from '../spells/booming_blade';
+import { shouldCast as shouldCastAid, execute as executeAid } from '../spells/aid';
+import { shouldCast as shouldCastBarkskin, execute as executeBarkskin } from '../spells/barkskin';
+import { shouldCast as shouldCastBlur, execute as executeBlur } from '../spells/blur';
+import { shouldCast as shouldCastBlindnessDeafness, execute as executeBlindnessDeafness } from '../spells/blindness_deafness';
+import { shouldCast as shouldCastBrandingSmite, execute as executeBrandingSmite } from '../spells/branding_smite';
 
 // ---- Combat log ---------------------------------------------
 
@@ -394,7 +399,11 @@ export function resolveAttack(
 
   // Warding Bond: +1 AC while bonded (PHB p.287)
   // Cover: +2 (half) or +5 (three-quarters) to AC from obstacles (DMG Ch.8 p.196)
-  const effectiveAC = target.ac + (target.wardingBond ? 1 : 0) + (los?.coverACBonus ?? 0) + getActiveAcBonus(target);
+  // Barkskin: AC can't be less than 16 (PHB p.217) — ac_floor effect applied
+  //   by spell_effects.ts; the floor is applied to natural AC BEFORE bonuses.
+  const acFloor = getActiveAcFloor(target);
+  const naturalAC = acFloor > 0 ? Math.max(target.ac, acFloor) : target.ac;
+  const effectiveAC = naturalAC + (target.wardingBond ? 1 : 0) + (los?.coverACBonus ?? 0) + getActiveAcBonus(target);
   const hits = isCritOverride ?? attackHits(result.roll, result.total, effectiveAC);
 
   if (!hits) {
@@ -485,6 +494,29 @@ export function resolveAttack(
       dmg += shillelaghBonus;
       log(state, 'action', attacker.id,
         `${attacker.name} adds Shillelagh bonus (+${shillelaghBonus} radiant${isCrit ? ' CRIT' : ''})!`, target.id, shillelaghBonus);
+    }
+
+    // Branding Smite (PHB p.219): while the self-buff is active, the next
+    // weapon attack (melee OR ranged, NOT spell) deals an extra 2d6 radiant
+    // damage. The buff is CONSUMED after this hit (one-shot, mirror
+    // Shillelagh's +1d8 pattern but one-shot instead of persistent — see
+    // `_brandingSmiteActive` doc comment in core.ts). Crit doubles the dice
+    // (PHB p.196). v1 simplification: skips the invisibility-suppression
+    // (forward-compat TODO via `brandingSmiteInvisibilitySuppressionV1Implemented`
+    // metadata flag).
+    if (
+      attacker._brandingSmiteActive === true &&
+      (action.attackType === 'melee' || action.attackType === 'ranged')
+    ) {
+      let brandingDice = isCrit ? 4 : 2; // 2d6 radiant, crit → 4d6 (PHB p.196)
+      let brandingBonus = 0;
+      for (let i = 0; i < brandingDice; i++) brandingBonus += rollDie(6);
+      dmg += brandingBonus;
+      log(state, 'action', attacker.id,
+        `${attacker.name} adds Branding Smite bonus (+${brandingBonus} radiant${isCrit ? ' CRIT' : ''})!`, target.id, brandingBonus);
+      // Consume the buff (one-shot — PHB p.219: "the next time you hit a
+      // creature with a weapon attack before this spell ends" — singular).
+      attacker._brandingSmiteActive = false;
     }
 
     // Hex damage: +1d6 necrotic when the warlock who hexed the target hits it (PHB p.251)
@@ -1192,6 +1224,58 @@ function executePlannedAction(
       const hwTarget = plan.targetId ? bf.combatants.get(plan.targetId) ?? null : null;
       if (!hwTarget) break;
       executeHealingWord(actor, hwTarget, state);
+      break;
+    }
+
+    case 'aid': {
+      // Aid — PHB p.211: action, range 30 ft, up to 3 allies, +5 max & current
+      // HP. 8 hr duration (no concentration). v1: no cleanup (8 hr >> combat).
+      // Re-run shouldCast to get the live target list (planning may be stale).
+      const aidTargets = shouldCastAid(actor, bf);
+      if (!aidTargets || aidTargets.length === 0) break;
+      executeAid(actor, aidTargets, state);
+      break;
+    }
+
+    case 'barkskin': {
+      // Barkskin — PHB p.217: action, touch, concentration 1 hr. AC ≥ 16.
+      // Single-target AC floor via the new `ac_floor` ActiveEffect type.
+      const bkTargetId = plan.targetId;
+      const bkTarget = bkTargetId ? bf.combatants.get(bkTargetId) ?? null : null;
+      // shouldCast returns the live target; fall back to plan.targetId if so.
+      const liveTarget = bkTarget && !bkTarget.isDead && !bkTarget.isUnconscious
+        ? bkTarget
+        : shouldCastBarkskin(actor, bf);
+      if (!liveTarget) break;
+      executeBarkskin(actor, liveTarget, state);
+      break;
+    }
+
+    case 'blur': {
+      // Blur — PHB p.219: action, self, concentration 1 min. Disadv on attacks
+      // vs caster (advantage_vs 'disadvantage' 'attack' effect on self).
+      if (shouldCastBlur(actor, bf)) executeBlur(actor, state);
+      break;
+    }
+
+    case 'blindnessDeafness': {
+      // Blindness/Deafness — PHB p.219: action, 30 ft, CON save, NO
+      // concentration (1 min duration). On fail: caster picks blinded (v1
+      // always picks blinded — more combat-relevant than deafened).
+      const bdTargetId = plan.targetId;
+      if (!bdTargetId) break;
+      const bdTarget = bf.combatants.get(bdTargetId);
+      if (!bdTarget || bdTarget.isDead || bdTarget.isUnconscious) break;
+      executeBlindnessDeafness(actor, bdTarget, state);
+      break;
+    }
+
+    case 'brandingSmite': {
+      // Branding Smite — PHB p.219: bonus action, self, concentration 1 min.
+      // Next weapon hit deals +2d6 radiant. v1: 1-round scratch flag
+      // (`_brandingSmiteActive`), consumed by resolveAttack on the next weapon
+      // hit OR cleared by cleanup() at start of next turn.
+      if (shouldCastBrandingSmite(actor, bf)) executeBrandingSmite(actor, state);
       break;
     }
   }

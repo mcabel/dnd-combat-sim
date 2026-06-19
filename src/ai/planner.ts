@@ -27,6 +27,11 @@ import { shouldCast as shouldCastGuidingBolt } from '../spells/guiding_bolt';
 import { shouldCast as shouldCastSleep } from '../spells/sleep';
 import { shouldCast as shouldCastWardingBond } from '../spells/warding_bond';
 import { shouldCast as shouldCastShieldOfFaith } from '../spells/shield_of_faith';
+import { shouldCast as shouldCastAid } from '../spells/aid';
+import { shouldCast as shouldCastBarkskin } from '../spells/barkskin';
+import { shouldCast as shouldCastBlur } from '../spells/blur';
+import { shouldCast as shouldCastBlindnessDeafness } from '../spells/blindness_deafness';
+import { shouldCast as shouldCastBrandingSmite } from '../spells/branding_smite';
 import { selectAction, selfPreserveDecision, selectLegendaryAction } from './actions';
 import {
   canReach, bestAdjacentPos, bestRangedPosition,
@@ -349,6 +354,25 @@ function planBonusAction(
         description: `${self.name} casts Shield of Faith on ${sofTarget.name}`,
       };
     }
+  }
+
+  // --- 2.8. Branding Smite (Paladin/Ranger bonus action self-buff) ---
+  // PHB p.219: bonus action, self, concentration 1 min. Next weapon hit
+  // deals +2d6 radiant. Cast BEFORE the caster's main-action weapon attack
+  // on the same turn so the buff is primed for that attack.
+  // v1: 1-round scratch flag (`_brandingSmiteActive`); concentration not
+  // enforced (TG-002). Should be cast whenever the caster has a weapon
+  // attack planned AND a 2nd-level slot AND no other concentration.
+  // Priority: after Shield of Faith (which is also concentration), before
+  // Bardic Inspiration. Only triggers when shouldCastBrandingSmite returns
+  // true (caster has a weapon attack, an enemy exists, not already primed).
+  if (self.actions.some(a => a.name === 'Branding Smite') && shouldCastBrandingSmite(self, battlefield)) {
+    return {
+      type: 'brandingSmite',
+      action: null,
+      targetId: self.id,
+      description: `${self.name} casts Branding Smite (next weapon hit +2d6 radiant)`,
+    };
   }
 
   // --- 3. Bardic Inspiration ---
@@ -817,6 +841,93 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
       targetId: target.id,
       description: `${self.name} casts Magic Missile at ${target.name}`,
     };
+  }
+
+  // === LEVEL-2 SPELLS (action-time, added in Cantrip-z pivot Session 16) ===
+  // These are 4 new PHB level-2 spells implemented in this session. Each is
+  // guarded by `if (!plan.action)` so it only fires when no higher-priority
+  // spell was chosen. Order within the block: Aid (multi-ally buff, highest
+  // value) → Barkskin (single-ally buff) → Blur (self-buff) → Blindness/
+  // Deafness (single-target debuff). All four return early via `return plan`
+  // when they fire so the AI doesn't fall through to SELECT ACTION.
+
+  // --- 11A. AID (multi-ally HP buff, no concentration) ---
+  // PHB p.211: action, range 30 ft, up to 3 allies, +5 max & current HP.
+  // 8 hr duration (no concentration) — fires freely alongside Bless / Faerie
+  // Fire. Priority: after all concentration spells (in case the caster has
+  // Bless/Faerie Fire/Entangle AND Aid, the concentration spell wins
+  // because Aid can be cast later without breaking concentration).
+  if (!plan.action && self.actions.some(a => a.name === 'Aid')) {
+    const aidTargets = shouldCastAid(self, battlefield);
+    if (aidTargets && aidTargets.length > 0) {
+      plan.action = {
+        type: 'aid',
+        action: null,
+        targetId: aidTargets[0].id,
+        description: `${self.name} casts Aid on ${aidTargets.length} all${aidTargets.length !== 1 ? 'ies' : 'y'}`,
+      };
+      plan.targetId = aidTargets[0].id;
+      plan.bonusAction = planBonusAction(self, target, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 11B. BARKSKIN (single-ally touch AC floor, concentration) ---
+  // PHB p.217: action, touch, concentration 1 hr. AC ≥ 16. Only fires when
+  // the caster is NOT already concentrating and an ally (or self) with AC<16
+  // is in touch range. Priority: after Aid (which has no concentration
+  // requirement, so Aid fires first if both are available).
+  if (!plan.action && self.actions.some(a => a.name === 'Barkskin')) {
+    const bkTarget = shouldCastBarkskin(self, battlefield);
+    if (bkTarget) {
+      plan.action = {
+        type: 'barkskin',
+        action: null,
+        targetId: bkTarget.id,
+        description: `${self.name} casts Barkskin on ${bkTarget.name}`,
+      };
+      plan.targetId = bkTarget.id;
+      plan.bonusAction = planBonusAction(self, target, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 11C. BLINDNESS/DEAFNESS (single-target debuff, NO concentration) ---
+  // PHB p.219: action, range 30 ft, CON save or blinded (v1: always blinded).
+  // 1 min duration, NO concentration — fires freely alongside concentration
+  // spells. Priority: after Barkskin (concentration); Blindness/Deafness
+  // fires only when no concentration spell was chosen (so the caster can
+  // keep their concentration slot open for Bless/Faerie Fire/Entangle).
+  if (!plan.action && target && self.actions.some(a => a.name === 'Blindness/Deafness')) {
+    const bdTarget = shouldCastBlindnessDeafness(self, battlefield);
+    if (bdTarget) {
+      plan.action = {
+        type: 'blindnessDeafness',
+        action: null,
+        targetId: bdTarget.id,
+        description: `${self.name} casts Blindness/Deafness at ${bdTarget.name}`,
+      };
+      plan.targetId = bdTarget.id;
+      plan.bonusAction = planBonusAction(self, bdTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 11D. BLUR (self-buff, concentration) ---
+  // PHB p.219: action, self, concentration 1 min. Disadv on attacks vs caster.
+  // Lowest priority of the 4 new spells — fires only when no other spell was
+  // chosen. Useful for squishy casters in melee range. The caster must NOT be
+  // already concentrating (shouldCast guards this).
+  if (!plan.action && self.actions.some(a => a.name === 'Blur') && shouldCastBlur(self, battlefield)) {
+    plan.action = {
+      type: 'blur',
+      action: null,
+      targetId: self.id,
+      description: `${self.name} casts Blur`,
+    };
+    plan.targetId = self.id;
+    plan.bonusAction = planBonusAction(self, target, battlefield);
+    return plan;
   }
 
   // === MAGE ARMOR (action, self) ===
