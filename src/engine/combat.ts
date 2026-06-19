@@ -130,8 +130,13 @@ function makeState(battlefield: Battlefield): EngineState {
 /**
  * Resolve a single attack action against a target.
  * Handles: attack roll, hit check, damage roll, crit, death.
+ *
+ * Exported for direct testing of cantrip engine integration (e.g. Vicious
+ * Mockery's one-shot consume-on-attack semantics, Sacred Flame's
+ * bypassesCover, Chill Touch's undead-disadv). Normal callers should use
+ * runCombat / executePlannedAction rather than invoking this directly.
  */
-function resolveAttack(
+export function resolveAttack(
   attacker: Combatant,
   target: Combatant,
   action: Action,
@@ -143,7 +148,16 @@ function resolveAttack(
   // ── LOS / Cover check (PHB Ch.10, DMG Ch.8) ─────────────────────────────
   // Skip for save-based AoE (area is targeted, not an individual creature).
   // For melee/ranged/spell attacks: block on total cover; AC bonus otherwise.
-  const los = action.attackType !== 'save'
+  // For save-based single-target spells: block on total cover too — UNLESS the
+  // action bypasses cover (PHB p.272 Sacred Flame: "The target gains no benefit
+  // from cover for this saving throw."). action.bypassesCover === true skips
+  // the LOS check entirely, letting Sacred Flame target a creature even behind
+  // total cover.
+  const computeLosForAction =
+    action.attackType === 'save'
+      ? action.bypassesCover !== true   // save: skip LOS only when bypassesCover
+      : true;                            // non-save: always compute LOS
+  const los = computeLosForAction
     ? computeLOS(attacker, target, bf)
     : null;
 
@@ -182,6 +196,12 @@ function resolveAttack(
       if (dealt > 0) state.rageDamagedSinceLastTurn.add(target.id);
       applyWardingBondRedirect(target, dealt, state);
       checkDeath(target, state);
+    }
+    // Apply post-save-FAIL cantrip riders (e.g. Vicious Mockery disadv on next
+    // attack, PHB p.285). The dispatcher is a no-op for unknown cantrip names
+    // and for cantrips with no rider. Rider applies ONLY when the save failed.
+    if (!save.success) {
+      applyCantripEffect(attacker, target, action.name, state);
     }
     return;
   }
@@ -255,9 +275,29 @@ function resolveAttack(
     log(state, 'action', attacker.id,
       `${attacker.name} attacks ${target.name} with Disadvantage (Chill Touch).`, target.id);
   }
-  const disadvantage = baseDisadv || !!protectionRider || losDisadvantage || chillTouchDisadv;
+  // Vicious Mockery (PHB p.285): a creature that failed its WIS save against
+  // Vicious Mockery has disadvantage on the NEXT attack roll it makes before
+  // the end of its next turn. This is a ONE-SHOT debuff — consumed (set back
+  // to false) immediately after this attack roll resolves, hit or miss.
+  // Distinct from Chill Touch's ongoing undead-disadv (which lasts the whole
+  // turn). The flag is set by Vicious Mockery's applyCantripEffect on save-fail.
+  const viciousMockeryDisadv = attacker._viciousMockeryDisadvNextAttack === true;
+  if (viciousMockeryDisadv) {
+    log(state, 'action', attacker.id,
+      `${attacker.name} attacks ${target.name} with Disadvantage (Vicious Mockery).`, target.id);
+  }
+  const disadvantage = baseDisadv || !!protectionRider || losDisadvantage || chillTouchDisadv || viciousMockeryDisadv;
 
   const result = rollAttack(action.hitBonus ?? 0, advantage, disadvantage);
+
+  // Vicious Mockery one-shot consume: the debuff applies to exactly one attack
+  // roll (PHB p.285). Consume it now — whether the attack hit or missed — so
+  // subsequent attacks in the same turn (e.g. Multiattack) are unaffected.
+  if (viciousMockeryDisadv) {
+    attacker._viciousMockeryDisadvNextAttack = false;
+    log(state, 'condition_remove', attacker.id,
+      `${attacker.name}'s Vicious Mockery debuff fades (consumed by attack).`, target.id);
+  }
 
   // Bardic Inspiration die — consumed on this attack roll (PHB p.54)
   const biBonus = consumeBardicInspiration(attacker);

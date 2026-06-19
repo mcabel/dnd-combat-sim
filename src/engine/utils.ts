@@ -10,6 +10,7 @@ import { cleanup as cleanupShield } from '../spells/shield';
 import { cleanup as cleanupRayOfFrost } from '../spells/ray_of_frost';
 import { cleanup as cleanupChillTouch } from '../spells/chill_touch';
 import { cleanup as cleanupBladeWard } from '../spells/blade_ward';
+import { cleanup as cleanupViciousMockery } from '../spells/vicious_mockery';
 
 // Damage types resisted by Blade Ward (PHB p.218) — bludgeoning/piercing/slashing.
 const BLADE_WARD_PHYSICAL_TYPES: DamageType[] = ['bludgeoning', 'piercing', 'slashing'];
@@ -237,6 +238,9 @@ export function resetBudget(c: Combatant): void {
   cleanupChillTouch(c);
   // Blade Ward resistance expires at start of caster's next turn (PHB p.218)
   cleanupBladeWard(c);
+  // Vicious Mockery one-shot disadv expires if not consumed by an attack roll
+  // before the end of the target's next turn (PHB p.285).
+  cleanupViciousMockery(c);
 
   const speed = effectiveSpeed(c);
   c.budget = {

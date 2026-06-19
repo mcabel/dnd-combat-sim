@@ -141,6 +141,16 @@ export interface Action {
   costType: AICostType;
   legendaryCost: number;
   description: string;
+  /**
+   * Bypasses cover for this action's saving throw (PHB p.272 Sacred Flame:
+   * "The target gains no benefit from cover for this saving throw.").
+   *
+   * When true, resolveAttack's save branch skips the LOS / total-cover
+   * gating entirely — Sacred Flame can target a creature even behind total
+   * cover. Other save spells (default undefined/false) are subject to total
+   * cover blocking per PHB line-of-effect rules.
+   */
+  bypassesCover?: boolean;
 }
 
 // ---- LegendaryAction ----------------------------------------
@@ -428,6 +438,19 @@ export interface Combatant {
   // composes correctly with other resistances and never double-halves.
   // Cleared by cleanup() called from resetBudget() in utils.ts.
   _bladeWardActive?: boolean;
+
+  // ---- Vicious Mockery (PHB p.285) scratch field ----
+  // Set on the TARGET when it fails its WIS save against Vicious Mockery
+  // (post-hit rider dispatched from CANTRIP_EFFECTS). The target has
+  // disadvantage on the NEXT attack roll it makes before the end of its
+  // next turn (PHB p.285). resolveAttack() in combat.ts folds this into
+  // the attack's `disadvantage` boolean when the marked creature is the
+  // attacker, then CONSUMES the flag (sets it back to false) after the
+  // attack roll resolves — hit or miss. This is a one-shot debuff
+  // (distinct from Chill Touch's ongoing undead-disadv, which lasts the
+  // whole turn). If not consumed by end of the target's next turn,
+  // cleanup() called from resetBudget() clears it.
+  _viciousMockeryDisadvNextAttack?: boolean;
 }
 
 // ---- Obstacle -----------------------------------------------

@@ -11,10 +11,13 @@
 //   - Shocking Grasp: Prevents reactions on hit + adv vs metal (pre-roll + post-hit)
 //   - Chill Touch: No healing + undead disadv vs caster      (post-hit)
 //   - Blade Ward: Self resistance to B/P/S (NON-attack self-buff)
+//   - Vicious Mockery: Disadv on target's next attack (post-save-FAIL)
 //
 // Integration:
 //   - Post-hit attack cantrips: called from resolveAttack in combat.ts
 //     after damage is dealt, via applyCantripEffect() below.
+//   - Post-save-FAIL cantrips (Vicious Mockery): called from resolveAttack's
+//     save branch after damage, ONLY when the save failed.
 //   - Non-attack self-buff cantrips (Blade Ward): routed by
 //     resolveCantripAction() below, which executePlannedAction in
 //     combat.ts consults BEFORE resolveAttack so self-buffs never go
@@ -27,6 +30,7 @@ import { applyCantripEffect as applyThornWhipEffect } from '../spells/thorn_whip
 import { applyCantripEffect as applyRayOfFrostEffect } from '../spells/ray_of_frost';
 import { applyCantripEffect as applyShockingGraspEffect, cantripAttackAdvantage as shockingGraspAdvantage } from '../spells/shocking_grasp';
 import { applyCantripEffect as applyChillTouchEffect } from '../spells/chill_touch';
+import { applyCantripEffect as applyViciousMockeryEffect } from '../spells/vicious_mockery';
 import { applySelfEffect as applyBladeWardSelfEffect } from '../spells/blade_ward';
 
 // ---- Cantrip effect handlers --------------------------------
@@ -44,7 +48,8 @@ const CANTRIP_EFFECTS: Record<
   'Ray of Frost': applyRayOfFrostEffect,
   'Shocking Grasp': applyShockingGraspEffect,
   'Chill Touch': applyChillTouchEffect,
-  // Future post-hit cantrips will be added here
+  'Vicious Mockery': applyViciousMockeryEffect,
+  // Future post-hit / post-save-FAIL cantrips will be added here
 };
 
 // ---- Pre-roll cantrip advantage registry --------------------

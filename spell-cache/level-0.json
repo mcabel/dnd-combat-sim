@@ -1,6 +1,6 @@
 {
   "level": 0,
-  "generatedAt": "2026-06-19T01:01:05.024Z",
+  "generatedAt": "2026-06-19T01:52:08.360Z",
   "generatorVersion": 2,
   "scopeRule": "pre-2024 canon; reprints: newest in-scope source wins; XPHB(2024) out of scope; creatures keep all variants (not applicable to spells)",
   "sourceDates": {
@@ -26,8 +26,8 @@
     "XPHB"
   ],
   "count": 49,
-  "implementedCount": 5,
-  "remainingInScope": 41,
+  "implementedCount": 10,
+  "remainingInScope": 36,
   "spells": [
     {
       "name": "Acid Splash",
@@ -37,8 +37,8 @@
       "page": 211,
       "level": 0,
       "school": "Conjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "acid_splash.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -379,8 +379,8 @@
       "page": 242,
       "level": 0,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "fire_bolt.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -881,8 +881,8 @@
       "page": 266,
       "level": 0,
       "school": "Conjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "poison_spray.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1083,8 +1083,8 @@
       "page": 272,
       "level": 0,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "sacred_flame.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1529,8 +1529,8 @@
       "page": 285,
       "level": 0,
       "school": "Enchantment",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "vicious_mockery.ts",
       "inScope": true,
       "otherSources": [
         {
