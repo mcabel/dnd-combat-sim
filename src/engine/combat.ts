@@ -33,7 +33,7 @@ import { tickAdvantages, grantSelf, grantVulnerability } from './adv_system';
 import { getSummonEntry }                           from '../summons/registry';
 import { rollGrappleContest, rollShoveContest, canGrappleOrShoveTarget } from './utils';
 import { computeLOS } from './los';
-import { removeEffectsFromCaster, getActiveAcBonus, getActiveAcFloor, getActiveBlessDie, getActiveHexDie, getActiveDamageZones } from './spell_effects';
+import { removeEffectsFromCaster, removeEffectById, getActiveAcBonus, getActiveAcFloor, getActiveBlessDie, getActiveHexDie, getActiveDamageZones, getActiveWeaponEnchant, getActiveEnlargeReduce } from './spell_effects';
 import { applyCantripEffect, getCantripAttackAdvantage, resolveCantripAction, resolveCantripAoE, resolveCantripTouchEffect } from './cantrip_effects';
 import { execute as executeHex } from '../spells/hex';
 import { execute as executeMagicMissile } from '../spells/magic_missile';
@@ -65,6 +65,67 @@ import { shouldCast as shouldCastCloudOfDaggers, execute as executeCloudOfDagger
 import { shouldCast as shouldCastCrownOfMadness, execute as executeCrownOfMadness } from '../spells/crown_of_madness';
 import { shouldCast as shouldCastHoldPerson, execute as executeHoldPerson } from '../spells/hold_person';
 import { shouldCast as shouldCastMirrorImage, execute as executeMirrorImage } from '../spells/mirror_image';
+// ── Session 17 — level-2 batch 3 (15 new PHB level-2 spells) ──────────────
+import {
+  shouldCast as shouldCastEnlargeReduce,
+  execute as executeEnlargeReduce,
+} from '../spells/enlarge_reduce';
+import {
+  shouldCast as shouldCastEnhanceAbility,
+  execute as executeEnhanceAbility,
+} from '../spells/enhance_ability';
+import {
+  shouldCast as shouldCastFlameBlade,
+  execute as executeFlameBlade,
+} from '../spells/flame_blade';
+import {
+  shouldCast as shouldCastFlamingSphere,
+  execute as executeFlamingSphere,
+} from '../spells/flaming_sphere';
+import {
+  shouldCast as shouldCastHeatMetal,
+  execute as executeHeatMetal,
+} from '../spells/heat_metal';
+import {
+  shouldCast as shouldCastMelfsAcidArrow,
+  execute as executeMelfsAcidArrow,
+} from '../spells/melf_s_acid_arrow';
+import {
+  shouldCast as shouldCastMistyStep,
+  execute as executeMistyStep,
+} from '../spells/misty_step';
+import {
+  shouldCast as shouldCastInvisibility,
+  execute as executeInvisibility,
+} from '../spells/invisibility';
+import {
+  shouldCast as shouldCastGustOfWind,
+  execute as executeGustOfWind,
+} from '../spells/gust_of_wind';
+import {
+  shouldCast as shouldCastLevitate,
+  execute as executeLevitate,
+} from '../spells/levitate';
+import {
+  shouldCast as shouldCastLesserRestoration,
+  execute as executeLesserRestoration,
+} from '../spells/lesser_restoration';
+import {
+  shouldCast as shouldCastMagicWeapon,
+  execute as executeMagicWeapon,
+} from '../spells/magic_weapon';
+import {
+  shouldCast as shouldCastCordonOfArrows,
+  execute as executeCordonOfArrows,
+} from '../spells/cordon_of_arrows';
+import {
+  shouldCast as shouldCastAlterSelf,
+  execute as executeAlterSelf,
+} from '../spells/alter_self';
+import {
+  shouldCast as shouldCastDarkvision,
+  execute as executeDarkvision,
+} from '../spells/darkvision';
 
 // ---- Combat log ---------------------------------------------
 
@@ -432,6 +493,16 @@ export function resolveAttack(
       `${attacker.name} rolls Bless die (+${blessBonus})!`, target.id, blessBonus);
   }
 
+  // Magic Weapon (PHB p.257) — Session 17: +N to attack rolls with weapon
+  // attacks (melee/ranged, NOT spell). The damage bonus is applied in the
+  // damage branch below. Crit doesn't affect flat bonuses (PHB p.196).
+  const mwEnchant = getActiveWeaponEnchant(attacker);
+  if (mwEnchant.attackBonus > 0 && (action.attackType === 'melee' || action.attackType === 'ranged')) {
+    result.total += mwEnchant.attackBonus;
+    log(state, 'action', attacker.id,
+      `${attacker.name} adds Magic Weapon bonus (+${mwEnchant.attackBonus} to attack)!`, target.id, mwEnchant.attackBonus);
+  }
+
   // Warding Bond: +1 AC while bonded (PHB p.287)
   // Cover: +2 (half) or +5 (three-quarters) to AC from obstacles (DMG Ch.8 p.196)
   // Barkskin: AC can't be less than 16 (PHB p.217) — ac_floor effect applied
@@ -596,6 +667,97 @@ export function resolveAttack(
       dmg += hexRoll;
       log(state, 'action', attacker.id,
         `${attacker.name} deals Hex bonus (+${hexRoll} necrotic) to ${target.name}`, target.id, hexRoll);
+    }
+
+    // ── Session 17 — level-2 batch 3 damage-branch hooks ────────────────
+    // These hooks fire on the ATTACKER's weapon attacks (melee/ranged, NOT
+    // spell — same gating as Branding Smite). They read the attacker's
+    // ActiveEffects / scratch fields via the query functions in
+    // spell_effects.ts and the scratch fields on Combatant.
+
+    // Enlarge/Reduce (PHB p.237): the attacker's `enlarge_reduce` effect
+    // modifies outgoing weapon damage.
+    //   'enlarge' → +1d8 weapon damage (PHB p.237).
+    //   'reduce'  → weapon damage HALVED (PHB p.237: "the target's weapon
+    //               attacks deal half damage"). v1 applies this as a flat
+    //               halving BEFORE other bonuses are added — mirror PHB p.197
+    //               resistance semantics (round down) but NOT actual resistance
+    //               (so it composes with other resistances by halving first).
+    // Crit doubles the enlarge die (PHB p.196). Reduce halves the post-crit
+    // total (mirror resistance's "halved after dice" semantics).
+    const enlargeReduceMode = getActiveEnlargeReduce(attacker);
+    if (enlargeReduceMode && (action.attackType === 'melee' || action.attackType === 'ranged')) {
+      if (enlargeReduceMode === 'enlarge') {
+        let erDice = isCrit ? 2 : 1;  // +1d8, crit → +2d8 (PHB p.196)
+        let erBonus = 0;
+        for (let i = 0; i < erDice; i++) erBonus += rollDie(8);
+        dmg += erBonus;
+        log(state, 'action', attacker.id,
+          `${attacker.name} adds Enlarge bonus (+${erBonus} damage${isCrit ? ' CRIT' : ''})!`, target.id, erBonus);
+      } else {  // 'reduce'
+        dmg = Math.floor(dmg / 2);
+        log(state, 'action', attacker.id,
+          `${attacker.name}'s weapon damage is HALVED by Reduce! (dmg now ${dmg})`, target.id);
+      }
+    }
+
+    // Magic Weapon (PHB p.257): the attacker's `weapon_enchant` effect adds
+    // a flat +N to attack rolls AND damage rolls with weapon attacks. The
+    // attack-roll bonus was already applied above (added to result.total
+    // via the getActiveWeaponEnchant query — see the attack-roll section).
+    // This block applies the DAMAGE bonus. Crit does NOT double flat bonuses
+    // (PHB p.196: crit doubles "damage dice", not flat modifiers).
+    const weaponEnchant = getActiveWeaponEnchant(attacker);
+    if (weaponEnchant.damageBonus > 0 && (action.attackType === 'melee' || action.attackType === 'ranged')) {
+      dmg += weaponEnchant.damageBonus;
+      log(state, 'action', attacker.id,
+        `${attacker.name} adds Magic Weapon bonus (+${weaponEnchant.damageBonus} damage)!`, target.id, weaponEnchant.damageBonus);
+    }
+
+    // Flame Blade (PHB p.242): while the self-buff is active, MELEE weapon
+    // attacks deal +3d6 fire damage (v1 simplification — canon: the spell
+    // creates a new melee weapon; v1 models it as a +3d6 fire rider on
+    // existing melee weapon attacks, mirroring Shillelagh's +1d8 radiant
+    // pattern but with a larger die and fire type). Crit doubles the dice
+    // (PHB p.196).
+    if (
+      attacker._flameBladeActive === true &&
+      action.attackType === 'melee'
+    ) {
+      let flameBladeDice = isCrit ? 6 : 3;  // 3d6 fire, crit → 6d6 (PHB p.196)
+      let flameBladeBonus = 0;
+      for (let i = 0; i < flameBladeDice; i++) flameBladeBonus += rollDie(6);
+      dmg += flameBladeBonus;
+      log(state, 'action', attacker.id,
+        `${attacker.name} adds Flame Blade bonus (+${flameBladeBonus} fire${isCrit ? ' CRIT' : ''})!`, target.id, flameBladeBonus);
+    }
+
+    // Alter Self — Natural Weapons (PHB p.211): while the self-buff is
+    // active, the caster's unarmed strikes deal 1d6 + STR mod slashing
+    // instead of 1 + STR mod. v1 detects unarmed strikes by checking if
+    // the action's damage is a 1-die (count=1, sides=1, bonus=0) — the
+    // standard unarmed-strike damage expression. If so, the damage is
+    // REGENERATED from 1d6 (slash) + STR mod. Crit doubles the 1d6 (PHB p.196).
+    // This is a v1 simplification — canon: the caster "grows claws" and the
+    // unarmed strike's damage die becomes 1d6 (chosen type). v1 regenerates
+    // the damage roll to avoid mutating action.damage in place.
+    if (
+      attacker._alterSelfActive === 'naturalWeapons' &&
+      action.damage &&
+      action.damage.count === 1 &&
+      action.damage.sides === 1 &&
+      action.damage.bonus === 0
+    ) {
+      // Regenerate: roll 1d6 (or 2d6 on crit) slashing + STR mod.
+      const strMod = abilityMod(attacker.str);
+      let alterSelfDice = isCrit ? 2 : 1;
+      let alterSelfRoll = 0;
+      for (let i = 0; i < alterSelfDice; i++) alterSelfRoll += rollDie(6);
+      const newDmg = alterSelfRoll + strMod;
+      log(state, 'action', attacker.id,
+        `${attacker.name}'s unarmed strike is enhanced by Alter Self — Natural Weapons! (regenerated from ${dmg} to ${newDmg} = ${alterSelfDice}d6${isCrit ? ' CRIT' : ''}=${alterSelfRoll} + STR mod ${strMod >= 0 ? '+' : ''}${strMod})`,
+        target.id, newDmg);
+      dmg = newDmg;
     }
 
     // ST-5C: Fighting Style: Interception — rider reduces damage to mount (reaction)
@@ -1405,6 +1567,167 @@ function executePlannedAction(
       if (shouldCastMirrorImage(actor, bf)) executeMirrorImage(actor, state);
       break;
     }
+
+    // ── Session 17 — level-2 batch 3 (15 new PHB level-2 spells) ──────────
+
+    case 'enlargeReduce': {
+      // Enlarge/Reduce — PHB p.237: action, 30 ft, CON save, concentration 1 min.
+      // v1: mode = 'reduce' (enemy debuff) or 'enlarge' (ally buff); size
+      // change NOT modelled. shouldCast returns { target, mode }.
+      const er = shouldCastEnlargeReduce(actor, bf);
+      if (er) executeEnlargeReduce(actor, er.target, er.mode, state);
+      break;
+    }
+
+    case 'enhanceAbility': {
+      // Enhance Ability — PHB p.237: action, touch, concentration 1 hr.
+      // Grants advantage on one ability's checks. shouldCast returns
+      // { target, ability }.
+      const ea = shouldCastEnhanceAbility(actor, bf);
+      if (ea) executeEnhanceAbility(actor, ea.target, ea.ability, state);
+      break;
+    }
+
+    case 'flameBlade': {
+      // Flame Blade — PHB p.242: action, self, concentration 10 min.
+      // v1: +3d6 fire rider on melee weapon attacks (canon: new melee weapon).
+      if (shouldCastFlameBlade(actor, bf)) executeFlameBlade(actor, state);
+      break;
+    }
+
+    case 'flamingSphere': {
+      // Flaming Sphere — PHB p.242: action, 60 ft, DEX save 2d6 fire,
+      // concentration 1 min. Persistent damage_zone with save for half.
+      const fsTargetId = plan.targetId;
+      const fsTarget = fsTargetId ? bf.combatants.get(fsTargetId) ?? null : null;
+      const liveTarget = fsTarget && !fsTarget.isDead && !fsTarget.isUnconscious
+        ? fsTarget
+        : shouldCastFlamingSphere(actor, bf);
+      if (liveTarget) executeFlamingSphere(actor, liveTarget, state);
+      break;
+    }
+
+    case 'heatMetal': {
+      // Heat Metal — PHB p.250: action, 60 ft, 2d8 fire + persistent
+      // damage_zone (no save on damage), concentration 1 min.
+      const hmTargetId = plan.targetId;
+      const hmTarget = hmTargetId ? bf.combatants.get(hmTargetId) ?? null : null;
+      const liveTarget = hmTarget && !hmTarget.isDead && !hmTarget.isUnconscious
+        ? hmTarget
+        : shouldCastHeatMetal(actor, bf);
+      if (liveTarget) executeHeatMetal(actor, liveTarget, state);
+      break;
+    }
+
+    case 'melfsAcidArrow': {
+      // Melf's Acid Arrow — PHB p.259: action, 90 ft, ranged spell attack,
+      // 4d4 acid + 2d4 delayed (damage_zone with ticksRemaining: 1).
+      // NO concentration.
+      const maaTargetId = plan.targetId;
+      if (!maaTargetId) break;
+      const maaTarget = bf.combatants.get(maaTargetId);
+      if (!maaTarget || maaTarget.isDead || maaTarget.isUnconscious) break;
+      executeMelfsAcidArrow(actor, maaTarget, state);
+      break;
+    }
+
+    case 'mistyStep': {
+      // Misty Step — PHB p.260: BONUS ACTION, self, NO concentration.
+      // Teleport up to 30 ft. shouldCast returns { destination }.
+      const ms = shouldCastMistyStep(actor, bf);
+      if (ms) executeMistyStep(actor, ms.destination, state);
+      break;
+    }
+
+    case 'invisibility': {
+      // Invisibility — PHB p.254: action, touch, concentration 1 hr.
+      // Grants invisible condition. v1: ends-on-attack NOT modelled.
+      const invTargetId = plan.targetId;
+      const invTarget = invTargetId ? bf.combatants.get(invTargetId) ?? null : null;
+      const liveTarget = invTarget && !invTarget.isDead && !invTarget.isUnconscious
+        ? invTarget
+        : shouldCastInvisibility(actor, bf);
+      if (liveTarget) executeInvisibility(actor, liveTarget, state);
+      break;
+    }
+
+    case 'gustOfWind': {
+      // Gust of Wind — PHB p.248: action, line 60 ft, STR save or pushed
+      // 15 ft, concentration 1 min. v1: single-target, one-shot push.
+      const gowTargetId = plan.targetId;
+      const gowTarget = gowTargetId ? bf.combatants.get(gowTargetId) ?? null : null;
+      const liveTarget = gowTarget && !gowTarget.isDead && !gowTarget.isUnconscious
+        ? gowTarget
+        : shouldCastGustOfWind(actor, bf);
+      if (liveTarget) executeGustOfWind(actor, liveTarget, state);
+      break;
+    }
+
+    case 'levitate': {
+      // Levitate — PHB p.255: action, 60 ft, CON save or restrained (v1),
+      // concentration 10 min.
+      const levTargetId = plan.targetId;
+      if (!levTargetId) break;
+      const levTarget = bf.combatants.get(levTargetId);
+      if (!levTarget || levTarget.isDead || levTarget.isUnconscious) break;
+      executeLevitate(actor, levTarget, state);
+      break;
+    }
+
+    case 'lesserRestoration': {
+      // Lesser Restoration — PHB p.255: action, touch, NO concentration.
+      // Ends blinded/deafened/paralyzed/poisoned. v1: removes ALL listed.
+      const lrTargetId = plan.targetId;
+      const lrTarget = lrTargetId ? bf.combatants.get(lrTargetId) ?? null : null;
+      const liveTarget = lrTarget && !lrTarget.isDead && !lrTarget.isUnconscious
+        ? lrTarget
+        : shouldCastLesserRestoration(actor, bf);
+      if (liveTarget) executeLesserRestoration(actor, liveTarget, state);
+      break;
+    }
+
+    case 'magicWeapon': {
+      // Magic Weapon — PHB p.257: action, touch, concentration 1 hr.
+      // Weapon +1 to attack and damage rolls.
+      const mwTargetId = plan.targetId;
+      const mwTarget = mwTargetId ? bf.combatants.get(mwTargetId) ?? null : null;
+      const liveTarget = mwTarget && !mwTarget.isDead && !mwTarget.isUnconscious
+        ? mwTarget
+        : shouldCastMagicWeapon(actor, bf);
+      if (liveTarget) executeMagicWeapon(actor, liveTarget, state);
+      break;
+    }
+
+    case 'cordonOfArrows': {
+      // Cordon of Arrows — PHB p.228: action, 5 ft, DEX save 1d6 piercing,
+      // 4-piece damage_zone (ticksRemaining: 4). NO concentration.
+      const coaTargetId = plan.targetId;
+      const coaTarget = coaTargetId ? bf.combatants.get(coaTargetId) ?? null : null;
+      const liveTarget = coaTarget && !coaTarget.isDead && !coaTarget.isUnconscious
+        ? coaTarget
+        : shouldCastCordonOfArrows(actor, bf);
+      if (liveTarget) executeCordonOfArrows(actor, liveTarget, state);
+      break;
+    }
+
+    case 'alterSelf': {
+      // Alter Self — PHB p.211: action, self, concentration 10 min.
+      // v1: Natural Weapons only (unarmed strikes → 1d6 slashing).
+      if (shouldCastAlterSelf(actor, bf)) executeAlterSelf(actor, state);
+      break;
+    }
+
+    case 'darkvision': {
+      // Darkvision — PHB p.230: action, touch, NO concentration, 8 hr.
+      // v1: forward-compat flag only (vision subsystem not implemented).
+      const dvTargetId = plan.targetId;
+      const dvTarget = dvTargetId ? bf.combatants.get(dvTargetId) ?? null : null;
+      const liveTarget = dvTarget && !dvTarget.isDead && !dvTarget.isUnconscious
+        ? dvTarget
+        : shouldCastDarkvision(actor, bf);
+      if (liveTarget) executeDarkvision(actor, liveTarget, state);
+      break;
+    }
   }
 }
 
@@ -1702,6 +2025,8 @@ export function runCombat(
       // casters overlapping zones). Each effect rolls its own dice.
       const damageZones = getActiveDamageZones(actor);
       if (damageZones.length > 0 && !actor.isDead && !actor.isUnconscious) {
+        // Track which zones to remove after the loop (ticksRemaining decrement).
+        const zonesToRemove: string[] = [];
         for (const zone of damageZones) {
           // Re-check liveness (a prior zone in this loop may have killed
           // the actor — e.g. two overlapping Cloud of Daggers zones).
@@ -1710,15 +2035,40 @@ export function runCombat(
           const dieCount = zone.payload.dieCount ?? 0;
           const dieSides = zone.payload.dieSides ?? 0;
           const damageType = zone.payload.damageType ?? null;
+          // Skip sentinels (dieCount=0) — they're lifecycle anchors for
+          // scratch-field buffs (Flame Blade, Alter Self, Enhance Ability),
+          // not actual damage zones. See _undoEffect in spell_effects.ts.
           if (dieCount <= 0 || dieSides <= 0) continue;
 
           // Roll the damage (mirror Cloud of Daggers's rollDamage helper).
           let dmgRoll = 0;
           for (let i = 0; i < dieCount; i++) dmgRoll += rollDie(dieSides);
 
-          const dealt = applyDamageWithTempHP(actor, dmgRoll, damageType);
+          // Session 17: save for half (Flaming Sphere, Cordon of Arrows).
+          // If the zone has a saveDC + saveAbility, the actor rolls a save;
+          // on success, the damage is halved (PHB p.242 Flaming Sphere:
+          // "half as much on a successful one"). Cloud of Daggers has no
+          // save (backward-compatible — saveDC is undefined).
+          let actualDmg = dmgRoll;
+          let saveDesc = '';
+          const zoneSaveDC = zone.payload.saveDC;
+          const zoneSaveAbility = zone.payload.saveAbility;
+          if (zoneSaveDC !== undefined && zoneSaveAbility) {
+            const save = rollSave(actor, zoneSaveAbility, zoneSaveDC);
+            if (save.success) {
+              actualDmg = Math.floor(dmgRoll / 2);
+            }
+            saveDesc = ` (DC ${zoneSaveDC} ${zoneSaveAbility.toUpperCase()} save: ${save.success ? 'SUCCESS — half damage' : 'FAIL — full damage'} (rolled ${save.total}))`;
+            log(state,
+              save.success ? 'save_success' : 'save_fail',
+              zone.casterId,
+              `${actor.name} ${save.success ? 'succeeds on' : 'fails'} DC ${zoneSaveDC} ${zoneSaveAbility.toUpperCase()} save vs ${zone.spellName} (start-of-turn damage)${saveDesc}`,
+              actor.id, save.roll);
+          }
+
+          const dealt = applyDamageWithTempHP(actor, actualDmg, damageType);
           log(state, 'damage', zone.casterId,
-            `${actor.name} takes ${dealt} ${damageType ?? ''} damage from ${zone.spellName} (start of turn: ${dieCount}d${dieSides}=${dmgRoll})`,
+            `${actor.name} takes ${dealt} ${damageType ?? ''} damage from ${zone.spellName} (start of turn: ${dieCount}d${dieSides}=${dmgRoll}${actualDmg !== dmgRoll ? `, halved to ${actualDmg}` : ''})`,
             actor.id, dealt);
 
           // Concentration check if the actor was concentrating (the damage
@@ -1734,6 +2084,28 @@ export function runCombat(
 
           // Death check (the damage may have killed the actor).
           checkDeath(actor, state);
+
+          // Session 17: ticksRemaining decrement (Melf's Acid Arrow = 1,
+          // Cordon of Arrows = 4). If ticksRemaining reaches 0, mark the
+          // zone for removal after the loop. We can't mutate activeEffects
+          // during iteration (the for-of loop holds a reference to the array),
+          // so we collect the IDs and remove them after.
+          if (zone.payload.ticksRemaining !== undefined) {
+            // Decrement the zone's ticksRemaining in place (mutating the
+            // payload object — safe because we hold the reference directly).
+            zone.payload.ticksRemaining -= 1;
+            if (zone.payload.ticksRemaining <= 0) {
+              zonesToRemove.push(zone.id);
+              log(state, 'condition_remove', zone.casterId,
+                `${zone.spellName} effect on ${actor.name} expires (ticksRemaining reached 0).`,
+                actor.id);
+            }
+          }
+        }
+
+        // Remove expired zones (ticksRemaining reached 0).
+        for (const zoneId of zonesToRemove) {
+          removeEffectById(actor.id, zoneId, battlefield);
         }
       }
 

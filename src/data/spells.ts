@@ -427,6 +427,210 @@ export const SPELL_DB: Record<string, SpellTemplate> = {
     slotLevel: 2,
   },
 
+  // ── Session 17 — level-2 batch 3 (15 new PHB level-2 spells) ──────────
+
+  'enlarge/reduce': {
+    // 2nd-level transmutation, action, 30 ft, CON save, concentration 1 min.
+    // v1: mode = 'reduce' (enemy) or 'enlarge' (ally); size change NOT modelled.
+    attackType: 'save',
+    rangeNormal: 30,
+    damage: null,
+    damageType: null,
+    saveAbility: 'con',
+    isAoE: false,
+    isControl: true,          // buff/debuff
+    requiresConcentration: true,
+    slotLevel: 2,
+  },
+
+  'enhance ability': {
+    // 2nd-level transmutation, action, touch, concentration 1 hr.
+    // Grants advantage on one ability's checks. No damage, no save.
+    attackType: null,
+    rangeNormal: 5,    // touch
+    damage: null,
+    damageType: null,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 2,
+  },
+
+  'flame blade': {
+    // 2nd-level evocation, action, self, concentration 10 min.
+    // v1: +3d6 fire rider on melee weapon attacks (canon: new melee weapon).
+    attackType: null,
+    rangeNormal: 0,    // self
+    damage: { count: 3, sides: 6, bonus: 0, average: avg(3, 6) },
+    damageType: 'fire',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 2,
+  },
+
+  'flaming sphere': {
+    // 2nd-level conjuration, action, 60 ft, DEX save 2d6 fire, concentration 1 min.
+    // Persistent damage_zone with save for half.
+    attackType: 'save',
+    rangeNormal: 60,
+    damage: { count: 2, sides: 6, bonus: 0, average: avg(2, 6) },
+    damageType: 'fire',
+    saveAbility: 'dex',
+    isAoE: true,              // canon: 5-ft sphere (v1: single-target)
+    isControl: true,          // persistent damage zone
+    requiresConcentration: true,
+    slotLevel: 2,
+  },
+
+  'heat metal': {
+    // 2nd-level transmutation, action, 60 ft, 2d8 fire + persistent damage_zone
+    // (no save on damage), concentration 1 min.
+    attackType: null,         // damage applied in execute(), not via resolveAttack
+    rangeNormal: 60,
+    damage: { count: 2, sides: 8, bonus: 0, average: avg(2, 8) },
+    damageType: 'fire',
+    saveAbility: 'con',       // CON save (for logging only — drop-object NOT modelled)
+    isAoE: false,
+    isControl: true,          // persistent damage zone
+    requiresConcentration: true,
+    slotLevel: 2,
+  },
+
+  "melf's acid arrow": {
+    // 2nd-level evocation, action, 90 ft, ranged spell attack, 4d4 acid +
+    // 2d4 delayed (damage_zone with ticksRemaining: 1). NO concentration.
+    attackType: 'spell',      // ranged spell attack (resolved in execute())
+    rangeNormal: 90,
+    damage: { count: 4, sides: 4, bonus: 0, average: avg(4, 4) },
+    damageType: 'acid',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 2,
+  },
+
+  'misty step': {
+    // 2nd-level conjuration, BONUS ACTION, self, NO concentration.
+    // Teleport up to 30 ft. No damage, no save.
+    attackType: null,
+    rangeNormal: 0,    // self
+    damage: null,
+    damageType: null,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 2,
+    bonusAction: true,
+  },
+
+  'invisibility': {
+    // 2nd-level illusion, action, touch, concentration 1 hr.
+    // Grants invisible condition. v1: ends-on-attack NOT modelled.
+    attackType: null,
+    rangeNormal: 5,    // touch
+    damage: null,
+    damageType: null,
+    isAoE: false,
+    isControl: true,          // grants a condition (invisible)
+    requiresConcentration: true,
+    slotLevel: 2,
+  },
+
+  'gust of wind': {
+    // 2nd-level evocation, action, line 60 ft, STR save or pushed 15 ft,
+    // concentration 1 min. v1: single-target, one-shot push.
+    attackType: 'save',
+    rangeNormal: 60,
+    damage: null,             // no damage — push only
+    damageType: null,
+    saveAbility: 'str',
+    isAoE: true,              // canon: line 60 ft (v1: single-target)
+    isControl: true,          // push effect
+    requiresConcentration: true,
+    slotLevel: 2,
+  },
+
+  'levitate': {
+    // 2nd-level transmutation, action, 60 ft, CON save or restrained (v1),
+    // concentration 10 min.
+    attackType: 'save',
+    rangeNormal: 60,
+    damage: null,
+    damageType: null,
+    saveAbility: 'con',
+    isAoE: false,
+    isControl: true,          // imposes restrained condition (v1)
+    requiresConcentration: true,
+    slotLevel: 2,
+  },
+
+  'lesser restoration': {
+    // 2nd-level abjuration, action, touch, NO concentration.
+    // Ends blinded/deafened/paralyzed/poisoned. v1: removes ALL listed.
+    attackType: null,
+    rangeNormal: 5,    // touch
+    damage: null,
+    damageType: null,
+    isAoE: false,
+    isControl: true,          // removes control conditions
+    requiresConcentration: false,
+    slotLevel: 2,
+  },
+
+  'magic weapon': {
+    // 2nd-level transmutation, action, touch, concentration 1 hr.
+    // Weapon +1 to attack and damage rolls.
+    attackType: null,
+    rangeNormal: 5,    // touch
+    damage: null,
+    damageType: null,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 2,
+  },
+
+  'cordon of arrows': {
+    // 2nd-level transmutation, action, 5 ft, DEX save 1d6 piercing,
+    // 4-piece damage_zone (ticksRemaining: 4). NO concentration.
+    attackType: 'save',
+    rangeNormal: 5,
+    damage: { count: 1, sides: 6, bonus: 0, average: avg(1, 6) },
+    damageType: 'piercing',
+    saveAbility: 'dex',       // v1: DEX save (canon: ranged spell attack)
+    isAoE: false,
+    isControl: true,          // persistent damage zone
+    requiresConcentration: false,
+    slotLevel: 2,
+  },
+
+  'alter self': {
+    // 2nd-level transmutation, action, self, concentration 10 min.
+    // v1: Natural Weapons only (unarmed strikes → 1d6 slashing).
+    attackType: null,
+    rangeNormal: 0,    // self
+    damage: null,
+    damageType: null,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 2,
+  },
+
+  'darkvision': {
+    // 2nd-level transmutation, action, touch, NO concentration, 8 hr.
+    // v1: forward-compat flag only (vision subsystem not implemented).
+    attackType: null,
+    rangeNormal: 5,    // touch
+    damage: null,
+    damageType: null,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 2,
+  },
+
 };
 
 // ---- Lookup helper ------------------------------------------

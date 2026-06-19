@@ -5,7 +5,7 @@
 
 import { Combatant, Action, DiceExpression, Condition, ActionBudget, Battlefield, CreatureSize, DamageType } from '../types/core';
 import { querySelf, queryVulnerability } from './adv_system';
-import { getActiveBlessDie } from './spell_effects';
+import { getActiveBlessDie, getActiveEnlargeReduce } from './spell_effects';
 import { cleanup as cleanupShield } from '../spells/shield';
 import { cleanup as cleanupRayOfFrost } from '../spells/ray_of_frost';
 import { cleanup as cleanupChillTouch } from '../spells/chill_touch';
@@ -128,9 +128,19 @@ export function rollSave(
   // always-on while rage is active (no per-turn bookkeeping needed).
   const rageStrAdvantage =
     ability === 'str' && combatant.resources?.rage?.active === true;
-  const hasAdvantage   = selfSave.advantage   || allSave.advantage   || rageStrAdvantage;
+  // Enlarge/Reduce (PHB p.237 — Session 17): "The target has advantage on
+  // Strength checks and Strength saving throws" (enlarge) or "disadvantage
+  // Strength checks and Strength saving throws" (reduce). Flat unconditional
+  // adv/disadv on STR saves — modeled via the enlarge_reduce ActiveEffect
+  // (queried by getActiveEnlargeReduce), NOT via the advantage-system entries
+  // (same pattern as rageStrAdvantage).
+  const enlargeReduceMode = getActiveEnlargeReduce(combatant);
+  const enlargeStrAdvantage   = ability === 'str' && enlargeReduceMode === 'enlarge';
+  const enlargeStrDisadvantage = ability === 'str' && enlargeReduceMode === 'reduce';
+  const hasAdvantage   = selfSave.advantage   || allSave.advantage   || rageStrAdvantage    || enlargeStrAdvantage;
   const hasDisadvantage = combatant.conditions.has('poisoned') // PHB Appendix A: poisoned → disadv on saves
-    || selfSave.disadvantage || allSave.disadvantage;
+    || selfSave.disadvantage || allSave.disadvantage
+    || enlargeStrDisadvantage;
 
   let roll: number;
   if (hasAdvantage && !hasDisadvantage) roll = rollWithAdvantage();
@@ -268,6 +278,22 @@ export function rollAbilityCheck(
   const rageStrAdvantage =
     ability === 'str' && combatant.resources?.rage?.active === true;
 
+  // ── Session 17 — level-2 batch 3 ability-check advantage sources ──────
+  // Enlarge/Reduce (PHB p.237): "advantage on Strength checks" (enlarge) /
+  // "disadvantage on Strength checks" (reduce). Flat unconditional, modeled
+  // via the enlarge_reduce ActiveEffect (queried by getActiveEnlargeReduce).
+  const enlargeReduceMode = getActiveEnlargeReduce(combatant);
+  const enlargeStrAdvantage    = ability === 'str' && enlargeReduceMode === 'enlarge';
+  const enlargeStrDisadvantage = ability === 'str' && enlargeReduceMode === 'reduce';
+
+  // Enhance Ability (PHB p.237): "advantage on one ability check of the
+  // chosen type". Flat unconditional advantage on the matching ability's
+  // checks, modeled via the `_enhanceAbilityActive` scratch field (set by
+  // enhance_ability.ts; cleared by the damage_zone sentinel's _undoEffect
+  // on concentration break). v1 simplification: advantage only (no Bear's
+  // Endurance 2d6 temp HP, no Cat's Grace fall-damage immunity).
+  const enhanceAbilityAdv = ability === combatant._enhanceAbilityActive;
+
   // Advantage-system entries (spells, feats, class features that grant
   // adv/dis on ability checks via grantSelf — scope 'ability' covers any
   // ability check; 'ability:str' covers STR checks specifically; etc.).
@@ -281,8 +307,8 @@ export function rollAbilityCheck(
   // IS canonically correct.
   const poisonedDisadv = combatant.conditions.has('poisoned');
 
-  const hasAdvantage    = friendsAdv || selfCheck.advantage   || allCheck.advantage   || rageStrAdvantage;
-  const hasDisadvantage = poisonedDisadv || selfCheck.disadvantage || allCheck.disadvantage;
+  const hasAdvantage    = friendsAdv || selfCheck.advantage   || allCheck.advantage   || rageStrAdvantage || enlargeStrAdvantage || enhanceAbilityAdv;
+  const hasDisadvantage = poisonedDisadv || selfCheck.disadvantage || allCheck.disadvantage || enlargeStrDisadvantage;
 
   let roll: number;
   if (hasAdvantage && !hasDisadvantage) {

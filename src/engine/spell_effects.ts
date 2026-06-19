@@ -78,6 +78,8 @@ export function applySpellEffect(
     case 'ac_floor':
     case 'bless_die':
     case 'damage_zone':
+    case 'weapon_enchant':
+    case 'enlarge_reduce':
       // No immediate side-effect — read at resolution time.
       // (damage_zone: the start-of-turn damage tick is in combat.ts's
       // runCombat loop, right after resetBudget.)
@@ -150,8 +152,34 @@ function _undoEffect(target: Combatant, effect: ActiveEffect): void {
     case 'ac_bonus':
     case 'ac_floor':
     case 'bless_die':
+    case 'weapon_enchant':
+    case 'enlarge_reduce':
+      // Read-only at resolution — nothing to undo structurally.
+      break;
+
     case 'damage_zone':
       // Read-only at resolution — nothing to undo structurally.
+      //
+      // Session 17: some concentration spells use a `damage_zone` effect with
+      // `dieCount: 0` as a SENTINEL to anchor concentration-break cleanup for
+      // their scratch-field buffs (the scratch field is the real mechanic; the
+      // sentinel effect is just a lifecycle anchor so removeEffectsFromCaster
+      // clears it). When such a sentinel is removed, clear the matching
+      // scratch field. The start-of-turn damage tick naturally skips
+      // dieCount=0 effects (the existing `if (dieCount <= 0) continue;` check).
+      if ((effect.payload.dieCount ?? 0) === 0) {
+        switch (effect.spellName) {
+          case 'Flame Blade':
+            delete target._flameBladeActive;
+            break;
+          case 'Alter Self':
+            delete target._alterSelfActive;
+            break;
+          case 'Enhance Ability':
+            delete target._enhanceAbilityActive;
+            break;
+        }
+      }
       break;
   }
 }
@@ -223,7 +251,66 @@ export function getActiveHexDie(target: Combatant, attackerId: string): number {
  * Called by the start-of-turn damage tick in combat.ts's runCombat loop
  * (right after resetBudget). The damage is applied via applyDamageWithTempHP
  * so resistances / temp HP / Warding Bond redirect all work as expected.
+ *
+ * Session 17: damage_zone effects with `dieCount === 0` are SENTINELS
+ * (no damage tick) — they anchor concentration-break cleanup for scratch-
+ * field buffs (Flame Blade, Alter Self, Enhance Ability). The caller
+ * (combat.ts start-of-turn tick) already skips dieCount=0 via the
+ * `if (dieCount <= 0 || dieSides <= 0) continue;` check, so this query
+ * can return them safely.
  */
 export function getActiveDamageZones(c: Combatant): ActiveEffect[] {
   return c.activeEffects.filter(e => e.effectType === 'damage_zone');
+}
+
+// ---- Weapon enchant query (Session 17 — Magic Weapon PHB p.257) ---
+
+/**
+ * Returns the sum of all `weapon_enchant` effects' attackBonus and
+ * damageBonus on a combatant. Each entry is a flat +N to attack rolls
+ * AND damage rolls with weapon attacks (melee/ranged, NOT spell).
+ * Called by resolveAttack's attack-roll branch (adds to attack total)
+ * and damage branch (adds to weapon damage).
+ *
+ * v1: Magic Weapon (PHB p.257) is the only source of weapon_enchant
+ * effects in v1. The bonus is +1 at 2nd level (upcast +2/+3 NOT modelled).
+ * Multiple weapon_enchant effects would stack (rare — PHB p.205 "magical
+ * effects on the same target don't stack" usually applies, but v1 allows
+ * stacking for simplicity).
+ */
+export function getActiveWeaponEnchant(c: Combatant): { attackBonus: number; damageBonus: number } {
+  let attackBonus = 0;
+  let damageBonus = 0;
+  for (const e of c.activeEffects) {
+    if (e.effectType !== 'weapon_enchant') continue;
+    attackBonus += e.payload.attackBonus ?? 0;
+    damageBonus  += e.payload.damageBonus  ?? 0;
+  }
+  return { attackBonus, damageBonus };
+}
+
+// ---- Enlarge/Reduce query (Session 17 — Enlarge/Reduce PHB p.237) ---
+
+/**
+ * Returns the active `enlarge_reduce` mode on a combatant, or null if none.
+ *   'enlarge' → +1d8 weapon damage, advantage on STR checks/saves.
+ *   'reduce'  → half weapon damage, disadvantage on STR checks/saves.
+ *   null      → no Enlarge/Reduce effect active.
+ *
+ * Called by:
+ *   - resolveAttack's damage branch (the ATTACKER's effect — modifies
+ *     outgoing weapon damage).
+ *   - rollAbilityCheck (the creature's OWN effect — STR check adv/disadv).
+ *   - rollSave (the creature's OWN effect — STR save adv/disadv).
+ *
+ * If multiple enlarge_reduce effects are active on the same creature
+ * (rare — would require two casters), the first one found wins (v1
+ * simplification — PHB p.205 says magical effects don't stack anyway).
+ */
+export function getActiveEnlargeReduce(c: Combatant): 'enlarge' | 'reduce' | null {
+  for (const e of c.activeEffects) {
+    if (e.effectType !== 'enlarge_reduce') continue;
+    return e.payload.enlargeReduceMode ?? null;
+  }
+  return null;
 }

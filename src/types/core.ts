@@ -93,7 +93,10 @@ export type SpellEffectType =
   | 'bless_die'         // add a bonus die to this creature's attack rolls & saves (Bless 1d4)
   | 'condition_apply'   // apply a condition to this creature (e.g. Entangle → restrained)
   | 'hex_damage'        // +1d6 necrotic on each hit by the caster (Hex PHB p.251)
-  | 'damage_zone';      // persistent damage aura on this creature (e.g. Cloud of Daggers 4d4 slashing)
+  | 'damage_zone'       // persistent damage aura on this creature (e.g. Cloud of Daggers 4d4 slashing)
+  // ── Session 17 — level-2 batch 3 new effect types ───────────────────
+  | 'weapon_enchant'    // flat +N to attack rolls AND damage rolls with weapons (Magic Weapon PHB p.257)
+  | 'enlarge_reduce';   // enlarge/reduce weapon-damage mod + STR check adv/disadv (Enlarge/Reduce PHB p.237)
 
 export interface ActiveEffect {
   id: string;               // unique per instance, e.g. 'eff_1'
@@ -122,6 +125,34 @@ export interface ActiveEffect {
     // the caster's concentration breaks (sourceIsConcentration: true).
     dieCount?: number;                // e.g. 4 for 4d4
     damageType?: DamageType;          // e.g. 'slashing' for Cloud of Daggers
+    // ── Session 17 additions (level-2 batch 3) ─────────────────────────
+    // saveDC + saveAbility: if present, the start-of-turn damage tick rolls
+    // a save; on success, the damage is halved (PHB p.242 Flaming Sphere:
+    // "must make a Dexterity saving throw. A creature takes 2d6 fire damage
+    // on a failed save, or half as much on a successful one."). Omitted for
+    // Cloud of Daggers (no save) — backward-compatible.
+    saveDC?: number;                  // e.g. 13 for a DC 13 DEX save
+    saveAbility?: AbilityScore;       // e.g. 'dex' for Flaming Sphere
+    // ticksRemaining: if present, the effect ticks only this many times
+    // before being automatically removed. Used by spells with a fixed
+    // number of damage instances (e.g. Cordon of Arrows PHB p.228: "the
+    // ground or surface ... shoots forth ... one piece ... of ammunition
+    // ... when a creature moves into ... or ends its turn there" — 4 pieces
+    // total; Melf's Acid Arrow delayed 2d4 — 1 tick). Omitted for Cloud of
+    // Daggers (infinite ticks while concentration lasts) — backward-compatible.
+    ticksRemaining?: number;          // e.g. 4 for Cordon of Arrows
+    // ── weapon_enchant (Session 17 — Magic Weapon PHB p.257) ───────────
+    // Flat +N to attack rolls AND damage rolls with weapon attacks
+    // (melee/ranged, NOT spell). Read by resolveAttack's attack-roll branch
+    // (adds to attack total) and damage branch (adds to weapon damage).
+    attackBonus?: number;             // e.g. 1 for Magic Weapon (v1: no upcast)
+    damageBonus?: number;             // e.g. 1 for Magic Weapon (v1: no upcast)
+    // ── enlarge_reduce (Session 17 — Enlarge/Reduce PHB p.237) ─────────
+    // 'enlarge': +1d8 weapon damage, advantage on STR checks/saves.
+    // 'reduce': half weapon damage, disadvantage on STR checks/saves.
+    // Read by resolveAttack's damage branch (the attacker's effect) and
+    // rollAbilityCheck + rollSave (the creature's own effect for STR).
+    enlargeReduceMode?: 'enlarge' | 'reduce';
   };
   sourceIsConcentration: boolean;     // if true, removed when caster's concentration ends
 }
@@ -867,6 +898,103 @@ export interface Combatant {
   // attack roll, damage, or AC). The retargeting logic lives in
   // resolveAttack's pre-roll section.
   _mirrorImageDuplicates?: number;
+
+  // ---- Session 17 — level-2 batch 3 scratch fields ---------------------------
+  // These scratch fields are set by the 15 new level-2 spell modules added in
+  // Session 17 (Enlarge/Reduce, Enhance Ability, Flame Blade, Magic Weapon,
+  // Alter Self, Melf's Acid Arrow, Darkvision). They are optional (undefined
+  // = effect not active) and never persisted. All but `_darkvisionActive` are
+  // concentration-bound (cleaned by removeEffectsFromCaster when concentration
+  // breaks); `_darkvisionActive` is a forward-compat flag with no v1 mechanic
+  // (like `_lightSourceActive`).
+
+  // ---- Enlarge/Reduce (PHB p.237) scratch field ----
+  // Set on the TARGET (the affected creature) when it fails its CON save vs
+  // Enlarge/Reduce. Values: 'enlarge' (buff — +1d8 weapon damage, advantage
+  // on STR checks) or 'reduce' (debuff — half weapon damage, disadvantage on
+  // STR checks). While set:
+  //   - resolveAttack's damage branch checks the ATTACKER's flag:
+  //     'enlarge' → +1d8 weapon damage (melee/ranged, NOT spell).
+  //     'reduce'  → weapon damage (melee/ranged, NOT spell) is halved (PHB
+  //                 p.197 resistance, rounded down — but NOT actual resistance,
+  //                 so it composes with other resistances by halving first).
+  //   - rollAbilityCheck checks the creature's flag for STR checks:
+  //     'enlarge' → advantage on STR checks (PHB p.237).
+  //     'reduce'  → disadvantage on STR checks (PHB p.237).
+  // Concentration spell — removed by removeEffectsFromCaster when the caster's
+  // concentration breaks. v1 simplification: size change (size category) NOT
+  // modelled (no size-modifier subsystem for weapon dice / carrying capacity).
+  _enlargeReduceActive?: 'enlarge' | 'reduce';
+
+  // ---- Enhance Ability (PHB p.237) scratch field ----
+  // Set on the TARGET (the buffed ally) when Enhance Ability is cast on them.
+  // Value: the ability score that gains advantage on ability checks (PHB p.237:
+  // "For the duration, the target has advantage on one ability check of the
+  // chosen type, which is chosen when you cast this spell."). While set,
+  // rollAbilityCheck grants advantage on ability checks of the matching ability.
+  // Concentration spell — removed by removeEffectsFromCaster when concentration
+  // breaks. v1 simplification: the per-spell die (e.g. Bear's Endurance adds
+  // 2d6 to one check) is NOT modelled (advantage only — forward-compat TODO
+  // via the metadata flag `enhanceAbilityTempHPV1Implemented: false` and
+  // `enhanceAbilityBonusDieV1Implemented: false`).
+  _enhanceAbilityActive?: 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha';
+
+  // ---- Flame Blade (PHB p.242) scratch field ----
+  // Set on the CASTER when Flame Blade is cast (self-buff). While true, the
+  // caster's melee weapon attacks deal +3d6 fire damage (v1 simplification —
+  // canon: Flame Blade creates a NEW melee weapon that the caster attacks
+  // with as an action, dealing 3d6 fire on a melee spell attack; v1 models it
+  // as a +3d6 fire rider on existing melee weapon attacks, mirroring
+  // Shillelagh's +1d8 radiant pattern but with a larger die and fire type).
+  // Concentration spell — removed by removeEffectsFromCaster when concentration
+  // breaks. v1 simplification documented via `flameBladeAsWeaponRiderV1Simplified: true`.
+  _flameBladeActive?: boolean;
+
+  // ---- Magic Weapon (PHB p.257) scratch field ----
+  // Set on the TARGET (the weapon's wielder) when Magic Weapon is cast on
+  // their weapon. Value: the +N bonus to attack rolls AND damage rolls with
+  // that weapon (PHB p.257: "+1 to attack and damage rolls"; upcast +2/+3
+  // NOT modelled in v1). While set, resolveAttack's attack-roll branch adds
+  // the bonus to the attack total, and the damage branch adds it to weapon
+  // damage (melee/ranged, NOT spell). Concentration spell — removed by
+  // removeEffectsFromCaster when concentration breaks. v1 simplification:
+  // the bonus applies to ALL of the wielder's weapon attacks (canon: a
+  // specific weapon — v1 doesn't track per-weapon state).
+  _magicWeaponBonus?: number;
+
+  // ---- Alter Self (PHB p.211) scratch field ----
+  // Set on the CASTER when Alter Self is cast (self-buff). v1 implements
+  // ONLY the "Natural Weapons" option (PHB p.211: "Your unarmed strikes deal
+  // 1d6 bludgeoning, piercing, or slashing damage — chosen when you cast the
+  // spell — and you are proficient with them."). While set to 'naturalWeapons',
+  // resolveAttack's damage branch checks: if the action is an unarmed strike
+  // (damage 1 + STR mod), substitute 1d6 + STR mod instead. Concentration
+  // spell — removed by removeEffectsFromCaster when concentration breaks.
+  // v1 simplification: the other two options (Aquatic Adaptation, Change
+  // Appearance) are NOT modelled (no swimming/disguise subsystem).
+  _alterSelfActive?: 'naturalWeapons';
+
+  // ---- Melf's Acid Arrow (PHB p.259) scratch field ----
+  // Set on the TARGET when Melf's Acid Arrow hits (ranged spell attack).
+  // PHB p.259: "On a hit, the target takes 4d4 acid damage immediately and
+  // 2d4 acid damage at the end of its next turn." v1 models the delayed 2d4
+  // acid as a damage_zone effect with `ticksRemaining: 1` (one tick at the
+  // start of the target's next turn — slightly earlier than canon's "end of
+  // its next turn", but consistent with the damage_zone start-of-tick timing
+  // established by Cloud of Daggers in Session 16). This scratch field is
+  // NOT used in v1 (the delayed damage is tracked via the damage_zone effect,
+  // not via a scratch field) — kept here for forward-compat if a future
+  // refactor moves delayed-damage tracking to a Combatant field.
+  // (Reserved — currently always undefined.)
+
+  // ---- Darkvision (PHB p.230) scratch field ----
+  // Set on the TARGET when Darkvision is cast on them (touch). v1 has no
+  // vision subsystem (computeLOS does not query darkvision), so this flag is
+  // FORWARD-COMPAT only — set for future use, never read in v1. Like Light's
+  // `_lightSourceActive` pattern. NOT a concentration spell (PHB p.230: 8 hr,
+  // no concentration) — v1 applies the flag with no cleanup (persists for
+  // the combat, like Aid's `_aidHPBonus`).
+  _darkvisionActive?: boolean;
 }
 
 // ---- Obstacle -----------------------------------------------
@@ -965,6 +1093,22 @@ export interface PlannedAction {
     | 'crownOfMadness'   // Crown of Madness — 120 ft, WIS save or charmed, concentration 1 min (Bard/Sorcerer/Warlock/Wizard)
     | 'holdPerson'       // Hold Person — 60 ft, WIS save or paralyzed, concentration 1 min (Bard/Cleric/Druid/Paladin/Sorcerer/Warlock/Wizard)
     | 'mirrorImage'      // Mirror Image — self, 3 duplicates, NO concentration, 1 min (Bard/Sorcerer/Warlock/Wizard)
+    // ── Session 17 — level-2 batch 3 (15 new PHB level-2 spells) ──
+    | 'enlargeReduce'      // Enlarge/Reduce — 30 ft, CON save, size/damage buff/debuff, concentration 1 min
+    | 'enhanceAbility'     // Enhance Ability — touch, advantage on one ability's checks, concentration 1 hr
+    | 'flameBlade'         // Flame Blade — self, +3d6 fire on melee weapon attacks, concentration 10 min
+    | 'flamingSphere'      // Flaming Sphere — 60 ft, DEX save 2d6 fire + persistent damage_zone, concentration 1 min
+    | 'heatMetal'          // Heat Metal — 60 ft, CON save 2d8 fire + persistent damage_zone, concentration 1 min
+    | 'melfsAcidArrow'     // Melf's Acid Arrow — ranged spell attack, 4d4 acid + 2d4 delayed, 90 ft
+    | 'mistyStep'          // Misty Step — BONUS ACTION, self teleport 30 ft, no concentration
+    | 'invisibility'       // Invisibility — touch, grants invisible condition, concentration 1 hr
+    | 'gustOfWind'         // Gust of Wind — line 60 ft, STR save or pushed 15 ft, concentration 1 min
+    | 'levitate'           // Levitate — 60 ft, CON save or restrained (v1), concentration 10 min
+    | 'lesserRestoration'  // Lesser Restoration — touch, ends blinded/deafened/poisoned/paralyzed, no concentration
+    | 'magicWeapon'        // Magic Weapon — touch, weapon +1, concentration 1 hr
+    | 'cordonOfArrows'     // Cordon of Arrows — 5 ft, DEX save 1d6 piercing, 4-piece damage_zone, 1 min
+    | 'alterSelf'          // Alter Self — self, natural weapons (1d6 unarmed), concentration 10 min
+    | 'darkvision'         // Darkvision — touch, grants darkvision 60 ft (forward-compat), 8 hr, no concentration
     | 'legendary';
   action: Action | null;
   targetId: string | null;

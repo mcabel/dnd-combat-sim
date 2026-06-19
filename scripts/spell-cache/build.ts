@@ -137,8 +137,12 @@ function titleCaseFromFilename(file: string): string {
 function moduleNameFromFile(file: string): string | null {
   try {
     const src = fs.readFileSync(file, 'utf8');
-    const m = src.match(/export\s+const\s+metadata\s*=\s*\{[\s\S]*?name:\s*['"]([^'"]+)['"]/);
-    if (m) return m[1];
+    // Match name: "..." or name: '...' — allow apostrophes inside double-
+    // quoted strings (e.g. "Melf's Acid Arrow") and double quotes inside
+    // single-quoted strings. The original regex `[^'"]+` stopped at the
+    // first apostrophe, breaking apostrophe-containing names. Session 17 fix.
+    const m = src.match(/export\s+const\s+metadata\s*=\s*\{[\s\S]*?name:\s*("([^"]*)"|'([^']*)')/);
+    if (m) return m[2] ?? m[3];
   } catch { /* ignore */ }
   return null;
 }

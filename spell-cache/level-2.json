@@ -1,6 +1,6 @@
 {
   "level": 2,
-  "generatedAt": "2026-06-19T20:31:52.701Z",
+  "generatedAt": "2026-06-19T21:22:06.681Z",
   "generatorVersion": 2,
   "scopeRule": "pre-2024 canon; reprints: newest in-scope source wins; XPHB(2024) out of scope; creatures keep all variants (not applicable to spells)",
   "sourceDates": {
@@ -26,8 +26,8 @@
     "XPHB"
   ],
   "count": 94,
-  "implementedCount": 11,
-  "remainingInScope": 81,
+  "implementedCount": 26,
+  "remainingInScope": 66,
   "spells": [
     {
       "name": "Aganazzar's Scorcher",
@@ -127,8 +127,8 @@
       "page": 211,
       "level": 2,
       "school": "Transmutation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "alter_self.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -584,8 +584,8 @@
       "page": 228,
       "level": 2,
       "school": "Transmutation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "cordon_of_arrows.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -687,8 +687,8 @@
       "page": 230,
       "level": 2,
       "school": "Transmutation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "darkvision.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -923,8 +923,8 @@
       "page": 237,
       "level": 2,
       "school": "Transmutation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "enhance_ability.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -959,8 +959,8 @@
       "page": 237,
       "level": 2,
       "school": "Transmutation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "enlarge_reduce.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1092,8 +1092,8 @@
       "page": 242,
       "level": 2,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "flame_blade.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1124,8 +1124,8 @@
       "page": 242,
       "level": 2,
       "school": "Conjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "flaming_sphere.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1270,8 +1270,8 @@
       "page": 248,
       "level": 2,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "gust_of_wind.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1328,8 +1328,8 @@
       "page": 250,
       "level": 2,
       "school": "Transmutation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "heat_metal.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1451,8 +1451,8 @@
       "page": 254,
       "level": 2,
       "school": "Illusion",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "invisibility.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1576,8 +1576,8 @@
       "page": 255,
       "level": 2,
       "school": "Abjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "lesser_restoration.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1613,8 +1613,8 @@
       "page": 255,
       "level": 2,
       "school": "Transmutation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "levitate.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1752,8 +1752,8 @@
       "page": 257,
       "level": 2,
       "school": "Transmutation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "magic_weapon.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1812,8 +1812,8 @@
       "page": 259,
       "level": 2,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "melf_s_acid_arrow.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1913,8 +1913,8 @@
       "page": 260,
       "level": 2,
       "school": "Conjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "misty_step.ts",
       "inScope": true,
       "otherSources": [
         {

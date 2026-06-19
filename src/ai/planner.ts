@@ -37,6 +37,22 @@ import { shouldCast as shouldCastCloudOfDaggers } from '../spells/cloud_of_dagge
 import { shouldCast as shouldCastCrownOfMadness } from '../spells/crown_of_madness';
 import { shouldCast as shouldCastHoldPerson } from '../spells/hold_person';
 import { shouldCast as shouldCastMirrorImage } from '../spells/mirror_image';
+// ── Session 17 — level-2 batch 3 (15 new PHB level-2 spells) ──────────────
+import { shouldCast as shouldCastEnlargeReduce } from '../spells/enlarge_reduce';
+import { shouldCast as shouldCastEnhanceAbility } from '../spells/enhance_ability';
+import { shouldCast as shouldCastFlameBlade } from '../spells/flame_blade';
+import { shouldCast as shouldCastFlamingSphere } from '../spells/flaming_sphere';
+import { shouldCast as shouldCastHeatMetal } from '../spells/heat_metal';
+import { shouldCast as shouldCastMelfsAcidArrow } from '../spells/melf_s_acid_arrow';
+import { shouldCast as shouldCastMistyStep } from '../spells/misty_step';
+import { shouldCast as shouldCastInvisibility } from '../spells/invisibility';
+import { shouldCast as shouldCastGustOfWind } from '../spells/gust_of_wind';
+import { shouldCast as shouldCastLevitate } from '../spells/levitate';
+import { shouldCast as shouldCastLesserRestoration } from '../spells/lesser_restoration';
+import { shouldCast as shouldCastMagicWeapon } from '../spells/magic_weapon';
+import { shouldCast as shouldCastCordonOfArrows } from '../spells/cordon_of_arrows';
+import { shouldCast as shouldCastAlterSelf } from '../spells/alter_self';
+import { shouldCast as shouldCastDarkvision } from '../spells/darkvision';
 import { selectAction, selfPreserveDecision, selectLegendaryAction } from './actions';
 import {
   canReach, bestAdjacentPos, bestRangedPosition,
@@ -378,6 +394,26 @@ function planBonusAction(
       targetId: self.id,
       description: `${self.name} casts Branding Smite (next weapon hit +2d6 radiant)`,
     };
+  }
+
+  // --- 2.9. Misty Step (Sorcerer/Warlock/Wizard bonus-action teleport) ---
+  // PHB p.260: bonus action, self, NO concentration. Teleport up to 30 ft.
+  // v1: teleports toward the nearest enemy (to close distance) or away from
+  // it (if below 25% HP — escape). NOT concentration, so it can stack with
+  // an existing concentration spell. Priority: after Branding Smite (which
+  // is concentration), before Bardic Inspiration. Fires when the caster is
+  // out of range of its primary target (closing distance) or low on HP
+  // (escaping). shouldCast returns { destination } or null.
+  if (self.actions.some(a => a.name === 'Misty Step')) {
+    const ms = shouldCastMistyStep(self, battlefield);
+    if (ms) {
+      return {
+        type: 'mistyStep',
+        action: null,
+        targetId: self.id,    // self-targeted; destination is in the plan
+        description: `${self.name} casts Misty Step (teleport 30 ft)`,
+      };
+    }
   }
 
   // --- 3. Bardic Inspiration ---
@@ -1049,6 +1085,297 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
     plan.targetId = self.id;
     plan.bonusAction = planBonusAction(self, target, battlefield);
     return plan;
+  }
+
+  // === LEVEL-2 SPELLS batch 3 (action-time, added in Cantrip-z Session 17) ===
+  // 15 new PHB level-2 spells. Each is guarded by `if (!plan.action)` so it
+  // only fires when no higher-priority spell was chosen. Order within the
+  // block is by tactical priority:
+  //   11J. Melf's Acid Arrow (ranged spell attack, highest damage, NO concentration — like a harder-hitting Fire Bolt)
+  //   11K. Heat Metal (CON save, persistent 2d8 fire/turn, concentration)
+  //   11L. Flaming Sphere (DEX save, persistent 2d6 fire/turn, concentration)
+  //   11M. Cordon of Arrows (DEX save, persistent 1d6 piercing/turn × 4, NO concentration)
+  //   11N. Enlarge/Reduce (CON save, buff/debuff, concentration)
+  //   11O. Gust of Wind (STR save, push 15 ft, concentration)
+  //   11P. Levitate (CON save or restrained, concentration)
+  //   11Q. Invisibility (touch, invisible condition, concentration)
+  //   11R. Magic Weapon (touch, weapon +1, concentration)
+  //   11S. Enhance Ability (touch, ability-check advantage, concentration)
+  //   11T. Flame Blade (self, +3d6 fire rider, concentration)
+  //   11U. Alter Self (self, natural weapons, concentration)
+  //   11V. Lesser Restoration (touch, condition removal, NO concentration)
+  //   11W. Darkvision (touch, forward-compat, NO concentration)
+  // All return early via `return plan` when they fire. Misty Step is a
+  // BONUS ACTION and is added in planBonusAction (section 2.9).
+
+  // --- 11J. MELF'S ACID ARROW (ranged spell attack, NO concentration) ---
+  // PHB p.259: action, 90 ft, ranged spell attack, 4d4 acid + 2d4 delayed.
+  // Highest-priority of the 15 new spells — it's a hard-hitting single-target
+  // damage spell with no concentration requirement (can be cast while
+  // concentrating on something else). The 4d4+2d4 acid total (avg 15) is
+  // the highest damage of any level-2 spell in v1.
+  if (!plan.action && self.actions.some(a => a.name === "Melf's Acid Arrow")) {
+    const maaTarget = shouldCastMelfsAcidArrow(self, battlefield);
+    if (maaTarget) {
+      plan.action = {
+        type: 'melfsAcidArrow',
+        action: null,
+        targetId: maaTarget.id,
+        description: `${self.name} casts Melf's Acid Arrow at ${maaTarget.name}`,
+      };
+      plan.targetId = maaTarget.id;
+      plan.bonusAction = planBonusAction(self, maaTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 11K. HEAT METAL (CON save, persistent damage_zone, concentration) ---
+  // PHB p.250: action, 60 ft, 2d8 fire + persistent 2d8 fire/turn, concentration.
+  // Very high damage potential (2d8 on cast + 2d8/turn = up to 18 dmg/round
+  // at level 2). Priority after Melf's Acid Arrow (Heat Metal requires
+  // concentration; Melf's doesn't).
+  if (!plan.action && self.actions.some(a => a.name === 'Heat Metal')) {
+    const hmTarget = shouldCastHeatMetal(self, battlefield);
+    if (hmTarget) {
+      plan.action = {
+        type: 'heatMetal',
+        action: null,
+        targetId: hmTarget.id,
+        description: `${self.name} casts Heat Metal on ${hmTarget.name}'s equipment`,
+      };
+      plan.targetId = hmTarget.id;
+      plan.bonusAction = planBonusAction(self, hmTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 11L. FLAMING SPHERE (DEX save, persistent damage_zone, concentration) ---
+  // PHB p.242: action, 60 ft, DEX save 2d6 fire (half on save) + persistent
+  // 2d6 fire/turn (DEX save for half), concentration. Lower per-hit damage
+  // than Heat Metal (2d6 vs 2d8) but the DEX save (vs Heat Metal's no-save)
+  // can halve the damage.
+  if (!plan.action && self.actions.some(a => a.name === 'Flaming Sphere')) {
+    const fsTarget = shouldCastFlamingSphere(self, battlefield);
+    if (fsTarget) {
+      plan.action = {
+        type: 'flamingSphere',
+        action: null,
+        targetId: fsTarget.id,
+        description: `${self.name} casts Flaming Sphere at ${fsTarget.name}`,
+      };
+      plan.targetId = fsTarget.id;
+      plan.bonusAction = planBonusAction(self, fsTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 11M. CORDON OF ARROWS (DEX save, persistent damage_zone × 4, NO concentration) ---
+  // PHB p.228: action, 5 ft, DEX save 1d6 piercing (half on save), 4-piece
+  // damage_zone (ticksRemaining: 4). NO concentration — can stack with
+  // another concentration spell. Requires adjacency (5 ft) — risky for
+  // squishy casters. Lower priority than the concentration damage spells
+  // because the per-tick damage is lower (1d6 vs 2d6/2d8) and it requires
+  // being in melee range.
+  if (!plan.action && self.actions.some(a => a.name === 'Cordon of Arrows')) {
+    const coaTarget = shouldCastCordonOfArrows(self, battlefield);
+    if (coaTarget) {
+      plan.action = {
+        type: 'cordonOfArrows',
+        action: null,
+        targetId: coaTarget.id,
+        description: `${self.name} casts Cordon of Arrows around ${coaTarget.name}`,
+      };
+      plan.targetId = coaTarget.id;
+      plan.bonusAction = planBonusAction(self, coaTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 11N. ENLARGE/REDUCE (CON save, buff/debuff, concentration) ---
+  // PHB p.237: action, 30 ft, CON save, concentration 1 min. v1: 'reduce'
+  // (enemy debuff — half weapon damage, disadv STR) or 'enlarge' (ally buff
+  // — +1d8 weapon damage, adv STR). Strong vs weapon-attack enemies.
+  if (!plan.action && self.actions.some(a => a.name === 'Enlarge/Reduce')) {
+    const er = shouldCastEnlargeReduce(self, battlefield);
+    if (er) {
+      const verb = er.mode === 'enlarge' ? 'on' : 'at';
+      plan.action = {
+        type: 'enlargeReduce',
+        action: null,
+        targetId: er.target.id,
+        description: `${self.name} casts ${er.mode === 'enlarge' ? 'Enlarge' : 'Reduce'} ${verb} ${er.target.name}`,
+      };
+      plan.targetId = er.target.id;
+      plan.bonusAction = planBonusAction(self, er.target, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 11O. GUST OF WIND (STR save, push 15 ft, concentration) ---
+  // PHB p.248: action, line 60 ft, STR save or pushed 15 ft, concentration.
+  // v1: single-target, one-shot push. Useful for battlefield control —
+  // pushing a melee enemy 15 ft delays their engagement by 1-2 turns.
+  if (!plan.action && self.actions.some(a => a.name === 'Gust of Wind')) {
+    const gowTarget = shouldCastGustOfWind(self, battlefield);
+    if (gowTarget) {
+      plan.action = {
+        type: 'gustOfWind',
+        action: null,
+        targetId: gowTarget.id,
+        description: `${self.name} casts Gust of Wind at ${gowTarget.name}`,
+      };
+      plan.targetId = gowTarget.id;
+      plan.bonusAction = planBonusAction(self, gowTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 11P. LEVITATE (CON save or restrained, concentration) ---
+  // PHB p.255: action, 60 ft, CON save or restrained (v1), concentration.
+  // v1: modeled as restrained (closest PHB condition). Strong vs melee
+  // enemies (speed 0, attacks vs them have advantage).
+  if (!plan.action && self.actions.some(a => a.name === 'Levitate')) {
+    const levTarget = shouldCastLevitate(self, battlefield);
+    if (levTarget) {
+      plan.action = {
+        type: 'levitate',
+        action: null,
+        targetId: levTarget.id,
+        description: `${self.name} casts Levitate at ${levTarget.name}`,
+      };
+      plan.targetId = levTarget.id;
+      plan.bonusAction = planBonusAction(self, levTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 11Q. INVISIBILITY (touch, invisible condition, concentration) ---
+  // PHB p.254: action, touch, concentration 1 hr. Grants invisible condition
+  // (advantage on attacks, disadvantage on attacks vs them). v1: ends-on-
+  // attack NOT modelled. Priority: defensive buff for squishy allies.
+  if (!plan.action && self.actions.some(a => a.name === 'Invisibility')) {
+    const invTarget = shouldCastInvisibility(self, battlefield);
+    if (invTarget) {
+      plan.action = {
+        type: 'invisibility',
+        action: null,
+        targetId: invTarget.id,
+        description: `${self.name} casts Invisibility on ${invTarget.name}`,
+      };
+      plan.targetId = invTarget.id;
+      plan.bonusAction = planBonusAction(self, invTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 11R. MAGIC WEAPON (touch, weapon +1, concentration) ---
+  // PHB p.257: action, touch, concentration 1 hr. +1 to attack and damage
+  // rolls with weapon attacks. Priority: offensive buff for weapon-attack
+  // allies (Fighter, Paladin, Ranger).
+  if (!plan.action && self.actions.some(a => a.name === 'Magic Weapon')) {
+    const mwTarget = shouldCastMagicWeapon(self, battlefield);
+    if (mwTarget) {
+      plan.action = {
+        type: 'magicWeapon',
+        action: null,
+        targetId: mwTarget.id,
+        description: `${self.name} casts Magic Weapon on ${mwTarget.name}'s weapon`,
+      };
+      plan.targetId = mwTarget.id;
+      plan.bonusAction = planBonusAction(self, mwTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 11S. ENHANCE ABILITY (touch, ability-check advantage, concentration) ---
+  // PHB p.237: action, touch, concentration 1 hr. Advantage on one ability's
+  // checks. Lower combat relevance (no attack-roll or save benefit) — fires
+  // late in the priority order. v1: picks the target's highest ability.
+  if (!plan.action && self.actions.some(a => a.name === 'Enhance Ability')) {
+    const ea = shouldCastEnhanceAbility(self, battlefield);
+    if (ea) {
+      plan.action = {
+        type: 'enhanceAbility',
+        action: null,
+        targetId: ea.target.id,
+        description: `${self.name} casts Enhance Ability on ${ea.target.name} (${ea.ability.toUpperCase()} advantage)`,
+      };
+      plan.targetId = ea.target.id;
+      plan.bonusAction = planBonusAction(self, ea.target, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 11T. FLAME BLADE (self, +3d6 fire rider, concentration) ---
+  // PHB p.242: action, self, concentration 10 min. v1: +3d6 fire rider on
+  // melee weapon attacks (canon: new melee weapon). Requires the caster to
+  // have a melee weapon attack. Priority: self-buff for melee casters
+  // (Druid, some Clerics).
+  if (!plan.action && self.actions.some(a => a.name === 'Flame Blade') && shouldCastFlameBlade(self, battlefield)) {
+    plan.action = {
+      type: 'flameBlade',
+      action: null,
+      targetId: self.id,
+      description: `${self.name} casts Flame Blade`,
+    };
+    plan.targetId = self.id;
+    plan.bonusAction = planBonusAction(self, target, battlefield);
+    return plan;
+  }
+
+  // --- 11U. ALTER SELF (self, natural weapons, concentration) ---
+  // PHB p.211: action, self, concentration 10 min. v1: Natural Weapons only
+  // (unarmed strikes → 1d6 slashing). Niche — only fires for spell-only
+  // casters with no weapon attacks (fallback option).
+  if (!plan.action && self.actions.some(a => a.name === 'Alter Self') && shouldCastAlterSelf(self, battlefield)) {
+    plan.action = {
+      type: 'alterSelf',
+      action: null,
+      targetId: self.id,
+      description: `${self.name} casts Alter Self — Natural Weapons`,
+    };
+    plan.targetId = self.id;
+    plan.bonusAction = planBonusAction(self, target, battlefield);
+    return plan;
+  }
+
+  // --- 11V. LESSER RESTORATION (touch, condition removal, NO concentration) ---
+  // PHB p.255: action, touch, NO concentration. Ends blinded/deafened/
+  // paralyzed/poisoned. Niche — only fires when an ally has a removable
+  // condition. Priority: defensive (removes debuffs from allies).
+  if (!plan.action && self.actions.some(a => a.name === 'Lesser Restoration')) {
+    const lrTarget = shouldCastLesserRestoration(self, battlefield);
+    if (lrTarget) {
+      plan.action = {
+        type: 'lesserRestoration',
+        action: null,
+        targetId: lrTarget.id,
+        description: `${self.name} casts Lesser Restoration on ${lrTarget.name}`,
+      };
+      plan.targetId = lrTarget.id;
+      plan.bonusAction = planBonusAction(self, lrTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 11W. DARKVISION (touch, forward-compat, NO concentration) ---
+  // PHB p.230: action, touch, NO concentration, 8 hr. v1: forward-compat flag
+  // only (vision subsystem not implemented). Lowest priority — no mechanical
+  // effect in v1. Fires only when no other spell was chosen (the AI casts it
+  // for realism, even though it has no v1 effect).
+  if (!plan.action && self.actions.some(a => a.name === 'Darkvision')) {
+    const dvTarget = shouldCastDarkvision(self, battlefield);
+    if (dvTarget) {
+      plan.action = {
+        type: 'darkvision',
+        action: null,
+        targetId: dvTarget.id,
+        description: `${self.name} casts Darkvision on ${dvTarget.name}`,
+      };
+      plan.targetId = dvTarget.id;
+      plan.bonusAction = planBonusAction(self, dvTarget, battlefield);
+      return plan;
+    }
   }
 
   // === MAGE ARMOR (action, self) ===
