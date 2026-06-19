@@ -5,7 +5,10 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
-    "test:parser": "ts-node src/test/parser.test.ts"
+    "test:parser": "ts-node src/test/parser.test.ts",
+    "spell-cache:build": "ts-node --transpile-only scripts/spell-cache/build.ts",
+    "spell-cache:pick": "ts-node --transpile-only scripts/spell-cache/pick.ts",
+    "spell-cache:show": "ts-node --transpile-only scripts/spell-cache/show.ts"
   },
   "devDependencies": {
     "@types/node": "^20.19.39",

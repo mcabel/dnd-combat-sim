@@ -1,0 +1,1370 @@
+{
+  "level": 6,
+  "generatedAt": "2026-06-19T00:44:11.347Z",
+  "generatorVersion": 1,
+  "count": 51,
+  "implementedCount": 0,
+  "remainingInScope2014": 50,
+  "spells": [
+    {
+      "name": "Arcane Gate",
+      "source": "PHB",
+      "sourceFile": "spells-phb.json",
+      "page": 214,
+      "level": 6,
+      "school": "Conjuration",
+      "implemented": false,
+      "implementedModule": null,
+      "inScope2014": true,
+      "reprintedIn": [
+        "XPHB"
+      ],
+      "classes": [
+        "Sorcerer",
+        "Warlock",
+        "Wizard"
+      ],
+      "effect": "utility · 500 ft · timed",
+      "meta": {
+        "time": "1 action",
+        "range": "500 ft",
+        "duration": "timed",
+        "save": null,
+        "attack": null,
+        "damage": [],
+        "scales": false
+      }
+    },
+    {
+      "name": "Blade Barrier",
+      "source": "PHB",
+      "sourceFile": "spells-phb.json",
+      "page": 218,
+      "level": 6,
+      "school": "Evocation",
+      "implemented": false,
+      "implementedModule": null,
+      "inScope2014": true,
+      "reprintedIn": [
+        "XPHB"
+      ],
+      "classes": [
+        "Cleric"
+      ],
+      "effect": "DEXTERITY save · 90 ft · timed",
+      "meta": {
+        "time": "1 action",
+        "range": "90 ft",
+        "duration": "timed",
+        "save": "dexterity",
+        "attack": null,
+        "damage": [],
+        "scales": false
+      }
+    },
+    {
+      "name": "Bones of the Earth",
+      "source": "XGE",
+      "sourceFile": "spells-xge.json",
+      "page": 150,
+      "level": 6,
+      "school": "Transmutation",
+      "implemented": false,
+      "implementedModule": null,
+      "inScope2014": true,
+      "reprintedIn": [],
+      "classes": [],
+      "effect": "DEXTERITY save · 120 ft · Instantaneous",
+      "meta": {
+        "time": "1 action",
+        "range": "120 ft",
+        "duration": "Instantaneous",
+        "save": "dexterity",
+        "attack": null,
+        "damage": [],
+        "scales": false
+      }
+    },
+    {
+      "name": "Chain Lightning",
+      "source": "PHB",
+      "sourceFile": "spells-phb.json",
+      "page": 221,
+      "level": 6,
+      "school": "Evocation",
+      "implemented": false,
+      "implementedModule": null,
+      "inScope2014": true,
+      "reprintedIn": [
+        "XPHB"
+      ],
+      "classes": [
+        "Sorcerer",
+        "Wizard"
+      ],
+      "effect": "DEXTERITY save · 150 ft · Instantaneous",
+      "meta": {
+        "time": "1 action",
+        "range": "150 ft",
+        "duration": "Instantaneous",
+        "save": "dexterity",
+        "attack": null,
+        "damage": [],
+        "scales": false
+      }
+    },
+    {
+      "name": "Circle of Death",
+      "source": "PHB",
+      "sourceFile": "spells-phb.json",
+      "page": 221,
+      "level": 6,
+      "school": "Necromancy",
+      "implemented": false,
+      "implementedModule": null,
+      "inScope2014": true,
+      "reprintedIn": [
+        "XPHB"
+      ],
+      "classes": [
+        "Sorcerer",
+        "Warlock",
+        "Wizard"
+      ],
+      "effect": "CONSTITUTION save · 8d6 necrotic · 150 ft · Instantaneous",
+      "meta": {
+        "time": "1 action",
+        "range": "150 ft",
+        "duration": "Instantaneous",
+        "save": "constitution",
+        "attack": null,
+        "damage": [
+          "8d6 necrotic"
+        ],
+        "scales": false
+      }
+    },
+    {
+      "name": "Conjure Fey",
+      "source": "PHB",
+      "sourceFile": "spells-phb.json",
+      "page": 226,
+      "level": 6,
+      "school": "Conjuration",
+      "implemented": false,
+      "implementedModule": null,
+      "inScope2014": true,
+      "reprintedIn": [
+        "XPHB"
+      ],
+      "classes": [
+        "Druid",
+        "Warlock"
+      ],
+      "effect": "utility · 90 ft · timed",
+      "meta": {
+        "time": "1 min",
+        "range": "90 ft",
+        "duration": "timed",
+        "save": null,
+        "attack": null,
+        "damage": [],
+        "scales": false
+      }
+    },
+    {
+      "name": "Contingency",
+      "source": "PHB",
+      "sourceFile": "spells-phb.json",
+      "page": 227,
+      "level": 6,
+      "school": "Evocation",
+      "implemented": false,
+      "implementedModule": null,
+      "inScope2014": true,
+      "reprintedIn": [
+        "XPHB"
+      ],
+      "classes": [
+        "Wizard"
+      ],
+      "effect": "utility · Self · timed",
+      "meta": {
+        "time": "10 min",
+        "range": "Self",
+        "duration": "timed",
+        "save": null,
+        "attack": null,
+        "damage": [],
+        "scales": false
+      }
+    },
+    {
+      "name": "Create Homunculus",
+      "source": "XGE",
+      "sourceFile": "spells-xge.json",
+      "page": 152,
+      "level": 6,
+      "school": "Transmutation",
+      "implemented": false,
+      "implementedModule": null,
+      "inScope2014": true,
+      "reprintedIn": [],
+      "classes": [],
+      "effect": "utility · 2d4 · Touch · Instantaneous",
+      "meta": {
+        "time": "1 hour",
+        "range": "Touch",
+        "duration": "Instantaneous",
+        "save": null,
+        "attack": null,
+        "damage": [
+          "2d4"
+        ],
+        "scales": false
+      }
+    },
+    {
+      "name": "Create Undead",
+      "source": "PHB",
+      "sourceFile": "spells-phb.json",
+      "page": 229,
+      "level": 6,
+      "school": "Necromancy",
+      "implemented": false,
+      "implementedModule": null,
+      "inScope2014": true,
+      "reprintedIn": [
+        "XPHB"
+      ],
+      "classes": [
+        "Cleric",
+        "Warlock",
+        "Wizard"
+      ],
+      "effect": "utility · 10 ft · Instantaneous",
+      "meta": {
+        "time": "1 min",
+        "range": "10 ft",
+        "duration": "Instantaneous",
+        "save": null,
+        "attack": null,
+        "damage": [],
+        "scales": false
+      }
+    },
+    {
+      "name": "Dirge",
+      "source": "FRHoF",
+      "sourceFile": "spells-frhof.json",
+      "page": 144,
+      "level": 6,
+      "school": "Enchantment",
+      "implemented": false,
+      "implementedModule": null,
+      "inScope2014": true,
+      "reprintedIn": [],
+      "classes": [
+        "Bard",
+        "Cleric"
+      ],
+      "effect": "CONSTITUTION save · emanation · timed",
+      "meta": {
+        "time": "1 action",
+        "range": "emanation",
+        "duration": "timed",
+        "save": "constitution",
+        "attack": null,
+        "damage": [],
+        "scales": false
+      }
+    },
+    {
+      "name": "Disintegrate",
+      "source": "PHB",
+      "sourceFile": "spells-phb.json",
+      "page": 233,
+      "level": 6,
+      "school": "Transmutation",
+      "implemented": false,
+      "implementedModule": null,
+      "inScope2014": true,
+      "reprintedIn": [
+        "XPHB"
+      ],
+      "classes": [
+        "Sorcerer",
+        "Wizard"
+      ],
+      "effect": "DEXTERITY save · 60 ft · Instantaneous",
+      "meta": {
+        "time": "1 action",
+        "range": "60 ft",
+        "duration": "Instantaneous",
+        "save": "dexterity",
+        "attack": null,
+        "damage": [],
+        "scales": false
+      }
+    },
+    {
+      "name": "Drawmij's Instant Summons",
+      "source": "PHB",
+      "sourceFile": "spells-phb.json",
+      "page": 235,
+      "level": 6,
+      "school": "Conjuration",
+      "implemented": false,
+      "implementedModule": null,
+      "inScope2014": true,
+      "reprintedIn": [
+        "XPHB"
+      ],
+      "classes": [
+        "Wizard"
+      ],
+      "effect": "utility · Touch · Permanent",
+      "meta": {
+        "time": "1 min",
+        "range": "Touch",
+        "duration": "Permanent",
+        "save": null,
+        "attack": null,
+        "damage": [],
+        "scales": false
+      }
+    },
+    {
+      "name": "Druid Grove",
+      "source": "XGE",
+      "sourceFile": "spells-xge.json",
+      "page": 154,
+      "level": 6,
+      "school": "Abjuration",
+      "implemented": false,
+      "implementedModule": null,
+      "inScope2014": true,
+      "reprintedIn": [],
+      "classes": [],
+      "effect": "utility · Touch · timed",
+      "meta": {
+        "time": "10 min",
+        "range": "Touch",
+        "duration": "timed",
+        "save": null,
+        "attack": null,
+        "damage": [],
+        "scales": false
+      }
+    },
+    {
+      "name": "Elminster's Effulgent Spheres",
+      "source": "FRHoF",
+      "sourceFile": "spells-frhof.json",
+      "page": 144,
+      "level": 6,
+      "school": "Evocation",
+      "implemented": false,
+      "implementedModule": null,
+      "inScope2014": true,
+      "reprintedIn": [],
+      "classes": [
+        "Druid",
+        "Sorcerer",
+        "Wizard"
+      ],
+      "effect": "ranged spell attack · Self · timed",
+      "meta": {
+        "time": "1 action",
+        "range": "Self",
+        "duration": "timed",
+        "save": null,
+        "attack": "ranged",
+        "damage": [],
+        "scales": false
+      }
+    },
+    {
+      "name": "Eyebite",
+      "source": "PHB",
+      "sourceFile": "spells-phb.json",
+      "page": 238,
+      "level": 6,
+      "school": "Necromancy",
+      "implemented": false,
+      "implementedModule": null,
+      "inScope2014": true,
+      "reprintedIn": [
+        "XPHB"
+      ],
+      "classes": [
+        "Bard",
+        "Sorcerer",
+        "Warlock",
+        "Wizard"
+      ],
+      "effect": "WISDOM save · Self · timed",
+      "meta": {
+        "time": "1 action",
+        "range": "Self",
+        "duration": "timed",
+        "save": "wisdom",
+        "attack": null,
+        "damage": [],
+        "scales": false
+      }
+    },
+    {
+      "name": "Find the Path",
+      "source": "PHB",
+      "sourceFile": "spells-phb.json",
+      "page": 240,
+      "level": 6,
+      "school": "Divination",
+      "implemented": false,
+      "implementedModule": null,
+      "inScope2014": true,
+      "reprintedIn": [
+        "XPHB"
+      ],
+      "classes": [
+        "Bard",
+        "Cleric",
+        "Druid"
+      ],
+      "effect": "utility · Self · timed",
+      "meta": {
+        "time": "1 min",
+        "range": "Self",
+        "duration": "timed",
+        "save": null,
+        "attack": null,
+        "damage": [],
+        "scales": false
+      }
+    },
+    {
+      "name": "Fizban's Platinum Shield",
+      "source": "FTD",
+      "sourceFile": "spells-ftd.json",
+      "page": 20,
+      "level": 6,
+      "school": "Abjuration",
+      "implemented": false,
+      "implementedModule": null,
+      "inScope2014": true,
+      "reprintedIn": [],
+      "classes": [],
+      "effect": "utility · 60 ft · timed",
+      "meta": {
+        "time": "1 bonus action",
+        "range": "60 ft",
+        "duration": "timed",
+        "save": null,
+        "attack": null,
+        "damage": [],
+        "scales": false
+      }
+    },
+    {
+      "name": "Flesh to Stone",
+      "source": "PHB",
+      "sourceFile": "spells-phb.json",
+      "page": 243,
+      "level": 6,
+      "school": "Transmutation",
+      "implemented": false,
+      "implementedModule": null,
+      "inScope2014": true,
+      "reprintedIn": [
+        "XPHB"
+      ],
+      "classes": [
+        "Warlock",
+        "Wizard"
+      ],
+      "effect": "CONSTITUTION save · 60 ft · timed",
+      "meta": {
+        "time": "1 action",
+        "range": "60 ft",
+        "duration": "timed",
+        "save": "constitution",
+        "attack": null,
+        "damage": [],
+        "scales": false
+      }
+    },
+    {
+      "name": "Forbiddance",
+      "source": "PHB",
+      "sourceFile": "spells-phb.json",
+      "page": 243,
+      "level": 6,
+      "school": "Abjuration",
+      "implemented": false,
+      "implementedModule": null,
+      "inScope2014": true,
+      "reprintedIn": [
+        "XPHB"
+      ],
+      "classes": [
+        "Cleric"
+      ],
+      "effect": "utility · Touch · timed",
+      "meta": {
+        "time": "10 min",
+        "range": "Touch",
+        "duration": "timed",
+        "save": null,
+        "attack": null,
+        "damage": [],
+        "scales": false
+      }
+    },
+    {
+      "name": "Globe of Invulnerability",
+      "source": "PHB",
+      "sourceFile": "spells-phb.json",
+      "page": 245,
+      "level": 6,
+      "school": "Abjuration",
+      "implemented": false,
+      "implementedModule": null,
+      "inScope2014": true,
+      "reprintedIn": [
+        "XPHB"
+      ],
+      "classes": [
+        "Sorcerer",
+        "Wizard"
+      ],
+      "effect": "utility · radius 10 ft · timed",
+      "meta": {
+        "time": "1 action",
+        "range": "radius 10 ft",
+        "duration": "timed",
+        "save": null,
+        "attack": null,
+        "damage": [],
+        "scales": false
+      }
+    },
+    {
+      "name": "Gravity Fissure",
+      "source": "EGW",
+      "sourceFile": "spells-egw.json",
+      "page": 187,
+      "level": 6,
+      "school": "Evocation",
+      "implemented": false,
+      "implementedModule": null,
+      "inScope2014": true,
+      "reprintedIn": [],
+      "classes": [],
+      "effect": "CONSTITUTION save · 8d8 force · line 100 ft · Instantaneous",
+      "meta": {
+        "time": "1 action",
+        "range": "line 100 ft",
+        "duration": "Instantaneous",
+        "save": "constitution",
+        "attack": null,
+        "damage": [
+          "8d8 force"
+        ],
+        "scales": false
+      }
+    },
+    {
+      "name": "Guards and Wards",
+      "source": "PHB",
+      "sourceFile": "spells-phb.json",
+      "page": 248,
+      "level": 6,
+      "school": "Abjuration",
+      "implemented": false,
+      "implementedModule": null,
+      "inScope2014": true,
+      "reprintedIn": [
+        "XPHB"
+      ],
+      "classes": [
+        "Bard",
+        "Wizard"
+      ],
+      "effect": "utility · Touch · timed",
+      "meta": {
+        "time": "10 min",
+        "range": "Touch",
+        "duration": "timed",
+        "save": null,
+        "attack": null,
+        "damage": [],
+        "scales": false
+      }
+    },
+    {
+      "name": "Harm",
+      "source": "PHB",
+      "sourceFile": "spells-phb.json",
+      "page": 249,
+      "level": 6,
+      "school": "Necromancy",
+      "implemented": false,
+      "implementedModule": null,
+      "inScope2014": true,
+      "reprintedIn": [
+        "XPHB"
+      ],
+      "classes": [
+        "Cleric"
+      ],
+      "effect": "CONSTITUTION save · 14d6 necrotic · 60 ft · Instantaneous",
+      "meta": {
+        "time": "1 action",
+        "range": "60 ft",
+        "duration": "Instantaneous",
+        "save": "constitution",
+        "attack": null,
+        "damage": [
+          "14d6 necrotic"
+        ],
+        "scales": false
+      }
+    },
+    {
+      "name": "Heal",
+      "source": "PHB",
+      "sourceFile": "spells-phb.json",
+      "page": 250,
+      "level": 6,
+      "school": "Evocation",
+      "implemented": false,
+      "implementedModule": null,
+      "inScope2014": true,
+      "reprintedIn": [
+        "XPHB"
+      ],
+      "classes": [
+        "Cleric",
+        "Druid"
+      ],
+      "effect": "utility · 60 ft · Instantaneous",
+      "meta": {
+        "time": "1 action",
+        "range": "60 ft",
+        "duration": "Instantaneous",
+        "save": null,
+        "attack": null,
+        "damage": [],
+        "scales": false
+      }
+    },
+    {
+      "name": "Heroes' Feast",
+      "source": "PHB",
+      "sourceFile": "spells-phb.json",
+      "page": 250,
+      "level": 6,
+      "school": "Conjuration",
+      "implemented": false,
+      "implementedModule": null,
+      "inScope2014": true,
+      "reprintedIn": [
+        "XPHB"
+      ],
+      "classes": [
+        "Cleric",
+        "Druid"
+      ],
+      "effect": "utility · 30 ft · Instantaneous",
+      "meta": {
+        "time": "10 min",
+        "range": "30 ft",
+        "duration": "Instantaneous",
+        "save": null,
+        "attack": null,
+        "damage": [],
+        "scales": false
+      }
+    },
+    {
+      "name": "Investiture of Flame",
+      "source": "XGE",
+      "sourceFile": "spells-xge.json",
+      "page": 159,
+      "level": 6,
+      "school": "Transmutation",
+      "implemented": false,
+      "implementedModule": null,
+      "inScope2014": true,
+      "reprintedIn": [],
+      "classes": [],
+      "effect": "DEXTERITY save · Self · timed",
+      "meta": {
+        "time": "1 action",
+        "range": "Self",
+        "duration": "timed",
+        "save": "dexterity",
+        "attack": null,
+        "damage": [],
+        "scales": false
+      }
+    },
+    {
+      "name": "Investiture of Ice",
+      "source": "XGE",
+      "sourceFile": "spells-xge.json",
+      "page": 159,
+      "level": 6,
+      "school": "Transmutation",
+      "implemented": false,
+      "implementedModule": null,
+      "inScope2014": true,
+      "reprintedIn": [],
+      "classes": [],
+      "effect": "CONSTITUTION save · Self · timed",
+      "meta": {
+        "time": "1 action",
+        "range": "Self",
+        "duration": "timed",
+        "save": "constitution",
+        "attack": null,
+        "damage": [],
+        "scales": false
+      }
+    },
+    {
+      "name": "Investiture of Stone",
+      "source": "XGE",
+      "sourceFile": "spells-xge.json",
+      "page": 159,
+      "level": 6,
+      "school": "Transmutation",
+      "implemented": false,
+      "implementedModule": null,
+      "inScope2014": true,
+      "reprintedIn": [],
+      "classes": [],
+      "effect": "DEXTERITY save · Self · timed",
+      "meta": {
+        "time": "1 action",
+        "range": "Self",
+        "duration": "timed",
+        "save": "dexterity",
+        "attack": null,
+        "damage": [],
+        "scales": false
+      }
+    },
+    {
+      "name": "Investiture of Wind",
+      "source": "XGE",
+      "sourceFile": "spells-xge.json",
+      "page": 160,
+      "level": 6,
+      "school": "Transmutation",
+      "implemented": false,
+      "implementedModule": null,
+      "inScope2014": true,
+      "reprintedIn": [],
+      "classes": [],
+      "effect": "CONSTITUTION save · Self · timed",
+      "meta": {
+        "time": "1 action",
+        "range": "Self",
+        "duration": "timed",
+        "save": "constitution",
+        "attack": null,
+        "damage": [],
+        "scales": false
+      }
+    },
+    {
+      "name": "Magic Jar",
+      "source": "PHB",
+      "sourceFile": "spells-phb.json",
+      "page": 257,
+      "level": 6,
+      "school": "Necromancy",
+      "implemented": false,
+      "implementedModule": null,
+      "inScope2014": true,
+      "reprintedIn": [
+        "XPHB"
+      ],
+      "classes": [
+        "Wizard"
+      ],
+      "effect": "CHARISMA save · Self · Permanent",
+      "meta": {
+        "time": "1 min",
+        "range": "Self",
+        "duration": "Permanent",
+        "save": "charisma",
+        "attack": null,
+        "damage": [],
+        "scales": false
+      }
+    },
+    {
+      "name": "Mass Suggestion",
+      "source": "PHB",
+      "sourceFile": "spells-phb.json",
+      "page": 258,
+      "level": 6,
+      "school": "Enchantment",
+      "implemented": false,
+      "implementedModule": null,
+      "inScope2014": true,
+      "reprintedIn": [
+        "XPHB"
+      ],
+      "classes": [
+        "Bard",
+        "Sorcerer",
+        "Warlock",
+        "Wizard"
+      ],
+      "effect": "WISDOM save · 60 ft · timed",
+      "meta": {
+        "time": "1 action",
+        "range": "60 ft",
+        "duration": "timed",
+        "save": "wisdom",
+        "attack": null,
+        "damage": [],
+        "scales": false
+      }
+    },
+    {
+      "name": "Mental Prison",
+      "source": "XGE",
+      "sourceFile": "spells-xge.json",
+      "page": 161,
+      "level": 6,
+      "school": "Illusion",
+      "implemented": false,
+      "implementedModule": null,
+      "inScope2014": true,
+      "reprintedIn": [],
+      "classes": [],
+      "effect": "INTELLIGENCE save · 5d10 psychic + 10d10 · 60 ft · timed",
+      "meta": {
+        "time": "1 action",
+        "range": "60 ft",
+        "duration": "timed",
+        "save": "intelligence",
+        "attack": null,
+        "damage": [
+          "5d10 psychic",
+          "10d10"
+        ],
+        "scales": false
+      }
+    },
+    {
+      "name": "Move Earth",
+      "source": "PHB",
+      "sourceFile": "spells-phb.json",
+      "page": 263,
+      "level": 6,
+      "school": "Transmutation",
+      "implemented": false,
+      "implementedModule": null,
+      "inScope2014": true,
+      "reprintedIn": [
+        "XPHB"
+      ],
+      "classes": [
+        "Druid",
+        "Sorcerer",
+        "Wizard"
+      ],
+      "effect": "utility · 120 ft · timed",
+      "meta": {
+        "time": "1 action",
+        "range": "120 ft",
+        "duration": "timed",
+        "save": null,
+        "attack": null,
+        "damage": [],
+        "scales": false
+      }
+    },
+    {
+      "name": "Otiluke's Freezing Sphere",
+      "source": "PHB",
+      "sourceFile": "spells-phb.json",
+      "page": 263,
+      "level": 6,
+      "school": "Evocation",
+      "implemented": false,
+      "implementedModule": null,
+      "inScope2014": true,
+      "reprintedIn": [
+        "XPHB"
+      ],
+      "classes": [
+        "Wizard"
+      ],
+      "effect": "CONSTITUTION save · 10d6 cold · 300 ft · Instantaneous",
+      "meta": {
+        "time": "1 action",
+        "range": "300 ft",
+        "duration": "Instantaneous",
+        "save": "constitution",
+        "attack": null,
+        "damage": [
+          "10d6 cold"
+        ],
+        "scales": false
+      }
+    },
+    {
+      "name": "Otto's Irresistible Dance",
+      "source": "PHB",
+      "sourceFile": "spells-phb.json",
+      "page": 264,
+      "level": 6,
+      "school": "Enchantment",
+      "implemented": false,
+      "implementedModule": null,
+      "inScope2014": true,
+      "reprintedIn": [
+        "XPHB"
+      ],
+      "classes": [
+        "Bard",
+        "Wizard"
+      ],
+      "effect": "WISDOM save · 30 ft · timed",
+      "meta": {
+        "time": "1 action",
+        "range": "30 ft",
+        "duration": "timed",
+        "save": "wisdom",
+        "attack": null,
+        "damage": [],
+        "scales": false
+      }
+    },
+    {
+      "name": "Planar Ally",
+      "source": "PHB",
+      "sourceFile": "spells-phb.json",
+      "page": 265,
+      "level": 6,
+      "school": "Conjuration",
+      "implemented": false,
+      "implementedModule": null,
+      "inScope2014": true,
+      "reprintedIn": [
+        "XPHB"
+      ],
+      "classes": [
+        "Cleric"
+      ],
+      "effect": "utility · 60 ft · Instantaneous",
+      "meta": {
+        "time": "10 min",
+        "range": "60 ft",
+        "duration": "Instantaneous",
+        "save": null,
+        "attack": null,
+        "damage": [],
+        "scales": false
+      }
+    },
+    {
+      "name": "Primordial Ward",
+      "source": "XGE",
+      "sourceFile": "spells-xge.json",
+      "page": 163,
+      "level": 6,
+      "school": "Abjuration",
+      "implemented": false,
+      "implementedModule": null,
+      "inScope2014": true,
+      "reprintedIn": [],
+      "classes": [],
+      "effect": "utility · Self · timed",
+      "meta": {
+        "time": "1 action",
+        "range": "Self",
+        "duration": "timed",
+        "save": null,
+        "attack": null,
+        "damage": [],
+        "scales": false
+      }
+    },
+    {
+      "name": "Programmed Illusion",
+      "source": "PHB",
+      "sourceFile": "spells-phb.json",
+      "page": 269,
+      "level": 6,
+      "school": "Illusion",
+      "implemented": false,
+      "implementedModule": null,
+      "inScope2014": true,
+      "reprintedIn": [
+        "XPHB"
+      ],
+      "classes": [
+        "Bard",
+        "Wizard"
+      ],
+      "effect": "utility · 120 ft · Permanent",
+      "meta": {
+        "time": "1 action",
+        "range": "120 ft",
+        "duration": "Permanent",
+        "save": null,
+        "attack": null,
+        "damage": [],
+        "scales": false
+      }
+    },
+    {
+      "name": "Scatter",
+      "source": "XGE",
+      "sourceFile": "spells-xge.json",
+      "page": 164,
+      "level": 6,
+      "school": "Conjuration",
+      "implemented": false,
+      "implementedModule": null,
+      "inScope2014": true,
+      "reprintedIn": [],
+      "classes": [],
+      "effect": "WISDOM save · 30 ft · Instantaneous",
+      "meta": {
+        "time": "1 action",
+        "range": "30 ft",
+        "duration": "Instantaneous",
+        "save": "wisdom",
+        "attack": null,
+        "damage": [],
+        "scales": false
+      }
+    },
+    {
+      "name": "Soul Cage",
+      "source": "XGE",
+      "sourceFile": "spells-xge.json",
+      "page": 165,
+      "level": 6,
+      "school": "Necromancy",
+      "implemented": false,
+      "implementedModule": null,
+      "inScope2014": true,
+      "reprintedIn": [],
+      "classes": [],
+      "effect": "utility · 60 ft · timed",
+      "meta": {
+        "time": "1 reaction",
+        "range": "60 ft",
+        "duration": "timed",
+        "save": null,
+        "attack": null,
+        "damage": [],
+        "scales": false
+      }
+    },
+    {
+      "name": "Summon Fiend",
+      "source": "TCE",
+      "sourceFile": "spells-tce.json",
+      "page": 112,
+      "level": 6,
+      "school": "Conjuration",
+      "implemented": false,
+      "implementedModule": null,
+      "inScope2014": true,
+      "reprintedIn": [
+        "XPHB"
+      ],
+      "classes": [],
+      "effect": "utility · 90 ft · timed",
+      "meta": {
+        "time": "1 action",
+        "range": "90 ft",
+        "duration": "timed",
+        "save": null,
+        "attack": null,
+        "damage": [],
+        "scales": false
+      }
+    },
+    {
+      "name": "Sunbeam",
+      "source": "PHB",
+      "sourceFile": "spells-phb.json",
+      "page": 279,
+      "level": 6,
+      "school": "Evocation",
+      "implemented": false,
+      "implementedModule": null,
+      "inScope2014": true,
+      "reprintedIn": [
+        "XPHB"
+      ],
+      "classes": [
+        "Druid",
+        "Sorcerer",
+        "Wizard"
+      ],
+      "effect": "CONSTITUTION save · 6d8 radiant · line 60 ft · timed",
+      "meta": {
+        "time": "1 action",
+        "range": "line 60 ft",
+        "duration": "timed",
+        "save": "constitution",
+        "attack": null,
+        "damage": [
+          "6d8 radiant"
+        ],
+        "scales": false
+      }
+    },
+    {
+      "name": "Tasha's Bubbling Cauldron",
+      "source": "XPHB",
+      "sourceFile": "spells-xphb.json",
+      "page": 330,
+      "level": 6,
+      "school": "Conjuration",
+      "implemented": false,
+      "implementedModule": null,
+      "inScope2014": false,
+      "reprintedIn": [],
+      "classes": [
+        "Warlock",
+        "Wizard"
+      ],
+      "effect": "utility · 5 ft · timed",
+      "meta": {
+        "time": "1 action",
+        "range": "5 ft",
+        "duration": "timed",
+        "save": null,
+        "attack": null,
+        "damage": [],
+        "scales": false
+      }
+    },
+    {
+      "name": "Tasha's Otherworldly Guise",
+      "source": "TCE",
+      "sourceFile": "spells-tce.json",
+      "page": 116,
+      "level": 6,
+      "school": "Transmutation",
+      "implemented": false,
+      "implementedModule": null,
+      "inScope2014": true,
+      "reprintedIn": [],
+      "classes": [],
+      "effect": "utility · Self · timed",
+      "meta": {
+        "time": "1 bonus action",
+        "range": "Self",
+        "duration": "timed",
+        "save": null,
+        "attack": null,
+        "damage": [],
+        "scales": false
+      }
+    },
+    {
+      "name": "Tenser's Transformation",
+      "source": "XGE",
+      "sourceFile": "spells-xge.json",
+      "page": 168,
+      "level": 6,
+      "school": "Transmutation",
+      "implemented": false,
+      "implementedModule": null,
+      "inScope2014": true,
+      "reprintedIn": [],
+      "classes": [],
+      "effect": "CONSTITUTION save · Self · timed",
+      "meta": {
+        "time": "1 action",
+        "range": "Self",
+        "duration": "timed",
+        "save": "constitution",
+        "attack": null,
+        "damage": [],
+        "scales": false
+      }
+    },
+    {
+      "name": "Transport via Plants",
+      "source": "PHB",
+      "sourceFile": "spells-phb.json",
+      "page": 283,
+      "level": 6,
+      "school": "Conjuration",
+      "implemented": false,
+      "implementedModule": null,
+      "inScope2014": true,
+      "reprintedIn": [
+        "XPHB"
+      ],
+      "classes": [
+        "Druid"
+      ],
+      "effect": "utility · 10 ft · timed",
+      "meta": {
+        "time": "1 action",
+        "range": "10 ft",
+        "duration": "timed",
+        "save": null,
+        "attack": null,
+        "damage": [],
+        "scales": false
+      }
+    },
+    {
+      "name": "True Seeing",
+      "source": "PHB",
+      "sourceFile": "spells-phb.json",
+      "page": 284,
+      "level": 6,
+      "school": "Divination",
+      "implemented": false,
+      "implementedModule": null,
+      "inScope2014": true,
+      "reprintedIn": [
+        "XPHB"
+      ],
+      "classes": [
+        "Bard",
+        "Cleric",
+        "Sorcerer",
+        "Warlock",
+        "Wizard"
+      ],
+      "effect": "utility · Touch · timed",
+      "meta": {
+        "time": "1 action",
+        "range": "Touch",
+        "duration": "timed",
+        "save": null,
+        "attack": null,
+        "damage": [],
+        "scales": false
+      }
+    },
+    {
+      "name": "Wall of Ice",
+      "source": "PHB",
+      "sourceFile": "spells-phb.json",
+      "page": 285,
+      "level": 6,
+      "school": "Evocation",
+      "implemented": false,
+      "implementedModule": null,
+      "inScope2014": true,
+      "reprintedIn": [
+        "XPHB"
+      ],
+      "classes": [
+        "Wizard"
+      ],
+      "effect": "DEXTERITY save · 120 ft · timed",
+      "meta": {
+        "time": "1 action",
+        "range": "120 ft",
+        "duration": "timed",
+        "save": "dexterity",
+        "attack": null,
+        "damage": [],
+        "scales": false
+      }
+    },
+    {
+      "name": "Wall of Thorns",
+      "source": "PHB",
+      "sourceFile": "spells-phb.json",
+      "page": 287,
+      "level": 6,
+      "school": "Conjuration",
+      "implemented": false,
+      "implementedModule": null,
+      "inScope2014": true,
+      "reprintedIn": [
+        "XPHB"
+      ],
+      "classes": [
+        "Druid"
+      ],
+      "effect": "DEXTERITY save · 120 ft · timed",
+      "meta": {
+        "time": "1 action",
+        "range": "120 ft",
+        "duration": "timed",
+        "save": "dexterity",
+        "attack": null,
+        "damage": [],
+        "scales": false
+      }
+    },
+    {
+      "name": "Wind Walk",
+      "source": "PHB",
+      "sourceFile": "spells-phb.json",
+      "page": 288,
+      "level": 6,
+      "school": "Transmutation",
+      "implemented": false,
+      "implementedModule": null,
+      "inScope2014": true,
+      "reprintedIn": [
+        "XPHB"
+      ],
+      "classes": [
+        "Druid"
+      ],
+      "effect": "utility · 30 ft · timed",
+      "meta": {
+        "time": "1 min",
+        "range": "30 ft",
+        "duration": "timed",
+        "save": null,
+        "attack": null,
+        "damage": [],
+        "scales": false
+      }
+    },
+    {
+      "name": "Word of Recall",
+      "source": "PHB",
+      "sourceFile": "spells-phb.json",
+      "page": 289,
+      "level": 6,
+      "school": "Conjuration",
+      "implemented": false,
+      "implementedModule": null,
+      "inScope2014": true,
+      "reprintedIn": [
+        "XPHB"
+      ],
+      "classes": [
+        "Cleric"
+      ],
+      "effect": "utility · 5 ft · Instantaneous",
+      "meta": {
+        "time": "1 action",
+        "range": "5 ft",
+        "duration": "Instantaneous",
+        "save": null,
+        "attack": null,
+        "damage": [],
+        "scales": false
+      }
+    }
+  ]
+}
