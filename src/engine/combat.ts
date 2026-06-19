@@ -34,7 +34,7 @@ import { getSummonEntry }                           from '../summons/registry';
 import { rollGrappleContest, rollShoveContest, canGrappleOrShoveTarget } from './utils';
 import { computeLOS } from './los';
 import { removeEffectsFromCaster, getActiveAcBonus, getActiveBlessDie, getActiveHexDie } from './spell_effects';
-import { applyCantripEffect, getCantripAttackAdvantage, resolveCantripAction } from './cantrip_effects';
+import { applyCantripEffect, getCantripAttackAdvantage, resolveCantripAction, resolveCantripAoE } from './cantrip_effects';
 import { execute as executeHex } from '../spells/hex';
 import { execute as executeMagicMissile } from '../spells/magic_missile';
 import { execute as executeBurningHands, shouldCast as shouldCastBurningHands } from '../spells/burning_hands';
@@ -53,6 +53,7 @@ import {
   shouldCast as shouldCastGuidingBolt, execute as executeGuidingBolt,
   cleanupMarks as cleanupGuidingBoltMarks, consumeMark as consumeGuidingBoltMark,
 } from '../spells/guiding_bolt';
+import { rollDiceString as rollBoomingBladeDice } from '../spells/booming_blade';
 
 // ---- Combat log ---------------------------------------------
 
@@ -541,7 +542,17 @@ function checkDeath(target: Combatant, state: EngineState, attacker?: Combatant)
  * Checks for OA triggers at each step (simplified: checks once at dest).
  * Full step-by-step OA checking is a future enhancement.
  */
-function executeMove(
+/**
+ * Move a combatant from their current position to `dest`, spending movement
+ * budget and triggering opportunity attacks (unless `isDisengage` is true).
+ *
+ * Exported for direct testing of cantrip engine integration (e.g. Booming
+ * Blade's movement-triggered rider, TCE p.106, which fires when a marked
+ * creature wills itself to move 5+ ft via this function). Normal callers
+ * should use `runCombat` / `executeTurnPlan` rather than invoking this
+ * directly.
+ */
+export function executeMove(
   mover: Combatant,
   dest: Vec3,  // mutable — will be clamped
   state: EngineState,
@@ -574,6 +585,41 @@ function executeMove(
     `${mover.name} moves from (${fromPos.x},${fromPos.y}) to (${dest.x},${dest.y})`,
     undefined);
   mover.pos = { ...dest };
+
+  // ── Booming Blade (TCE p.106) movement-triggered rider ──────────────────
+  // If the mover is sheathed in booming energy from a Booming Blade hit and
+  // just moved WILLINGLY 5+ ft (executeMove is only called for willing
+  // movement — forced movement like Thorn Whip pull / Thunderwave push /
+  // grapple drag modifies `pos` directly without calling executeMove), roll
+  // the stored thunder dice, apply the damage, and clear the rider.
+  //
+  // PHB p.196 / TCE p.106: "If the target willingly moves 5 feet or more
+  // before then [the start of the caster's next turn], the target takes
+  // 1d8 thunder damage, and the spell ends." Movement via Dash, normal
+  // movement, or Cunning Action all count as willing. Being pushed/pulled/
+  // dragged does NOT. The cost ≥5 ft check excludes the no-op case where
+  // dest === fromPos (already-there early return above handles that too).
+  if (mover._boomingBladePendingDamageDice && cost >= 5) {
+    const dice = mover._boomingBladePendingDamageDice;
+    const casterId = mover._boomingBladeCasterId;
+    const casterLabel = casterId
+      ? (bf.combatants.get(casterId)?.name ?? casterId)
+      : 'Booming Blade';
+    const dmg = rollBoomingBladeDice(dice);
+    // Apply with thunder damage type so resistances/immunities compose
+    // correctly via applyDamageWithTempHP (Blade Ward doesn't apply — it
+    // only resists B/P/S — but other sources like a hypothetical thunder
+    // resistance would).
+    const dealt = applyDamageWithTempHP(mover, dmg, 'thunder');
+    log(state, 'damage', mover.id,
+      `${casterLabel}'s Booming Blade detonates as ${mover.name} moves willingly — ${dealt} thunder damage! (rolled ${dmg} on ${dice})`,
+      mover.id, dealt);
+    // Clear the rider (spell ends, TCE p.106).
+    delete mover._boomingBladePendingDamageDice;
+    delete mover._boomingBladeCasterId;
+    // If the mover died from the rider damage, skip the OA loop.
+    if (mover.isDead || mover.isUnconscious) return;
+  }
 
   // OA check: did any watcher's melee reach get left?
   if (!isDisengage) {
@@ -619,6 +665,13 @@ function executePlannedAction(
       // target, so they must be handled BEFORE the target-null guard below. This
       // also keeps cantrip logic out of this switch (no `case 'spellName'`).
       if (plan.action && resolveCantripAction(actor, plan.action.name, state)) break;
+      // Caster-centered AoE cantrips (e.g. Thunderclap, XGE p.168: all creatures
+      // within 5 ft of the caster). These have no single target — the execute
+      // handler finds all targets in range itself. Routed BEFORE the target-null
+      // guard so the spell fires even when plan.targetId is null (the AI planner
+      // may or may not set a "primary target" for animation purposes). Mirrors
+      // resolveCantripAction for self-buffs; both bypass resolveAttack.
+      if (plan.action && resolveCantripAoE(actor, plan.action.name, state)) break;
       const target = plan.targetId ? bf.combatants.get(plan.targetId) : null;
       if (!target || target.isDead || target.isUnconscious) break;
       if (!plan.action) break;

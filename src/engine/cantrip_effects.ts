@@ -12,16 +12,23 @@
 //   - Chill Touch: No healing + undead disadv vs caster      (post-hit)
 //   - Blade Ward: Self resistance to B/P/S (NON-attack self-buff)
 //   - Vicious Mockery: Disadv on target's next attack (post-save-FAIL)
+//   - Mind Sliver: −1d4 to target's next save (post-save-FAIL)
+//   - Booming Blade: Thunder rider on target's next willing move (post-hit)
+//   - Thunderclap: Caster-centered 5-ft AoE CON save (NON-attack AoE)
 //
 // Integration:
 //   - Post-hit attack cantrips: called from resolveAttack in combat.ts
 //     after damage is dealt, via applyCantripEffect() below.
-//   - Post-save-FAIL cantrips (Vicious Mockery): called from resolveAttack's
-//     save branch after damage, ONLY when the save failed.
+//   - Post-save-FAIL cantrips (Vicious Mockery, Mind Sliver): called from
+//     resolveAttack's save branch after damage, ONLY when the save failed.
 //   - Non-attack self-buff cantrips (Blade Ward): routed by
 //     resolveCantripAction() below, which executePlannedAction in
 //     combat.ts consults BEFORE resolveAttack so self-buffs never go
 //     through the attack-roll path.
+//   - Caster-centered AoE cantrips (Thunderclap): routed by
+//     resolveCantripAoE() below, which executePlannedAction consults
+//     BEFORE the target-null guard and BEFORE resolveAttack. The
+//     execute handler finds all creatures within range itself.
 // ============================================================
 
 import { Combatant } from '../types/core';
@@ -31,7 +38,10 @@ import { applyCantripEffect as applyRayOfFrostEffect } from '../spells/ray_of_fr
 import { applyCantripEffect as applyShockingGraspEffect, cantripAttackAdvantage as shockingGraspAdvantage } from '../spells/shocking_grasp';
 import { applyCantripEffect as applyChillTouchEffect } from '../spells/chill_touch';
 import { applyCantripEffect as applyViciousMockeryEffect } from '../spells/vicious_mockery';
+import { applyCantripEffect as applyMindSliverEffect } from '../spells/mind_sliver';
+import { applyCantripEffect as applyBoomingBladeEffect } from '../spells/booming_blade';
 import { applySelfEffect as applyBladeWardSelfEffect } from '../spells/blade_ward';
+import { execute as executeThunderclap } from '../spells/thunderclap';
 
 // ---- Cantrip effect handlers --------------------------------
 
@@ -49,6 +59,8 @@ const CANTRIP_EFFECTS: Record<
   'Shocking Grasp': applyShockingGraspEffect,
   'Chill Touch': applyChillTouchEffect,
   'Vicious Mockery': applyViciousMockeryEffect,
+  'Mind Sliver': applyMindSliverEffect,        // post-save-FAIL: −1d4 to next save (TCE p.108)
+  'Booming Blade': applyBoomingBladeEffect,    // post-hit: thunder rider on willing move (TCE p.106)
   // Future post-hit / post-save-FAIL cantrips will be added here
 };
 
@@ -160,5 +172,69 @@ export function resolveCantripAction(
       `[cantrip_effects] Error applying self-effect for ${actionName}: ${e instanceof Error ? e.message : String(e)}`
     );
     return false;
+  }
+}
+
+// ---- Caster-centered AoE cantrip registry --------------------
+
+/**
+ * Map of cantrip names to their EXECUTE handler functions for
+ * caster-centered AoE cantrips (e.g. Thunderclap, XGE p.168: each
+ * creature within 5 ft of the caster). Each handler takes
+ * (caster, state) and resolves the entire spell — finding targets,
+ * rolling saves, applying damage, and logging.
+ *
+ * These cantrips do NOT ride resolveAttack (no single target, no
+ * attack roll). executePlannedAction() in combat.ts consults
+ * resolveCantripAoE() AFTER resolveCantripAction and BEFORE the
+ * target-null guard; if it returns true the action is fully resolved
+ * as an AoE and resolveAttack is skipped. This keeps cantrip logic
+ * out of the executePlannedAction switch (no `case 'spellName'`),
+ * mirroring CANTRIP_SELF_EFFECTS for self-buffs.
+ *
+ * The handler returns true whenever the cantrip name is registered,
+ * even if 0 creatures are in range (the spell is still cast — the
+ * action is consumed). This is correct PHB behavior: "You create a
+ * burst of thunderous sound" (XGE p.168) — the burst happens
+ * regardless of who is in range. The AI planner is responsible for
+ * not casting the cantrip when it would be wasted.
+ */
+const CANTRIP_AOE_EFFECTS: Record<
+  string,
+  (caster: Combatant, state: EngineState) => void
+> = {
+  'Thunderclap': executeThunderclap,    // XGE p.168: 5-ft radius CON save, 1d6 thunder
+  // Future caster-centered AoE cantrips will be added here
+  // (e.g. Word of Radiance, Thunderwave as a cantrip if it existed)
+};
+
+/**
+ * Resolve a caster-centered AoE cantrip action.
+ *
+ * If `actionName` is registered in CANTRIP_AOE_EFFECTS, calls its
+ * execute handler and returns true. Otherwise returns false (caller
+ * should fall through to the target-null guard and resolveAttack).
+ *
+ * Called from executePlannedAction() in combat.ts for 'attack'/'cast'
+ * actions, AFTER resolveCantripAction (self-buffs) and BEFORE the
+ * target-null guard. AoE cantrips bypass the single-target attack-roll
+ * path entirely; the execute handler finds all targets in range itself.
+ */
+export function resolveCantripAoE(
+  caster: Combatant,
+  actionName: string,
+  state: EngineState,
+): boolean {
+  const handler = CANTRIP_AOE_EFFECTS[actionName];
+  if (!handler) return false;
+
+  try {
+    handler(caster, state);
+    return true;
+  } catch (e) {
+    console.error(
+      `[cantrip_effects] Error executing AoE cantrip ${actionName}: ${e instanceof Error ? e.message : String(e)}`
+    );
+    return true; // still consume the action — the spell was "cast"
   }
 }

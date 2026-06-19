@@ -1,6 +1,6 @@
 {
   "level": 0,
-  "generatedAt": "2026-06-19T01:52:08.360Z",
+  "generatedAt": "2026-06-19T03:43:31.106Z",
   "generatorVersion": 2,
   "scopeRule": "pre-2024 canon; reprints: newest in-scope source wins; XPHB(2024) out of scope; creatures keep all variants (not applicable to spells)",
   "sourceDates": {
@@ -26,8 +26,8 @@
     "XPHB"
   ],
   "count": 49,
-  "implementedCount": 10,
-  "remainingInScope": 36,
+  "implementedCount": 15,
+  "remainingInScope": 31,
   "spells": [
     {
       "name": "Acid Splash",
@@ -108,8 +108,8 @@
       "page": 106,
       "level": 0,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "booming_blade.ts",
       "inScope": true,
       "otherSources": [],
       "classes": [
@@ -292,8 +292,8 @@
       "page": 237,
       "level": 0,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "eldritch_blast.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -790,8 +790,8 @@
       "page": 108,
       "level": 0,
       "school": "Enchantment",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "mind_sliver.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1429,8 +1429,8 @@
       "page": 168,
       "level": 0,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "thunderclap.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1461,8 +1461,8 @@
       "page": 169,
       "level": 0,
       "school": "Necromancy",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "toll_the_dead.ts",
       "inScope": true,
       "otherSources": [
         {

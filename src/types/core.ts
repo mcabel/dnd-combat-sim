@@ -451,6 +451,43 @@ export interface Combatant {
   // whole turn). If not consumed by end of the target's next turn,
   // cleanup() called from resetBudget() clears it.
   _viciousMockeryDisadvNextAttack?: boolean;
+
+  // ---- Mind Sliver (TCE p.108) scratch field ----
+  // Set on the TARGET when it fails its INT save against Mind Sliver
+  // (post-save-FAIL rider dispatched from CANTRIP_EFFECTS). The target
+  // subtracts 1d4 from the NEXT saving throw it makes before the end of
+  // the caster's next turn (TCE p.108). rollSave() in utils.ts folds
+  // this into the save total (subtracts rollDie(value)) and CONSUMES the
+  // flag (sets to undefined) after the save resolves — success or failure.
+  // This is a one-shot save debuff (analogous to Vicious Mockery's one-shot
+  // attack debuff, but for saves; the choke point is rollSave, not
+  // resolveAttack's attack-roll branch). The stored value is the die size
+  // (4 = d4) so the system is extensible to other die penalties.
+  // If not consumed by the start of the target's next turn, cleanup()
+  // called from resetBudget() clears it (codebase convention — slightly
+  // more lenient than PHB's "end of caster's next turn", but consistent
+  // with how Vicious Mockery is timed).
+  _mindSliverDiePenaltyNextSave?: number;
+
+  // ---- Booming Blade (TCE p.106) scratch fields ----
+  // Set on the TARGET when it is hit by Booming Blade (post-hit rider
+  // dispatched from CANTRIP_EFFECTS). The target becomes sheathed in
+  // booming energy until the start of the caster's next turn. If the
+  // target WILLS itself to move 5+ ft before then (i.e. executeMove is
+  // called on it — forced movement like Thorn Whip pull / Thunderwave
+  // push bypasses executeMove and does NOT trigger this rider), it
+  // immediately takes thunder damage equal to the stored dice string
+  // (e.g. '1d8') and the spell ends.
+  //
+  // _boomingBladePendingDamageDice: dice expression to roll on willing
+  //   movement (e.g. '1d8', '2d8' at higher levels). Cleared by cleanup()
+  //   called from resetBudget() if not triggered by movement before the
+  //   start of the target's next turn (codebase convention — slightly
+  //   more lenient than PHB's "start of caster's next turn").
+  // _boomingBladeCasterId: ID of the caster who applied the rider, used
+  //   for log attribution when the rider detonates. Optional.
+  _boomingBladePendingDamageDice?: string;
+  _boomingBladeCasterId?: string;
 }
 
 // ---- Obstacle -----------------------------------------------
