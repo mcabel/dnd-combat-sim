@@ -16,6 +16,8 @@ import { cleanup as cleanupBoomingBlade } from '../spells/booming_blade';
 import { cleanup as cleanupFrostbite } from '../spells/frostbite';
 import { cleanup as cleanupInfestation } from '../spells/infestation';
 import { cleanup as cleanupShillelagh } from '../spells/shillelagh';
+import { cleanup as cleanupTrueStrike } from '../spells/true_strike';
+import { cleanup as cleanupResistance } from '../spells/resistance';
 
 // Damage types resisted by Blade Ward (PHB p.218) — bludgeoning/piercing/slashing.
 const BLADE_WARD_PHYSICAL_TYPES: DamageType[] = ['bludgeoning', 'piercing', 'slashing'];
@@ -155,7 +157,26 @@ export function rollSave(
     delete combatant._mindSliverDiePenaltyNextSave;
   }
 
-  const total = roll + mod + prof + biBonus + blessBonus + wbBonus - mindSliverPenalty;
+  // Resistance (PHB p.272): one-shot save buff — target adds 1d4 (or
+  // rollDie(storedSides)) to the next save it makes, then the flag is
+  // consumed (cleared) regardless of success/failure. The flag is set by
+  // Resistance's applySelfEffect on cast (CANTRIP_SELF_EFFECTS); rollSave
+  // is the choke point (mirror Mind Sliver's subtract-1d4 logic but with
+  // the OPPOSITE SIGN — Resistance ADDS, Mind Sliver SUBTRACTS). PHB p.272:
+  // "Once before the spell ends, the target can roll a d4 and add the
+  // number rolled to one saving throw of its choice." The stored value
+  // is the die size (4 = d4) so the system is extensible to other die
+  // bonuses.
+  let resistanceBonus = 0;
+  if (combatant._resistanceDieBonusNextSave !== undefined) {
+    resistanceBonus = rollDie(combatant._resistanceDieBonusNextSave);
+    // Consume (one-shot) — clear the flag now so subsequent saves this
+    // turn (and beyond) are unaffected. PHB p.272: "Once before the spell
+    // ends" — singular.
+    delete combatant._resistanceDieBonusNextSave;
+  }
+
+  const total = roll + mod + prof + biBonus + blessBonus + wbBonus - mindSliverPenalty + resistanceBonus;
   return { roll, total, success: total >= dc };
 }
 
@@ -289,6 +310,20 @@ export function resetBudget(c: Combatant): void {
   // branch substitutes WIS mod for STR mod on melee attacks AND adds +1d8
   // radiant damage on hit.
   cleanupShillelagh(c);
+  // True Strike self-buff (PHB p.284) — v1 simplification: 1-round duration,
+  // clears at the start of the caster's next turn (canonically concentration,
+  // up to 1 minute). While `_trueStrikeAdvNextAttack === true`, resolveAttack's
+  // attack-roll branch folds the flag into the `advantage` boolean for ANY
+  // attack type (melee, ranged, AND spell). One-shot — consumed by the first
+  // attack roll; cleanup is a safety net.
+  cleanupTrueStrike(c);
+  // Resistance self-buff (PHB p.272) — v1 simplification: 1-round duration,
+  // clears at the start of the caster's next turn (canonically concentration,
+  // up to 1 minute). While `_resistanceDieBonusNextSave` is set, rollSave()
+  // adds rollDie(value) to the save total (mirror Mind Sliver's subtract
+  // logic, opposite sign). One-shot — consumed by the first save; cleanup is
+  // a safety net.
+  cleanupResistance(c);
 
   const speed = effectiveSpeed(c);
   c.budget = {

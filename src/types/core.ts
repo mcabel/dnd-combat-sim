@@ -559,6 +559,60 @@ export interface Combatant {
   // grants ATTACK-ROLL substitution + BONUS DAMAGE (read by
   // resolveAttack's attack-roll branch). Both live in CANTRIP_SELF_EFFECTS.
   _shillelaghActive?: boolean;
+
+  // ---- True Strike (PHB p.284) scratch field ----
+  // Set on the CASTER when it casts True Strike (self-buff cantrip,
+  // PHB p.284: "On your next turn, you gain advantage on your first
+  // attack roll against the target, provided that this spell hasn't
+  // ended."). v1 simplification: target-agnostic (the buff applies to
+  // the caster's NEXT attack roll regardless of target — see
+  // true_strike.ts header for the v1 simplification details).
+  //
+  // While `_trueStrikeAdvNextAttack === true`, resolveAttack's attack-
+  // roll branch folds this into the `advantage` boolean (mirror
+  // Frostbite's `_frostbiteDisadvNextWeaponAttack` but for ADVANTAGE
+  // instead of DISADVANTAGE, and NOT restricted by attackType — True
+  // Strike applies to ANY attack roll: melee, ranged, AND spell). The
+  // buff is consumed (cleared) immediately after the attack roll
+  // resolves — one-shot (PHB p.284: "your first attack roll",
+  // singular). If not consumed by an attack before the start of the
+  // caster's NEXT turn, cleanup() called from resetBudget() clears the
+  // flag (v1 1-round simplification).
+  //
+  // Distinct from Shocking Grasp (the other advantage-granting cantrip):
+  // Shocking Grasp grants advantage on the SAME turn (pre-roll, vs metal
+  // armor — read by CANTRIP_ATTACK_ADVANTAGE). True Strike grants
+  // advantage on a LATER turn's first attack, regardless of target
+  // (scratch flag, read by resolveAttack's attack-roll branch).
+  //
+  // Distinct from Frostbite (the other attack-debuff cantrip): Frostbite
+  // imposes DISADVANTAGE on the next WEAPON attack (the flag is set on
+  // the TARGET, attack-type-restricted). True Strike grants ADVANTAGE on
+  // the next attack of ANY type (the flag is set on the CASTER, no
+  // attack-type restriction).
+  _trueStrikeAdvNextAttack?: boolean;
+
+  // ---- Resistance (PHB p.272) scratch field ----
+  // Set on the CASTER when it casts Resistance (self-buff cantrip,
+  // PHB p.272: "Once before the spell ends, the target can roll a d4
+  // and add the number rolled to one saving throw of its choice.").
+  // v1 simplification: self-only (the caster targets themselves — see
+  // resistance.ts header for the v1 simplification details).
+  //
+  // While `_resistanceDieBonusNextSave` is set (the value is the die
+  // size — 4 = d4), rollSave() in utils.ts rolls rollDie(value) and
+  // ADDS the result to the save total (mirror Mind Sliver's subtract-
+  // 1d4 logic but with the OPPOSITE SIGN), then CONSUMES the flag
+  // (sets to undefined) after the save resolves — success or failure.
+  // The bonus applies to ANY saving throw the caster makes while the
+  // flag is set (str/dex/con/int/wis/cha). If not consumed by a save
+  // before the start of the caster's NEXT turn, cleanup() called from
+  // resetBudget() clears the flag (v1 1-round simplification).
+  //
+  // Mirrors Mind Sliver (TCE p.108) — same architecture, opposite sign:
+  //   Mind Sliver: _mindSliverDiePenaltyNextSave = 4 (d4)  [debuff on enemy, SUBTRACT]
+  //   Resistance:  _resistanceDieBonusNextSave  = 4 (d4)  [buff on self/ally, ADD]
+  _resistanceDieBonusNextSave?: number;
 }
 
 // ---- Obstacle -----------------------------------------------

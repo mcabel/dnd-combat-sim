@@ -236,7 +236,9 @@ export function resolveAttack(
   const { advantage: baseAdv, disadvantage: baseDisadv } = advState;
   // Cantrip intrinsic advantage (pre-roll): e.g. Shocking Grasp vs metal armor (PHB p.275)
   const cantripAdv = getCantripAttackAdvantage(attacker, target, action.name);
-  const advantage = baseAdv || packTacticsAdvantage || attacker.helpedThisTurn || cantripAdv;
+  // `advantage` is computed below (after the True Strike flag is read) so it
+  // can fold in the True Strike self-buff advantage (PHB p.284). baseAdv /
+  // cantripAdv / packTacticsAdvantage / helpedThisTurn are pre-computed here.
 
   // Guiding Bolt mark: consume on the first attack roll against the illuminated target (PHB p.248).
   // Advantage from the mark is already captured in advState above; consuming it now ensures
@@ -304,7 +306,22 @@ export function resolveAttack(
     log(state, 'action', attacker.id,
       `${attacker.name} attacks ${target.name} with Disadvantage (Frostbite).`, target.id);
   }
+  // True Strike (PHB p.284): the caster's self-buff grants advantage on
+  // the FIRST attack roll on the caster's NEXT turn (v1 simplification:
+  // target-agnostic — applies to any attack roll, not just against the
+  // creature True Strike was cast on). ONE-SHOT (consumed after this
+  // attack). Distinct from Shocking Grasp (which grants advantage on
+  // the SAME turn vs metal armor — pre-roll, via CANTRIP_ATTACK_ADVANTAGE).
+  // Distinct from Frostbite (which is weapon-only DISADVANTAGE on the
+  // target — True Strike is any-attack-type ADVANTAGE on the caster).
+  // The flag is set by True Strike's applySelfEffect on cast (CANTRIP_SELF_EFFECTS).
+  const trueStrikeAdv = attacker._trueStrikeAdvNextAttack === true;
+  if (trueStrikeAdv) {
+    log(state, 'action', attacker.id,
+      `${attacker.name} attacks ${target.name} with Advantage (True Strike).`, target.id);
+  }
   const disadvantage = baseDisadv || !!protectionRider || losDisadvantage || chillTouchDisadv || viciousMockeryDisadv || frostbiteDisadv;
+  const advantage = baseAdv || packTacticsAdvantage || attacker.helpedThisTurn || cantripAdv || trueStrikeAdv;
 
   // Shillelagh (PHB p.275): while the self-buff is active, MELEE attacks use
   // WIS mod instead of STR mod for the attack roll. The substitution delta is
@@ -346,6 +363,16 @@ export function resolveAttack(
     attacker._frostbiteDisadvNextWeaponAttack = false;
     log(state, 'condition_remove', attacker.id,
       `${attacker.name}'s Frostbite debuff fades (consumed by weapon attack).`, target.id);
+  }
+  // True Strike one-shot consume: the buff applies to exactly one attack roll
+  // (PHB p.284: "your first attack roll"). Consume it now — whether the attack
+  // hit or missed — so subsequent attacks in the same turn (e.g. Multiattack)
+  // are unaffected. Unlike Frostbite, True Strike is NOT attack-type-restricted
+  // (any attack roll consumes the buff).
+  if (trueStrikeAdv) {
+    attacker._trueStrikeAdvNextAttack = false;
+    log(state, 'condition_remove', attacker.id,
+      `${attacker.name}'s True Strike insight fades (consumed by attack).`, target.id);
   }
 
   // Bardic Inspiration die — consumed on this attack roll (PHB p.54)

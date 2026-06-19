@@ -1,6 +1,6 @@
 {
   "level": 0,
-  "generatedAt": "2026-06-19T08:02:58.200Z",
+  "generatedAt": "2026-06-19T16:22:54.355Z",
   "generatorVersion": 2,
   "scopeRule": "pre-2024 canon; reprints: newest in-scope source wins; XPHB(2024) out of scope; creatures keep all variants (not applicable to spells)",
   "sourceDates": {
@@ -26,8 +26,8 @@
     "XPHB"
   ],
   "count": 49,
-  "implementedCount": 25,
-  "remainingInScope": 21,
+  "implementedCount": 30,
+  "remainingInScope": 16,
   "spells": [
     {
       "name": "Acid Splash",
@@ -539,8 +539,8 @@
       "page": 157,
       "level": 0,
       "school": "Transmutation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "gust.ts",
       "inScope": true,
       "otherSources": [],
       "classes": [],
@@ -692,8 +692,8 @@
       "page": 160,
       "level": 0,
       "school": "Transmutation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "magic_stone.ts",
       "inScope": true,
       "otherSources": [],
       "classes": [],
@@ -955,8 +955,8 @@
       "page": 163,
       "level": 0,
       "school": "Transmutation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "primal_savagery.ts",
       "inScope": true,
       "otherSources": [],
       "classes": [],
@@ -1049,8 +1049,8 @@
       "page": 272,
       "level": 0,
       "school": "Abjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "resistance.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1494,8 +1494,8 @@
       "page": 284,
       "level": 0,
       "school": "Divination",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "true_strike.ts",
       "inScope": true,
       "otherSources": [
         {
