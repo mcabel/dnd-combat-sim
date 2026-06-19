@@ -113,7 +113,13 @@ export function rollSave(
   // Conditions and advantage-system entries that affect saving throws
   const selfSave = querySelf(combatant, `save:${ability}` as import('../types/core').D20TestScope);
   const allSave  = querySelf(combatant, 'save');
-  const hasAdvantage   = selfSave.advantage   || allSave.advantage;
+  // Rage (PHB p.48): "You have advantage on Strength checks and Strength
+  // saving throws while raging." This is a flat unconditional advantage on
+  // STR saves — not modeled via the advantage-system entries because it's
+  // always-on while rage is active (no per-turn bookkeeping needed).
+  const rageStrAdvantage =
+    ability === 'str' && combatant.resources?.rage?.active === true;
+  const hasAdvantage   = selfSave.advantage   || allSave.advantage   || rageStrAdvantage;
   const hasDisadvantage = combatant.conditions.has('poisoned') // PHB Appendix A: poisoned → disadv on saves
     || selfSave.disadvantage || allSave.disadvantage;
 

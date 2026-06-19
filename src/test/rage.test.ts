@@ -8,12 +8,13 @@
 //   - +2 does NOT apply to ranged attacks or non-raging actors
 //   - tickRage: end conditions (rounds, no attack, no damage)
 //   - B/P/S resistances stripped on rage end
+//   - Rage grants advantage on STR saves (PHB p.48) — statistical test
 //   - Integration: full-combat barbarian
 // Run: ts-node src/test/rage.test.ts
 // ============================================================
 
 import { runCombat, makeFlatBattlefield } from '../engine/combat';
-import { addResistance, removeResistance, applyDamageWithTempHP } from '../engine/utils';
+import { addResistance, removeResistance, applyDamageWithTempHP, rollSave } from '../engine/utils';
 import { tickRage } from '../ai/resources';
 import { Combatant, Action } from '../types/core';
 
@@ -401,6 +402,73 @@ console.log('\n=== Non-B/P/S damage not resisted ===');
   const dealtSlash = applyDamageWithTempHP(c, 4, 'slashing');
   eq('Slashing (after fire hit): halved to 2', dealtSlash, 2);
   eq('Slashing HP: 8', c.currentHP, 8);
+}
+
+// ============================================================
+// Section: Rage grants advantage on STR saves (PHB p.48)
+// ============================================================
+// PHB p.48: "When you rage, you gain the following benefits... You have
+// advantage on Strength checks and Strength saving throws while raging."
+//
+// This is a statistical test. With STR 10 (mod 0) vs DC 12:
+//   - Flat d20: need 12+ → 45% pass rate (9 of 20 values)
+//   - With advantage: P(at least one ≥ 12) = 1 − (11/20)² ≈ 69.75% pass rate
+//
+// Over 400 iterations:
+//   - Raging STR saves: mean ≈ 279, 99.9% CI ≈ [249, 309]
+//   - Non-raging STR saves: mean ≈ 180, 99.9% CI ≈ [147, 213]
+//   - Raging DEX saves (control): mean ≈ 180 (rage should NOT apply)
+//
+// Threshold of 240 cleanly separates raging-advantage (>240) from
+// flat-d20 (<240) with < 0.1% false-failure probability per assertion.
+console.log('\n=== Rage STR save advantage (PHB p.48) ===');
+{
+  const N = 400;
+  const DC = 12;
+
+  // --- Raging barbarian: STR saves ---
+  const ragingBarb = makeC({
+    str: 10,
+    resources: { rage: { max: 2, remaining: 1, active: true, roundsRemaining: 10 } },
+  });
+  let ragingStrPasses = 0;
+  for (let i = 0; i < N; i++) {
+    if (rollSave(ragingBarb, 'str', DC).success) ragingStrPasses++;
+  }
+  assert(`Raging STR saves: ${ragingStrPasses}/${N} passed (expect ~280 with advantage)`,
+    ragingStrPasses > 240,
+    `got ${ragingStrPasses} — advantage may not be applied`);
+
+  // --- Non-raging barbarian: STR saves (control) ---
+  const calmBarb = makeC({
+    str: 10,
+    resources: { rage: { max: 2, remaining: 2, active: false, roundsRemaining: 0 } },
+  });
+  let calmStrPasses = 0;
+  for (let i = 0; i < N; i++) {
+    if (rollSave(calmBarb, 'str', DC).success) calmStrPasses++;
+  }
+  assert(`Non-raging STR saves: ${calmStrPasses}/${N} passed (expect ~180, flat d20)`,
+    calmStrPasses < 240,
+    `got ${calmStrPasses} — advantage may be incorrectly applied when rage is inactive`);
+
+  // --- Raging barbarian: DEX saves (control — rage should NOT grant DEX advantage) ---
+  const ragingDexBarb = makeC({
+    dex: 10,
+    resources: { rage: { max: 2, remaining: 1, active: true, roundsRemaining: 10 } },
+  });
+  let ragingDexPasses = 0;
+  for (let i = 0; i < N; i++) {
+    if (rollSave(ragingDexBarb, 'dex', DC).success) ragingDexPasses++;
+  }
+  assert(`Raging DEX saves: ${ragingDexPasses}/${N} passed (expect ~180, rage is STR-only)`,
+    ragingDexPasses < 240,
+    `got ${ragingDexPasses} — rage advantage may be incorrectly applied to non-STR saves`);
+
+  // --- Sanity: raging STR should pass significantly more than non-raging STR ---
+  assert('Raging STR passes > non-raging STR passes (advantage confirmed)',
+    ragingStrPasses > calmStrPasses + 40, // 40 = ~2 std devs of separation
+    `raging=${ragingStrPasses}, calm=${calmStrPasses}`);
 }
 
 // ---- Results ------------------------------------------------

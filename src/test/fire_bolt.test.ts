@@ -229,20 +229,20 @@ console.log('\n--- 6. Action shape ---');
 console.log('\n--- 7. resolveAttack integration: damage on hit ---');
 {
   // Caster at (0,0), target at (2,0) — 10 ft apart, no cover.
-  // Force a hit with isCritOverride=false. hitBonus 5 vs AC 4 → always hits
-  // (nat 1 fails, but we use isCritOverride to bypass the roll).
-  // Actually, isCritOverride only forces crit=true, not auto-hit. Use high
-  // hitBonus and low AC instead so the attack hits regardless of the d20.
+  // Force a hit with isCritOverride=true (PHB p.194: nat 1 always misses
+  // regardless of bonuses, so hitBonus 5 vs AC 5 still has a 5% nat-1 auto-miss
+  // rate — isCritOverride=true bypasses the d20 roll entirely for determinism).
+  // Crit doubles the fire dice: 1d10 → 2d10 = 2..20.
   const caster = makeCombatant('wizard', { pos: { x: 0, y: 0, z: 0 } });
   const target = makeCombatant('goblin', {
     pos: { x: 2, y: 0, z: 0 },
-    ac: 5, // very low AC so even a nat-1 + 5 = 6 hits
+    ac: 5,
     currentHP: 100, maxHP: 100,
   });
   const bf = makeBF([caster, target]);
   const state = makeState(bf);
 
-  resolveAttack(caster, target, FIRE_BOLT_ACTION, state);
+  resolveAttack(caster, target, FIRE_BOLT_ACTION, state, true /* force hit — avoids nat-1 auto-miss flakiness */);
 
   // A hit event should mention Fire Bolt; a damage event should mention fire.
   const hitEvent = state.log.events.find(
