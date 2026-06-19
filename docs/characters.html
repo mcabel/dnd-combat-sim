@@ -774,6 +774,8 @@ button.full { width: 100%; padding: 11px; font-size: 13px; }
     <div class="row-list" id="ps-enemy-list"></div>
     <button class="sm mt8" onclick="addEnemyRow()" style="width:100%;color:var(--muted)">+ Add Enemy</button>
     <datalist id="monster-list"></datalist>
+    <datalist id="spell-cantrip-suggestions"></datalist>
+    <datalist id="spell-suggestions"></datalist>
 
     <div class="sec-row mt12"><div class="sec-title">Trials</div><div class="sec-line"></div></div>
     <div class="trial-row">
@@ -1193,6 +1195,7 @@ function renderCharDetail() {
             ${badges}
             <span style="display:inline-flex;gap:3px;align-items:center">
               <input id="spell-add-input-cantrips" type="text" placeholder="Add cantrip…" style="font-size:11px;padding:1px 5px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);width:110px"
+                list="spell-cantrip-suggestions"
                 onkeydown="if(event.key==='Enter')addSpell('cantrips')" />
               <button class="sm secondary" onclick="addSpell('cantrips')" style="padding:1px 6px;font-size:10px">＋</button>
             </span>
@@ -1261,6 +1264,7 @@ function renderCharDetail() {
             ${badges}
             <span style="display:inline-flex;gap:3px;align-items:center">
               <input id="spell-add-input-${listKey}" type="text" placeholder="Add spell…" style="font-size:11px;padding:1px 5px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);width:120px"
+                list="spell-suggestions"
                 onkeydown="if(event.key==='Enter')addSpell('${listKey}')" />
               <button class="sm secondary" onclick="addSpell('${listKey}')" style="padding:1px 6px;font-size:10px">＋</button>
             </span>
@@ -1925,7 +1929,56 @@ let _spellEditMode = false;
 
 function toggleSpellEdit() {
   _spellEditMode = !_spellEditMode;
+  if (_spellEditMode) populateSpellSuggestions();
   renderCharDetail();
+}
+
+// Resolve the primary spellcasting class name for a character,
+// returning null for non-spellcasting classes (Barbarian, Fighter, Monk, Rogue).
+function _resolveSpellcastingClass(c: any): string | null {
+  const SPELLCASTERS = new Set([
+    'Bard','Cleric','Druid','Paladin','Ranger','Sorcerer','Warlock','Wizard',
+  ]);
+  const SUBCLASS_ALIAS: Record<string, string> = {
+    'Eldritch Knight': 'Wizard',
+    'Arcane Trickster': 'Wizard',
+  };
+  // Check subclass choices first for archetypes
+  for (const [, sub] of Object.entries((c.subclassChoices || {}) as Record<string, string>)) {
+    if (SUBCLASS_ALIAS[sub]) return SUBCLASS_ALIAS[sub];
+  }
+  // Walk class levels to find first spellcasting class
+  for (const cl of (c.classLevels || []) as { className: string }[]) {
+    if (SPELLCASTERS.has(cl.className)) return cl.className;
+  }
+  // Fallback to firstClass
+  if (c.firstClass && SPELLCASTERS.has(c.firstClass)) return c.firstClass;
+  return null;
+}
+
+async function populateSpellSuggestions() {
+  const c = S.charDetail;
+  if (!c?.spellcasting) return;
+  const spellClass = _resolveSpellcastingClass(c);
+  const classParam = spellClass ? `&class=${encodeURIComponent(spellClass)}` : '';
+  try {
+    const [cantripData, spellData] = await Promise.all([
+      fetch(`/api/spells?level=0${classParam}`).then(r => r.json()),
+      fetch(`/api/spells${classParam ? '?' + classParam.slice(1) : ''}`).then(r => r.json()),
+    ]);
+    const cantripDL = document.getElementById('spell-cantrip-suggestions') as HTMLDataListElement;
+    const spellDL   = document.getElementById('spell-suggestions')         as HTMLDataListElement;
+    if (cantripDL) {
+      cantripDL.innerHTML = (cantripData.spells as string[] || [])
+        .map((n: string) => `<option value="${n.replace(/"/g,'&quot;')}">`)
+        .join('');
+    }
+    if (spellDL) {
+      spellDL.innerHTML = (spellData.spells as string[] || [])
+        .map((n: string) => `<option value="${n.replace(/"/g,'&quot;')}">`)
+        .join('');
+    }
+  } catch { /* non-critical — datalist remains empty */ }
 }
 
 async function addSpell(listKey: string) {
