@@ -210,10 +210,12 @@ console.log('\n=== 4. resetCombatant preserves hitDice ===\n');
 console.log('\n=== 5. runDay — single wave ===\n');
 
 {
+  // Use harmlessEnemy so the fighter is guaranteed to win (weakEnemy can
+  // occasionally kill a level-1 fighter on lucky dice, failing the assertions).
   const fighter = pc('Fighter');
   const spec: DaySpec = {
     party: [fighter],
-    waves: [{ enemies: [weakEnemy()], label: 'Wave 1' }],
+    waves: [{ enemies: [harmlessEnemy()], label: 'Wave 1' }],
     maxShortRests: 2,
   };
   const result = runDay(spec);
@@ -231,13 +233,16 @@ console.log('\n=== 5. runDay — single wave ===\n');
 console.log('\n=== 6. Resource attrition across waves ===\n');
 
 {
-  // Cleric with spell slots — run two fights and verify slots persist (not reset)
+  // Cleric with spell slots — run two fights and verify slots persist (not reset).
+  // Use harmlessEnemy (no actions, cannotAttack) so the cleric is guaranteed to
+  // win both waves — otherwise a weak enemy can occasionally kill the level-1
+  // cleric on lucky dice (~3% flake rate), producing 1 outcome instead of 2.
   const cleric = pc('Cleric');
   const spec: DaySpec = {
     party: [cleric],
     waves: [
-      { enemies: [weakEnemy()] },
-      { enemies: [weakEnemy()] },
+      { enemies: [harmlessEnemy()] },
+      { enemies: [harmlessEnemy()] },
     ],
     maxShortRests: 0,   // no rests — pure attrition
     shortRestThreshold: 0,
@@ -352,19 +357,21 @@ console.log('\n=== 10. Stable PC revived on short rest ===\n');
 console.log('\n=== 11. Multi-wave day completed ===\n');
 
 {
+  // Use harmlessEnemy so the fighter is guaranteed to win all 3 waves
+  // (weakEnemy can occasionally kill a level-1 fighter on lucky dice).
   const fighter = pc('Fighter');
   const spec: DaySpec = {
     party: [fighter],
     waves: [
-      { enemies: [weakEnemy()], label: 'A' },
-      { enemies: [weakEnemy()], label: 'B' },
-      { enemies: [weakEnemy()], label: 'C' },
+      { enemies: [harmlessEnemy()], label: 'A' },
+      { enemies: [harmlessEnemy()], label: 'B' },
+      { enemies: [harmlessEnemy()], label: 'C' },
     ],
     maxShortRests: 2,
     shortRestThreshold: 0.99,
   };
   const result = runDay(spec);
-  // Fighter vs 1-HP enemies — should win all 3
+  // Fighter vs harmless 1-HP enemies — should win all 3
   if (!result.partyWiped) {
     eq('multi-wave: 3 outcomes', result.outcomes.length, 3);
     assert('multi-wave: all party wins',

@@ -273,19 +273,29 @@ console.log('\n3. Forced flee mechanic');
 }
 
 {
-  // Successful save: reaction NOT consumed
-  const b = makeBard(); const e = makeEnemy('e1', { x: 1, y: 0, z: 0 }, 30); // always saves
+  // Successful save: reaction NOT consumed.
+  // Use a bard with saveDC = 11 so wis 30 (+10) ALWAYS saves (d20+10 ≥ 11 even
+  // on nat 1). The default DC 13 fails on nat 1 (→11) and nat 2 (→12) — ~10%
+  // flake rate. PHB 2014 saves have NO auto-fail on nat 1 (unlike attack rolls).
+  const b = makeBard();
+  const dwAction = b.actions.find(a => a.name === 'Dissonant Whispers');
+  if (dwAction) dwAction.saveDC = 11;
+  const e = makeEnemy('e1', { x: 1, y: 0, z: 0 }, 30); // guaranteed save vs DC 11
   e.budget.reactionUsed = false;
   execute(b, e, makeState(makeBF([b, e])));
-  assert('reaction NOT consumed on successful save (wis 30)', !e.budget.reactionUsed);
+  assert('reaction NOT consumed on successful save (wis 30, DC 11)', !e.budget.reactionUsed);
 }
 
 {
-  // Successful save: position unchanged
-  const b = makeBard({ x: 0, y: 0, z: 0 }); const e = makeEnemy('e1', { x: 3, y: 0, z: 0 }, 30);
+  // Successful save: position unchanged.
+  // Same DC 11 fix as above — guarantees the save succeeds.
+  const b = makeBard({ x: 0, y: 0, z: 0 });
+  const dwAction = b.actions.find(a => a.name === 'Dissonant Whispers');
+  if (dwAction) dwAction.saveDC = 11;
+  const e = makeEnemy('e1', { x: 3, y: 0, z: 0 }, 30); // guaranteed save vs DC 11
   const startPos = { ...e.pos };
   execute(b, e, makeState(makeBF([b, e])));
-  assert('position unchanged on successful save (wis 30)',
+  assert('position unchanged on successful save (wis 30, DC 11)',
     e.pos.x === startPos.x && e.pos.y === startPos.y);
 }
 
@@ -420,17 +430,19 @@ console.log('\n6. End-to-end');
 }
 
 {
-  // Low-WIS orc (wis=8 in MM) fails more than half the time across 20 trials
+  // Orc (MM wis=11, +0 mod) vs Bard DC 13 → needs 13+ on d20, fails ~60%.
+  // With 40 trials, expected fails ≈ 24, σ ≈ √(40·0.6·0.4) ≈ 3.1.
+  // Threshold of 15 is ~2.9σ below mean — robust against flake.
+  // (Note: the orc's WIS is 11, not 8 as an old comment claimed.)
   let fails = 0;
-  for (let i = 0; i < 20; i++) {
+  for (let i = 0; i < 40; i++) {
     const bard = spawnClass('Bard', { x: 0, y: 0, z: 0 });
     const orc = spawnMonster('orc', `orc${i}`, { x: 3, y: 0, z: 0 });
     const state = makeState(makeBF([bard, orc]));
     execute(bard, orc, state);
     if (state.log.events.some(ev => ev.type === 'save_fail')) fails++;
   }
-  // Orc WIS mod = -1, DC 13 → needs 14+ on d20, fail ~65% of time. Expect ≥8/20.
-  assert(`orc fails WIS save majority of time (${fails}/20 fails, expect ≥8)`, fails >= 8);
+  assert(`orc fails WIS save majority of time (${fails}/40 fails, expect ≥15)`, fails >= 15);
 }
 
 // ---- Results ------------------------------------------------
