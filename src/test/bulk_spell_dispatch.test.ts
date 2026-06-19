@@ -134,11 +134,12 @@ const SPELL_NAMES = Object.keys(GENERIC_SPELLS);
 const SPELL_COUNT = SPELL_NAMES.length;
 
 assert('Registry is non-empty', SPELL_COUNT > 0);
-assert(`Registry has at least 250 spells (got ${SPELL_COUNT})`, SPELL_COUNT >= 250);
+assert(`Registry has at least 300 spells (got ${SPELL_COUNT})`, SPELL_COUNT >= 300);
 console.log(`  📊 Total bulk-implemented spells: ${SPELL_COUNT}`);
 
-// Sample spells — one per level 2-9
+// Sample spells — one per level 1-9
 const SAMPLE_SPELLS = [
+  { name: 'Alarm', level: 1 },
   { name: 'Continual Flame', level: 2 },
   { name: 'Fireball', level: 3 },
   { name: 'Polymorph', level: 4 },
@@ -324,6 +325,7 @@ console.log('\n=== 8. PlannedAction.spellName field works ===\n');
 console.log('\n=== 9. Multi-level slot gating ===\n');
 
 const SAMPLE_BY_LEVEL: Record<number, string | null> = {
+  1: 'Alarm',
   2: 'Continual Flame',
   3: 'Fireball',
   4: 'Polymorph',
@@ -390,7 +392,7 @@ const byLevel: Record<number, number> = {};
 for (const desc of GENERIC_SPELL_LIST) {
   byLevel[desc.level] = (byLevel[desc.level] ?? 0) + 1;
 }
-for (const lvl of [2, 3, 4, 5, 6, 7, 8, 9]) {
+for (const lvl of [1, 2, 3, 4, 5, 6, 7, 8, 9]) {
   console.log(`  L${lvl}: ${byLevel[lvl] ?? 0} spells`);
   assert(`L${lvl} has at least 1 spell`, (byLevel[lvl] ?? 0) >= 1);
 }

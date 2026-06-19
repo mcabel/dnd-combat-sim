@@ -4339,6 +4339,677 @@ export const SPELL_DB: Record<string, SpellTemplate> = {
     slotLevel: 9,
   },
 
+
+  // ── Session 20 — bulk-implementation L1 spells (51 new spells) ──
+  // Each entry maps the lowercase spell name to a SpellTemplate. The
+  // `attackType` field is set from the raw 5etools data: 'spell' for
+  // melee/ranged spell attacks, 'save' for save-based spells, null for
+  // utility / buff / forward-compat-only spells. The actual mechanical
+  // effect of each spell is NOT applied in v1 — the spell module at
+  // src/spells/<snake>.ts sets a forward-compat flag only.
+  'alarm': {
+    // Session 20 bulk: 1-level abjuration, range 30 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 30,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 1,
+  },
+
+  'animal friendship': {
+    // Session 20 bulk: 1-level enchantment, range 30 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 30,
+    damage: null,
+    damageType: null,
+    saveAbility: 'wis',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 1,
+  },
+
+  'armor of agathys': {
+    // Session 20 bulk: 1-level abjuration, range 0 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 0,
+    damage: null,
+    damageType: 'cold',
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 1,
+  },
+
+  'bane': {
+    // Session 20 bulk: 1-level enchantment, range 30 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 30,
+    damage: null,
+    damageType: null,
+    saveAbility: 'cha',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 1,
+  },
+
+  'beast bond': {
+    // Session 20 bulk: 1-level divination, range 5 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 5,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 1,
+  },
+
+  'catapult': {
+    // Session 20 bulk: 1-level transmutation, range 60 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 60,
+    damage: { count: 3, sides: 8, bonus: 0, average: 14 },
+    damageType: 'bludgeoning',
+    saveAbility: 'dex',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 1,
+  },
+
+  'cause fear': {
+    // Session 20 bulk: 1-level necromancy, range 60 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 60,
+    damage: null,
+    damageType: null,
+    saveAbility: 'wis',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 1,
+  },
+
+  'ceremony': {
+    // Session 20 bulk: 1-level abjuration, range 5 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 5,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 1,
+  },
+
+  'chaos bolt': {
+    // Session 20 bulk: 1-level evocation, range 120 ft, forward-compat flag.
+    attackType: 'spell',
+    rangeNormal: 120,
+    damage: null,
+    damageType: 'acid',
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 1,
+  },
+
+  'charm person': {
+    // Session 20 bulk: 1-level enchantment, range 30 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 30,
+    damage: null,
+    damageType: null,
+    saveAbility: 'wis',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 1,
+  },
+
+  // 'chromatic orb' already exists in SPELL_DB (pre-Session-20) — not re-added here.
+
+  'color spray': {
+    // Session 20 bulk: 1-level illusion, range 15 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 15,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 1,
+  },
+
+  'command': {
+    // Session 20 bulk: 1-level enchantment, range 60 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 60,
+    damage: null,
+    damageType: null,
+    saveAbility: 'wis',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 1,
+  },
+
+  'compelled duel': {
+    // Session 20 bulk: 1-level enchantment, range 30 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 30,
+    damage: null,
+    damageType: null,
+    saveAbility: 'wis',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 1,
+    bonusAction: true,
+  },
+
+  'create or destroy water': {
+    // Session 20 bulk: 1-level transmutation, range 30 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 30,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 1,
+  },
+
+  'disguise self': {
+    // Session 20 bulk: 1-level illusion, range 0 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 0,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 1,
+  },
+
+  'distort value': {
+    // Session 20 bulk: 1-level illusion, range 5 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 5,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 1,
+  },
+
+  'divine favor': {
+    // Session 20 bulk: 1-level evocation, range 0 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 0,
+    damage: { count: 1, sides: 4, bonus: 0, average: 2 },
+    damageType: 'radiant',
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 1,
+    bonusAction: true,
+  },
+
+  'earth tremor': {
+    // Session 20 bulk: 1-level evocation, range 10 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 10,
+    damage: { count: 1, sides: 6, bonus: 0, average: 4 },
+    damageType: 'bludgeoning',
+    saveAbility: 'dex',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 1,
+  },
+
+  'ensnaring strike': {
+    // Session 20 bulk: 1-level conjuration, range 0 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 0,
+    damage: { count: 1, sides: 6, bonus: 0, average: 4 },
+    damageType: 'piercing',
+    saveAbility: 'str',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 1,
+    bonusAction: true,
+  },
+
+  'expeditious retreat': {
+    // Session 20 bulk: 1-level transmutation, range 0 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 0,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 1,
+    bonusAction: true,
+  },
+
+  'false life': {
+    // Session 20 bulk: 1-level necromancy, range 0 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 0,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 1,
+  },
+
+  'frost fingers': {
+    // Session 20 bulk: 1-level evocation, range 15 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 15,
+    damage: { count: 2, sides: 8, bonus: 0, average: 9 },
+    damageType: 'cold',
+    saveAbility: 'con',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 1,
+  },
+
+  'gift of alacrity': {
+    // Session 20 bulk: 1-level divination, range 5 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 5,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 1,
+  },
+
+  'goodberry': {
+    // Session 20 bulk: 1-level transmutation, range 5 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 5,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 1,
+  },
+
+  'grease': {
+    // Session 20 bulk: 1-level conjuration, range 60 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 60,
+    damage: null,
+    damageType: null,
+    saveAbility: 'dex',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 1,
+  },
+
+  'hail of thorns': {
+    // Session 20 bulk: 1-level conjuration, range 0 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 0,
+    damage: { count: 1, sides: 10, bonus: 0, average: 6 },
+    damageType: 'piercing',
+    saveAbility: 'dex',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 1,
+    bonusAction: true,
+  },
+
+  'heroism': {
+    // Session 20 bulk: 1-level enchantment, range 5 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 5,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 1,
+  },
+
+  "hunter's mark": {
+    // Session 20 bulk: 1-level divination, range 90 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 90,
+    damage: { count: 1, sides: 6, bonus: 0, average: 4 },
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 1,
+    bonusAction: true,
+  },
+
+  'ice knife': {
+    // Session 20 bulk: 1-level conjuration, range 60 ft, forward-compat flag.
+    attackType: 'spell',
+    rangeNormal: 60,
+    damage: { count: 1, sides: 10, bonus: 0, average: 6 },
+    damageType: 'cold',
+    saveAbility: 'dex',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 1,
+  },
+
+  'inflict wounds': {
+    // Session 20 bulk: 1-level necromancy, range 5 ft, forward-compat flag.
+    attackType: 'spell',
+    rangeNormal: 5,
+    damage: { count: 3, sides: 10, bonus: 0, average: 16 },
+    damageType: 'necrotic',
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 1,
+  },
+
+  "jim's magic missile": {
+    // Session 20 bulk: 1-level evocation, range 120 ft, forward-compat flag.
+    attackType: 'spell',
+    rangeNormal: 120,
+    damage: { count: 2, sides: 4, bonus: 0, average: 5 },
+    damageType: 'force',
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 1,
+  },
+
+  'jump': {
+    // Session 20 bulk: 1-level transmutation, range 5 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 5,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 1,
+  },
+
+  'magnify gravity': {
+    // Session 20 bulk: 1-level transmutation, range 60 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 60,
+    damage: { count: 2, sides: 8, bonus: 0, average: 9 },
+    damageType: 'force',
+    saveAbility: 'con',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 1,
+  },
+
+  'purify food and drink': {
+    // Session 20 bulk: 1-level transmutation, range 10 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 10,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 1,
+  },
+
+  'ray of sickness': {
+    // Session 20 bulk: 1-level necromancy, range 60 ft, forward-compat flag.
+    attackType: 'spell',
+    rangeNormal: 60,
+    damage: { count: 2, sides: 8, bonus: 0, average: 9 },
+    damageType: 'poison',
+    saveAbility: 'con',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 1,
+  },
+
+  'sanctuary': {
+    // Session 20 bulk: 1-level abjuration, range 30 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 30,
+    damage: null,
+    damageType: null,
+    saveAbility: 'wis',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 1,
+    bonusAction: true,
+  },
+
+  'searing smite': {
+    // Session 20 bulk: 1-level evocation, range 0 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 0,
+    damage: { count: 1, sides: 6, bonus: 0, average: 4 },
+    damageType: 'fire',
+    saveAbility: 'con',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 1,
+    bonusAction: true,
+  },
+
+  'silent image': {
+    // Session 20 bulk: 1-level illusion, range 60 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 60,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 1,
+  },
+
+  'snare': {
+    // Session 20 bulk: 1-level abjuration, range 5 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 5,
+    damage: null,
+    damageType: null,
+    saveAbility: 'dex',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 1,
+  },
+
+  'speak with animals': {
+    // Session 20 bulk: 1-level divination, range 0 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 0,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 1,
+  },
+
+  'spellfire flare': {
+    // Session 20 bulk: 1-level evocation, range 60 ft, forward-compat flag.
+    attackType: 'spell',
+    rangeNormal: 60,
+    damage: { count: 2, sides: 10, bonus: 0, average: 11 },
+    damageType: 'radiant',
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 1,
+  },
+
+  "tasha's caustic brew": {
+    // Session 20 bulk: 1-level evocation, range 30 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 30,
+    damage: { count: 2, sides: 4, bonus: 0, average: 5 },
+    damageType: 'acid',
+    saveAbility: 'dex',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 1,
+  },
+
+  "tasha's hideous laughter": {
+    // Session 20 bulk: 1-level enchantment, range 30 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 30,
+    damage: null,
+    damageType: null,
+    saveAbility: 'wis',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 1,
+  },
+
+  "tenser's floating disk": {
+    // Session 20 bulk: 1-level conjuration, range 30 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 30,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 1,
+  },
+
+  'thunderous smite': {
+    // Session 20 bulk: 1-level evocation, range 0 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 0,
+    damage: { count: 2, sides: 6, bonus: 0, average: 7 },
+    damageType: 'thunder',
+    saveAbility: 'str',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 1,
+    bonusAction: true,
+  },
+
+  'unseen servant': {
+    // Session 20 bulk: 1-level conjuration, range 60 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 60,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 1,
+  },
+
+  'wardaway': {
+    // Session 20 bulk: 1-level abjuration, range 60 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 60,
+    damage: { count: 2, sides: 4, bonus: 0, average: 5 },
+    damageType: 'force',
+    saveAbility: 'con',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 1,
+  },
+
+  'witch bolt': {
+    // Session 20 bulk: 1-level evocation, range 30 ft, forward-compat flag.
+    attackType: 'spell',
+    rangeNormal: 30,
+    damage: { count: 1, sides: 12, bonus: 0, average: 6 },
+    damageType: 'lightning',
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 1,
+  },
+
+  'wrathful smite': {
+    // Session 20 bulk: 1-level evocation, range 0 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 0,
+    damage: { count: 1, sides: 6, bonus: 0, average: 4 },
+    damageType: 'psychic',
+    saveAbility: 'wis',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 1,
+    bonusAction: true,
+  },
+
+  'zephyr strike': {
+    // Session 20 bulk: 1-level transmutation, range 0 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 0,
+    damage: { count: 1, sides: 8, bonus: 0, average: 4 },
+    damageType: 'force',
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 1,
+    bonusAction: true,
+  },
+
 };
 
 // ---- Lookup helper ------------------------------------------
