@@ -495,5 +495,5 @@ console.log('\n=== 5. Integration: shouldCast → execute pipeline ===\n');
 // ---- Results ------------------------------------------------
 
 console.log(`\n${'='.repeat(50)}`);
-console.log(`healing_word.test.ts: ${passed} passed, ${failed} failed`);
+console.log(`Results: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
