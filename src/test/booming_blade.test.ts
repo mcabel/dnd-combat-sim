@@ -321,7 +321,7 @@ console.log('\n--- 11. resolveAttack MISS → no rider ---');
   const bf = makeBF([caster, target]);
   const state = makeState(bf);
 
-  resolveAttack(caster, target, BOOMING_BLADE_MISS, state);
+  resolveAttack(caster, target, BOOMING_BLADE_MISS, state, false /* force miss — avoids nat-20 auto-hit flakiness */);
 
   const missEvent = state.log.events.find((e: any) => e.type === 'attack_miss');
   assert('11a. attack_miss logged', missEvent !== undefined);

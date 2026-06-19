@@ -301,7 +301,7 @@ console.log('\n--- 11. resolveAttack miss → no damage ---');
   const bf = makeBF([caster, target]);
   const state = makeState(bf);
 
-  resolveAttack(caster, target, ELDRITCH_BLAST_MISS, state);
+  resolveAttack(caster, target, ELDRITCH_BLAST_MISS, state, false /* force miss — avoids nat-20 auto-hit flakiness */);
 
   const missEvent = state.log.events.find((e: CombatEvent) => e.type === 'attack_miss');
   const damageEvent = state.log.events.find((e: CombatEvent) => e.type === 'damage');

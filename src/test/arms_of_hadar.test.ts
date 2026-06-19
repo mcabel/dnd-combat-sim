@@ -564,10 +564,13 @@ console.log('\n5. OA integration — reactionUsed blocks opportunity attacks');
   // 5c. Enemy whose save succeeded retains their reaction (OA still possible).
   const warlock = spawnClass('Warlock', { x: 0, y: 0, z: 0 });
 
-  // STR 30 enemy → guaranteed to succeed DC 13 STR save (min roll = 30+10 = 40)
+  // STR 34 enemy → abilityMod(34) = +12 → min save = 1 + 12 = 13 ≥ DC 13 → always succeeds.
+  // (Previously str=30 → mod +10 → min save 11 < 13 → failed on nat 1-2 ~10% of the time.
+  //  The old comment "min roll = 30+10 = 40" confused the str SCORE (30) with the str
+  //  MODIFIER (+10). Fixed: use str=34 so min save 13 ≥ DC 13 guarantees success.)
   const enemy = makeCombatant('giant', {
-    name: 'GiantSTR30', faction: 'enemy', pos: { x: 0, y: 0, z: 0 },
-    str: 30, maxHP: 100, currentHP: 100, ac: 10,
+    name: 'GiantSTR34', faction: 'enemy', pos: { x: 0, y: 0, z: 0 },
+    str: 34, maxHP: 100, currentHP: 100, ac: 10,
   });
   enemy.budget.reactionUsed = false;
 
