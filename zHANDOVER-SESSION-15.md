@@ -52,13 +52,13 @@
 ## STARTUP CHECKLIST (do these before implementing)
 
 1. `git pull` — make sure you're on the latest `main`.
-2. Read **`zHANDOVER-SESSION-14.md`** (Session 14 patterns: the PIVOT — Option A `rollAbilityCheck` choke point. Documents 5 forward-compat options A/B/C/D/E; Session 14 chose A. Lists the 2 scratch flags consumed: `_guidanceDieBonusNextAbilityCheck` (Guidance) and `_friendsAdvNextChaCheck` (Friends). Includes a code template for the function signature.)
-3. Read `zHANDOVER-SESSION-13.md` (the FINAL cantrip batch: Control Flames / Dancing Lights / Druidcraft / Encode Thoughts / Mold Earth / Shape Water. Confirms 5 cantrip registries, 46 implemented cantrips total).
-4. Read `zHANDOVER-SESSION-11.md` (Guidance + Friends initial implementation — sets the scratch flags that Session 14 now consumes).
+2. Read **`zHandoversOld/zHANDOVER-SESSION-14.md`** (Session 14 patterns: the PIVOT — Option A `rollAbilityCheck` choke point. Documents 5 forward-compat options A/B/C/D/E; Session 14 chose A. Lists the 2 scratch flags consumed: `_guidanceDieBonusNextAbilityCheck` (Guidance) and `_friendsAdvNextChaCheck` (Friends). Includes a code template for the function signature.)
+3. Read `zHandoversOld/zHANDOVER-SESSION-13.md` (the FINAL cantrip batch: Control Flames / Dancing Lights / Druidcraft / Encode Thoughts / Mold Earth / Shape Water. Confirms 5 cantrip registries, 46 implemented cantrips total).
+4. Read `zHandoversOld/zHANDOVER-SESSION-11.md` (Guidance + Friends initial implementation — sets the scratch flags that Session 14 now consumes).
 5. Read `SPELL-CACHE.md` — it explains the cache + picker workflow.
 6. Run `npm install` (deps: ts-node, typescript).
 7. Run `npm run spell-cache:build` — confirm 46/49 cantrips implemented; 0 remaining in-scope. The cantrip implementation workstream is COMPLETE.
-8. **NEW for Session 15:** `grep -n "rollAbilityCheck" src/engine/utils.ts` — confirm the choke point exists (line ~242). If it does NOT exist, the previous session (14) failed to commit/push — re-implement per `zHANDOVER-SESSION-14.md` Option A.
+8. **NEW for Session 15:** `grep -n "rollAbilityCheck" src/engine/utils.ts` — confirm the choke point exists (line ~242). If it does NOT exist, the previous session (14) failed to commit/push — re-implement per `zHandoversOld/zHANDOVER-SESSION-14.md` Option A.
 
 ---
 
@@ -66,7 +66,7 @@
 
 The cantrip workstream has PIVOTED. The `rollAbilityCheck` choke point (Option A) is DONE. The next agent should choose ONE of the remaining forward-compat subsystems from Session 14's handover, OR coordinate with the Core Engine agent on AI planner cantrip selection.
 
-### Remaining pivot options (from zHANDOVER-SESSION-14.md)
+### Remaining pivot options (from zHandoversOld/zHANDOVER-SESSION-14.md)
 
 - **Option B: Persistent-buff subsystem for multi-effect cantrips** — STILL OPEN. 5 cantrips have "up to N effects active" caps that v1 ignores:
   - Prestidigitation (Session 12) — up to 3 non-instantaneous effects
@@ -170,7 +170,7 @@ The cantrip workstream has PIVOTED. The `rollAbilityCheck` choke point (Option A
 ## IMMEDIATE NEXT ACTION
 
 1. `git pull && npm install && npm run spell-cache:build` (confirm 46/49 cantrips implemented; 0 remaining in-scope — the cantrip implementation workstream is COMPLETE).
-2. **Verify Session 14's work landed:** `grep -n "export function rollAbilityCheck" src/engine/utils.ts` — should return line ~242. If it does NOT, the previous session (14) failed to commit/push — re-implement per `zHANDOVER-SESSION-14.md` Option A.
+2. **Verify Session 14's work landed:** `grep -n "export function rollAbilityCheck" src/engine/utils.ts` — should return line ~242. If it does NOT, the previous session (14) failed to commit/push — re-implement per `zHandoversOld/zHANDOVER-SESSION-14.md` Option A.
 3. Choose ONE of the remaining pivot options (B/C/D/E/F) above. **Option F is NEW** (built on Session 14's `rollAbilityCheck` — partially lift Minor Illusion's `illusionMechanicsV1Implemented: false` flag by wiring the Investigation check to disbelieve via `rollAbilityCheck`).
 4. If choosing Option B/C: coordinate with the Core Engine agent — these are significant engine changes.
 5. If choosing Option D/E/F: this is Core Engine territory — coordinate.

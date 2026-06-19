@@ -14,7 +14,7 @@
 
 ### Multi-agent documentation
 - Created `AGENTS.md` — authoritative workstream boundaries and startup priority rule (uploaded handover supersedes TASK.md)
-- Added stream/priority notes to `TASK.md`, `HANDOVER-SESSION-42.md`, `zHANDOVER-SESSION-1.md`
+- Added stream/priority notes to `TASK.md`, `HANDOVER-SESSION-42.md`, `zHandoversOld/zHANDOVER-SESSION-1.md`
 
 ### Bard/Cleric/Monk/Warlock subclass prompt tests (`src/test/character_leveler.test.ts`)
 - Added `makeBard()`, `makeCleric()`, `makeMonk()`, `makeWarlock()` factories

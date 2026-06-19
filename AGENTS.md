@@ -51,6 +51,11 @@ another stream's files.
 |--------|---------|---------|
 | Sheet | `SHEET-HANDOVER-NN.md` | `SHEET-HANDOVER-29.md` |
 | Core Engine | `HANDOVER-SESSION-NN.md` | `HANDOVER-SESSION-43.md` |
-| Cantrip / z | `zHANDOVER-SESSION-NN.md` | `zHANDOVER-SESSION-2.md` |
+| Cantrip / z | `zHANDOVER-SESSION-NN.md` | `zHANDOVER-SESSION-16.md` |
 
 Each agent writes the next numbered handover for its own stream only.
+
+Old handovers are archived in subfolders to keep the repo root tidy:
+- `zHandoversOld/` — zHANDOVER-SESSION-1 through 14 (cantrip-z workstream archive)
+- `HandoverOldDocs/` — older HANDOVER-SESSION and SHEET-HANDOVER files
+- `handover old/` — older HANDOVER-SESSION and SHEET-HANDOVER files
