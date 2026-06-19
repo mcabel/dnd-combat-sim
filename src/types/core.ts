@@ -488,6 +488,47 @@ export interface Combatant {
   //   for log attribution when the rider detonates. Optional.
   _boomingBladePendingDamageDice?: string;
   _boomingBladeCasterId?: string;
+
+  // ---- Frostbite (XGE p.156) scratch field ----
+  // Set on the TARGET when it fails its CON save against Frostbite
+  // (post-save-FAIL rider dispatched from CANTRIP_EFFECTS). The target
+  // has disadvantage on the NEXT WEAPON ATTACK roll it makes before the
+  // end of its next turn (XGE p.156). resolveAttack() in combat.ts folds
+  // this into the attack's `disadvantage` boolean when the marked
+  // creature is the ATTACKER AND `action.attackType === 'melee' ||
+  // 'ranged'` (i.e. weapon attacks ONLY — spell attacks are excluded
+  // per XGE p.156's "weapon attack roll" wording), then CONSUMES the
+  // flag (sets it back to false) after the attack roll resolves — hit
+  // or miss. This is a one-shot debuff — distinct from Vicious Mockery,
+  // which applies to ALL attack rolls (weapon + spell).
+  //
+  // If not consumed by end of the target's next turn, cleanup() called
+  // from resetBudget() clears it (codebase convention — slightly more
+  // lenient than PHB's "end of its next turn", consistent with Vicious
+  // Mockery and Mind Sliver timing).
+  _frostbiteDisadvNextWeaponAttack?: boolean;
+
+  // ---- Spellcasting ability modifier (for cantrips like Green-Flame Blade) ----
+  // The caster's spellcasting ability modifier (INT for Wizard, CHA for
+  // Sorcerer/Warlock, WIS for Cleric/Druid). Used by cantrips whose damage
+  // scales with the spellcasting modifier (e.g. Green-Flame Blade's splash
+  // damage, TCE p.107: "fire damage equal to your spellcasting ability
+  // modifier (minimum of 1)").
+  //
+  // Optional — populated by the parser from the caster's class. Tests set
+  // it directly for determinism. Defaults to 3 (typical level-1 caster
+  // with 16 in their spellcasting stat) via DEFAULT_SPELLCASTING_MOD in
+  // the Green-Flame Blade module when undefined.
+  spellcastingMod?: number;
+
+  // ---- Caster level (for cantrips that scale by caster level) ----
+  // The caster's character level (1–20). Used by cantrips whose damage
+  // scales at 5/11/17 (e.g. Green-Flame Blade's splash damage, TCE p.107:
+  // "At 5th level ... 1d8 + your spellcasting ability modifier").
+  //
+  // Optional — populated by the parser. Tests set it directly for
+  // determinism. Defaults to 1 when undefined.
+  casterLevel?: number;
 }
 
 // ---- Obstacle -----------------------------------------------

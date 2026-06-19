@@ -13,6 +13,7 @@ import { cleanup as cleanupBladeWard } from '../spells/blade_ward';
 import { cleanup as cleanupViciousMockery } from '../spells/vicious_mockery';
 import { cleanup as cleanupMindSliver } from '../spells/mind_sliver';
 import { cleanup as cleanupBoomingBlade } from '../spells/booming_blade';
+import { cleanup as cleanupFrostbite } from '../spells/frostbite';
 
 // Damage types resisted by Blade Ward (PHB p.218) — bludgeoning/piercing/slashing.
 const BLADE_WARD_PHYSICAL_TYPES: DamageType[] = ['bludgeoning', 'piercing', 'slashing'];
@@ -266,6 +267,10 @@ export function resetBudget(c: Combatant): void {
   // Booming Blade rider expires if the target didn't move willingly before
   // the start of its next turn (TCE p.106). Same codebase convention.
   cleanupBoomingBlade(c);
+  // Frostbite one-shot weapon-attack disadv expires if not consumed by a
+  // weapon attack before the start of the target's next turn (XGE p.156).
+  // Same codebase convention as Vicious Mockery / Mind Sliver / Booming Blade.
+  cleanupFrostbite(c);
 
   const speed = effectiveSpeed(c);
   c.budget = {

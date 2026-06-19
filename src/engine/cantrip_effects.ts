@@ -14,7 +14,12 @@
 //   - Vicious Mockery: Disadv on target's next attack (post-save-FAIL)
 //   - Mind Sliver: −1d4 to target's next save (post-save-FAIL)
 //   - Booming Blade: Thunder rider on target's next willing move (post-hit)
+//   - Frostbite: Disadv on target's next WEAPON attack (post-save-FAIL)
+//   - Sapping Sting: Target falls prone (post-save-FAIL — condition, not scratch field)
+//   - Lightning Lure: Pull 10 ft + conditional lightning damage (post-save-FAIL)
+//   - Green-Flame Blade: Fire splash to 2nd creature within 5 ft of primary (post-hit)
 //   - Thunderclap: Caster-centered 5-ft AoE CON save (NON-attack AoE)
+//   - Sword Burst: Caster-centered 5-ft AoE DEX save (NON-attack AoE)
 //
 // Integration:
 //   - Post-hit attack cantrips: called from resolveAttack in combat.ts
@@ -40,8 +45,13 @@ import { applyCantripEffect as applyChillTouchEffect } from '../spells/chill_tou
 import { applyCantripEffect as applyViciousMockeryEffect } from '../spells/vicious_mockery';
 import { applyCantripEffect as applyMindSliverEffect } from '../spells/mind_sliver';
 import { applyCantripEffect as applyBoomingBladeEffect } from '../spells/booming_blade';
+import { applyCantripEffect as applyFrostbiteEffect } from '../spells/frostbite';
+import { applyCantripEffect as applySappingStingEffect } from '../spells/sapping_sting';
+import { applyCantripEffect as applyLightningLureEffect } from '../spells/lightning_lure';
+import { applyCantripEffect as applyGreenFlameBladeEffect } from '../spells/green_flame_blade';
 import { applySelfEffect as applyBladeWardSelfEffect } from '../spells/blade_ward';
 import { execute as executeThunderclap } from '../spells/thunderclap';
+import { execute as executeSwordBurst } from '../spells/sword_burst';
 
 // ---- Cantrip effect handlers --------------------------------
 
@@ -61,6 +71,10 @@ const CANTRIP_EFFECTS: Record<
   'Vicious Mockery': applyViciousMockeryEffect,
   'Mind Sliver': applyMindSliverEffect,        // post-save-FAIL: −1d4 to next save (TCE p.108)
   'Booming Blade': applyBoomingBladeEffect,    // post-hit: thunder rider on willing move (TCE p.106)
+  'Frostbite': applyFrostbiteEffect,           // post-save-FAIL: disadv on next WEAPON attack (XGE p.156)
+  'Sapping Sting': applySappingStingEffect,    // post-save-FAIL: target falls prone (EGW p.189)
+  'Lightning Lure': applyLightningLureEffect,  // post-save-FAIL: pull 10 ft + conditional lightning (TCE p.107)
+  'Green-Flame Blade': applyGreenFlameBladeEffect,  // post-hit: fire splash to 2nd creature within 5 ft (TCE p.107)
   // Future post-hit / post-save-FAIL cantrips will be added here
 };
 
@@ -204,6 +218,7 @@ const CANTRIP_AOE_EFFECTS: Record<
   (caster: Combatant, state: EngineState) => void
 > = {
   'Thunderclap': executeThunderclap,    // XGE p.168: 5-ft radius CON save, 1d6 thunder
+  'Sword Burst': executeSwordBurst,     // TCE p.115: 5-ft radius DEX save, 1d6 force
   // Future caster-centered AoE cantrips will be added here
   // (e.g. Word of Radiance, Thunderwave as a cantrip if it existed)
 };

@@ -287,7 +287,23 @@ export function resolveAttack(
     log(state, 'action', attacker.id,
       `${attacker.name} attacks ${target.name} with Disadvantage (Vicious Mockery).`, target.id);
   }
-  const disadvantage = baseDisadv || !!protectionRider || losDisadvantage || chillTouchDisadv || viciousMockeryDisadv;
+  // Frostbite (XGE p.156): a creature that failed its CON save against
+  // Frostbite has disadvantage on the NEXT WEAPON ATTACK roll it makes
+  // before the end of its next turn. ONE-SHOT (consumed after this attack).
+  // Distinct from Vicious Mockery in two ways:
+  //   1. Weapon attacks ONLY — spell attacks (attackType='spell') do NOT
+  //      consume the flag and do NOT suffer the disadvantage.
+  //   2. Damage type + save ability differ (cold / CON vs psychic / WIS).
+  // The flag is set by Frostbite's applyCantripEffect on save-FAIL.
+  const isWeaponAttack =
+    action.attackType === 'melee' || action.attackType === 'ranged';
+  const frostbiteDisadv =
+    isWeaponAttack && attacker._frostbiteDisadvNextWeaponAttack === true;
+  if (frostbiteDisadv) {
+    log(state, 'action', attacker.id,
+      `${attacker.name} attacks ${target.name} with Disadvantage (Frostbite).`, target.id);
+  }
+  const disadvantage = baseDisadv || !!protectionRider || losDisadvantage || chillTouchDisadv || viciousMockeryDisadv || frostbiteDisadv;
 
   const result = rollAttack(action.hitBonus ?? 0, advantage, disadvantage);
 
@@ -298,6 +314,16 @@ export function resolveAttack(
     attacker._viciousMockeryDisadvNextAttack = false;
     log(state, 'condition_remove', attacker.id,
       `${attacker.name}'s Vicious Mockery debuff fades (consumed by attack).`, target.id);
+  }
+  // Frostbite one-shot consume: same one-shot semantics as Vicious Mockery,
+  // but ONLY consumed when the attack is a weapon attack (the flag stays set
+  // if the marked creature casts a spell attack instead — XGE p.156 explicitly
+  // says "weapon attack roll", so spell attacks neither suffer the disadv nor
+  // consume the flag).
+  if (frostbiteDisadv) {
+    attacker._frostbiteDisadvNextWeaponAttack = false;
+    log(state, 'condition_remove', attacker.id,
+      `${attacker.name}'s Frostbite debuff fades (consumed by weapon attack).`, target.id);
   }
 
   // Bardic Inspiration die — consumed on this attack roll (PHB p.54)

@@ -1,6 +1,6 @@
 {
   "level": 0,
-  "generatedAt": "2026-06-19T03:43:31.106Z",
+  "generatedAt": "2026-06-19T04:21:08.654Z",
   "generatorVersion": 2,
   "scopeRule": "pre-2024 canon; reprints: newest in-scope source wins; XPHB(2024) out of scope; creatures keep all variants (not applicable to spells)",
   "sourceDates": {
@@ -26,8 +26,8 @@
     "XPHB"
   ],
   "count": 49,
-  "implementedCount": 15,
-  "remainingInScope": 31,
+  "implementedCount": 20,
+  "remainingInScope": 26,
   "spells": [
     {
       "name": "Acid Splash",
@@ -450,8 +450,8 @@
       "page": 156,
       "level": 0,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "frostbite.ts",
       "inScope": true,
       "otherSources": [],
       "classes": [],
@@ -476,8 +476,8 @@
       "page": 107,
       "level": 0,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "green_flame_blade.ts",
       "inScope": true,
       "otherSources": [],
       "classes": [
@@ -625,8 +625,8 @@
       "page": 107,
       "level": 0,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "lightning_lure.ts",
       "inScope": true,
       "otherSources": [],
       "classes": [
@@ -1117,8 +1117,8 @@
       "page": 189,
       "level": 0,
       "school": "Necromancy",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "sapping_sting.ts",
       "inScope": true,
       "otherSources": [],
       "classes": [],
@@ -1331,8 +1331,8 @@
       "page": 115,
       "level": 0,
       "school": "Conjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "sword_burst.ts",
       "inScope": true,
       "otherSources": [],
       "classes": [
