@@ -515,6 +515,7 @@ export interface PlannedAction {
     | 'dissonantWhispers' // Dissonant Whispers — WIS save, 3d6 psychic + forced flee (Bard)
     | 'shield'         // Shield — reaction, +5 AC, blocks Magic Missile (Wizard/Sorcerer)
     | 'guidingBolt'    // Guiding Bolt — ranged spell attack, 4d6 radiant, next attack vs target has advantage (Cleric)
+    | 'healingWord'    // Healing Word — bonus action, 1d4+WIS heal at 60 ft (Cleric/Druid/Bard)
     | 'legendary';
   action: Action | null;
   targetId: string | null;

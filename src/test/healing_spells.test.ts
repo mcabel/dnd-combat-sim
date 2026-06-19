@@ -319,7 +319,7 @@ console.log('\n=== 5. planBonusAction — Healing Word bonus action ===\n');
   const plan = planTurn(cleric, bf);
   // Cure Wounds can't reach (> 5ft), but Healing Word can → goes to bonusAction
   assert('Healing Word in bonusAction when ally at 30ft',
-    plan.bonusAction?.type === 'spellHeal',
+    plan.bonusAction?.type === 'healingWord',
     `got ${plan.bonusAction?.type}`);
   eq('Healing Word targets downed fighter', plan.bonusAction?.targetId, fighter.id);
 }
@@ -410,7 +410,8 @@ console.log('\n=== 8. Edge cases ===\n');
 
   const plan = planTurn(cleric, bf);
   assert('No spellHeal planned when slots exhausted',
-    plan.action?.type !== 'spellHeal' && plan.bonusAction?.type !== 'spellHeal',
+    plan.action?.type !== 'spellHeal' && plan.bonusAction?.type !== 'spellHeal'
+    && plan.bonusAction?.type !== 'healingWord',
     `action: ${plan.action?.type}, bonus: ${plan.bonusAction?.type}`);
 }
 

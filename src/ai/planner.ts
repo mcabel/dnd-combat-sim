@@ -11,8 +11,9 @@ import {
   shouldRage, activateRagePlan, shouldSecondWind, secondWindPlan,
   shouldLayOnHands, layOnHandsPlan, bardicInspirationTarget, bardicInspirationPlan,
   shouldCastHex, hexPlan,
-  shouldCastCureWounds, shouldCastHealingWord, spellHealPlan,
+  shouldCastCureWounds, spellHealPlan,
 } from './resources';
+import { shouldCast as shouldCastHW } from '../spells/healing_word';
 import { shouldCast as shouldCastFaerieFire } from '../spells/faerie_fire';
 import { shouldCast as shouldCastBless } from '../spells/bless';
 import { shouldCast as shouldCastMageArmor } from '../spells/mage_armor';
@@ -324,9 +325,14 @@ function planBonusAction(
   // Higher priority than Bardic Inspiration: reviving a downed ally is urgent.
   // Only triggers when a heal target exists (downed ally or critical HP within 60ft).
   {
-    const hwTarget = shouldCastHealingWord(self, battlefield);
-    if (hwTarget && self.actions.some(a => a.name === 'Healing Word')) {
-      return spellHealPlan(self, hwTarget.id, true);
+    const hwTarget = shouldCastHW(self, battlefield);
+    if (hwTarget) {
+      return {
+        type: 'healingWord',
+        action: null,
+        targetId: hwTarget.id,
+        description: `${self.name} casts Healing Word on ${hwTarget.name}`,
+      };
     }
   }
 

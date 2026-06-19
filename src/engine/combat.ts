@@ -53,6 +53,7 @@ import {
   shouldCast as shouldCastGuidingBolt, execute as executeGuidingBolt,
   cleanupMarks as cleanupGuidingBoltMarks, consumeMark as consumeGuidingBoltMark,
 } from '../spells/guiding_bolt';
+import { execute as executeHealingWord } from '../spells/healing_word';
 
 // ---- Combat log ---------------------------------------------
 
@@ -984,6 +985,16 @@ function executePlannedAction(
       const gbTarget = plan.targetId ? bf.combatants.get(plan.targetId) : null;
       if (!gbTarget || gbTarget.isDead || gbTarget.isUnconscious) break;
       if (shouldCastGuidingBolt(actor, gbTarget, bf)) executeGuidingBolt(actor, gbTarget, state);
+      break;
+    }
+
+    case 'healingWord': {
+      // Healing Word — PHB p.250: bonus action, 1d4+WIS healing at 60 ft.
+      // No effect on undead or constructs (PHB p.250).
+      // Slot consumed and heal applied inside execute().
+      const hwTarget = plan.targetId ? bf.combatants.get(plan.targetId) ?? null : null;
+      if (!hwTarget) break;
+      executeHealingWord(actor, hwTarget, state);
       break;
     }
   }
