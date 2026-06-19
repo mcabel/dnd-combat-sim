@@ -5,7 +5,7 @@
 // This module provides a central dispatch for cantrip effects
 // that are applied after a successful hit.
 //
-// Supported cantrips (40 total across 5 registries after Session 12):
+// Supported cantrips (46 total across 5 registries after Session 13):
 //   - Thorn Whip: Pulls Large/smaller targets 10 ft closer  (post-hit)
 //   - Ray of Frost: Reduces target speed by 10 ft           (post-hit)
 //   - Shocking Grasp: Prevents reactions on hit + adv vs metal (pre-roll + post-hit)
@@ -21,6 +21,12 @@
 //   - Prestidigitation: Flavor log only (NON-attack self-buff, no mechanical effect in v1)
 //   - Thaumaturgy: Flavor log only (NON-attack self-buff, V-only, no mechanical effect in v1)
 //   - Message: Flavor log only (NON-attack self-buff, no mechanical effect in v1)
+//   - Control Flames: Flavor log only (NON-attack self-buff, S-only, no mechanical effect in v1)
+//   - Dancing Lights: Flavor log only (NON-attack self-buff, FIRST concentration cantrip, no mechanical effect in v1)
+//   - Druidcraft: Flavor log only (NON-attack self-buff, nature-themed, no mechanical effect in v1)
+//   - Encode Thoughts: Flavor log only (NON-attack self-buff, FIRST GGR-source + 8-hour-duration, no mechanical effect in v1)
+//   - Mold Earth: Flavor log only (NON-attack self-buff, S-only, no mechanical effect in v1)
+//   - Shape Water: Flavor log only (NON-attack self-buff, S-only, no mechanical effect in v1)
 //   - Vicious Mockery: Disadv on target's next attack (post-save-FAIL)
 //   - Mind Sliver: −1d4 to target's next save (post-save-FAIL)
 //   - Booming Blade: Thunder rider on target's next willing move (post-hit)
@@ -87,6 +93,12 @@ import { applySelfEffect as applyMageHandSelfEffect } from '../spells/mage_hand'
 import { applySelfEffect as applyPrestidigitationSelfEffect } from '../spells/prestidigitation';
 import { applySelfEffect as applyThaumaturgySelfEffect } from '../spells/thaumaturgy';
 import { applySelfEffect as applyMessageSelfEffect } from '../spells/message';
+import { applySelfEffect as applyControlFlamesSelfEffect } from '../spells/control_flames';
+import { applySelfEffect as applyDancingLightsSelfEffect } from '../spells/dancing_lights';
+import { applySelfEffect as applyDruidcraftSelfEffect } from '../spells/druidcraft';
+import { applySelfEffect as applyEncodeThoughtsSelfEffect } from '../spells/encode_thoughts';
+import { applySelfEffect as applyMoldEarthSelfEffect } from '../spells/mold_earth';
+import { applySelfEffect as applyShapeWaterSelfEffect } from '../spells/shape_water';
 import { execute as executeThunderclap } from '../spells/thunderclap';
 import { execute as executeSwordBurst } from '../spells/sword_burst';
 import { execute as executeWordOfRadiance } from '../spells/word_of_radiance';
@@ -210,6 +222,12 @@ const CANTRIP_SELF_EFFECTS: Record<
   'Prestidigitation': applyPrestidigitationSelfEffect, // PHB p.267: flavor log only (1-round v1; multi-effect tracking TODO)
   'Thaumaturgy': applyThaumaturgySelfEffect,     // PHB p.282: flavor log only (V-only, 1-round v1; multi-effect tracking TODO)
   'Message': applyMessageSelfEffect,             // PHB p.259: flavor log only (1-round canon; communication subsystem TODO)
+  'Control Flames': applyControlFlamesSelfEffect, // XGE p.152: flavor log only (S-only, 1-round v1; multi-effect tracking TODO)
+  'Dancing Lights': applyDancingLightsSelfEffect, // PHB p.230: flavor log only (FIRST concentration cantrip, 1-round v1; persistent-lights TODO)
+  'Druidcraft': applyDruidcraftSelfEffect,       // PHB p.236: flavor log only (nature-themed, 1-round v1; weather prediction TODO)
+  'Encode Thoughts': applyEncodeThoughtsSelfEffect, // GGR p.47: flavor log only (FIRST GGR-source + 8-hr-duration, 1-round v1; thought-strand TODO)
+  'Mold Earth': applyMoldEarthSelfEffect,         // XGE p.162: flavor log only (S-only, 1-round v1; difficult-terrain integration TODO)
+  'Shape Water': applyShapeWaterSelfEffect,       // XGE p.164: flavor log only (S-only, 1-round v1; water-flow + freeze TODO)
   // Future non-attack self-buff cantrips will be added here
 };
 

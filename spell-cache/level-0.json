@@ -1,6 +1,6 @@
 {
   "level": 0,
-  "generatedAt": "2026-06-19T17:24:02.059Z",
+  "generatedAt": "2026-06-19T18:13:36.830Z",
   "generatorVersion": 2,
   "scopeRule": "pre-2024 canon; reprints: newest in-scope source wins; XPHB(2024) out of scope; creatures keep all variants (not applicable to spells)",
   "sourceDates": {
@@ -26,8 +26,8 @@
     "XPHB"
   ],
   "count": 49,
-  "implementedCount": 40,
-  "remainingInScope": 6,
+  "implementedCount": 46,
+  "remainingInScope": 0,
   "spells": [
     {
       "name": "Acid Splash",
@@ -175,8 +175,8 @@
       "page": 152,
       "level": 0,
       "school": "Transmutation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "control_flames.ts",
       "inScope": true,
       "otherSources": [],
       "classes": [],
@@ -225,8 +225,8 @@
       "page": 230,
       "level": 0,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "dancing_lights.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -260,8 +260,8 @@
       "page": 236,
       "level": 0,
       "school": "Transmutation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "druidcraft.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -355,8 +355,8 @@
       "page": 47,
       "level": 0,
       "school": "Enchantment",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "encode_thoughts.ts",
       "inScope": true,
       "otherSources": [],
       "classes": [],
@@ -857,8 +857,8 @@
       "page": 162,
       "level": 0,
       "school": "Transmutation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "mold_earth.ts",
       "inScope": true,
       "otherSources": [],
       "classes": [],
@@ -1143,8 +1143,8 @@
       "page": 164,
       "level": 0,
       "school": "Transmutation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "shape_water.ts",
       "inScope": true,
       "otherSources": [],
       "classes": [],
