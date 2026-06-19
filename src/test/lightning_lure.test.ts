@@ -639,5 +639,5 @@ console.log('\n--- 18. Total Cover blocks Lightning Lure ---');
 // ============================================================
 // Summary
 // ============================================================
-console.log(`\n=== Lightning Lure test: ${passed} passed, ${failed} failed ===`);
+console.log(`\nResults: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

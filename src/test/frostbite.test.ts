@@ -550,5 +550,5 @@ console.log('\n--- 17. Total Cover blocks Frostbite ---');
 // ============================================================
 // Summary
 // ============================================================
-console.log(`\n=== Frostbite test: ${passed} passed, ${failed} failed ===`);
+console.log(`\nResults: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

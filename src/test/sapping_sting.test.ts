@@ -472,5 +472,5 @@ console.log('\n--- 16. Total Cover blocks Sapping Sting ---');
 // ============================================================
 // Summary
 // ============================================================
-console.log(`\n=== Sapping Sting test: ${passed} passed, ${failed} failed ===`);
+console.log(`\nResults: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

@@ -535,5 +535,5 @@ console.log('\n--- 16. saveDC read from caster.actions ---');
 // ============================================================
 // Summary
 // ============================================================
-console.log(`\n=== Sword Burst test: ${passed} passed, ${failed} failed ===`);
+console.log(`\nResults: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

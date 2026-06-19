@@ -656,5 +656,5 @@ console.log('\n--- 23. Total Cover blocks Green-Flame Blade ---');
 // ============================================================
 // Summary
 // ============================================================
-console.log(`\n=== Green-Flame Blade test: ${passed} passed, ${failed} failed ===`);
+console.log(`\nResults: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
