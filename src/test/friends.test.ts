@@ -11,9 +11,12 @@
 //   - Hostility backlash: canonically "the creature realizes that you used
 //     magic to influence its mood and becomes hostile toward you" → v1:
 //     backlash NOT implemented.
-//   - CHA-check integration: the engine has NO rollAbilityCheck choke
-//     point yet → v1 sets the flag on cast but does NOT consume it. The flag
-//     is cleared at the start of the caster's NEXT turn via cleanup().
+//   - CHA-check integration: the rollAbilityCheck() choke point now EXISTS
+//     in utils.ts (added in Session 14) → v1 sets the flag on cast AND
+//     consumes it on the next CHA check via rollAbilityCheck. The flag is
+//     cleared at the start of the caster's NEXT turn via cleanup() as a
+//     safety net (only fires if the caster makes no CHA check before their
+//     next turn).
 //
 // Tests:
 //   1. metadata correctness
@@ -26,7 +29,7 @@
 //   8. resolveCantripAction integration — 'Friends' routes to applySelfEffect
 //   9. dispatcher safety — unknown cantrip name is a no-op
 //  10. cleanup() clears _friendsAdvNextChaCheck flag (resetBudget integration)
-//  11. v1 does NOT consume the flag (no rollAbilityCheck choke point yet)
+//  11. flag is NOT consumed by any function other than rollAbilityCheck
 //  12. buff clears at start of caster's next turn (resetBudget)
 //  13. Friends itself does NOT go through resolveAttack (self-buff)
 //  14. resolveCantripAoE returns false (not a caster-centered AoE)
@@ -196,8 +199,8 @@ console.log('\n--- 5. v1 simplification flags ---');
     metadata.friendsTargetAgnosticV1Simplified, true);
   eq('5c. friendsHostilityBacklashV1Implemented = false (canon: backlash on end; v1: skipped)',
     metadata.friendsHostilityBacklashV1Implemented, false);
-  eq('5d. friendsAbilityCheckIntegrationV1Implemented = false (no rollAbilityCheck choke point yet)',
-    metadata.friendsAbilityCheckIntegrationV1Implemented, false);
+  eq('5d. friendsAbilityCheckIntegrationV1Implemented = true (rollAbilityCheck choke point exists in utils.ts)',
+    metadata.friendsAbilityCheckIntegrationV1Implemented, true);
 }
 
 // ============================================================
@@ -290,25 +293,29 @@ console.log('\n--- 10. cleanup ---');
 }
 
 // ============================================================
-// 11. v1 does NOT consume the flag (no rollAbilityCheck choke point yet)
+// 11. flag is NOT consumed by any function other than rollAbilityCheck
 // ============================================================
-console.log('\n--- 11. v1 does NOT consume flag ---');
+console.log('\n--- 11. flag only consumed by rollAbilityCheck ---');
 {
-  // In v1, there is no rollAbilityCheck choke point in utils.ts. The flag
-  // is set on cast and only cleared by cleanup() at the start of the
-  // caster's NEXT turn. The flag is NEVER consumed by a CHA check
-  // in v1 (because the choke point doesn't exist yet).
+  // The rollAbilityCheck() choke point now EXISTS in utils.ts (added in
+  // Session 14). The flag is set on cast and consumed ONLY by
+  // rollAbilityCheck() on the next CHA check. It is NOT consumed by any
+  // other function (rollSave, resolveAttack, etc.). The flag is cleared
+  // at the start of the caster's NEXT turn via cleanup() as a safety net
+  // (v1 1-round simplification).
   const caster = makeCombatant('bard', { _friendsAdvNextChaCheck: true });
   eq('11a. flag set', caster._friendsAdvNextChaCheck, true);
 
-  // Simulate "a CHA check happens" — in v1, nothing consumes the flag.
-  // (In the future, rollAbilityCheck would consume it here.)
-  eq('11b. flag STILL set in v1 (no rollAbilityCheck choke point to consume it)',
+  // Simulate "some non-CHA-check event happens" (e.g. a save, an
+  // attack, a move). None of these should consume the Friends flag.
+  // rollSave does NOT touch _friendsAdvNextChaCheck.
+  // The flag remains set.
+  eq('11b. flag STILL set (only rollAbilityCheck consumes it)',
     caster._friendsAdvNextChaCheck, true);
 
-  // Cleanup is the ONLY mechanism that clears the flag in v1.
+  // Cleanup is the safety-net clearing mechanism (start of next turn).
   cleanup(caster);
-  eq('11c. flag cleared by cleanup (v1: only clearing mechanism)',
+  eq('11c. flag cleared by cleanup (safety net at start of next turn)',
     caster._friendsAdvNextChaCheck, undefined);
 }
 

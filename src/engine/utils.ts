@@ -184,6 +184,163 @@ export function rollSave(
   return { roll, total, success: total >= dc };
 }
 
+/**
+ * Roll an ability check (PHB p.174–175).
+ *
+ * d20 + ability modifier (+ proficiency bonus if proficient — e.g. skill
+ * or tool proficiency). NO auto-fail on nat 1 / NO auto-success on nat 20
+ * (those only apply to attack rolls PHB p.194 and death saves PHB p.197;
+ * ability checks have no critical-fail/critical-success rule).
+ *
+ * Mirrors rollSave's architecture. Folds in:
+ *   - Bardic Inspiration die (PHB p.54 — adds rollDie(die) once per grant,
+ *     consumed; applies to attack rolls, ability checks, AND saving throws).
+ *   - Guidance cantrip (PHB p.248 — ADD rollDie(_guidanceDieBonusNextAbilityCheck)
+ *     to the next ability check, one-shot consume; applies to ANY ability
+ *     check — str/dex/con/int/wis/cha). THIS IS THE CHOKE POINT that
+ *     consumes the scratch flag set by guidance.ts's applySelfEffect.
+ *   - Friends cantrip (PHB p.244 — advantage on the next CHA check, one-shot
+ *     consume; CHA-only). v1 simplification: target-agnostic (the buff
+ *     applies to the next CHA check regardless of target — see friends.ts
+ *     header). THIS IS THE CHOKE POINT that consumes the scratch flag set
+ *     by friends.ts's applySelfEffect.
+ *   - Rage (PHB p.48 — advantage on STR checks AND STR saves while raging;
+ *     flat unconditional advantage, no per-turn bookkeeping needed).
+ *   - Poisoned condition (PHB Appendix A — disadvantage on attack rolls
+ *     AND ability checks; RAW does NOT impose disadvantage on saves, but
+ *     rollSave models poisoned disadv on saves too — a known v1
+ *     simplification that this function does NOT replicate).
+ *   - Advantage-system entries via querySelf (scope 'ability' and
+ *     'ability:<ab>' — set via adv_system.grantSelf).
+ *
+ * v1 simplifications (documented here for the next agent):
+ *   - Does NOT model exhaustion (PHB p.291 — disadvantage on ability
+ *     checks; exhaustion isn't tracked in the conditions Set, it's a
+ *     separate subtype). Future work: track exhaustion levels.
+ *   - Does NOT model every condition's ability-check interaction (e.g.
+ *     blinded imposes DM-fiat disadvantage on sight-based checks;
+ *     frightened has no explicit ability-check penalty; restrained has
+ *     no explicit ability-check penalty). Only poisoned + rage are
+ *     folded in (mirror rollSave's poisoned disadvantage + rage-STR
+ *     advantage). Future work: extend as needed when a spell/feature
+ *     requires it.
+ *   - Does NOT auto-tick advantage-system entries (the caller is
+ *     responsible for calling tickAdvantages at the start of each turn —
+ *     mirror rollSave).
+ *
+ * The `details` array is a human-readable breakdown of each component
+ * (advantage source, d20 roll, ability mod, prof, BI, Guidance, total,
+ * dc, success/fail). Useful for combat-log rendering and debugging.
+ *
+ * @returns { roll, total, success, details }
+ *   - roll:    the raw d20 result (or the higher/lower of two dice if
+ *              advantage/disadvantage applied and didn't cancel out).
+ *   - total:   roll + ability mod + prof + BI + Guidance bonus.
+ *   - success: total >= dc.
+ *   - details: human-readable strings describing each component.
+ */
+export function rollAbilityCheck(
+  combatant: Combatant,
+  ability: 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha',
+  dc: number,
+  isProficient = false,
+): { roll: number; total: number; success: boolean; details: string[] } {
+  const score = combatant[ability];
+  const mod = abilityMod(score);
+  const prof = isProficient ? profBonusByCR(combatant.cr) : 0;
+  const details: string[] = [];
+
+  // ── Advantage / disadvantage sources ──────────────────────────
+  // Friends cantrip (PHB p.244) — advantage on the next CHA check,
+  // one-shot. Canonically target-agnostic in v1 (the buff applies to the
+  // next CHA check regardless of target). The flag is CONSUMED after the
+  // roll resolves (one-shot — PHB p.244: "advantage on all Charisma
+  // checks directed at one creature" — v1 simplifies to the NEXT CHA
+  // check regardless of target).
+  const friendsAdv = ability === 'cha' && combatant._friendsAdvNextChaCheck === true;
+
+  // Rage (PHB p.48): "You have advantage on Strength checks and Strength
+  // saving throws while raging." Flat unconditional advantage on STR
+  // checks — not modeled via the advantage-system entries because it's
+  // always-on while rage is active (no per-turn bookkeeping needed).
+  // Mirrors rollSave's rageStrAdvantage for STR saves.
+  const rageStrAdvantage =
+    ability === 'str' && combatant.resources?.rage?.active === true;
+
+  // Advantage-system entries (spells, feats, class features that grant
+  // adv/dis on ability checks via grantSelf — scope 'ability' covers any
+  // ability check; 'ability:str' covers STR checks specifically; etc.).
+  const selfCheck = querySelf(combatant, `ability:${ability}` as import('../types/core').D20TestScope);
+  const allCheck  = querySelf(combatant, 'ability');
+
+  // Poisoned (PHB Appendix A): "While poisoned, the creature has
+  // disadvantage on attack rolls and ability checks." RAW does NOT
+  // impose disadvantage on saves — rollSave models it for saves too (a
+  // known v1 simplification). For ability checks, poisoned disadvantage
+  // IS canonically correct.
+  const poisonedDisadv = combatant.conditions.has('poisoned');
+
+  const hasAdvantage    = friendsAdv || selfCheck.advantage   || allCheck.advantage   || rageStrAdvantage;
+  const hasDisadvantage = poisonedDisadv || selfCheck.disadvantage || allCheck.disadvantage;
+
+  let roll: number;
+  if (hasAdvantage && !hasDisadvantage) {
+    roll = rollWithAdvantage();
+    details.push('advantage');
+  } else if (hasDisadvantage && !hasAdvantage) {
+    roll = rollWithDisadvantage();
+    details.push('disadvantage');
+  } else {
+    roll = rollDie(20);
+  }
+  // If both advantage AND disadvantage, neither applies (PHB p.173) — single roll.
+
+  details.push(`d20=${roll}`);
+  details.push(`${ability} mod=${mod >= 0 ? '+' : ''}${mod}`);
+  if (prof !== 0) details.push(`prof=+${prof}`);
+
+  // ── Bardic Inspiration (PHB p.54) ─────────────────────────────
+  // Adds rollDie(die) once per grant; applies to attack rolls, ability
+  // checks, AND saving throws. Consumed after the roll resolves (one-shot
+  // per grant). Mirrors rollSave's BI integration.
+  const biBonus = consumeBardicInspiration(combatant);
+  if (biBonus > 0) details.push(`BI=+${biBonus}`);
+
+  // ── Guidance cantrip (PHB p.248) ──────────────────────────────
+  // ADD rollDie(value) to the ability-check total, one-shot consume.
+  // Applies to ANY ability check (str/dex/con/int/wis/cha). The flag is
+  // set by guidance.ts's applySelfEffect (CANTRIP_SELF_EFFECTS); this is
+  // the consuming choke point (mirror Resistance's rollSave integration,
+  // but for ability checks instead of saves). PHB p.248: "Once before the
+  // spell ends, the target can roll a d4 and add the number rolled to one
+  // ability check of its choice." — singular, one-shot.
+  let guidanceBonus = 0;
+  if (combatant._guidanceDieBonusNextAbilityCheck !== undefined) {
+    guidanceBonus = rollDie(combatant._guidanceDieBonusNextAbilityCheck);
+    details.push(`Guidance=+${guidanceBonus}`);
+    // Consume (one-shot) — clear the flag now so subsequent ability
+    // checks this turn (and beyond) are unaffected.
+    delete combatant._guidanceDieBonusNextAbilityCheck;
+  }
+
+  // ── Consume Friends flag (after the advantage roll is made) ───
+  // The advantage was already applied to the d20 roll above; consume the
+  // flag now (one-shot — set by friends.ts's applySelfEffect via
+  // CANTRIP_SELF_EFFECTS; this is the consuming choke point, mirror True
+  // Strike's resolveAttack advantage integration but for CHA checks).
+  if (friendsAdv) {
+    details.push('Friends advantage consumed');
+    delete combatant._friendsAdvNextChaCheck;
+  }
+
+  const total = roll + mod + prof + biBonus + guidanceBonus;
+  details.push(`total=${total}`);
+  details.push(`dc=${dc}`);
+  details.push(total >= dc ? 'success' : 'fail');
+
+  return { roll, total, success: total >= dc, details };
+}
+
 // ---- HP / damage --------------------------------------------
 
 /**
@@ -330,21 +487,22 @@ export function resetBudget(c: Combatant): void {
   cleanupResistance(c);
   // Guidance self-buff (PHB p.248) — v1 simplification: 1-round duration,
   // clears at the start of the caster's next turn (canonically concentration,
-  // up to 1 minute). While `_guidanceDieBonusNextAbilityCheck` is set, the
-  // FUTURE rollAbilityCheck() choke point will add rollDie(value) to the
-  // ability-check total (mirror Resistance's save-bonus integration, but for
-  // ability checks instead of saves). v1 does NOT consume the flag (no
-  // rollAbilityCheck choke point exists yet) — cleanup is the ONLY mechanism
-  // that clears the flag.
+  // up to 1 minute). While `_guidanceDieBonusNextAbilityCheck` is set,
+  // rollAbilityCheck() (now implemented in this file — Session 14) ADDS
+  // rollDie(value) to the ability-check total (mirror Resistance's save-bonus
+  // integration, but for ability checks instead of saves). One-shot —
+  // consumed by the first ability check; cleanup is a safety net (clears
+  // the flag if the caster makes no ability check before their next turn).
   cleanupGuidance(c);
   // Friends self-buff (PHB p.244) — v1 simplification: 1-round duration,
   // clears at the start of the caster's next turn (canonically concentration,
-  // up to 1 minute). While `_friendsAdvNextChaCheck === true`, the FUTURE
-  // rollAbilityCheck() choke point will fold this into the advantage boolean
-  // for Charisma checks (mirror True Strike's attack-roll advantage
-  // integration, but for CHA checks instead of ATTACK rolls). v1 does NOT
-  // consume the flag (no rollAbilityCheck choke point exists yet) — cleanup
-  // is the ONLY mechanism that clears the flag.
+  // up to 1 minute). While `_friendsAdvNextChaCheck === true`,
+  // rollAbilityCheck() (now implemented in this file — Session 14) folds
+  // this into the advantage boolean for Charisma checks (mirror True
+  // Strike's attack-roll advantage integration, but for CHA checks instead
+  // of ATTACK rolls). One-shot — consumed by the first CHA check; cleanup
+  // is a safety net (clears the flag if the caster makes no CHA check
+  // before their next turn).
   cleanupFriends(c);
   // Light touch-effect (PHB p.255) — v1 simplification: 1-round duration,
   // clears at the start of the caster's next turn (canonically 1 hour). The

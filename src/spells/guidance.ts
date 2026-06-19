@@ -19,14 +19,15 @@
 // Guidance is the FIFTH self-buff cantrip in CANTRIP_SELF_EFFECTS
 // (the first four are Blade Ward, Shillelagh, True Strike,
 // Resistance). Like them, it sets a scratch flag on the target
-// and is cleaned up by resetBudget(). Unlike Resistance (whose
-// flag is read by rollSave in utils.ts), Guidance's flag is read
-// by the FUTURE rollAbilityCheck() choke point — which does NOT
-// exist yet in the engine. v1 sets the flag on cast but does not
-// consume it (documented via the metadata flag
-// `guidanceAbilityCheckIntegrationV1Implemented: false`). The
-// flag still clears at the start of the caster's NEXT turn via
-// cleanup() called from resetBudget() (v1 1-round simplification).
+// and is cleaned up by resetBudget(). Like Resistance (whose
+// flag is consumed by rollSave in utils.ts), Guidance's flag is
+// consumed by rollAbilityCheck() in utils.ts (added in Session 14 —
+// the choke point that was previously missing). The flag is set on
+// cast by applySelfEffect (below) and CONSUMED by the next ability
+// check (any ability — str/dex/con/int/wis/cha). If the caster
+// makes no ability check before their next turn, cleanup() (called
+// from resetBudget) clears the flag as a safety net (v1 1-round
+// simplification — canonically concentration up to 1 minute).
 //
 // v1 simplification: PHB p.248 canonically requires concentration,
 // lasts up to 1 minute, and can target ANY willing creature (touch
@@ -40,23 +41,25 @@
 // size (4 = d4), same one-shot consume semantics, but for ABILITY
 // CHECKS instead of SAVES:
 //   Resistance: _resistanceDieBonusNextSave        = 4 (d4)  [save bonus, consumed by rollSave]
-//   Guidance:   _guidanceDieBonusNextAbilityCheck  = 4 (d4)  [ability-check bonus, consumed by future rollAbilityCheck]
+//   Guidance:   _guidanceDieBonusNextAbilityCheck  = 4 (d4)  [ability-check bonus, consumed by rollAbilityCheck]
 //
 // The flag is stored as the die size (4 = d4) so the system is
 // extensible to other die bonuses (e.g. a hypothetical "Enhanced
 // Guidance" cantrip that adds 1d6 — set the flag to 6).
 //
-// Ability-check-bonus integration (FUTURE — rollAbilityCheck in
-// utils.ts):
+// Ability-check-bonus integration (rollAbilityCheck in utils.ts —
+// implemented in Session 14):
 //   - When `combatant._guidanceDieBonusNextAbilityCheck` is set,
-//     the future rollAbilityCheck() will roll rollDie(value) and
-//     ADD the result to the ability-check total (mirror
-//     Resistance's save-bonus integration, but for ability checks).
+//     rollAbilityCheck() rolls rollDie(value) and ADDS the result
+//     to the ability-check total (mirror Resistance's save-bonus
+//     integration, but for ability checks instead of saves).
 //   - Consume (set to undefined) after the ability check resolves
 //     — one-shot (PHB p.248: "Once before the spell ends").
-//   - v1 does NOT implement this integration (no rollAbilityCheck
-//     choke point exists yet — forward-compat TODO via the metadata
-//     flag `guidanceAbilityCheckIntegrationV1Implemented: false`).
+//   - The integration IS implemented (metadata flag
+//     `guidanceAbilityCheckIntegrationV1Implemented: true`). The
+//     remaining v1 simplifications are concentration (1-round vs
+//     canon 1-minute concentration) and touch-ally (self-only vs
+//     canon any willing creature) — see those metadata flags.
 //
 // Routing (per zHANDOVER-SESSION-11):
 //   - The AI planner emits a normal `cast` PlannedAction with
@@ -132,17 +135,21 @@ export const metadata = {
    */
   guidanceTouchAllyV1Simplified: true as const,
   /**
-   * v1 simplification flag: the engine currently has NO
-   * rollAbilityCheck() choke point in utils.ts. v1 sets the
-   * `_guidanceDieBonusNextAbilityCheck` flag on cast but does not
-   * consume it (the flag is cleared at the start of the caster's
-   * NEXT turn via cleanup() called from resetBudget — v1 1-round
-   * simplification). Future work: add rollAbilityCheck() to
-   * utils.ts (mirror rollSave's architecture — fold in
-   * `_guidanceDieBonusNextAbilityCheck` and consume on the next
-   * ability check, mirror Resistance's rollSave integration).
+   * v1 simplification flag: the rollAbilityCheck() choke point in
+   * utils.ts now EXISTS (added in Session 14). v1 sets the
+   * `_guidanceDieBonusNextAbilityCheck` flag on cast and CONSUMES
+   * it on the next ability check (any ability — str/dex/con/int/
+   * wis/cha) via rollAbilityCheck, which ADDS rollDie(value) to
+   * the ability-check total (mirror Resistance's rollSave
+   * integration, but for ability checks). The flag is cleared
+   * at the start of the caster's NEXT turn via cleanup() called
+   * from resetBudget as a SAFETY NET (v1 1-round simplification —
+   * canonically concentration up to 1 minute). The remaining v1
+   * simplifications are concentration (1-round vs canon 1-minute
+   * concentration) and touch-ally (self-only vs canon any willing
+   * creature) — see those metadata flags.
    */
-  guidanceAbilityCheckIntegrationV1Implemented: false as const,
+  guidanceAbilityCheckIntegrationV1Implemented: true as const,
 } as const;
 
 // ---- Local log helper ---------------------------------------
@@ -172,18 +179,18 @@ function emit(
  * cantrip_effects.ts, which executePlannedAction consults for
  * non-attack cantrips (routing them away from resolveAttack).
  *
- * While `_guidanceDieBonusNextAbilityCheck` is set, the FUTURE
- * rollAbilityCheck() choke point in utils.ts (NOT YET IMPLEMENTED
- * — forward-compat TODO) will roll rollDie(value) (a d4) and ADD
- * the result to the ability-check total (mirror Resistance's
- * save-bonus integration, but for ability checks instead of
- * saves), then CONSUME the flag (sets to undefined) after the
- * ability check resolves — success or failure. The bonus applies
- * to ANY ability check the caster makes while the flag is set
- * (str/dex/con/int/wis/cha). v1 does NOT consume the flag (no
- * rollAbilityCheck choke point exists yet) — the flag still
- * clears at the start of the caster's NEXT turn via cleanup()
- * called from resetBudget (v1 1-round simplification).
+ * While `_guidanceDieBonusNextAbilityCheck` is set, the
+ * rollAbilityCheck() choke point in utils.ts (implemented in
+ * Session 14) rolls rollDie(value) (a d4) and ADDS the result
+ * to the ability-check total (mirror Resistance's save-bonus
+ * integration, but for ability checks instead of saves), then
+ * CONSUMES the flag (sets to undefined) after the ability check
+ * resolves — success or failure. The bonus applies to ANY
+ * ability check the caster makes while the flag is set
+ * (str/dex/con/int/wis/cha). If the caster makes no ability
+ * check before their next turn, the flag is cleared by cleanup()
+ * called from resetBudget as a safety net (v1 1-round
+ * simplification).
  *
  * @returns true if the buff was applied
  */
@@ -196,7 +203,7 @@ export function applySelfEffect(
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Guidance — ${alreadyActive ? 'already active' : `gains +1d4 to next ability check (v1: 1-round, self-only; ability-check integration not yet implemented)`}!`,
+    `${caster.name} casts Guidance — ${alreadyActive ? 'already active' : 'gains +1d4 to next ability check (v1: 1-round, self-only; consumed by rollAbilityCheck)'}!`,
   );
 
   return true;
@@ -219,12 +226,10 @@ export function applySelfEffect(
  *
  * Note: canonically, the buff is consumed by the first ability
  * check (one-shot), so cleanup is a safety net — if the caster
- * makes no ability check on their next turn (and the future
- * rollAbilityCheck choke point is implemented), the buff expires
- * at the start of the turn after that. In v1 (no rollAbilityCheck
- * integration), cleanup is the ONLY mechanism that clears the
- * flag (the flag is never consumed because the choke point doesn't
- * exist yet).
+ * makes no ability check on their next turn, the buff expires at
+ * the start of that next turn via this cleanup. rollAbilityCheck
+ * (in utils.ts, implemented in Session 14) is the consuming
+ * choke point; this cleanup is the safety net.
  */
 export function cleanup(combatant: Combatant): void {
   if (combatant._guidanceDieBonusNextAbilityCheck !== undefined) {

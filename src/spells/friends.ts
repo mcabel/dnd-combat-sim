@@ -26,15 +26,19 @@
 // Friends is the SIXTH self-buff cantrip in CANTRIP_SELF_EFFECTS
 // (the first five are Blade Ward, Shillelagh, True Strike,
 // Resistance, Guidance). Like them, it sets a scratch flag on
-// the caster and is cleaned up by resetBudget(). Unlike True
-// Strike (whose flag is read by resolveAttack's attack-roll
-// branch), Friends' flag is read by the FUTURE rollAbilityCheck()
-// choke point — which does NOT exist yet in the engine. v1 sets
-// the flag on cast but does not consume it (documented via the
-// metadata flag `friendsAbilityCheckIntegrationV1Implemented:
-// false`). The flag still clears at the start of the caster's
-// NEXT turn via cleanup() called from resetBudget() (v1 1-round
-// simplification).
+// the caster and is cleaned up by resetBudget(). Like True
+// Strike (whose flag is consumed by resolveAttack's attack-roll
+// branch), Friends' flag is consumed by rollAbilityCheck() in
+// utils.ts (added in Session 14 — the choke point that was
+// previously missing). The flag is set on cast by applySelfEffect
+// (below) and CONSUMED by the next Charisma check (CHA-only —
+// PHB p.244: "advantage on all Charisma checks directed at one
+// creature"). v1 simplification: target-agnostic (the buff applies
+// to the next CHA check regardless of target — see metadata
+// flag `friendsTargetAgnosticV1Simplified`). If the caster makes
+// no CHA check before their next turn, cleanup() (called from
+// resetBudget) clears the flag as a safety net (v1 1-round
+// simplification — canonically concentration up to 1 minute).
 //
 // v1 simplification: PHB p.244 canonically requires concentration,
 // lasts up to 1 minute, and is "directed at one creature of your
@@ -53,18 +57,23 @@
 // one-shot consume semantics, but for CHA CHECKS instead of
 // ATTACK rolls:
 //   True Strike: _trueStrikeAdvNextAttack   = true  [attack advantage, consumed by resolveAttack]
-//   Friends:     _friendsAdvNextChaCheck    = true  [CHA-check advantage, consumed by future rollAbilityCheck]
+//   Friends:     _friendsAdvNextChaCheck    = true  [CHA-check advantage, consumed by rollAbilityCheck]
 //
-// Advantage integration (FUTURE — rollAbilityCheck in utils.ts):
-//   - When `combatant._friendsAdvNextChaCheck === true`, the
-//     future rollAbilityCheck() will fold this into the advantage
-//     boolean for Charisma checks (mirror True Strike's attack-
-//     roll advantage integration, but for CHA checks instead of
-//     ATTACK rolls), then CONSUME the flag (set to false) after
-//     the CHA check resolves — one-shot.
-//   - v1 does NOT implement this integration (no rollAbilityCheck
-//     choke point exists yet — forward-compat TODO via the metadata
-//     flag `friendsAbilityCheckIntegrationV1Implemented: false`).
+// Advantage integration (rollAbilityCheck in utils.ts — implemented
+// in Session 14):
+//   - When `combatant._friendsAdvNextChaCheck === true`,
+//     rollAbilityCheck() folds this into the advantage boolean
+//     for Charisma checks (mirror True Strike's attack-roll
+//     advantage integration, but for CHA checks instead of ATTACK
+//     rolls), then CONSUMES the flag (set to false) after the CHA
+//     check resolves — one-shot.
+//   - The integration IS implemented (metadata flag
+//     `friendsAbilityCheckIntegrationV1Implemented: true`). The
+//     remaining v1 simplifications are concentration (1-round vs
+//     canon 1-minute concentration), target-agnostic (next CHA
+//     check regardless of target vs canon "directed at one
+//     creature"), and hostility-backlash (skipped vs canon
+//     hostility-on-end) — see those metadata flags.
 //
 // Routing (per zHANDOVER-SESSION-11):
 //   - The AI planner emits a normal `cast` PlannedAction with
@@ -146,18 +155,23 @@ export const metadata = {
    */
   friendsHostilityBacklashV1Implemented: false as const,
   /**
-   * v1 simplification flag: the engine currently has NO
-   * rollAbilityCheck() choke point in utils.ts. v1 sets the
-   * `_friendsAdvNextChaCheck` flag on cast but does not consume
-   * it (the flag is cleared at the start of the caster's NEXT
-   * turn via cleanup() called from resetBudget — v1 1-round
-   * simplification). Future work: add rollAbilityCheck() to
-   * utils.ts (mirror rollSave's architecture — fold in
-   * `_friendsAdvNextChaCheck` for CHA checks and consume on the
-   * next CHA check, mirror True Strike's resolveAttack advantage
-   * integration but for ability checks).
+   * v1 simplification flag: the rollAbilityCheck() choke point in
+   * utils.ts now EXISTS (added in Session 14). v1 sets the
+   * `_friendsAdvNextChaCheck` flag on cast and CONSUMES it on the
+   * next CHA check via rollAbilityCheck, which folds the flag
+   * into the advantage boolean for Charisma checks (mirror True
+   * Strike's resolveAttack advantage integration, but for CHA
+   * checks instead of ATTACK rolls). The flag is cleared at the
+   * start of the caster's NEXT turn via cleanup() called from
+   * resetBudget as a SAFETY NET (v1 1-round simplification —
+   * canonically concentration up to 1 minute). The remaining v1
+   * simplifications are concentration (1-round vs canon 1-minute
+   * concentration), target-agnostic (next CHA check regardless
+   * of target vs canon "directed at one creature"), and
+   * hostility-backlash (skipped vs canon hostility-on-end) — see
+   * those metadata flags.
    */
-  friendsAbilityCheckIntegrationV1Implemented: false as const,
+  friendsAbilityCheckIntegrationV1Implemented: true as const,
   /**
    * Rider restriction: NONE — Friends's advantage applies to ANY
    * Charisma check (no sub-restriction like "ability checks
@@ -197,19 +211,18 @@ function emit(
  * executePlannedAction consults for non-attack cantrips (routing
  * them away from resolveAttack).
  *
- * While `_friendsAdvNextChaCheck === true`, the FUTURE
- * rollAbilityCheck() choke point in utils.ts (NOT YET IMPLEMENTED
- * — forward-compat TODO) will fold this into the advantage boolean
- * for Charisma checks (mirror True Strike's attack-roll advantage
+ * While `_friendsAdvNextChaCheck === true`, the
+ * rollAbilityCheck() choke point in utils.ts (implemented in
+ * Session 14) folds this into the advantage boolean for
+ * Charisma checks (mirror True Strike's attack-roll advantage
  * integration, but for CHA checks instead of ATTACK rolls), then
- * CONSUME the flag (set to false) after the CHA check resolves —
- * one-shot (PHB p.244: "advantage on all Charisma checks directed
- * at one creature of your choice that isn't hostile toward you" —
- * v1 simplifies to the NEXT CHA check regardless of target). v1
- * does NOT consume the flag (no rollAbilityCheck choke point
- * exists yet) — the flag still clears at the start of the caster's
- * NEXT turn via cleanup() called from resetBudget (v1 1-round
- * simplification).
+ * CONSUMES the flag (set to false) after the CHA check resolves
+ * — one-shot (PHB p.244: "advantage on all Charisma checks
+ * directed at one creature of your choice that isn't hostile
+ * toward you" — v1 simplifies to the NEXT CHA check regardless
+ * of target). If the caster makes no CHA check before their
+ * next turn, the flag is cleared by cleanup() called from
+ * resetBudget as a safety net (v1 1-round simplification).
  *
  * @returns true if the buff was applied
  */
@@ -222,7 +235,7 @@ export function applySelfEffect(
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Friends — ${alreadyActive ? 'already active' : 'gains advantage on next Charisma check (v1: 1-round, target-agnostic; CHA-check integration not yet implemented)'}!`,
+    `${caster.name} casts Friends — ${alreadyActive ? 'already active' : 'gains advantage on next Charisma check (v1: 1-round, target-agnostic; consumed by rollAbilityCheck)'}!`,
   );
 
   return true;
@@ -245,11 +258,10 @@ export function applySelfEffect(
  *
  * Note: canonically, the buff is consumed by the first CHA check
  * (one-shot), so cleanup is a safety net — if the caster makes no
- * CHA check on their next turn (and the future rollAbilityCheck
- * choke point is implemented), the buff expires at the start of
- * the turn after that. In v1 (no rollAbilityCheck integration),
- * cleanup is the ONLY mechanism that clears the flag (the flag is
- * never consumed because the choke point doesn't exist yet).
+ * CHA check on their next turn, the buff expires at the start of
+ * that next turn via this cleanup. rollAbilityCheck (in utils.ts,
+ * implemented in Session 14) is the consuming choke point; this
+ * cleanup is the safety net.
  *
  * v1 simplification: PHB p.244 canonically imposes a hostility
  * backlash when the spell ends ("the creature realizes that you

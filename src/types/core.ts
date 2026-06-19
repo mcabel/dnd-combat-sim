@@ -622,23 +622,25 @@ export interface Combatant {
   // guidance.ts header for the v1 simplification details).
   //
   // While `_guidanceDieBonusNextAbilityCheck` is set (the value is the
-  // die size — 4 = d4), the FUTURE rollAbilityCheck() choke point
-  // (NOT YET IMPLEMENTED in utils.ts — forward-compat TODO) will roll
-  // rollDie(value) and ADD the result to the ability-check total
-  // (mirror Resistance's save-bonus integration, but for ability
-  // checks instead of saves), then CONSUME the flag (sets to
-  // undefined). v1 sets the flag on cast but does not consume it
-  // (no rollAbilityCheck choke point exists yet) — documented via
-  // the metadata flag `guidanceAbilityCheckIntegrationV1Implemented:
-  // false`. The flag still clears at the start of the caster's NEXT
-  // turn via cleanup() called from resetBudget() (v1 1-round
-  // simplification).
+  // die size — 4 = d4), the rollAbilityCheck() choke point in utils.ts
+  // (IMPLEMENTED in Session 14) will roll rollDie(value) and ADD the
+  // result to the ability-check total (mirror Resistance's save-bonus
+  // integration, but for ability checks instead of saves), then CONSUME
+  // the flag (sets to undefined). The flag is set on cast by
+  // guidance.ts's applySelfEffect and CONSUMED by the next ability
+  // check (any ability). If the caster makes no ability check before
+  // their next turn, cleanup() called from resetBudget() clears the
+  // flag as a safety net (v1 1-round simplification). The metadata
+  // flag `guidanceAbilityCheckIntegrationV1Implemented` is now `true`
+  // (flipped in Session 14). The remaining v1 simplifications are
+  // concentration (1-round vs canon 1-minute concentration) and
+  // touch-ally (self-only vs canon any willing creature).
   //
   // Mirrors Resistance (PHB p.272) — same architecture, same die
   // size (4 = d4), same one-shot consume semantics, but for ABILITY
   // CHECKS instead of SAVES:
   //   Resistance: _resistanceDieBonusNextSave        = 4 (d4)  [save bonus, consumed by rollSave]
-  //   Guidance:   _guidanceDieBonusNextAbilityCheck  = 4 (d4)  [ability-check bonus, consumed by future rollAbilityCheck]
+  //   Guidance:   _guidanceDieBonusNextAbilityCheck  = 4 (d4)  [ability-check bonus, consumed by rollAbilityCheck]
   _guidanceDieBonusNextAbilityCheck?: number;
 
   // ---- Friends (PHB p.244) scratch field ----
@@ -649,23 +651,27 @@ export interface Combatant {
   // applies to the next CHA check regardless of target — see
   // friends.ts header for the v1 simplification details).
   //
-  // While `_friendsAdvNextChaCheck === true`, the FUTURE
-  // rollAbilityCheck() choke point (NOT YET IMPLEMENTED in utils.ts
-  // — forward-compat TODO) will fold this into the advantage boolean
-  // for Charisma checks (mirror True Strike's attack-roll advantage
-  // integration, but for CHA checks instead of ATTACK rolls), then
-  // CONSUME the flag (set to false). v1 sets the flag on cast but
-  // does not consume it (no rollAbilityCheck choke point exists yet)
-  // — documented via the metadata flag
-  // `friendsAbilityCheckIntegrationV1Implemented: false`. The flag
-  // still clears at the start of the caster's NEXT turn via cleanup()
-  // called from resetBudget() (v1 1-round simplification).
+  // While `_friendsAdvNextChaCheck === true`, the rollAbilityCheck()
+  // choke point in utils.ts (IMPLEMENTED in Session 14) folds this
+  // into the advantage boolean for Charisma checks (mirror True
+  // Strike's attack-roll advantage integration, but for CHA checks
+  // instead of ATTACK rolls), then CONSUMES the flag (set to false).
+  // The flag is set on cast by friends.ts's applySelfEffect and
+  // CONSUMED by the next CHA check. If the caster makes no CHA check
+  // before their next turn, cleanup() called from resetBudget()
+  // clears the flag as a safety net (v1 1-round simplification). The
+  // metadata flag `friendsAbilityCheckIntegrationV1Implemented` is
+  // now `true` (flipped in Session 14). The remaining v1
+  // simplifications are concentration (1-round vs canon 1-minute
+  // concentration), target-agnostic (next CHA check regardless of
+  // target vs canon "directed at one creature"), and hostility-
+  // backlash (skipped vs canon hostility-on-end).
   //
   // Mirrors True Strike (PHB p.284) — same architecture, same
   // one-shot consume semantics, but for CHA CHECKS instead of ATTACK
   // rolls:
   //   True Strike: _trueStrikeAdvNextAttack   = true  [attack advantage, consumed by resolveAttack]
-  //   Friends:     _friendsAdvNextChaCheck    = true  [CHA-check advantage, consumed by future rollAbilityCheck]
+  //   Friends:     _friendsAdvNextChaCheck    = true  [CHA-check advantage, consumed by rollAbilityCheck]
   _friendsAdvNextChaCheck?: boolean;
 
   // ---- Light (PHB p.255) scratch field ----

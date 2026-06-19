@@ -7,9 +7,11 @@
 //     non-concentration (clears at start of caster's next turn).
 //   - Target: canonically "one willing creature" (touch range — self OR ally)
 //     → v1: self-only (the caster targets themselves).
-//   - Ability-check integration: the engine has NO rollAbilityCheck choke
-//     point yet → v1 sets the flag on cast but does NOT consume it. The flag
-//     is cleared at the start of the caster's NEXT turn via cleanup().
+//   - Ability-check integration: the rollAbilityCheck() choke point now EXISTS
+//     in utils.ts (added in Session 14) → v1 sets the flag on cast AND consumes
+//     it on the next ability check via rollAbilityCheck. The flag is cleared at
+//     the start of the caster's NEXT turn via cleanup() as a safety net (only
+//     fires if the caster makes no ability check before their next turn).
 //
 // Tests:
 //   1. metadata correctness
@@ -22,7 +24,7 @@
 //   8. resolveCantripAction integration — 'Guidance' routes to applySelfEffect
 //   9. dispatcher safety — unknown cantrip name is a no-op
 //  10. cleanup() clears _guidanceDieBonusNextAbilityCheck flag (resetBudget integration)
-//  11. v1 does NOT consume the flag (no rollAbilityCheck choke point yet)
+//  11. flag is NOT consumed by any function other than rollAbilityCheck
 //  12. buff clears at start of caster's next turn (resetBudget)
 //  13. Guidance itself does NOT go through resolveAttack (self-buff)
 //  14. resolveCantripAoE returns false (not a caster-centered AoE)
@@ -190,8 +192,8 @@ console.log('\n--- 5. v1 simplification flags ---');
     metadata.guidanceConcentrationV1Simplified, true);
   eq('5b. guidanceTouchAllyV1Simplified = true (canon: any willing creature, v1: self-only)',
     metadata.guidanceTouchAllyV1Simplified, true);
-  eq('5c. guidanceAbilityCheckIntegrationV1Implemented = false (no rollAbilityCheck choke point yet)',
-    metadata.guidanceAbilityCheckIntegrationV1Implemented, false);
+  eq('5c. guidanceAbilityCheckIntegrationV1Implemented = true (rollAbilityCheck choke point exists in utils.ts)',
+    metadata.guidanceAbilityCheckIntegrationV1Implemented, true);
 }
 
 // ============================================================
@@ -284,30 +286,29 @@ console.log('\n--- 10. cleanup ---');
 }
 
 // ============================================================
-// 11. v1 does NOT consume the flag (no rollAbilityCheck choke point yet)
+// 11. flag is NOT consumed by any function other than rollAbilityCheck
 // ============================================================
-console.log('\n--- 11. v1 does NOT consume flag ---');
+console.log('\n--- 11. flag only consumed by rollAbilityCheck ---');
 {
-  // In v1, there is no rollAbilityCheck choke point in utils.ts. The flag
-  // is set on cast and only cleared by cleanup() at the start of the
-  // caster's NEXT turn. The flag is NEVER consumed by an ability check
-  // in v1 (because the choke point doesn't exist yet).
-  //
-  // This test verifies the flag PERSISTS after an "ability check" happens
-  // (simulated by just calling some unrelated function). In v1, the flag
-  // would only be consumed by the FUTURE rollAbilityCheck choke point.
+  // The rollAbilityCheck() choke point now EXISTS in utils.ts (added in
+  // Session 14). The flag is set on cast and consumed ONLY by
+  // rollAbilityCheck() on the next ability check (any ability). It is
+  // NOT consumed by any other function (rollSave, resolveAttack, etc.).
+  // The flag is cleared at the start of the caster's NEXT turn via
+  // cleanup() as a safety net (v1 1-round simplification).
   const caster = makeCombatant('cleric', { _guidanceDieBonusNextAbilityCheck: 4 });
   eq('11a. flag set', caster._guidanceDieBonusNextAbilityCheck, 4);
 
-  // Simulate "an ability check happens" — in v1, nothing consumes the flag.
-  // (In the future, rollAbilityCheck would consume it here.)
-  // We just verify the flag is STILL set after this point.
-  eq('11b. flag STILL set in v1 (no rollAbilityCheck choke point to consume it)',
+  // Simulate "some non-ability-check event happens" (e.g. a save, an
+  // attack, a move). None of these should consume the Guidance flag.
+  // rollSave does NOT touch _guidanceDieBonusNextAbilityCheck.
+  // The flag remains set.
+  eq('11b. flag STILL set (only rollAbilityCheck consumes it)',
     caster._guidanceDieBonusNextAbilityCheck, 4);
 
-  // Cleanup is the ONLY mechanism that clears the flag in v1.
+  // Cleanup is the safety-net clearing mechanism (start of next turn).
   cleanup(caster);
-  eq('11c. flag cleared by cleanup (v1: only clearing mechanism)',
+  eq('11c. flag cleared by cleanup (safety net at start of next turn)',
     caster._guidanceDieBonusNextAbilityCheck, undefined);
 }
 

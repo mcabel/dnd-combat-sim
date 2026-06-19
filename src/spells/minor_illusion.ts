@@ -54,13 +54,16 @@
 //
 // v1 simplification: PHB p.260 canonically allows a creature to
 // examine the illusion with an INT (Investigation) check vs the
-// caster's spell save DC to disbelieve. The engine has NO
-// rollAbilityCheck choke point yet (same blocker as Guidance and
-// Friends), so v1 skips the Investigation check entirely. v1 also
-// skips the illusion-as-cover integration (the engine's computeLOS
-// does not yet model illusions-as-cover) and the physical-
-// interaction reveal. Documented via the metadata flag
-// `illusionMechanicsV1Implemented: false`.
+// caster's spell save DC to disbelieve. The rollAbilityCheck()
+// choke point now EXISTS in utils.ts (added in Session 14), but
+// v1 still skips the Investigation check to disbelieve — it
+// requires additional illusion-subsystem state (which illusion
+// is in which cell, which creature has examined it, etc.) that
+// v1 does not model. v1 also skips the illusion-as-cover
+// integration (the engine's computeLOS does not yet model
+// illusions-as-cover) and the physical-interaction reveal.
+// Documented via the metadata flag `illusionMechanicsV1Implemented:
+// false`.
 //
 // v1 simplification: PHB p.260 canonically lasts 1 minute. v1
 // treats Minor Illusion as a 1-round effect (the illusion
@@ -138,13 +141,16 @@ export const metadata = {
   /**
    * v1 simplification flag: PHB p.260 canonically allows a
    * creature to examine the illusion with an INT (Investigation)
-   * check vs the caster's spell save DC to disbelieve. The engine
-   * has NO rollAbilityCheck choke point yet, so v1 skips the
-   * Investigation check entirely. v1 also skips the illusion-as-
+   * check vs the caster's spell save DC to disbelieve. The
+   * rollAbilityCheck() choke point now EXISTS in utils.ts (added
+   * in Session 14), but v1 still skips the Investigation check —
+   * it requires additional illusion-subsystem state (which
+   * illusion is in which cell, which creature has examined it,
+   * etc.) that v1 does not model. v1 also skips the illusion-as-
    * cover integration (the engine's computeLOS does not yet model
    * illusions-as-cover) and the physical-interaction reveal.
-   * Future work: a rollAbilityCheck choke point + an illusions-
-   * as-cover subsystem + a physical-interaction reveal hook.
+   * Future work: an illusions-as-cover subsystem + a physical-
+   * interaction reveal hook + illusion-examination state.
    */
   illusionMechanicsV1Implemented: false as const,
   /**
