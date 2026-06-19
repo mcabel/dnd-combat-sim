@@ -34,7 +34,7 @@ import { getSummonEntry }                           from '../summons/registry';
 import { rollGrappleContest, rollShoveContest, canGrappleOrShoveTarget } from './utils';
 import { computeLOS } from './los';
 import { removeEffectsFromCaster, getActiveAcBonus, getActiveBlessDie, getActiveHexDie } from './spell_effects';
-import { applyCantripEffect, getCantripAttackAdvantage, resolveCantripAction, resolveCantripAoE } from './cantrip_effects';
+import { applyCantripEffect, getCantripAttackAdvantage, resolveCantripAction, resolveCantripAoE, resolveCantripTouchEffect } from './cantrip_effects';
 import { execute as executeHex } from '../spells/hex';
 import { execute as executeMagicMissile } from '../spells/magic_missile';
 import { execute as executeBurningHands, shouldCast as shouldCastBurningHands } from '../spells/burning_hands';
@@ -768,6 +768,16 @@ function executePlannedAction(
       // resolveCantripAction for self-buffs; both bypass resolveAttack.
       if (plan.action && resolveCantripAoE(actor, plan.action.name, state)) break;
       const target = plan.targetId ? bf.combatants.get(plan.targetId) : null;
+      // Non-attack touch-effect cantrips (e.g. Spare the Dying, PHB p.277:
+      // stabilize a downed PC ally; Light, PHB p.255: set _lightSourceActive
+      // flag on target). These target a single DOWNED ALLY or willing creature
+      // — the handler receives the target as an argument. CRITICAL: this routing
+      // comes BEFORE the standard target-null/dead/unconscious guard below,
+      // because Spare the Dying's target is an UNCONSCIOUS ally at 0 HP (the
+      // standard guard would BLOCK unconscious targets). The handler itself
+      // decides whether the spell fires (e.g. Spare the Dying fizzles on
+      // monsters at 0 HP, on creatures above 0 HP, and on dead creatures).
+      if (plan.action && resolveCantripTouchEffect(actor, target ?? null, plan.action.name, state)) break;
       if (!target || target.isDead || target.isUnconscious) break;
       if (!plan.action) break;
       // Consume spell slot for leveled spells (slotLevel >= 1)

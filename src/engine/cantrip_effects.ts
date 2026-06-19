@@ -14,6 +14,9 @@
 //   - Shillelagh: WIS-for-STR melee + +1d8 radiant (NON-attack self-buff)
 //   - True Strike: Advantage on next attack roll (NON-attack self-buff)
 //   - Resistance: +1d4 to next save (NON-attack self-buff)
+//   - Guidance: +1d4 to next ability check (NON-attack self-buff, future rollAbilityCheck integration)
+//   - Friends: Advantage on next CHA check (NON-attack self-buff, future rollAbilityCheck integration)
+//   - Minor Illusion: Flavor log only (NON-attack self-buff, no mechanical effect in v1)
 //   - Vicious Mockery: Disadv on target's next attack (post-save-FAIL)
 //   - Mind Sliver: −1d4 to target's next save (post-save-FAIL)
 //   - Booming Blade: Thunder rider on target's next willing move (post-hit)
@@ -26,6 +29,8 @@
 //   - Thunderclap: Caster-centered 5-ft AoE CON save (NON-attack AoE)
 //   - Sword Burst: Caster-centered 5-ft AoE DEX save (NON-attack AoE)
 //   - Word of Radiance: Caster-centered 5-ft AoE CON save, radiant (NON-attack AoE)
+//   - Spare the Dying: Stabilize a downed PC ally (NON-attack touch-effect — NEW registry)
+//   - Light: Set _lightSourceActive flag on target (NON-attack touch-effect — NEW registry)
 //
 // Integration:
 //   - Post-hit attack cantrips: called from resolveAttack in combat.ts
@@ -40,6 +45,15 @@
 //     resolveCantripAoE() below, which executePlannedAction consults
 //     BEFORE the target-null guard and BEFORE resolveAttack. The
 //     execute handler finds all creatures within range itself.
+//   - Non-attack touch-effect cantrips (Spare the Dying, Light v1):
+//     routed by resolveCantripTouchEffect() below, which
+//     executePlannedAction consults AFTER resolveCantripAction (self-
+//     buffs) and resolveCantripAoE (AoE), but BEFORE the target-null
+//     guard. This routing is critical for Spare the Dying — its target
+//     is an UNCONSCIOUS ally at 0 HP, which the standard
+//     `if (!target || target.isDead || target.isUnconscious) break;`
+//     guard would BLOCK. The touch-effect handler receives the target
+//     as an argument (unlike self-buffs which only take the caster).
 // ============================================================
 
 import { Combatant } from '../types/core';
@@ -61,9 +75,14 @@ import { applySelfEffect as applyBladeWardSelfEffect } from '../spells/blade_war
 import { applySelfEffect as applyShillelaghSelfEffect } from '../spells/shillelagh';
 import { applySelfEffect as applyTrueStrikeSelfEffect } from '../spells/true_strike';
 import { applySelfEffect as applyResistanceSelfEffect } from '../spells/resistance';
+import { applySelfEffect as applyGuidanceSelfEffect } from '../spells/guidance';
+import { applySelfEffect as applyFriendsSelfEffect } from '../spells/friends';
+import { applySelfEffect as applyMinorIllusionSelfEffect } from '../spells/minor_illusion';
 import { execute as executeThunderclap } from '../spells/thunderclap';
 import { execute as executeSwordBurst } from '../spells/sword_burst';
 import { execute as executeWordOfRadiance } from '../spells/word_of_radiance';
+import { applyTouchEffect as applySpareTheDyingTouchEffect } from '../spells/spare_the_dying';
+import { applyTouchEffect as applyLightTouchEffect } from '../spells/light';
 
 // ---- Cantrip effect handlers --------------------------------
 
@@ -174,6 +193,9 @@ const CANTRIP_SELF_EFFECTS: Record<
   'Shillelagh': applyShillelaghSelfEffect,  // PHB p.275: WIS-for-STR melee + +1d8 radiant (1-round v1)
   'True Strike': applyTrueStrikeSelfEffect, // PHB p.284: advantage on next attack roll (1-round v1)
   'Resistance': applyResistanceSelfEffect,  // PHB p.272: +1d4 to next save (1-round v1)
+  'Guidance': applyGuidanceSelfEffect,      // PHB p.248: +1d4 to next ability check (1-round v1; ability-check integration TODO)
+  'Friends': applyFriendsSelfEffect,        // PHB p.244: advantage on next CHA check (1-round v1; CHA-check integration TODO)
+  'Minor Illusion': applyMinorIllusionSelfEffect, // PHB p.260: flavor log only (1-round v1; illusion mechanics TODO)
   // Future non-attack self-buff cantrips will be added here
 };
 
@@ -266,6 +288,101 @@ export function resolveCantripAoE(
   } catch (e) {
     console.error(
       `[cantrip_effects] Error executing AoE cantrip ${actionName}: ${e instanceof Error ? e.message : String(e)}`
+    );
+    return true; // still consume the action — the spell was "cast"
+  }
+}
+
+// ---- Non-attack touch-effect cantrip registry ----------------
+
+/**
+ * Map of cantrip names to their TOUCH-EFFECT handler functions
+ * for non-attack, non-AoE, non-self-buff cantrips that target a
+ * single DOWNED ALLY or willing creature (Spare the Dying, Light
+ * v1). Each handler takes (caster, target, state) and returns
+ * true if the effect was applied (or fizzled — either way, the
+ * action is consumed and resolveAttack is bypassed).
+ *
+ * These cantrips do NOT ride resolveAttack (no attack roll, no
+ * save in v1). executePlannedAction() in combat.ts consults
+ * resolveCantripTouchEffect() AFTER resolveCantripAction (self-
+ * buffs) and resolveCantripAoE (AoE), but BEFORE the target-null
+ * guard. This routing is CRITICAL for Spare the Dying — its
+ * target is an UNCONSCIOUS ally at 0 HP, which the standard
+ * `if (!target || target.isDead || target.isUnconscious) break;`
+ * guard would BLOCK. By consulting the touch-effect handler
+ * BEFORE that guard, Spare the Dying can target downed allies.
+ *
+ * The touch-effect handler receives the TARGET as an argument
+ * (unlike self-buffs which only take the caster). If the handler
+ * returns true, the switch breaks (the touch cantrip bypasses
+ * resolveAttack). If the cantrip name is registered but the
+ * target is null, the function returns true (the spell fizzles
+ * — the action is consumed but no effect is applied).
+ *
+ * Mirror CANTRIP_SELF_EFFECTS for self-buffs and CANTRIP_AOE_EFFECTS
+ * for AoE — this is the THIRD non-attack cantrip routing pattern
+ * (single-target touch-effect, vs self-buff's no-target and AoE's
+ * caster-centered multi-target).
+ */
+const CANTRIP_TOUCH_EFFECTS: Record<
+  string,
+  (caster: Combatant, target: Combatant, state: EngineState) => boolean
+> = {
+  'Spare the Dying': applySpareTheDyingTouchEffect, // PHB p.277: stabilize a downed PC ally (instant, no save)
+  'Light': applyLightTouchEffect,                   // PHB p.255: set _lightSourceActive flag on target (1-hour canon, 1-round v1, no save v1)
+  // Future non-attack touch-effect cantrips will be added here
+};
+
+/**
+ * Resolve a non-attack touch-effect cantrip action.
+ *
+ * If `actionName` is registered in CANTRIP_TOUCH_EFFECTS, calls
+ * its touch-effect handler with the (caster, target, state)
+ * arguments and returns true. Otherwise returns false (caller
+ * should fall through to the target-null guard and resolveAttack).
+ *
+ * Called from executePlannedAction() in combat.ts for 'attack'/'cast'
+ * actions, AFTER resolveCantripAction (self-buffs) and resolveCantripAoE
+ * (AoE), but BEFORE the target-null guard. Touch-effect cantrips
+ * bypass the single-target attack-roll path entirely; the handler
+ * applies the effect directly to the target (no attack roll, no
+ * save in v1 — Spare the Dying and Light v1 are both no-save).
+ *
+ * If the target is null (no targetId in the PlannedAction), the
+ * function returns true (the spell fizzles — the action is consumed
+ * but no effect is applied). This mirrors CANTRIP_AOE_EFFECTS's
+ * "spell is cast regardless" semantics.
+ *
+ * CRITICAL: this routing MUST come BEFORE the standard
+ * `if (!target || target.isDead || target.isUnconscious) break;`
+ * guard in executePlannedAction. Spare the Dying's target is an
+ * UNCONSCIOUS ally at 0 HP, which the standard guard would block.
+ * By consulting the touch-effect handler BEFORE that guard, Spare
+ * the Dying can target downed allies. The handler itself decides
+ * whether the spell fires (e.g. Spare the Dying fizzles on monsters
+ * at 0 HP, on creatures above 0 HP, and on dead creatures).
+ */
+export function resolveCantripTouchEffect(
+  caster: Combatant,
+  target: Combatant | null,
+  actionName: string,
+  state: EngineState,
+): boolean {
+  const handler = CANTRIP_TOUCH_EFFECTS[actionName];
+  if (!handler) return false;
+
+  // No target: spell fizzles (action consumed, no effect).
+  // This mirrors CANTRIP_AOE_EFFECTS's "spell is cast regardless"
+  // semantics — the action is consumed even if the target is null.
+  if (!target) return true;
+
+  try {
+    handler(caster, target, state);
+    return true; // action consumed — touch cantrip bypasses resolveAttack
+  } catch (e) {
+    console.error(
+      `[cantrip_effects] Error executing touch cantrip ${actionName}: ${e instanceof Error ? e.message : String(e)}`
     );
     return true; // still consume the action — the spell was "cast"
   }

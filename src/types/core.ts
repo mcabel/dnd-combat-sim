@@ -613,6 +613,102 @@ export interface Combatant {
   //   Mind Sliver: _mindSliverDiePenaltyNextSave = 4 (d4)  [debuff on enemy, SUBTRACT]
   //   Resistance:  _resistanceDieBonusNextSave  = 4 (d4)  [buff on self/ally, ADD]
   _resistanceDieBonusNextSave?: number;
+
+  // ---- Guidance (PHB p.248) scratch field ----
+  // Set on the CASTER when it casts Guidance (self-buff cantrip,
+  // PHB p.248: "Once before the spell ends, the target can roll a d4
+  // and add the number rolled to one ability check of its choice.").
+  // v1 simplification: self-only (the caster targets themselves — see
+  // guidance.ts header for the v1 simplification details).
+  //
+  // While `_guidanceDieBonusNextAbilityCheck` is set (the value is the
+  // die size — 4 = d4), the FUTURE rollAbilityCheck() choke point
+  // (NOT YET IMPLEMENTED in utils.ts — forward-compat TODO) will roll
+  // rollDie(value) and ADD the result to the ability-check total
+  // (mirror Resistance's save-bonus integration, but for ability
+  // checks instead of saves), then CONSUME the flag (sets to
+  // undefined). v1 sets the flag on cast but does not consume it
+  // (no rollAbilityCheck choke point exists yet) — documented via
+  // the metadata flag `guidanceAbilityCheckIntegrationV1Implemented:
+  // false`. The flag still clears at the start of the caster's NEXT
+  // turn via cleanup() called from resetBudget() (v1 1-round
+  // simplification).
+  //
+  // Mirrors Resistance (PHB p.272) — same architecture, same die
+  // size (4 = d4), same one-shot consume semantics, but for ABILITY
+  // CHECKS instead of SAVES:
+  //   Resistance: _resistanceDieBonusNextSave        = 4 (d4)  [save bonus, consumed by rollSave]
+  //   Guidance:   _guidanceDieBonusNextAbilityCheck  = 4 (d4)  [ability-check bonus, consumed by future rollAbilityCheck]
+  _guidanceDieBonusNextAbilityCheck?: number;
+
+  // ---- Friends (PHB p.244) scratch field ----
+  // Set on the CASTER when it casts Friends (self-buff cantrip,
+  // PHB p.244: "For the duration, you have advantage on all Charisma
+  // checks directed at one creature of your choice that isn't hostile
+  // toward you."). v1 simplification: target-agnostic (the buff
+  // applies to the next CHA check regardless of target — see
+  // friends.ts header for the v1 simplification details).
+  //
+  // While `_friendsAdvNextChaCheck === true`, the FUTURE
+  // rollAbilityCheck() choke point (NOT YET IMPLEMENTED in utils.ts
+  // — forward-compat TODO) will fold this into the advantage boolean
+  // for Charisma checks (mirror True Strike's attack-roll advantage
+  // integration, but for CHA checks instead of ATTACK rolls), then
+  // CONSUME the flag (set to false). v1 sets the flag on cast but
+  // does not consume it (no rollAbilityCheck choke point exists yet)
+  // — documented via the metadata flag
+  // `friendsAbilityCheckIntegrationV1Implemented: false`. The flag
+  // still clears at the start of the caster's NEXT turn via cleanup()
+  // called from resetBudget() (v1 1-round simplification).
+  //
+  // Mirrors True Strike (PHB p.284) — same architecture, same
+  // one-shot consume semantics, but for CHA CHECKS instead of ATTACK
+  // rolls:
+  //   True Strike: _trueStrikeAdvNextAttack   = true  [attack advantage, consumed by resolveAttack]
+  //   Friends:     _friendsAdvNextChaCheck    = true  [CHA-check advantage, consumed by future rollAbilityCheck]
+  _friendsAdvNextChaCheck?: boolean;
+
+  // ---- Light (PHB p.255) scratch field ----
+  // Set on the TARGET when it is touched by Light (touch cantrip,
+  // PHB p.255: "the object sheds bright light in a 20-foot radius
+  // and dim light for an additional 20 feet"). v1 simplification:
+  // the engine's computeLOS does not yet model light-radius-based
+  // vision changes (forward-compat TODO via the metadata flag
+  // `lightVisionIntegrationV1Implemented: false`). The flag is set
+  // for forward-compatibility — the future vision subsystem will
+  // read it. v1 still clears the flag at the start of the caster's
+  // NEXT turn via cleanup() called from resetBudget() (v1 1-round
+  // simplification — canonically the spell lasts 1 hour).
+  //
+  // Distinct from the other cantrip scratch fields: Light's flag is
+  // set on the TARGET (the object/creature shedding light), not the
+  // CASTER. This is the same target-set pattern as Spare the Dying's
+  // `_isStabilized` flag (also a touch cantrip).
+  _lightSourceActive?: boolean;
+
+  // ---- Spare the Dying (PHB p.277) scratch field ----
+  // Set on the TARGET when it is touched by Spare the Dying (touch
+  // cantrip, PHB p.277: "You touch a living creature that has 0 hit
+  // points. The creature becomes stable."). The flag indicates the
+  // creature has been stabilized and should no longer make death
+  // saving throws (PHB p.197: a stable creature is no longer dying
+  // but remains at 0 HP and unconscious).
+  //
+  // The engine's rollDeathSave() in utils.ts currently checks
+  // `pc.isUnconscious && !pc.isDead` to decide whether to roll —
+  // future work should also check `_isStabilized` to skip the roll
+  // (forward-compat TODO). v1 sets the flag and resets
+  // `deathSaves = { successes: 0, failures: 0 }` (mirror
+  // rollDeathSave's "stable" outcome — the existing engine reset
+  // convention for stable creatures).
+  //
+  // v1 simplification: PHB p.277 canonically excludes undead and
+  // constructs ("This spell has no effect on undead or constructs.").
+  // v1 does NOT model the type exclusion (forward-compat TODO via
+  // the metadata flag `spareTheDyingTypeExclusionV1Implemented:
+  // false`). The handler still fizzles on monsters (PHB p.197:
+  // monsters die at 0 HP — Spare the Dying has no effect).
+  _isStabilized?: boolean;
 }
 
 // ---- Obstacle -----------------------------------------------

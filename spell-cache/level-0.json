@@ -1,6 +1,6 @@
 {
   "level": 0,
-  "generatedAt": "2026-06-19T16:22:54.355Z",
+  "generatedAt": "2026-06-19T16:56:03.316Z",
   "generatorVersion": 2,
   "scopeRule": "pre-2024 canon; reprints: newest in-scope source wins; XPHB(2024) out of scope; creatures keep all variants (not applicable to spells)",
   "sourceDates": {
@@ -26,8 +26,8 @@
     "XPHB"
   ],
   "count": 49,
-  "implementedCount": 30,
-  "remainingInScope": 16,
+  "implementedCount": 35,
+  "remainingInScope": 11,
   "spells": [
     {
       "name": "Acid Splash",
@@ -415,8 +415,8 @@
       "page": 244,
       "level": 0,
       "school": "Enchantment",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "friends.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -505,8 +505,8 @@
       "page": 248,
       "level": 0,
       "school": "Divination",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "guidance.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -589,8 +589,8 @@
       "page": 255,
       "level": 0,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "light.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -822,8 +822,8 @@
       "page": 260,
       "level": 0,
       "school": "Illusion",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "minor_illusion.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1269,8 +1269,8 @@
       "page": 277,
       "level": 0,
       "school": "Necromancy",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "spare_the_dying.ts",
       "inScope": true,
       "otherSources": [
         {

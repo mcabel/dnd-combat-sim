@@ -18,6 +18,9 @@ import { cleanup as cleanupInfestation } from '../spells/infestation';
 import { cleanup as cleanupShillelagh } from '../spells/shillelagh';
 import { cleanup as cleanupTrueStrike } from '../spells/true_strike';
 import { cleanup as cleanupResistance } from '../spells/resistance';
+import { cleanup as cleanupGuidance } from '../spells/guidance';
+import { cleanup as cleanupFriends } from '../spells/friends';
+import { cleanup as cleanupLight } from '../spells/light';
 
 // Damage types resisted by Blade Ward (PHB p.218) — bludgeoning/piercing/slashing.
 const BLADE_WARD_PHYSICAL_TYPES: DamageType[] = ['bludgeoning', 'piercing', 'slashing'];
@@ -324,6 +327,34 @@ export function resetBudget(c: Combatant): void {
   // logic, opposite sign). One-shot — consumed by the first save; cleanup is
   // a safety net.
   cleanupResistance(c);
+  // Guidance self-buff (PHB p.248) — v1 simplification: 1-round duration,
+  // clears at the start of the caster's next turn (canonically concentration,
+  // up to 1 minute). While `_guidanceDieBonusNextAbilityCheck` is set, the
+  // FUTURE rollAbilityCheck() choke point will add rollDie(value) to the
+  // ability-check total (mirror Resistance's save-bonus integration, but for
+  // ability checks instead of saves). v1 does NOT consume the flag (no
+  // rollAbilityCheck choke point exists yet) — cleanup is the ONLY mechanism
+  // that clears the flag.
+  cleanupGuidance(c);
+  // Friends self-buff (PHB p.244) — v1 simplification: 1-round duration,
+  // clears at the start of the caster's next turn (canonically concentration,
+  // up to 1 minute). While `_friendsAdvNextChaCheck === true`, the FUTURE
+  // rollAbilityCheck() choke point will fold this into the advantage boolean
+  // for Charisma checks (mirror True Strike's attack-roll advantage
+  // integration, but for CHA checks instead of ATTACK rolls). v1 does NOT
+  // consume the flag (no rollAbilityCheck choke point exists yet) — cleanup
+  // is the ONLY mechanism that clears the flag.
+  cleanupFriends(c);
+  // Light touch-effect (PHB p.255) — v1 simplification: 1-round duration,
+  // clears at the start of the caster's next turn (canonically 1 hour). The
+  // `_lightSourceActive` flag is set on the TARGET (not the caster), but
+  // v1's cleanup operates on the combatant whose turn is starting (the
+  // caster). This means the flag is only cleared if the caster is also the
+  // target (self-cast Light). For v1, this is acceptable — the flag is
+  // forward-compat only (the vision subsystem is not yet implemented). The
+  // cleanup also defensively clears the flag from ANY combatant that has
+  // it set (no-op if the flag isn't set).
+  cleanupLight(c);
 
   const speed = effectiveSpeed(c);
   c.budget = {
