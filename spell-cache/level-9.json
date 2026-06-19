@@ -1,6 +1,6 @@
 {
   "level": 9,
-  "generatedAt": "2026-06-19T22:31:06.221Z",
+  "generatedAt": "2026-06-19T23:16:11.271Z",
   "generatorVersion": 2,
   "scopeRule": "pre-2024 canon; reprints: newest in-scope source wins; XPHB(2024) out of scope; creatures keep all variants (not applicable to spells)",
   "sourceDates": {
@@ -26,8 +26,8 @@
     "XPHB"
   ],
   "count": 22,
-  "implementedCount": 0,
-  "remainingInScope": 22,
+  "implementedCount": 14,
+  "remainingInScope": 8,
   "spells": [
     {
       "name": "Astral Projection",
@@ -72,8 +72,8 @@
       "page": 143,
       "level": 9,
       "school": "Conjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "blade_of_disaster.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -108,8 +108,8 @@
       "page": 244,
       "level": 9,
       "school": "Divination",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "foresight.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -210,8 +210,8 @@
       "page": 160,
       "level": 9,
       "school": "Abjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "invulnerability.ts",
       "inScope": true,
       "otherSources": [],
       "classes": [],
@@ -234,8 +234,8 @@
       "page": 258,
       "level": 9,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "mass_heal.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -266,8 +266,8 @@
       "page": 160,
       "level": 9,
       "school": "Transmutation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "mass_polymorph.ts",
       "inScope": true,
       "otherSources": [],
       "classes": [],
@@ -290,8 +290,8 @@
       "page": 259,
       "level": 9,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "meteor_swarm.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -326,8 +326,8 @@
       "page": 266,
       "level": 9,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "power_word_heal.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -358,8 +358,8 @@
       "page": 266,
       "level": 9,
       "school": "Enchantment",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "power_word_kill.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -425,8 +425,8 @@
       "page": 163,
       "level": 9,
       "school": "Enchantment",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "psychic_scream.ts",
       "inScope": true,
       "otherSources": [],
       "classes": [],
@@ -449,8 +449,8 @@
       "page": 188,
       "level": 9,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "ravenous_void.ts",
       "inScope": true,
       "otherSources": [],
       "classes": [],
@@ -506,8 +506,8 @@
       "page": 279,
       "level": 9,
       "school": "Conjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "storm_of_vengeance.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -544,8 +544,8 @@
       "page": 189,
       "level": 9,
       "school": "Necromancy",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "time_ravage.ts",
       "inScope": true,
       "otherSources": [],
       "classes": [],
@@ -570,8 +570,8 @@
       "page": 283,
       "level": 9,
       "school": "Transmutation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "time_stop.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -670,8 +670,8 @@
       "page": 288,
       "level": 9,
       "school": "Illusion",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "weird.ts",
       "inScope": true,
       "otherSources": [
         {

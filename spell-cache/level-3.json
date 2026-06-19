@@ -1,6 +1,6 @@
 {
   "level": 3,
-  "generatedAt": "2026-06-19T22:31:06.221Z",
+  "generatedAt": "2026-06-19T23:16:11.271Z",
   "generatorVersion": 2,
   "scopeRule": "pre-2024 canon; reprints: newest in-scope source wins; XPHB(2024) out of scope; creatures keep all variants (not applicable to spells)",
   "sourceDates": {
@@ -26,8 +26,8 @@
     "XPHB"
   ],
   "count": 79,
-  "implementedCount": 0,
-  "remainingInScope": 79,
+  "implementedCount": 56,
+  "remainingInScope": 23,
   "spells": [
     {
       "name": "Animate Dead",
@@ -70,8 +70,8 @@
       "page": 50,
       "level": 3,
       "school": "Enchantment",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "antagonize.ts",
       "inScope": true,
       "otherSources": [],
       "classes": [],
@@ -96,8 +96,8 @@
       "page": 19,
       "level": 3,
       "school": "Transmutation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "ashardalons_stride.ts",
       "inScope": true,
       "otherSources": [],
       "classes": [],
@@ -120,8 +120,8 @@
       "page": 216,
       "level": 3,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "aura_of_vitality.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -152,8 +152,8 @@
       "page": 217,
       "level": 3,
       "school": "Abjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "beacon_of_hope.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -184,8 +184,8 @@
       "page": 218,
       "level": 3,
       "school": "Necromancy",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "bestow_curse.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -218,8 +218,8 @@
       "page": 219,
       "level": 3,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "blinding_smite.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -252,8 +252,8 @@
       "page": 219,
       "level": 3,
       "school": "Transmutation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "blink.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -286,8 +286,8 @@
       "page": 143,
       "level": 3,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "cacophonic_shield.ts",
       "inScope": true,
       "otherSources": [],
       "classes": [
@@ -316,8 +316,8 @@
       "page": 220,
       "level": 3,
       "school": "Conjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "call_lightning.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -348,8 +348,8 @@
       "page": 151,
       "level": 3,
       "school": "Enchantment",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "catnap.ts",
       "inScope": true,
       "otherSources": [],
       "classes": [],
@@ -534,8 +534,8 @@
       "page": 229,
       "level": 3,
       "school": "Conjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "create_food_and_water.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -568,8 +568,8 @@
       "page": 230,
       "level": 3,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "crusaders_mantle.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -602,8 +602,8 @@
       "page": 230,
       "level": 3,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "daylight.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -677,8 +677,8 @@
       "page": 237,
       "level": 3,
       "school": "Transmutation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "elemental_weapon.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -716,8 +716,8 @@
       "page": 155,
       "level": 3,
       "school": "Enchantment",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "enemies_abound.ts",
       "inScope": true,
       "otherSources": [],
       "classes": [],
@@ -740,8 +740,8 @@
       "page": 155,
       "level": 3,
       "school": "Transmutation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "erupting_earth.ts",
       "inScope": true,
       "otherSources": [],
       "classes": [],
@@ -766,8 +766,8 @@
       "page": 75,
       "level": 3,
       "school": "Enchantment",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "fast_friends.ts",
       "inScope": true,
       "otherSources": [],
       "classes": [
@@ -794,8 +794,8 @@
       "page": 239,
       "level": 3,
       "school": "Illusion",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "fear.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -829,8 +829,8 @@
       "page": 240,
       "level": 3,
       "school": "Necromancy",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "feign_death.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -864,8 +864,8 @@
       "page": 241,
       "level": 3,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "fireball.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -899,8 +899,8 @@
       "page": 156,
       "level": 3,
       "school": "Transmutation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "flame_arrows.ts",
       "inScope": true,
       "otherSources": [],
       "classes": [],
@@ -925,8 +925,8 @@
       "page": 243,
       "level": 3,
       "school": "Transmutation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "fly.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -960,8 +960,8 @@
       "page": 57,
       "level": 3,
       "school": "Conjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "galders_tower.ts",
       "inScope": true,
       "otherSources": [],
       "classes": [
@@ -986,8 +986,8 @@
       "page": 244,
       "level": 3,
       "school": "Transmutation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "gaseous_form.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1055,8 +1055,8 @@
       "page": 250,
       "level": 3,
       "school": "Transmutation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "haste.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1089,8 +1089,8 @@
       "page": 251,
       "level": 3,
       "school": "Conjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "hunger_of_hadar.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1121,8 +1121,8 @@
       "page": 252,
       "level": 3,
       "school": "Illusion",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "hypnotic_pattern.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1156,8 +1156,8 @@
       "page": 76,
       "level": 3,
       "school": "Enchantment",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "incite_greed.ts",
       "inScope": true,
       "otherSources": [],
       "classes": [
@@ -1184,8 +1184,8 @@
       "page": 107,
       "level": 3,
       "school": "Abjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "intellect_fortress.ts",
       "inScope": true,
       "otherSources": [],
       "classes": [
@@ -1210,8 +1210,8 @@
       "page": 145,
       "level": 3,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "laerals_silver_lance.ts",
       "inScope": true,
       "otherSources": [],
       "classes": [
@@ -1240,8 +1240,8 @@
       "page": 255,
       "level": 3,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "leomunds_tiny_hut.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1273,8 +1273,8 @@
       "page": 160,
       "level": 3,
       "school": "Necromancy",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "life_transference.ts",
       "inScope": true,
       "otherSources": [],
       "classes": [],
@@ -1299,8 +1299,8 @@
       "page": 255,
       "level": 3,
       "school": "Transmutation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "lightning_arrow.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1333,8 +1333,8 @@
       "page": 255,
       "level": 3,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "lightning_bolt.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1368,8 +1368,8 @@
       "page": 9,
       "level": 3,
       "school": "Abjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "linked_glyphs.ts",
       "inScope": true,
       "otherSources": [],
       "classes": [
@@ -1432,8 +1432,8 @@
       "page": 258,
       "level": 3,
       "school": "Illusion",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "major_image.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1467,8 +1467,8 @@
       "page": 258,
       "level": 3,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "mass_healing_word.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1499,8 +1499,8 @@
       "page": 259,
       "level": 3,
       "school": "Transmutation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "meld_into_stone.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1532,8 +1532,8 @@
       "page": 161,
       "level": 3,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "melfs_minute_meteors.ts",
       "inScope": true,
       "otherSources": [],
       "classes": [],
@@ -1558,8 +1558,8 @@
       "page": 77,
       "level": 3,
       "school": "Enchantment",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "motivational_speech.ts",
       "inScope": true,
       "otherSources": [],
       "classes": [
@@ -1585,8 +1585,8 @@
       "page": 263,
       "level": 3,
       "school": "Abjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "nondetection.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1619,8 +1619,8 @@
       "page": 265,
       "level": 3,
       "school": "Illusion",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "phantom_steed.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1651,8 +1651,8 @@
       "page": 266,
       "level": 3,
       "school": "Transmutation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "plant_growth.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1722,8 +1722,8 @@
       "page": 188,
       "level": 3,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "pulse_wave.ts",
       "inScope": true,
       "otherSources": [],
       "classes": [],
@@ -1748,8 +1748,8 @@
       "page": 271,
       "level": 3,
       "school": "Abjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "remove_curse.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1851,8 +1851,8 @@
       "page": 276,
       "level": 3,
       "school": "Conjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "sleet_storm.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1885,8 +1885,8 @@
       "page": 277,
       "level": 3,
       "school": "Transmutation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "slow.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1918,8 +1918,8 @@
       "page": 277,
       "level": 3,
       "school": "Necromancy",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "speak_with_dead.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1951,8 +1951,8 @@
       "page": 277,
       "level": 3,
       "school": "Transmutation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "speak_with_plants.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1985,8 +1985,8 @@
       "page": 278,
       "level": 3,
       "school": "Conjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "spirit_guardians.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -2017,8 +2017,8 @@
       "page": 108,
       "level": 3,
       "school": "Necromancy",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "spirit_shroud.ts",
       "inScope": true,
       "otherSources": [],
       "classes": [],
@@ -2041,8 +2041,8 @@
       "page": 278,
       "level": 3,
       "school": "Conjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "stinking_cloud.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -2183,8 +2183,8 @@
       "page": 147,
       "level": 3,
       "school": "Conjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "sylunés_viper.ts",
       "inScope": true,
       "otherSources": [],
       "classes": [
@@ -2236,8 +2236,8 @@
       "page": 168,
       "level": 3,
       "school": "Conjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "tidal_wave.ts",
       "inScope": true,
       "otherSources": [],
       "classes": [],
@@ -2262,8 +2262,8 @@
       "page": 168,
       "level": 3,
       "school": "Transmutation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "tiny_servant.ts",
       "inScope": true,
       "otherSources": [],
       "classes": [],
@@ -2322,8 +2322,8 @@
       "page": 285,
       "level": 3,
       "school": "Necromancy",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "vampiric_touch.ts",
       "inScope": true,
       "otherSources": [
         {

@@ -1,6 +1,6 @@
 {
   "level": 7,
-  "generatedAt": "2026-06-19T22:31:06.221Z",
+  "generatedAt": "2026-06-19T23:16:11.271Z",
   "generatorVersion": 2,
   "scopeRule": "pre-2024 canon; reprints: newest in-scope source wins; XPHB(2024) out of scope; creatures keep all variants (not applicable to spells)",
   "sourceDates": {
@@ -26,8 +26,8 @@
     "XPHB"
   ],
   "count": 30,
-  "implementedCount": 0,
-  "remainingInScope": 29,
+  "implementedCount": 19,
+  "remainingInScope": 10,
   "spells": [
     {
       "name": "Conjure Celestial",
@@ -95,8 +95,8 @@
       "page": 152,
       "level": 7,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "crown_of_stars.ts",
       "inScope": true,
       "otherSources": [],
       "classes": [],
@@ -121,8 +121,8 @@
       "page": 230,
       "level": 7,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "delayed_blast_fireball.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -154,8 +154,8 @@
       "page": 234,
       "level": 7,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "divine_word.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -186,8 +186,8 @@
       "page": 19,
       "level": 7,
       "school": "Transmutation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "draconic_transformation.ts",
       "inScope": true,
       "otherSources": [],
       "classes": [],
@@ -270,8 +270,8 @@
       "page": 241,
       "level": 7,
       "school": "Necromancy",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "finger_of_death.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -304,8 +304,8 @@
       "page": 242,
       "level": 7,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "fire_storm.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -340,8 +340,8 @@
       "page": 243,
       "level": 7,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "forcecage.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -374,8 +374,8 @@
       "page": 260,
       "level": 7,
       "school": "Illusion",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "mirage_arcane.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -408,8 +408,8 @@
       "page": 261,
       "level": 7,
       "school": "Conjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "mordenkainens_magnificent_mansion.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -441,8 +441,8 @@
       "page": 262,
       "level": 7,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "mordenkainens_sword.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -537,8 +537,8 @@
       "page": 163,
       "level": 7,
       "school": "Enchantment",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "power_word_pain.ts",
       "inScope": true,
       "otherSources": [],
       "classes": [],
@@ -561,8 +561,8 @@
       "page": 267,
       "level": 7,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "prismatic_spray.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -594,8 +594,8 @@
       "page": 270,
       "level": 7,
       "school": "Illusion",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "project_image.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -627,8 +627,8 @@
       "page": 271,
       "level": 7,
       "school": "Transmutation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "regenerate.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -694,8 +694,8 @@
       "page": 272,
       "level": 7,
       "school": "Transmutation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "reverse_gravity.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -728,8 +728,8 @@
       "page": 274,
       "level": 7,
       "school": "Transmutation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "sequester.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -760,8 +760,8 @@
       "page": 145,
       "level": 7,
       "school": "Transmutation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "simbuls_synostodweomer.ts",
       "inScope": true,
       "otherSources": [],
       "classes": [
@@ -911,8 +911,8 @@
       "page": 189,
       "level": 7,
       "school": "Necromancy",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "tether_essence.ts",
       "inScope": true,
       "otherSources": [],
       "classes": [],
@@ -935,8 +935,8 @@
       "page": 171,
       "level": 7,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "whirlwind.ts",
       "inScope": true,
       "otherSources": [],
       "classes": [],

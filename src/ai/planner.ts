@@ -74,6 +74,9 @@ import { shouldCast as shouldCastProtectionFromPoison } from '../spells/protecti
 import { shouldCast as shouldCastPrayerOfHealing } from '../spells/prayer_of_healing';
 import { shouldCast as shouldCastKnock } from '../spells/knock';
 import { shouldCast as shouldCastArcaneLock } from '../spells/arcane_lock';
+
+// ── Session 19 — bulk-implementation generic dispatch (262 new spells) ────
+import { GENERIC_SPELL_LIST } from '../spells/_generic_registry';
 import { selectAction, selfPreserveDecision, selectLegendaryAction } from './actions';
 import {
   canReach, bestAdjacentPos, bestRangedPosition,
@@ -1804,6 +1807,40 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
       plan.targetId = self.id;
       plan.bonusAction = planBonusAction(self, target, battlefield);
       return plan;
+    }
+  }
+
+  // === SESSION 19 — GENERIC SPELL LOOP (262 bulk-implemented spells) ===
+  // Iterate the GENERIC_SPELL_LIST (ordered by level, then name) and pick
+  // the first spell whose shouldCast returns true. Each spell module's
+  // shouldCast already checks (a) caster has the spell in actions, (b) slot
+  // available, (c) not already active. The generic-spell branch in combat.ts
+  // dispatches the chosen spell via lookupGenericSpell(plan.spellName).
+  //
+  // This loop sits BELOW all bespoke spell branches (11X–11AQ) so it only
+  // fires when no bespoke spell was chosen. It sits ABOVE Mage Armor / the
+  // improvised-attack fallback so a generic spell always wins over an
+  // improvised weapon attack.
+  //
+  // PERF: precompute the caster's action-name Set ONCE per planTurn call
+  // (not 262 times inside the loop). Most combatants have 0–10 spell
+  // actions, so the Set lookup is O(1) per spell instead of O(N actions).
+  if (!plan.action) {
+    const actionNames = new Set(self.actions.map(a => a.name));
+    for (const desc of GENERIC_SPELL_LIST) {
+      if (!actionNames.has(desc.name)) continue;
+      if (desc.shouldCast(self, battlefield)) {
+        plan.action = {
+          type: 'genericSpell',
+          action: null,
+          targetId: self.id,
+          description: `${self.name} casts ${desc.name}`,
+          spellName: desc.name,
+        };
+        plan.targetId = self.id;
+        plan.bonusAction = planBonusAction(self, target, battlefield);
+        return plan;
+      }
     }
   }
 

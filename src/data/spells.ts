@@ -903,6 +903,3442 @@ export const SPELL_DB: Record<string, SpellTemplate> = {
     slotLevel: 2,
   },
 
+  // ── Session 19 — bulk-implementation generic spells (262 new spells) ──
+  // Each entry maps the lowercase spell name to a SpellTemplate. The
+  // `attackType` field is set from the raw 5etools data: 'spell' for
+  // melee/ranged spell attacks, 'save' for save-based spells, null for
+  // utility / buff / forward-compat-only spells. The actual mechanical
+  // effect of each spell is NOT applied in v1 — the spell module at
+  // src/spells/<snake>.ts sets a forward-compat flag only.
+  "aganazzar's scorcher": {
+    // Session 19 bulk: 2-level evocation, range 30 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 30,
+    damage: { count: 3, sides: 8, bonus: 0, average: 14 },
+    damageType: 'fire',
+    saveAbility: 'dex',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 2,
+  },
+
+  'air bubble': {
+    // Session 19 bulk: 2-level conjuration, range 60 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 60,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 2,
+  },
+
+  'animal messenger': {
+    // Session 19 bulk: 2-level enchantment, range 30 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 30,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 2,
+  },
+
+  'beast sense': {
+    // Session 19 bulk: 2-level divination, range 5 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 5,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 2,
+  },
+
+  'borrowed knowledge': {
+    // Session 19 bulk: 2-level divination, range 0 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 0,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 2,
+  },
+
+  'continual flame': {
+    // Session 19 bulk: 2-level evocation, range 5 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 5,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 2,
+  },
+
+  'death armor': {
+    // Session 19 bulk: 2-level necromancy, range 5 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 5,
+    damage: { count: 2, sides: 4, bonus: 0, average: 5 },
+    damageType: 'necrotic',
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 2,
+  },
+
+  "deryan's helpful homunculi": {
+    // Session 19 bulk: 2-level conjuration, range 0 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 0,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 2,
+  },
+
+  "dragon's breath": {
+    // Session 19 bulk: 2-level transmutation, range 5 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 5,
+    damage: { count: 3, sides: 6, bonus: 0, average: 10 },
+    damageType: 'acid',
+    saveAbility: 'dex',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 2,
+    bonusAction: true,
+  },
+
+  'dust devil': {
+    // Session 19 bulk: 2-level conjuration, range 60 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 60,
+    damage: { count: 1, sides: 8, bonus: 0, average: 4 },
+    damageType: 'bludgeoning',
+    saveAbility: 'str',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 2,
+  },
+
+  'earthbind': {
+    // Session 19 bulk: 2-level transmutation, range 300 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 300,
+    damage: null,
+    damageType: null,
+    saveAbility: 'str',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 2,
+  },
+
+  "elminster's elusion": {
+    // Session 19 bulk: 2-level abjuration, range 0 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 0,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 2,
+    bonusAction: true,
+  },
+
+  'find traps': {
+    // Session 19 bulk: 2-level divination, range 120 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 120,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 2,
+  },
+
+  'flock of familiars': {
+    // Session 19 bulk: 2-level conjuration, range 5 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 5,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 2,
+  },
+
+  "fortune's favor": {
+    // Session 19 bulk: 2-level divination, range 60 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 60,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 2,
+  },
+
+  'gift of gab': {
+    // Session 19 bulk: 2-level enchantment, range 0 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 0,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 2,
+  },
+
+  'healing spirit': {
+    // Session 19 bulk: 2-level conjuration, range 60 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 60,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 2,
+    bonusAction: true,
+  },
+
+  'homunculus servant': {
+    // Session 19 bulk: 2-level conjuration, range 10 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 10,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 2,
+  },
+
+  'immovable object': {
+    // Session 19 bulk: 2-level transmutation, range 5 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 5,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 2,
+  },
+
+  "jim's glowing coin": {
+    // Session 19 bulk: 2-level enchantment, range 60 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 60,
+    damage: null,
+    damageType: null,
+    saveAbility: 'wis',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 2,
+  },
+
+  'kinetic jaunt': {
+    // Session 19 bulk: 2-level transmutation, range 0 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 0,
+    damage: { count: 1, sides: 8, bonus: 0, average: 4 },
+    damageType: 'force',
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 2,
+    bonusAction: true,
+  },
+
+  'magic mouth': {
+    // Session 19 bulk: 2-level illusion, range 30 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 30,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 2,
+  },
+
+  "maximilian's earthen grasp": {
+    // Session 19 bulk: 2-level transmutation, range 30 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 30,
+    damage: { count: 2, sides: 6, bonus: 0, average: 7 },
+    damageType: 'bludgeoning',
+    saveAbility: 'str',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 2,
+  },
+
+  'mind spike': {
+    // Session 19 bulk: 2-level divination, range 60 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 60,
+    damage: { count: 3, sides: 8, bonus: 0, average: 14 },
+    damageType: 'psychic',
+    saveAbility: 'wis',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 2,
+  },
+
+  "nathair's mischief": {
+    // Session 19 bulk: 2-level illusion, range 60 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 60,
+    damage: null,
+    damageType: null,
+    saveAbility: 'dex',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 2,
+  },
+
+  "nystul's magic aura": {
+    // Session 19 bulk: 2-level illusion, range 5 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 5,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 2,
+  },
+
+  'pyrotechnics': {
+    // Session 19 bulk: 2-level transmutation, range 60 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 60,
+    damage: null,
+    damageType: null,
+    saveAbility: 'con',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 2,
+  },
+
+  "rime's binding ice": {
+    // Session 19 bulk: 2-level evocation, range 30 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 30,
+    damage: { count: 3, sides: 8, bonus: 0, average: 14 },
+    damageType: 'cold',
+    saveAbility: 'con',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 2,
+  },
+
+  'shadow blade': {
+    // Session 19 bulk: 2-level illusion, range 0 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 0,
+    damage: { count: 2, sides: 8, bonus: 0, average: 9 },
+    damageType: 'psychic',
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 2,
+    bonusAction: true,
+  },
+
+  'skywrite': {
+    // Session 19 bulk: 2-level transmutation, range 60 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 60,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 2,
+  },
+
+  "snilloc's snowball swarm": {
+    // Session 19 bulk: 2-level evocation, range 90 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 90,
+    damage: { count: 3, sides: 6, bonus: 0, average: 10 },
+    damageType: 'cold',
+    saveAbility: 'dex',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 2,
+  },
+
+  'spray of cards': {
+    // Session 19 bulk: 2-level conjuration, range 15 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 15,
+    damage: { count: 2, sides: 10, bonus: 0, average: 11 },
+    damageType: 'force',
+    saveAbility: 'dex',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 2,
+  },
+
+  "tasha's mind whip": {
+    // Session 19 bulk: 2-level enchantment, range 90 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 90,
+    damage: { count: 3, sides: 6, bonus: 0, average: 10 },
+    damageType: 'psychic',
+    saveAbility: 'int',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 2,
+  },
+
+  'vortex warp': {
+    // Session 19 bulk: 2-level conjuration, range 90 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 90,
+    damage: null,
+    damageType: null,
+    saveAbility: 'con',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 2,
+  },
+
+  'warding wind': {
+    // Session 19 bulk: 2-level evocation, range 0 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 0,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 2,
+  },
+
+  'warp sense': {
+    // Session 19 bulk: 2-level divination, range 0 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 0,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 2,
+  },
+
+  'wither and bloom': {
+    // Session 19 bulk: 2-level necromancy, range 60 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 60,
+    damage: { count: 2, sides: 6, bonus: 0, average: 7 },
+    damageType: 'necrotic',
+    saveAbility: 'con',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 2,
+  },
+
+  'wristpocket': {
+    // Session 19 bulk: 2-level conjuration, range 0 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 0,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 2,
+  },
+
+  'antagonize': {
+    // Session 19 bulk: 3-level enchantment, range 30 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 30,
+    damage: { count: 4, sides: 4, bonus: 0, average: 10 },
+    damageType: 'psychic',
+    saveAbility: 'wis',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 3,
+  },
+
+  "ashardalon's stride": {
+    // Session 19 bulk: 3-level transmutation, range 0 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 0,
+    damage: { count: 1, sides: 6, bonus: 0, average: 4 },
+    damageType: 'fire',
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 3,
+    bonusAction: true,
+  },
+
+  'aura of vitality': {
+    // Session 19 bulk: 3-level evocation, range 30 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 30,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 3,
+  },
+
+  'beacon of hope': {
+    // Session 19 bulk: 3-level abjuration, range 30 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 30,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 3,
+  },
+
+  'bestow curse': {
+    // Session 19 bulk: 3-level necromancy, range 5 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 5,
+    damage: { count: 1, sides: 8, bonus: 0, average: 4 },
+    damageType: 'necrotic',
+    saveAbility: 'wis',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 3,
+  },
+
+  'blinding smite': {
+    // Session 19 bulk: 3-level evocation, range 0 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 0,
+    damage: { count: 3, sides: 8, bonus: 0, average: 14 },
+    damageType: 'radiant',
+    saveAbility: 'con',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 3,
+    bonusAction: true,
+  },
+
+  'blink': {
+    // Session 19 bulk: 3-level transmutation, range 0 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 0,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 3,
+  },
+
+  'cacophonic shield': {
+    // Session 19 bulk: 3-level evocation, range 10 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 10,
+    damage: { count: 3, sides: 6, bonus: 0, average: 10 },
+    damageType: 'thunder',
+    saveAbility: 'con',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 3,
+  },
+
+  'call lightning': {
+    // Session 19 bulk: 3-level conjuration, range 120 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 120,
+    damage: { count: 3, sides: 10, bonus: 0, average: 16 },
+    damageType: 'lightning',
+    saveAbility: 'dex',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 3,
+  },
+
+  'catnap': {
+    // Session 19 bulk: 3-level enchantment, range 30 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 30,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 3,
+  },
+
+  'create food and water': {
+    // Session 19 bulk: 3-level conjuration, range 30 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 30,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 3,
+  },
+
+  "crusader's mantle": {
+    // Session 19 bulk: 3-level evocation, range 30 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 30,
+    damage: { count: 1, sides: 4, bonus: 0, average: 2 },
+    damageType: 'radiant',
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 3,
+  },
+
+  'daylight': {
+    // Session 19 bulk: 3-level evocation, range 60 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 60,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 3,
+  },
+
+  'elemental weapon': {
+    // Session 19 bulk: 3-level transmutation, range 5 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 5,
+    damage: { count: 1, sides: 4, bonus: 0, average: 2 },
+    damageType: 'acid',
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 3,
+  },
+
+  'enemies abound': {
+    // Session 19 bulk: 3-level enchantment, range 120 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 120,
+    damage: null,
+    damageType: null,
+    saveAbility: 'int',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 3,
+  },
+
+  'erupting earth': {
+    // Session 19 bulk: 3-level transmutation, range 120 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 120,
+    damage: { count: 3, sides: 12, bonus: 0, average: 20 },
+    damageType: 'bludgeoning',
+    saveAbility: 'dex',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 3,
+  },
+
+  'fast friends': {
+    // Session 19 bulk: 3-level enchantment, range 30 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 30,
+    damage: null,
+    damageType: null,
+    saveAbility: 'wis',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 3,
+  },
+
+  'fear': {
+    // Session 19 bulk: 3-level illusion, range 30 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 30,
+    damage: null,
+    damageType: null,
+    saveAbility: 'wis',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 3,
+  },
+
+  'feign death': {
+    // Session 19 bulk: 3-level necromancy, range 5 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 5,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 3,
+  },
+
+  'fireball': {
+    // Session 19 bulk: 3-level evocation, range 150 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 150,
+    damage: { count: 8, sides: 6, bonus: 0, average: 28 },
+    damageType: 'fire',
+    saveAbility: 'dex',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 3,
+  },
+
+  'flame arrows': {
+    // Session 19 bulk: 3-level transmutation, range 5 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 5,
+    damage: { count: 1, sides: 6, bonus: 0, average: 4 },
+    damageType: 'fire',
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 3,
+  },
+
+  'fly': {
+    // Session 19 bulk: 3-level transmutation, range 5 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 5,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 3,
+  },
+
+  "galder's tower": {
+    // Session 19 bulk: 3-level conjuration, range 30 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 30,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 3,
+  },
+
+  'gaseous form': {
+    // Session 19 bulk: 3-level transmutation, range 5 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 5,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 3,
+  },
+
+  'haste': {
+    // Session 19 bulk: 3-level transmutation, range 30 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 30,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 3,
+  },
+
+  'hunger of hadar': {
+    // Session 19 bulk: 3-level conjuration, range 150 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 150,
+    damage: { count: 2, sides: 6, bonus: 0, average: 7 },
+    damageType: 'acid',
+    saveAbility: 'dex',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 3,
+  },
+
+  'hypnotic pattern': {
+    // Session 19 bulk: 3-level illusion, range 120 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 120,
+    damage: null,
+    damageType: null,
+    saveAbility: 'wis',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 3,
+  },
+
+  'incite greed': {
+    // Session 19 bulk: 3-level enchantment, range 30 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 30,
+    damage: null,
+    damageType: null,
+    saveAbility: 'wis',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 3,
+  },
+
+  'intellect fortress': {
+    // Session 19 bulk: 3-level abjuration, range 30 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 30,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 3,
+  },
+
+  "laeral's silver lance": {
+    // Session 19 bulk: 3-level evocation, range 120 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 120,
+    damage: { count: 3, sides: 10, bonus: 0, average: 16 },
+    damageType: 'force',
+    saveAbility: 'str',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 3,
+  },
+
+  "leomund's tiny hut": {
+    // Session 19 bulk: 3-level evocation, range 10 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 10,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 3,
+  },
+
+  'life transference': {
+    // Session 19 bulk: 3-level necromancy, range 30 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 30,
+    damage: { count: 4, sides: 8, bonus: 0, average: 18 },
+    damageType: 'necrotic',
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 3,
+  },
+
+  'lightning arrow': {
+    // Session 19 bulk: 3-level transmutation, range 0 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 0,
+    damage: { count: 4, sides: 8, bonus: 0, average: 18 },
+    damageType: 'lightning',
+    saveAbility: 'dex',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 3,
+    bonusAction: true,
+  },
+
+  'lightning bolt': {
+    // Session 19 bulk: 3-level evocation, range 100 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 100,
+    damage: { count: 8, sides: 6, bonus: 0, average: 28 },
+    damageType: 'lightning',
+    saveAbility: 'dex',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 3,
+  },
+
+  'linked glyphs': {
+    // Session 19 bulk: 3-level abjuration, range 5 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 5,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 3,
+  },
+
+  'major image': {
+    // Session 19 bulk: 3-level illusion, range 120 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 120,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 3,
+  },
+
+  'mass healing word': {
+    // Session 19 bulk: 3-level evocation, range 60 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 60,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 3,
+    bonusAction: true,
+  },
+
+  'meld into stone': {
+    // Session 19 bulk: 3-level transmutation, range 5 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 5,
+    damage: { count: 6, sides: 6, bonus: 0, average: 21 },
+    damageType: 'bludgeoning',
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 3,
+  },
+
+  "melf's minute meteors": {
+    // Session 19 bulk: 3-level evocation, range 0 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 0,
+    damage: { count: 2, sides: 6, bonus: 0, average: 7 },
+    damageType: 'fire',
+    saveAbility: 'dex',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 3,
+  },
+
+  'motivational speech': {
+    // Session 19 bulk: 3-level enchantment, range 60 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 60,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 3,
+  },
+
+  'nondetection': {
+    // Session 19 bulk: 3-level abjuration, range 5 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 5,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 3,
+  },
+
+  'phantom steed': {
+    // Session 19 bulk: 3-level illusion, range 30 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 30,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 3,
+  },
+
+  'plant growth': {
+    // Session 19 bulk: 3-level transmutation, range 150 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 150,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 3,
+  },
+
+  'pulse wave': {
+    // Session 19 bulk: 3-level evocation, range 30 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 30,
+    damage: { count: 6, sides: 6, bonus: 0, average: 21 },
+    damageType: 'force',
+    saveAbility: 'con',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 3,
+  },
+
+  'remove curse': {
+    // Session 19 bulk: 3-level abjuration, range 5 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 5,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 3,
+  },
+
+  'sleet storm': {
+    // Session 19 bulk: 3-level conjuration, range 150 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 150,
+    damage: null,
+    damageType: null,
+    saveAbility: 'dex',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 3,
+  },
+
+  'slow': {
+    // Session 19 bulk: 3-level transmutation, range 120 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 120,
+    damage: null,
+    damageType: null,
+    saveAbility: 'wis',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 3,
+  },
+
+  'speak with dead': {
+    // Session 19 bulk: 3-level necromancy, range 10 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 10,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 3,
+  },
+
+  'speak with plants': {
+    // Session 19 bulk: 3-level transmutation, range 30 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 30,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 3,
+  },
+
+  'spirit guardians': {
+    // Session 19 bulk: 3-level conjuration, range 15 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 15,
+    damage: { count: 3, sides: 8, bonus: 0, average: 14 },
+    damageType: 'necrotic',
+    saveAbility: 'wis',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 3,
+  },
+
+  'spirit shroud': {
+    // Session 19 bulk: 3-level necromancy, range 0 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 0,
+    damage: { count: 1, sides: 8, bonus: 0, average: 4 },
+    damageType: 'radiant',
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 3,
+    bonusAction: true,
+  },
+
+  'stinking cloud': {
+    // Session 19 bulk: 3-level conjuration, range 90 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 90,
+    damage: null,
+    damageType: null,
+    saveAbility: 'con',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 3,
+  },
+
+  "syluné's viper": {
+    // Session 19 bulk: 3-level conjuration, range 0 ft, forward-compat flag.
+    attackType: 'spell',
+    rangeNormal: 0,
+    damage: { count: 1, sides: 6, bonus: 0, average: 4 },
+    damageType: 'force',
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 3,
+    bonusAction: true,
+  },
+
+  'tidal wave': {
+    // Session 19 bulk: 3-level conjuration, range 120 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 120,
+    damage: { count: 4, sides: 8, bonus: 0, average: 18 },
+    damageType: 'bludgeoning',
+    saveAbility: 'dex',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 3,
+  },
+
+  'tiny servant': {
+    // Session 19 bulk: 3-level transmutation, range 5 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 5,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 3,
+  },
+
+  'vampiric touch': {
+    // Session 19 bulk: 3-level necromancy, range 0 ft, forward-compat flag.
+    attackType: 'spell',
+    rangeNormal: 0,
+    damage: { count: 3, sides: 6, bonus: 0, average: 10 },
+    damageType: 'necrotic',
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 3,
+  },
+
+  'aura of life': {
+    // Session 19 bulk: 4-level abjuration, range 30 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 30,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 4,
+  },
+
+  'aura of purity': {
+    // Session 19 bulk: 4-level abjuration, range 30 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 30,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 4,
+  },
+
+  'backlash': {
+    // Session 19 bulk: 4-level abjuration, range 60 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 60,
+    damage: { count: 4, sides: 6, bonus: 0, average: 14 },
+    damageType: 'force',
+    saveAbility: 'con',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 4,
+  },
+
+  'blight': {
+    // Session 19 bulk: 4-level necromancy, range 30 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 30,
+    damage: { count: 8, sides: 8, bonus: 0, average: 36 },
+    damageType: 'necrotic',
+    saveAbility: 'con',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 4,
+  },
+
+  'charm monster': {
+    // Session 19 bulk: 4-level enchantment, range 30 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 30,
+    damage: null,
+    damageType: null,
+    saveAbility: 'wis',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 4,
+  },
+
+  'compulsion': {
+    // Session 19 bulk: 4-level enchantment, range 30 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 30,
+    damage: null,
+    damageType: null,
+    saveAbility: 'wis',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 4,
+  },
+
+  'confusion': {
+    // Session 19 bulk: 4-level enchantment, range 90 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 90,
+    damage: null,
+    damageType: null,
+    saveAbility: 'wis',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 4,
+  },
+
+  'control water': {
+    // Session 19 bulk: 4-level transmutation, range 300 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 300,
+    damage: { count: 2, sides: 8, bonus: 0, average: 9 },
+    damageType: 'bludgeoning',
+    saveAbility: 'str',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 4,
+  },
+
+  'death ward': {
+    // Session 19 bulk: 4-level abjuration, range 5 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 5,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 4,
+  },
+
+  'dominate beast': {
+    // Session 19 bulk: 4-level enchantment, range 60 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 60,
+    damage: null,
+    damageType: null,
+    saveAbility: 'wis',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 4,
+  },
+
+  'doomtide': {
+    // Session 19 bulk: 4-level conjuration, range 120 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 120,
+    damage: { count: 5, sides: 6, bonus: 0, average: 18 },
+    damageType: 'psychic',
+    saveAbility: 'wis',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 4,
+  },
+
+  'elemental bane': {
+    // Session 19 bulk: 4-level transmutation, range 90 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 90,
+    damage: { count: 2, sides: 6, bonus: 0, average: 7 },
+    damageType: 'acid',
+    saveAbility: 'con',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 4,
+  },
+
+  "evard's black tentacles": {
+    // Session 19 bulk: 4-level conjuration, range 90 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 90,
+    damage: { count: 3, sides: 6, bonus: 0, average: 10 },
+    damageType: 'bludgeoning',
+    saveAbility: 'dex',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 4,
+  },
+
+  'fabricate': {
+    // Session 19 bulk: 4-level transmutation, range 120 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 120,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 4,
+  },
+
+  'fire shield': {
+    // Session 19 bulk: 4-level evocation, range 0 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 0,
+    damage: { count: 2, sides: 8, bonus: 0, average: 9 },
+    damageType: 'cold',
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 4,
+  },
+
+  'freedom of movement': {
+    // Session 19 bulk: 4-level abjuration, range 5 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 5,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 4,
+  },
+
+  "galder's speedy courier": {
+    // Session 19 bulk: 4-level conjuration, range 10 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 10,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 4,
+  },
+
+  'gate seal': {
+    // Session 19 bulk: 4-level abjuration, range 60 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 60,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 4,
+  },
+
+  'giant insect': {
+    // Session 19 bulk: 4-level transmutation, range 30 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 30,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 4,
+  },
+
+  'grasping vine': {
+    // Session 19 bulk: 4-level conjuration, range 30 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 30,
+    damage: null,
+    damageType: null,
+    saveAbility: 'dex',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 4,
+    bonusAction: true,
+  },
+
+  'gravity sinkhole': {
+    // Session 19 bulk: 4-level evocation, range 120 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 120,
+    damage: { count: 5, sides: 10, bonus: 0, average: 28 },
+    damageType: 'force',
+    saveAbility: 'con',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 4,
+  },
+
+  'guardian of faith': {
+    // Session 19 bulk: 4-level conjuration, range 30 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 30,
+    damage: null,
+    damageType: 'radiant',
+    saveAbility: 'dex',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 4,
+  },
+
+  'guardian of nature': {
+    // Session 19 bulk: 4-level transmutation, range 0 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 0,
+    damage: { count: 1, sides: 6, bonus: 0, average: 4 },
+    damageType: 'force',
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 4,
+    bonusAction: true,
+  },
+
+  'hallucinatory terrain': {
+    // Session 19 bulk: 4-level illusion, range 300 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 300,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 4,
+  },
+
+  'ice storm': {
+    // Session 19 bulk: 4-level evocation, range 300 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 300,
+    damage: { count: 2, sides: 8, bonus: 0, average: 9 },
+    damageType: 'bludgeoning',
+    saveAbility: 'dex',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 4,
+  },
+
+  "mordenkainen's faithful hound": {
+    // Session 19 bulk: 4-level conjuration, range 30 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 30,
+    damage: { count: 4, sides: 8, bonus: 0, average: 18 },
+    damageType: 'piercing',
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 4,
+  },
+
+  "mordenkainen's private sanctum": {
+    // Session 19 bulk: 4-level abjuration, range 120 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 120,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 4,
+  },
+
+  "otiluke's resilient sphere": {
+    // Session 19 bulk: 4-level evocation, range 30 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 30,
+    damage: null,
+    damageType: null,
+    saveAbility: 'dex',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 4,
+  },
+
+  'phantasmal killer': {
+    // Session 19 bulk: 4-level illusion, range 120 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 120,
+    damage: { count: 4, sides: 10, bonus: 0, average: 22 },
+    damageType: 'psychic',
+    saveAbility: 'wis',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 4,
+  },
+
+  'polymorph': {
+    // Session 19 bulk: 4-level transmutation, range 60 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 60,
+    damage: null,
+    damageType: null,
+    saveAbility: 'wis',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 4,
+  },
+
+  "raulothim's psychic lance": {
+    // Session 19 bulk: 4-level enchantment, range 120 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 120,
+    damage: { count: 7, sides: 6, bonus: 0, average: 24 },
+    damageType: 'psychic',
+    saveAbility: 'int',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 4,
+  },
+
+  'shadow of moil': {
+    // Session 19 bulk: 4-level necromancy, range 0 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 0,
+    damage: { count: 2, sides: 8, bonus: 0, average: 9 },
+    damageType: 'necrotic',
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 4,
+  },
+
+  'sickening radiance': {
+    // Session 19 bulk: 4-level evocation, range 120 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 120,
+    damage: { count: 4, sides: 10, bonus: 0, average: 22 },
+    damageType: 'radiant',
+    saveAbility: 'con',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 4,
+  },
+
+  'spellfire storm': {
+    // Session 19 bulk: 4-level evocation, range 60 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 60,
+    damage: { count: 4, sides: 10, bonus: 0, average: 22 },
+    damageType: 'radiant',
+    saveAbility: 'con',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 4,
+  },
+
+  'spirit of death': {
+    // Session 19 bulk: 4-level necromancy, range 60 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 60,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 4,
+  },
+
+  'staggering smite': {
+    // Session 19 bulk: 4-level evocation, range 0 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 0,
+    damage: { count: 4, sides: 6, bonus: 0, average: 14 },
+    damageType: 'psychic',
+    saveAbility: 'wis',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 4,
+    bonusAction: true,
+  },
+
+  'stone shape': {
+    // Session 19 bulk: 4-level transmutation, range 5 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 5,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 4,
+  },
+
+  'stoneskin': {
+    // Session 19 bulk: 4-level abjuration, range 5 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 5,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 4,
+  },
+
+  'storm sphere': {
+    // Session 19 bulk: 4-level evocation, range 150 ft, forward-compat flag.
+    attackType: 'spell',
+    rangeNormal: 150,
+    damage: { count: 2, sides: 6, bonus: 0, average: 7 },
+    damageType: 'bludgeoning',
+    saveAbility: 'str',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 4,
+  },
+
+  'vitriolic sphere': {
+    // Session 19 bulk: 4-level evocation, range 150 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 150,
+    damage: { count: 10, sides: 4, bonus: 0, average: 25 },
+    damageType: 'acid',
+    saveAbility: 'dex',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 4,
+  },
+
+  'watery sphere': {
+    // Session 19 bulk: 4-level conjuration, range 90 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 90,
+    damage: null,
+    damageType: null,
+    saveAbility: 'str',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 4,
+  },
+
+  "alustriel's mooncloak": {
+    // Session 19 bulk: 5-level abjuration, range 20 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 20,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 5,
+  },
+
+  'animate objects': {
+    // Session 19 bulk: 5-level transmutation, range 120 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 120,
+    damage: null,
+    damageType: 'bludgeoning',
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 5,
+  },
+
+  'antilife shell': {
+    // Session 19 bulk: 5-level abjuration, range 10 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 10,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 5,
+  },
+
+  'banishing smite': {
+    // Session 19 bulk: 5-level abjuration, range 0 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 0,
+    damage: { count: 5, sides: 10, bonus: 0, average: 28 },
+    damageType: 'force',
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 5,
+    bonusAction: true,
+  },
+
+  "bigby's hand": {
+    // Session 19 bulk: 5-level evocation, range 120 ft, forward-compat flag.
+    attackType: 'spell',
+    rangeNormal: 120,
+    damage: { count: 4, sides: 8, bonus: 0, average: 18 },
+    damageType: 'bludgeoning',
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 5,
+  },
+
+  'circle of power': {
+    // Session 19 bulk: 5-level abjuration, range 30 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 30,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 5,
+  },
+
+  'cloudkill': {
+    // Session 19 bulk: 5-level conjuration, range 120 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 120,
+    damage: { count: 5, sides: 8, bonus: 0, average: 22 },
+    damageType: 'poison',
+    saveAbility: 'con',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 5,
+  },
+
+  'commune with nature': {
+    // Session 19 bulk: 5-level divination, range 0 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 0,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 5,
+  },
+
+  'cone of cold': {
+    // Session 19 bulk: 5-level evocation, range 60 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 60,
+    damage: { count: 8, sides: 8, bonus: 0, average: 36 },
+    damageType: 'cold',
+    saveAbility: 'con',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 5,
+  },
+
+  'contagion': {
+    // Session 19 bulk: 5-level necromancy, range 5 ft, forward-compat flag.
+    attackType: 'spell',
+    rangeNormal: 5,
+    damage: null,
+    damageType: null,
+    saveAbility: 'con',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 5,
+  },
+
+  'control winds': {
+    // Session 19 bulk: 5-level transmutation, range 300 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 300,
+    damage: null,
+    damageType: null,
+    saveAbility: 'str',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 5,
+  },
+
+  'create spelljamming helm': {
+    // Session 19 bulk: 5-level transmutation, range 5 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 5,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 5,
+  },
+
+  'creation': {
+    // Session 19 bulk: 5-level illusion, range 30 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 30,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 5,
+  },
+
+  'danse macabre': {
+    // Session 19 bulk: 5-level necromancy, range 60 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 60,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 5,
+  },
+
+  'dawn': {
+    // Session 19 bulk: 5-level evocation, range 60 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 60,
+    damage: { count: 4, sides: 10, bonus: 0, average: 22 },
+    damageType: 'radiant',
+    saveAbility: 'con',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 5,
+  },
+
+  'destructive wave': {
+    // Session 19 bulk: 5-level evocation, range 30 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 30,
+    damage: { count: 5, sides: 6, bonus: 0, average: 18 },
+    damageType: 'necrotic',
+    saveAbility: 'con',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 5,
+  },
+
+  'dominate person': {
+    // Session 19 bulk: 5-level enchantment, range 60 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 60,
+    damage: null,
+    damageType: null,
+    saveAbility: 'wis',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 5,
+  },
+
+  'enervation': {
+    // Session 19 bulk: 5-level necromancy, range 60 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 60,
+    damage: { count: 2, sides: 8, bonus: 0, average: 9 },
+    damageType: 'necrotic',
+    saveAbility: 'dex',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 5,
+  },
+
+  'flame strike': {
+    // Session 19 bulk: 5-level evocation, range 60 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 60,
+    damage: { count: 4, sides: 6, bonus: 0, average: 14 },
+    damageType: 'fire',
+    saveAbility: 'dex',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 5,
+  },
+
+  'geas': {
+    // Session 19 bulk: 5-level enchantment, range 60 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 60,
+    damage: { count: 5, sides: 10, bonus: 0, average: 28 },
+    damageType: 'psychic',
+    saveAbility: 'wis',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 5,
+  },
+
+  'greater restoration': {
+    // Session 19 bulk: 5-level abjuration, range 5 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 5,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 5,
+  },
+
+  'hold monster': {
+    // Session 19 bulk: 5-level enchantment, range 90 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 90,
+    damage: null,
+    damageType: null,
+    saveAbility: 'wis',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 5,
+  },
+
+  'holy weapon': {
+    // Session 19 bulk: 5-level evocation, range 5 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 5,
+    damage: { count: 2, sides: 8, bonus: 0, average: 9 },
+    damageType: 'radiant',
+    saveAbility: 'con',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 5,
+    bonusAction: true,
+  },
+
+  'immolation': {
+    // Session 19 bulk: 5-level evocation, range 90 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 90,
+    damage: { count: 8, sides: 6, bonus: 0, average: 28 },
+    damageType: 'fire',
+    saveAbility: 'dex',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 5,
+  },
+
+  'insect plague': {
+    // Session 19 bulk: 5-level conjuration, range 300 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 300,
+    damage: { count: 4, sides: 10, bonus: 0, average: 22 },
+    damageType: 'piercing',
+    saveAbility: 'con',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 5,
+  },
+
+  'maelstrom': {
+    // Session 19 bulk: 5-level evocation, range 120 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 120,
+    damage: { count: 6, sides: 6, bonus: 0, average: 21 },
+    damageType: 'bludgeoning',
+    saveAbility: 'str',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 5,
+  },
+
+  'mass cure wounds': {
+    // Session 19 bulk: 5-level evocation, range 60 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 60,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 5,
+  },
+
+  'mislead': {
+    // Session 19 bulk: 5-level illusion, range 0 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 0,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 5,
+  },
+
+  'modify memory': {
+    // Session 19 bulk: 5-level enchantment, range 30 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 30,
+    damage: null,
+    damageType: null,
+    saveAbility: 'wis',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 5,
+  },
+
+  'negative energy flood': {
+    // Session 19 bulk: 5-level necromancy, range 60 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 60,
+    damage: { count: 5, sides: 12, bonus: 0, average: 32 },
+    damageType: 'necrotic',
+    saveAbility: 'con',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 5,
+  },
+
+  'passwall': {
+    // Session 19 bulk: 5-level transmutation, range 30 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 30,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 5,
+  },
+
+  "rary's telepathic bond": {
+    // Session 19 bulk: 5-level divination, range 30 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 30,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 5,
+  },
+
+  'seeming': {
+    // Session 19 bulk: 5-level illusion, range 30 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 30,
+    damage: null,
+    damageType: null,
+    saveAbility: 'cha',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 5,
+  },
+
+  'skill empowerment': {
+    // Session 19 bulk: 5-level transmutation, range 5 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 5,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 5,
+  },
+
+  "songal's elemental suffusion": {
+    // Session 19 bulk: 5-level transmutation, range 0 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 0,
+    damage: { count: 2, sides: 6, bonus: 0, average: 7 },
+    damageType: 'acid',
+    saveAbility: 'dex',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 5,
+  },
+
+  'steel wind strike': {
+    // Session 19 bulk: 5-level conjuration, range 30 ft, forward-compat flag.
+    attackType: 'spell',
+    rangeNormal: 30,
+    damage: { count: 6, sides: 10, bonus: 0, average: 33 },
+    damageType: 'force',
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 5,
+  },
+
+  'swift quiver': {
+    // Session 19 bulk: 5-level transmutation, range 5 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 5,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 5,
+    bonusAction: true,
+  },
+
+  'synaptic static': {
+    // Session 19 bulk: 5-level enchantment, range 120 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 120,
+    damage: { count: 8, sides: 6, bonus: 0, average: 28 },
+    damageType: 'psychic',
+    saveAbility: 'int',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 5,
+  },
+
+  'telekinesis': {
+    // Session 19 bulk: 5-level transmutation, range 60 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 60,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 5,
+  },
+
+  'temporal shunt': {
+    // Session 19 bulk: 5-level transmutation, range 120 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 120,
+    damage: null,
+    damageType: null,
+    saveAbility: 'wis',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 5,
+  },
+
+  'transmute rock': {
+    // Session 19 bulk: 5-level transmutation, range 120 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 120,
+    damage: { count: 4, sides: 8, bonus: 0, average: 18 },
+    damageType: 'bludgeoning',
+    saveAbility: 'str',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 5,
+  },
+
+  'tree stride': {
+    // Session 19 bulk: 5-level conjuration, range 0 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 0,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 5,
+  },
+
+  'wrath of nature': {
+    // Session 19 bulk: 5-level evocation, range 120 ft, forward-compat flag.
+    attackType: 'spell',
+    rangeNormal: 120,
+    damage: { count: 4, sides: 6, bonus: 0, average: 14 },
+    damageType: 'bludgeoning',
+    saveAbility: 'dex',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 5,
+  },
+
+  'arcane gate': {
+    // Session 19 bulk: 6-level conjuration, range 500 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 500,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 6,
+  },
+
+  'blade barrier': {
+    // Session 19 bulk: 6-level evocation, range 90 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 90,
+    damage: { count: 6, sides: 10, bonus: 0, average: 33 },
+    damageType: 'slashing',
+    saveAbility: 'dex',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 6,
+  },
+
+  'bones of the earth': {
+    // Session 19 bulk: 6-level transmutation, range 120 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 120,
+    damage: { count: 6, sides: 6, bonus: 0, average: 21 },
+    damageType: 'bludgeoning',
+    saveAbility: 'dex',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 6,
+  },
+
+  'chain lightning': {
+    // Session 19 bulk: 6-level evocation, range 150 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 150,
+    damage: { count: 10, sides: 8, bonus: 0, average: 45 },
+    damageType: 'lightning',
+    saveAbility: 'dex',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 6,
+  },
+
+  'circle of death': {
+    // Session 19 bulk: 6-level necromancy, range 150 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 150,
+    damage: { count: 8, sides: 6, bonus: 0, average: 28 },
+    damageType: 'necrotic',
+    saveAbility: 'con',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 6,
+  },
+
+  'create homunculus': {
+    // Session 19 bulk: 6-level transmutation, range 5 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 5,
+    damage: { count: 2, sides: 4, bonus: 0, average: 5 },
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 6,
+  },
+
+  'dirge': {
+    // Session 19 bulk: 6-level enchantment, range 60 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 60,
+    damage: { count: 3, sides: 10, bonus: 0, average: 16 },
+    damageType: 'necrotic',
+    saveAbility: 'con',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 6,
+  },
+
+  'disintegrate': {
+    // Session 19 bulk: 6-level transmutation, range 60 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 60,
+    damage: null,
+    damageType: 'force',
+    saveAbility: 'dex',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 6,
+  },
+
+  'druid grove': {
+    // Session 19 bulk: 6-level abjuration, range 5 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 5,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 6,
+  },
+
+  "elminster's effulgent spheres": {
+    // Session 19 bulk: 6-level evocation, range 0 ft, forward-compat flag.
+    attackType: 'spell',
+    rangeNormal: 0,
+    damage: { count: 3, sides: 6, bonus: 0, average: 10 },
+    damageType: 'acid',
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 6,
+  },
+
+  'eyebite': {
+    // Session 19 bulk: 6-level necromancy, range 0 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 0,
+    damage: null,
+    damageType: null,
+    saveAbility: 'wis',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 6,
+  },
+
+  "fizban's platinum shield": {
+    // Session 19 bulk: 6-level abjuration, range 60 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 60,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 6,
+    bonusAction: true,
+  },
+
+  'flesh to stone': {
+    // Session 19 bulk: 6-level transmutation, range 60 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 60,
+    damage: null,
+    damageType: null,
+    saveAbility: 'con',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 6,
+  },
+
+  'globe of invulnerability': {
+    // Session 19 bulk: 6-level abjuration, range 10 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 10,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 6,
+  },
+
+  'gravity fissure': {
+    // Session 19 bulk: 6-level evocation, range 100 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 100,
+    damage: { count: 8, sides: 8, bonus: 0, average: 36 },
+    damageType: 'force',
+    saveAbility: 'con',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 6,
+  },
+
+  'harm': {
+    // Session 19 bulk: 6-level necromancy, range 60 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 60,
+    damage: { count: 14, sides: 6, bonus: 0, average: 49 },
+    damageType: 'necrotic',
+    saveAbility: 'con',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 6,
+  },
+
+  'heal': {
+    // Session 19 bulk: 6-level evocation, range 60 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 60,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 6,
+  },
+
+  'investiture of flame': {
+    // Session 19 bulk: 6-level transmutation, range 0 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 0,
+    damage: { count: 1, sides: 10, bonus: 0, average: 6 },
+    damageType: 'fire',
+    saveAbility: 'dex',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 6,
+  },
+
+  'investiture of ice': {
+    // Session 19 bulk: 6-level transmutation, range 0 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 0,
+    damage: { count: 4, sides: 6, bonus: 0, average: 14 },
+    damageType: 'cold',
+    saveAbility: 'con',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 6,
+  },
+
+  'investiture of stone': {
+    // Session 19 bulk: 6-level transmutation, range 0 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 0,
+    damage: null,
+    damageType: null,
+    saveAbility: 'dex',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 6,
+  },
+
+  'investiture of wind': {
+    // Session 19 bulk: 6-level transmutation, range 0 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 0,
+    damage: { count: 2, sides: 10, bonus: 0, average: 11 },
+    damageType: 'bludgeoning',
+    saveAbility: 'con',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 6,
+  },
+
+  'mass suggestion': {
+    // Session 19 bulk: 6-level enchantment, range 60 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 60,
+    damage: null,
+    damageType: null,
+    saveAbility: 'wis',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 6,
+  },
+
+  'mental prison': {
+    // Session 19 bulk: 6-level illusion, range 60 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 60,
+    damage: { count: 5, sides: 10, bonus: 0, average: 28 },
+    damageType: 'psychic',
+    saveAbility: 'int',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 6,
+  },
+
+  'move earth': {
+    // Session 19 bulk: 6-level transmutation, range 120 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 120,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 6,
+  },
+
+  "otiluke's freezing sphere": {
+    // Session 19 bulk: 6-level evocation, range 300 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 300,
+    damage: { count: 10, sides: 6, bonus: 0, average: 35 },
+    damageType: 'cold',
+    saveAbility: 'con',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 6,
+  },
+
+  "otto's irresistible dance": {
+    // Session 19 bulk: 6-level enchantment, range 30 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 30,
+    damage: null,
+    damageType: null,
+    saveAbility: 'wis',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 6,
+  },
+
+  'primordial ward': {
+    // Session 19 bulk: 6-level abjuration, range 0 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 0,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 6,
+  },
+
+  'scatter': {
+    // Session 19 bulk: 6-level conjuration, range 30 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 30,
+    damage: null,
+    damageType: null,
+    saveAbility: 'wis',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 6,
+  },
+
+  'soul cage': {
+    // Session 19 bulk: 6-level necromancy, range 60 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 60,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 6,
+  },
+
+  'sunbeam': {
+    // Session 19 bulk: 6-level evocation, range 60 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 60,
+    damage: { count: 6, sides: 8, bonus: 0, average: 27 },
+    damageType: 'radiant',
+    saveAbility: 'con',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 6,
+  },
+
+  "tasha's otherworldly guise": {
+    // Session 19 bulk: 6-level transmutation, range 0 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 0,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 6,
+    bonusAction: true,
+  },
+
+  "tenser's transformation": {
+    // Session 19 bulk: 6-level transmutation, range 0 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 0,
+    damage: { count: 2, sides: 12, bonus: 0, average: 13 },
+    damageType: 'force',
+    saveAbility: 'con',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 6,
+  },
+
+  'transport via plants': {
+    // Session 19 bulk: 6-level conjuration, range 10 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 10,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 6,
+  },
+
+  'crown of stars': {
+    // Session 19 bulk: 7-level evocation, range 0 ft, forward-compat flag.
+    attackType: 'spell',
+    rangeNormal: 0,
+    damage: { count: 4, sides: 12, bonus: 0, average: 26 },
+    damageType: 'radiant',
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 7,
+  },
+
+  'delayed blast fireball': {
+    // Session 19 bulk: 7-level evocation, range 150 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 150,
+    damage: { count: 12, sides: 6, bonus: 0, average: 42 },
+    damageType: 'fire',
+    saveAbility: 'dex',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 7,
+  },
+
+  'divine word': {
+    // Session 19 bulk: 7-level evocation, range 30 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 30,
+    damage: null,
+    damageType: null,
+    saveAbility: 'cha',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 7,
+    bonusAction: true,
+  },
+
+  'draconic transformation': {
+    // Session 19 bulk: 7-level transmutation, range 0 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 0,
+    damage: { count: 6, sides: 8, bonus: 0, average: 27 },
+    damageType: 'force',
+    saveAbility: 'dex',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 7,
+    bonusAction: true,
+  },
+
+  'finger of death': {
+    // Session 19 bulk: 7-level necromancy, range 60 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 60,
+    damage: null,
+    damageType: 'necrotic',
+    saveAbility: 'con',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 7,
+  },
+
+  'fire storm': {
+    // Session 19 bulk: 7-level evocation, range 150 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 150,
+    damage: { count: 7, sides: 10, bonus: 0, average: 38 },
+    damageType: 'fire',
+    saveAbility: 'dex',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 7,
+  },
+
+  'forcecage': {
+    // Session 19 bulk: 7-level evocation, range 100 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 100,
+    damage: null,
+    damageType: null,
+    saveAbility: 'cha',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 7,
+  },
+
+  'mirage arcane': {
+    // Session 19 bulk: 7-level illusion, range 60 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 60,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 7,
+  },
+
+  "mordenkainen's magnificent mansion": {
+    // Session 19 bulk: 7-level conjuration, range 300 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 300,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 7,
+  },
+
+  "mordenkainen's sword": {
+    // Session 19 bulk: 7-level evocation, range 60 ft, forward-compat flag.
+    attackType: 'spell',
+    rangeNormal: 60,
+    damage: { count: 3, sides: 10, bonus: 0, average: 16 },
+    damageType: 'force',
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 7,
+  },
+
+  'power word pain': {
+    // Session 19 bulk: 7-level enchantment, range 60 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 60,
+    damage: null,
+    damageType: null,
+    saveAbility: 'con',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 7,
+  },
+
+  'prismatic spray': {
+    // Session 19 bulk: 7-level evocation, range 60 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 60,
+    damage: { count: 10, sides: 6, bonus: 0, average: 35 },
+    damageType: 'acid',
+    saveAbility: 'dex',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 7,
+  },
+
+  'project image': {
+    // Session 19 bulk: 7-level illusion, range 500 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 500,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 7,
+  },
+
+  'regenerate': {
+    // Session 19 bulk: 7-level transmutation, range 5 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 5,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 7,
+  },
+
+  'reverse gravity': {
+    // Session 19 bulk: 7-level transmutation, range 100 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 100,
+    damage: null,
+    damageType: null,
+    saveAbility: 'dex',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 7,
+  },
+
+  'sequester': {
+    // Session 19 bulk: 7-level transmutation, range 5 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 5,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 7,
+  },
+
+  "simbul's synostodweomer": {
+    // Session 19 bulk: 7-level transmutation, range 5 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 5,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 7,
+  },
+
+  'tether essence': {
+    // Session 19 bulk: 7-level necromancy, range 60 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 60,
+    damage: null,
+    damageType: null,
+    saveAbility: 'con',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 7,
+  },
+
+  'whirlwind': {
+    // Session 19 bulk: 7-level evocation, range 300 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 300,
+    damage: { count: 10, sides: 6, bonus: 0, average: 35 },
+    damageType: 'bludgeoning',
+    saveAbility: 'dex',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 7,
+  },
+
+  "abi-dalzim's horrid wilting": {
+    // Session 19 bulk: 8-level necromancy, range 150 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 150,
+    damage: { count: 12, sides: 8, bonus: 0, average: 54 },
+    damageType: 'necrotic',
+    saveAbility: 'con',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 8,
+  },
+
+  'animal shapes': {
+    // Session 19 bulk: 8-level transmutation, range 30 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 30,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 8,
+  },
+
+  'antipathy/sympathy': {
+    // Session 19 bulk: 8-level enchantment, range 60 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 60,
+    damage: null,
+    damageType: null,
+    saveAbility: 'wis',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 8,
+  },
+
+  'control weather': {
+    // Session 19 bulk: 8-level transmutation, range 5 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 5,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 8,
+  },
+
+  'dark star': {
+    // Session 19 bulk: 8-level evocation, range 150 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 150,
+    damage: { count: 8, sides: 10, bonus: 0, average: 44 },
+    damageType: 'force',
+    saveAbility: 'con',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 8,
+  },
+
+  'dominate monster': {
+    // Session 19 bulk: 8-level enchantment, range 60 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 60,
+    damage: null,
+    damageType: null,
+    saveAbility: 'wis',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 8,
+  },
+
+  'earthquake': {
+    // Session 19 bulk: 8-level evocation, range 500 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 500,
+    damage: { count: 5, sides: 6, bonus: 0, average: 18 },
+    damageType: 'bludgeoning',
+    saveAbility: 'con',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 8,
+  },
+
+  'feeblemind': {
+    // Session 19 bulk: 8-level enchantment, range 150 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 150,
+    damage: { count: 4, sides: 6, bonus: 0, average: 14 },
+    damageType: 'psychic',
+    saveAbility: 'int',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 8,
+  },
+
+  'glibness': {
+    // Session 19 bulk: 8-level transmutation, range 0 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 0,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 8,
+  },
+
+  'holy aura': {
+    // Session 19 bulk: 8-level abjuration, range 0 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 0,
+    damage: null,
+    damageType: null,
+    saveAbility: 'con',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 8,
+  },
+
+  'holy star of mystra': {
+    // Session 19 bulk: 8-level evocation, range 0 ft, forward-compat flag.
+    attackType: 'spell',
+    rangeNormal: 0,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 8,
+    bonusAction: true,
+  },
+
+  'illusory dragon': {
+    // Session 19 bulk: 8-level illusion, range 120 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 120,
+    damage: { count: 7, sides: 6, bonus: 0, average: 24 },
+    damageType: 'acid',
+    saveAbility: 'wis',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 8,
+  },
+
+  'incendiary cloud': {
+    // Session 19 bulk: 8-level conjuration, range 150 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 150,
+    damage: { count: 10, sides: 8, bonus: 0, average: 45 },
+    damageType: 'fire',
+    saveAbility: 'dex',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 8,
+  },
+
+  'maddening darkness': {
+    // Session 19 bulk: 8-level evocation, range 150 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 150,
+    damage: { count: 8, sides: 8, bonus: 0, average: 36 },
+    damageType: 'psychic',
+    saveAbility: 'wis',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 8,
+  },
+
+  'power word stun': {
+    // Session 19 bulk: 8-level enchantment, range 60 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 60,
+    damage: null,
+    damageType: null,
+    saveAbility: 'con',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 8,
+  },
+
+  'reality break': {
+    // Session 19 bulk: 8-level conjuration, range 60 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 60,
+    damage: { count: 6, sides: 12, bonus: 0, average: 39 },
+    damageType: 'psychic',
+    saveAbility: 'wis',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 8,
+  },
+
+  'sunburst': {
+    // Session 19 bulk: 8-level evocation, range 150 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 150,
+    damage: { count: 12, sides: 6, bonus: 0, average: 42 },
+    damageType: 'radiant',
+    saveAbility: 'con',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 8,
+  },
+
+  'tsunami': {
+    // Session 19 bulk: 8-level conjuration, range 60 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 60,
+    damage: { count: 6, sides: 10, bonus: 0, average: 33 },
+    damageType: 'bludgeoning',
+    saveAbility: 'str',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 8,
+  },
+
+  'blade of disaster': {
+    // Session 19 bulk: 9-level conjuration, range 60 ft, forward-compat flag.
+    attackType: 'spell',
+    rangeNormal: 60,
+    damage: { count: 4, sides: 12, bonus: 0, average: 26 },
+    damageType: 'force',
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 9,
+    bonusAction: true,
+  },
+
+  'foresight': {
+    // Session 19 bulk: 9-level divination, range 5 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 5,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 9,
+  },
+
+  'invulnerability': {
+    // Session 19 bulk: 9-level abjuration, range 0 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 0,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 9,
+  },
+
+  'mass heal': {
+    // Session 19 bulk: 9-level evocation, range 60 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 60,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 9,
+  },
+
+  'mass polymorph': {
+    // Session 19 bulk: 9-level transmutation, range 120 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 120,
+    damage: null,
+    damageType: null,
+    saveAbility: 'wis',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 9,
+  },
+
+  'meteor swarm': {
+    // Session 19 bulk: 9-level evocation, range 1 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 1,
+    damage: { count: 20, sides: 6, bonus: 0, average: 70 },
+    damageType: 'bludgeoning',
+    saveAbility: 'dex',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 9,
+  },
+
+  'power word heal': {
+    // Session 19 bulk: 9-level evocation, range 5 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 5,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 9,
+  },
+
+  'power word kill': {
+    // Session 19 bulk: 9-level enchantment, range 60 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 60,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 9,
+  },
+
+  'psychic scream': {
+    // Session 19 bulk: 9-level enchantment, range 90 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 90,
+    damage: { count: 14, sides: 6, bonus: 0, average: 49 },
+    damageType: 'psychic',
+    saveAbility: 'int',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 9,
+  },
+
+  'ravenous void': {
+    // Session 19 bulk: 9-level evocation, range 1000 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 1000,
+    damage: { count: 5, sides: 10, bonus: 0, average: 28 },
+    damageType: 'force',
+    saveAbility: 'str',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 9,
+  },
+
+  'storm of vengeance': {
+    // Session 19 bulk: 9-level conjuration, range 60 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 60,
+    damage: { count: 2, sides: 6, bonus: 0, average: 7 },
+    damageType: 'acid',
+    saveAbility: 'con',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 9,
+  },
+
+  'time ravage': {
+    // Session 19 bulk: 9-level necromancy, range 90 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 90,
+    damage: { count: 10, sides: 12, bonus: 0, average: 65 },
+    damageType: 'necrotic',
+    saveAbility: 'con',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 9,
+  },
+
+  'time stop': {
+    // Session 19 bulk: 9-level transmutation, range 0 ft, forward-compat flag.
+    attackType: null,
+    rangeNormal: 0,
+    damage: null,
+    damageType: null,
+    saveAbility: undefined,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 9,
+  },
+
+  'weird': {
+    // Session 19 bulk: 9-level illusion, range 120 ft, forward-compat flag.
+    attackType: 'save',
+    rangeNormal: 120,
+    damage: { count: 4, sides: 10, bonus: 0, average: 22 },
+    damageType: 'psychic',
+    saveAbility: 'wis',
+    isAoE: true,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 9,
+  },
+
 };
 
 // ---- Lookup helper ------------------------------------------

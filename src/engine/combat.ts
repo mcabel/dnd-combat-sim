@@ -209,6 +209,11 @@ import {
   execute as executeArcaneLock,
 } from '../spells/arcane_lock';
 
+// ── Session 19 — bulk-implementation generic dispatch (262 new spells) ────
+import {
+  lookupGenericSpell,
+} from '../spells/_generic_registry';
+
 // ---- Combat log ---------------------------------------------
 
 export interface CombatEvent {
@@ -2034,6 +2039,23 @@ function executePlannedAction(
       // Arcane Lock — PHB p.215: action, touch, locks object (forward-compat
       // flag on caster), permanent, NO concentration.
       if (shouldCastArcaneLock(actor, bf)) executeArcaneLock(actor, state);
+      break;
+    }
+
+    // ── Session 19 — generic spell dispatch ────────────────────────────
+    // Routes any spell in the GENERIC_SPELLS registry (262 bulk-implemented
+    // spells from levels 2-9) to its spell module's shouldCast + execute.
+    // The spell name is carried by `plan.spellName` (set by planner.ts).
+    case 'genericSpell': {
+      const spellName = plan.spellName;
+      if (!spellName) break;
+      const desc = lookupGenericSpell(spellName);
+      if (!desc) break;
+      // Re-run shouldCast with the live battlefield (target may have died
+      // or moved out of range between planTurn and executePlannedAction).
+      if (desc.shouldCast(actor, bf)) {
+        desc.execute(actor, state);
+      }
       break;
     }
   }

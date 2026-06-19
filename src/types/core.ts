@@ -1100,6 +1100,24 @@ export interface Combatant {
   // object/lock subsystem — this flag is FORWARD-COMPAT only. NOT a
   // concentration spell (PHB p.215: permanent, no concentration).
   _arcaneLockActive?: boolean;
+
+  // ---- Session 19 — generic forward-compat spell-active flag ----
+  // Tracks which Session 19 bulk-implemented spells are currently "active"
+  // on this combatant. Each spell module's `shouldCast` checks this Set
+  // to prevent re-casting an already-active spell in v1 (no-op). The actual
+  // mechanical effect of each spell is NOT applied in v1 — the flag is
+  // FORWARD-COMPAT only, mirroring the Session 17/18 pattern established
+  // by Darkvision, Arcane Lock, Knock, See Invisibility, etc.
+  //
+  // Why a Set<string> instead of per-spell boolean fields? Session 19
+  // adds 262 spells in one bulk pass; adding 262 individual Combatant
+  // scratch fields would bloat the type and the existing pattern of
+  // per-spell fields (Darkvision, Knock, etc.) was designed for the
+  // bespoke-implemented spells. The bulk-implemented spells use this
+  // generic Set instead. A future implementation that gives a spell a
+  // real mechanical effect can migrate it to a bespoke scratch field
+  // (and remove it from the generic registry).
+  _genericSpellActiveSpells?: Set<string>;
 }
 
 // ---- Obstacle -----------------------------------------------
@@ -1235,10 +1253,24 @@ export interface PlannedAction {
     | 'prayerOfHealing'     // Prayer of Healing — 30 ft, 2d8+spellcasting heal up to 3 creatures (v1: action cast), NO concentration
     | 'knock'               // Knock — 60 ft, opens objects (forward-compat), NO concentration
     | 'arcaneLock'          // Arcane Lock — touch, locks object (forward-compat), permanent, NO concentration
+    // ── Session 19 — bulk-implementation generic dispatch (262 new spells L2-9) ──
+    // All non-blocker in-scope spells from levels 2-9 that have not been
+    // implemented as bespoke case branches are routed through 'genericSpell'.
+    // The dispatch is keyed by `spellName` (see below). Each spell has its
+    // own module at src/spells/<snake>.ts that exports shouldCast + execute.
+    | 'genericSpell'
     | 'legendary';
   action: Action | null;
   targetId: string | null;
   description: string;
   // For healing actions (secondWind, layOnHands, spellHeal): HP restored this action.
   healAmount?: number;
+  // ── Session 19 — generic spell dispatch ──────────────────────────────
+  // When `type === 'genericSpell'`, this field carries the canonical spell
+  // name (e.g. 'Fireball', 'Beacon of Hope'). combat.ts's
+  // `case 'genericSpell':` branch looks up the spell module via the
+  // `genericSpellRegistry` (in src/spells/_generic_registry.ts) and calls
+  // its `shouldCast` + `execute`. This avoids adding 262 individual case
+  // branches for the Session 19 bulk-implementation pass.
+  spellName?: string;
 }

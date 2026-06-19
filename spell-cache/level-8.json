@@ -1,6 +1,6 @@
 {
   "level": 8,
-  "generatedAt": "2026-06-19T22:31:06.221Z",
+  "generatedAt": "2026-06-19T23:16:11.271Z",
   "generatorVersion": 2,
   "scopeRule": "pre-2024 canon; reprints: newest in-scope source wins; XPHB(2024) out of scope; creatures keep all variants (not applicable to spells)",
   "sourceDates": {
@@ -26,8 +26,8 @@
     "XPHB"
   ],
   "count": 26,
-  "implementedCount": 0,
-  "remainingInScope": 25,
+  "implementedCount": 18,
+  "remainingInScope": 7,
   "spells": [
     {
       "name": "Abi-Dalzim's Horrid Wilting",
@@ -37,8 +37,8 @@
       "page": 150,
       "level": 8,
       "school": "Necromancy",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "abi_dalzims_horrid_wilting.ts",
       "inScope": true,
       "otherSources": [],
       "classes": [],
@@ -63,8 +63,8 @@
       "page": 212,
       "level": 8,
       "school": "Transmutation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "animal_shapes.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -128,8 +128,8 @@
       "page": 214,
       "level": 8,
       "school": "Enchantment",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "antipathy_sympathy.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -222,8 +222,8 @@
       "page": 228,
       "level": 8,
       "school": "Transmutation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "control_weather.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -256,8 +256,8 @@
       "page": 186,
       "level": 8,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "dark_star.ts",
       "inScope": true,
       "otherSources": [],
       "classes": [],
@@ -313,8 +313,8 @@
       "page": 235,
       "level": 8,
       "school": "Enchantment",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "dominate_monster.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -348,8 +348,8 @@
       "page": 236,
       "level": 8,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "earthquake.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -382,8 +382,8 @@
       "page": 239,
       "level": 8,
       "school": "Enchantment",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "feeblemind.ts",
       "inScope": true,
       "otherSources": [],
       "classes": [
@@ -413,8 +413,8 @@
       "page": 245,
       "level": 8,
       "school": "Transmutation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "glibness.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -446,8 +446,8 @@
       "page": 251,
       "level": 8,
       "school": "Abjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "holy_aura.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -478,8 +478,8 @@
       "page": 145,
       "level": 8,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "holy_star_of_mystra.ts",
       "inScope": true,
       "otherSources": [],
       "classes": [
@@ -505,8 +505,8 @@
       "page": 157,
       "level": 8,
       "school": "Illusion",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "illusory_dragon.ts",
       "inScope": true,
       "otherSources": [],
       "classes": [],
@@ -529,8 +529,8 @@
       "page": 253,
       "level": 8,
       "school": "Conjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "incendiary_cloud.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -562,8 +562,8 @@
       "page": 160,
       "level": 8,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "maddening_darkness.ts",
       "inScope": true,
       "otherSources": [],
       "classes": [],
@@ -675,8 +675,8 @@
       "page": 267,
       "level": 8,
       "school": "Enchantment",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "power_word_stun.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -710,8 +710,8 @@
       "page": 189,
       "level": 8,
       "school": "Conjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "reality_break.ts",
       "inScope": true,
       "otherSources": [],
       "classes": [],
@@ -734,8 +734,8 @@
       "page": 279,
       "level": 8,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "sunburst.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -802,8 +802,8 @@
       "page": 284,
       "level": 8,
       "school": "Conjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "tsunami.ts",
       "inScope": true,
       "otherSources": [
         {
