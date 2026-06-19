@@ -1,6 +1,6 @@
 {
   "level": 2,
-  "generatedAt": "2026-06-19T21:22:06.681Z",
+  "generatedAt": "2026-06-19T22:31:06.221Z",
   "generatorVersion": 2,
   "scopeRule": "pre-2024 canon; reprints: newest in-scope source wins; XPHB(2024) out of scope; creatures keep all variants (not applicable to spells)",
   "sourceDates": {
@@ -26,8 +26,8 @@
     "XPHB"
   ],
   "count": 94,
-  "implementedCount": 26,
-  "remainingInScope": 66,
+  "implementedCount": 46,
+  "remainingInScope": 46,
   "spells": [
     {
       "name": "Aganazzar's Scorcher",
@@ -195,8 +195,8 @@
       "page": 215,
       "level": 2,
       "school": "Abjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "arcane_lock.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -779,8 +779,8 @@
       "page": 231,
       "level": 2,
       "school": "Divination",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "detect_thoughts.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -993,8 +993,8 @@
       "page": 238,
       "level": 2,
       "school": "Enchantment",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "enthrall.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1542,8 +1542,8 @@
       "page": 254,
       "level": 2,
       "school": "Transmutation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "knock.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1947,8 +1947,8 @@
       "page": 261,
       "level": 2,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "moonbeam.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -2035,8 +2035,8 @@
       "page": 264,
       "level": 2,
       "school": "Abjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "pass_without_trace.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -2068,8 +2068,8 @@
       "page": 264,
       "level": 2,
       "school": "Illusion",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "phantasmal_force.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -2102,8 +2102,8 @@
       "page": 267,
       "level": 2,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "prayer_of_healing.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -2134,8 +2134,8 @@
       "page": 270,
       "level": 2,
       "school": "Abjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "protection_from_poison.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -2194,8 +2194,8 @@
       "page": 271,
       "level": 2,
       "school": "Necromancy",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "ray_of_enfeeblement.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -2286,8 +2286,8 @@
       "page": 273,
       "level": 2,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "scorching_ray.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -2319,8 +2319,8 @@
       "page": 274,
       "level": 2,
       "school": "Divination",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "see_invisibility.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -2380,8 +2380,8 @@
       "page": 275,
       "level": 2,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "shatter.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -2445,8 +2445,8 @@
       "page": 275,
       "level": 2,
       "school": "Illusion",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "silence.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -2529,8 +2529,8 @@
       "page": 277,
       "level": 2,
       "school": "Transmutation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "spider_climb.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -2564,8 +2564,8 @@
       "page": 277,
       "level": 2,
       "school": "Transmutation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "spike_growth.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -2599,8 +2599,8 @@
       "page": 278,
       "level": 2,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "spiritual_weapon.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -2659,8 +2659,8 @@
       "page": 279,
       "level": 2,
       "school": "Enchantment",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "suggestion.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -2862,8 +2862,8 @@
       "page": 287,
       "level": 2,
       "school": "Conjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "web.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -2950,8 +2950,8 @@
       "page": 289,
       "level": 2,
       "school": "Enchantment",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "zone_of_truth.ts",
       "inScope": true,
       "otherSources": [
         {

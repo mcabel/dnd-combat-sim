@@ -127,6 +127,88 @@ import {
   execute as executeDarkvision,
 } from '../spells/darkvision';
 
+// ── Session 18 — level-2 batch 4 (20 new PHB level-2 spells) ──────────────
+import {
+  shouldCast as shouldCastMoonbeam,
+  execute as executeMoonbeam,
+} from '../spells/moonbeam';
+import {
+  shouldCast as shouldCastScorchingRay,
+  execute as executeScorchingRay,
+} from '../spells/scorching_ray';
+import {
+  shouldCast as shouldCastShatter,
+  execute as executeShatter,
+} from '../spells/shatter';
+import {
+  shouldCast as shouldCastSpikeGrowth,
+  execute as executeSpikeGrowth,
+} from '../spells/spike_growth';
+import {
+  shouldCast as shouldCastSpiritualWeapon,
+  execute as executeSpiritualWeapon,
+} from '../spells/spiritual_weapon';
+import {
+  shouldCast as shouldCastPhantasmalForce,
+  execute as executePhantasmalForce,
+} from '../spells/phantasmal_force';
+import {
+  shouldCast as shouldCastRayOfEnfeeblement,
+  execute as executeRayOfEnfeeblement,
+} from '../spells/ray_of_enfeeblement';
+import {
+  shouldCast as shouldCastWeb,
+  execute as executeWeb,
+} from '../spells/web';
+import {
+  shouldCast as shouldCastSilence,
+  execute as executeSilence,
+} from '../spells/silence';
+import {
+  shouldCast as shouldCastSuggestion,
+  execute as executeSuggestion,
+} from '../spells/suggestion';
+import {
+  shouldCast as shouldCastZoneOfTruth,
+  execute as executeZoneOfTruth,
+} from '../spells/zone_of_truth';
+import {
+  shouldCast as shouldCastEnthrall,
+  execute as executeEnthrall,
+} from '../spells/enthrall';
+import {
+  shouldCast as shouldCastDetectThoughts,
+  execute as executeDetectThoughts,
+} from '../spells/detect_thoughts';
+import {
+  shouldCast as shouldCastSeeInvisibility,
+  execute as executeSeeInvisibility,
+} from '../spells/see_invisibility';
+import {
+  shouldCast as shouldCastSpiderClimb,
+  execute as executeSpiderClimb,
+} from '../spells/spider_climb';
+import {
+  shouldCast as shouldCastPassWithoutTrace,
+  execute as executePassWithoutTrace,
+} from '../spells/pass_without_trace';
+import {
+  shouldCast as shouldCastProtectionFromPoison,
+  execute as executeProtectionFromPoison,
+} from '../spells/protection_from_poison';
+import {
+  shouldCast as shouldCastPrayerOfHealing,
+  execute as executePrayerOfHealing,
+} from '../spells/prayer_of_healing';
+import {
+  shouldCast as shouldCastKnock,
+  execute as executeKnock,
+} from '../spells/knock';
+import {
+  shouldCast as shouldCastArcaneLock,
+  execute as executeArcaneLock,
+} from '../spells/arcane_lock';
+
 // ---- Combat log ---------------------------------------------
 
 export interface CombatEvent {
@@ -758,6 +840,27 @@ export function resolveAttack(
         `${attacker.name}'s unarmed strike is enhanced by Alter Self — Natural Weapons! (regenerated from ${dmg} to ${newDmg} = ${alterSelfDice}d6${isCrit ? ' CRIT' : ''}=${alterSelfRoll} + STR mod ${strMod >= 0 ? '+' : ''}${strMod})`,
         target.id, newDmg);
       dmg = newDmg;
+    }
+
+    // Ray of Enfeeblement (PHB p.271 — Session 18): while the target is
+    // enfeebled (`_rayOfEnfeeblementActive === true` on the ATTACKER — the
+    // spell was cast ON this attacker by an enemy), the attacker's weapon
+    // attacks deal HALF damage. v1 simplification: applies to ALL weapon
+    // attacks (melee/ranged, NOT spell — canon: "weapon attacks that use
+    // Strength", but v1 doesn't track STR-vs-DEX weapon distinction).
+    // Halving applied as a flat half-after-other-modifiers (mirror Enlarge/
+    // Reduce's 'reduce' branch semantics — halving rounds down, composes
+    // with other modifiers by halving the total). Crit does NOT exempt the
+    // halving (PHB p.271 says "the target deals only half damage with weapon
+    // attacks" — no crit exception).
+    if (
+      attacker._rayOfEnfeeblementActive === true &&
+      (action.attackType === 'melee' || action.attackType === 'ranged')
+    ) {
+      const preHalve = dmg;
+      dmg = Math.floor(dmg / 2);
+      log(state, 'action', attacker.id,
+        `${attacker.name} is ENFEEBLED — weapon damage HALVED (${preHalve} → ${dmg})!`, target.id);
     }
 
     // ST-5C: Fighting Style: Interception — rider reduces damage to mount (reaction)
@@ -1726,6 +1829,211 @@ function executePlannedAction(
         ? dvTarget
         : shouldCastDarkvision(actor, bf);
       if (liveTarget) executeDarkvision(actor, liveTarget, state);
+      break;
+    }
+
+    // ── Session 18 — level-2 batch 4 (20 new PHB level-2 spells) ──────────
+
+    case 'moonbeam': {
+      // Moonbeam — PHB p.261: action, 120 ft, CON save 2d10 radiant,
+      // concentration 1 min. Persistent damage_zone with save for half.
+      const mbTargetId = plan.targetId;
+      const mbTarget = mbTargetId ? bf.combatants.get(mbTargetId) ?? null : null;
+      const liveTarget = mbTarget && !mbTarget.isDead && !mbTarget.isUnconscious
+        ? mbTarget
+        : shouldCastMoonbeam(actor, bf);
+      if (liveTarget) executeMoonbeam(actor, liveTarget, state);
+      break;
+    }
+
+    case 'scorchingRay': {
+      // Scorching Ray — PHB p.273: action, 120 ft, 3 ranged spell attacks
+      // 2d6 fire each (multi-attack pattern). NO concentration.
+      // shouldCast returns Combatant[] (3 targets, may repeat nearest).
+      const srTargets = shouldCastScorchingRay(actor, bf);
+      if (srTargets) executeScorchingRay(actor, srTargets, state);
+      break;
+    }
+
+    case 'shatter': {
+      // Shatter — PHB p.275: action, 60 ft, CON save 3d8 thunder,
+      // 10-ft radius AoE. NO concentration.
+      // shouldCast returns Combatant[] (all enemies in 10 ft of primary).
+      const shTargets = shouldCastShatter(actor, bf);
+      if (shTargets) executeShatter(actor, shTargets, state);
+      break;
+    }
+
+    case 'spikeGrowth': {
+      // Spike Growth — PHB p.277: action, 150 ft, 2d4 piercing damage_zone
+      // terrain, concentration 10 min. NO on-cast damage.
+      const sgTargetId = plan.targetId;
+      const sgTarget = sgTargetId ? bf.combatants.get(sgTargetId) ?? null : null;
+      const liveTarget = sgTarget && !sgTarget.isDead && !sgTarget.isUnconscious
+        ? sgTarget
+        : shouldCastSpikeGrowth(actor, bf);
+      if (liveTarget) executeSpikeGrowth(actor, liveTarget, state);
+      break;
+    }
+
+    case 'spiritualWeapon': {
+      // Spiritual Weapon — PHB p.278: BONUS ACTION, 60 ft, melee spell attack
+      // 1d8 force + persistent damage_zone 1d8 force/turn (ticksRemaining: 10).
+      // NO concentration, 1 min duration.
+      const swTargetId = plan.targetId;
+      const swTarget = swTargetId ? bf.combatants.get(swTargetId) ?? null : null;
+      const liveTarget = swTarget && !swTarget.isDead && !swTarget.isUnconscious
+        ? swTarget
+        : shouldCastSpiritualWeapon(actor, bf);
+      if (liveTarget) executeSpiritualWeapon(actor, liveTarget, state);
+      break;
+    }
+
+    case 'phantasmalForce': {
+      // Phantasmal Force — PHB p.264: action, 60 ft, INT save 1d6 psychic +
+      // persistent damage_zone, concentration 1 min. On save success: no effect.
+      const pfTargetId = plan.targetId;
+      const pfTarget = pfTargetId ? bf.combatants.get(pfTargetId) ?? null : null;
+      const liveTarget = pfTarget && !pfTarget.isDead && !pfTarget.isUnconscious
+        ? pfTarget
+        : shouldCastPhantasmalForce(actor, bf);
+      if (liveTarget) executePhantasmalForce(actor, liveTarget, state);
+      break;
+    }
+
+    case 'rayOfEnfeeblement': {
+      // Ray of Enfeeblement — PHB p.271: action, 60 ft, ranged spell attack,
+      // target deals half weapon damage, concentration 1 min. NO damage on hit.
+      const roeTargetId = plan.targetId;
+      const roeTarget = roeTargetId ? bf.combatants.get(roeTargetId) ?? null : null;
+      const liveTarget = roeTarget && !roeTarget.isDead && !roeTarget.isUnconscious
+        ? roeTarget
+        : shouldCastRayOfEnfeeblement(actor, bf);
+      if (liveTarget) executeRayOfEnfeeblement(actor, liveTarget, state);
+      break;
+    }
+
+    case 'web': {
+      // Web — PHB p.287: action, 60 ft, DEX save or restrained,
+      // concentration 1 min.
+      const webTargetId = plan.targetId;
+      const webTarget = webTargetId ? bf.combatants.get(webTargetId) ?? null : null;
+      const liveTarget = webTarget && !webTarget.isDead && !webTarget.isUnconscious
+        ? webTarget
+        : shouldCastWeb(actor, bf);
+      if (liveTarget) executeWeb(actor, liveTarget, state);
+      break;
+    }
+
+    case 'silence': {
+      // Silence — PHB p.275: action, 120 ft, AoE blocks verbal spells
+      // (forward-compat flag), concentration 10 min. NO save.
+      const silTargetId = plan.targetId;
+      const silTarget = silTargetId ? bf.combatants.get(silTargetId) ?? null : null;
+      const liveTarget = silTarget && !silTarget.isDead && !silTarget.isUnconscious
+        ? silTarget
+        : shouldCastSilence(actor, bf);
+      if (liveTarget) executeSilence(actor, liveTarget, state);
+      break;
+    }
+
+    case 'suggestion': {
+      // Suggestion — PHB p.279: action, 30 ft, WIS save or charmed,
+      // concentration (canon: 8 hr; v1: 1 min simplification).
+      const sugTargetId = plan.targetId;
+      const sugTarget = sugTargetId ? bf.combatants.get(sugTargetId) ?? null : null;
+      const liveTarget = sugTarget && !sugTarget.isDead && !sugTarget.isUnconscious
+        ? sugTarget
+        : shouldCastSuggestion(actor, bf);
+      if (liveTarget) executeSuggestion(actor, liveTarget, state);
+      break;
+    }
+
+    case 'zoneOfTruth': {
+      // Zone of Truth — PHB p.289: action, 60 ft, CHA save, can't lie in
+      // 15-ft radius (forward-compat flag), concentration 10 min.
+      const zotTargetId = plan.targetId;
+      const zotTarget = zotTargetId ? bf.combatants.get(zotTargetId) ?? null : null;
+      const liveTarget = zotTarget && !zotTarget.isDead && !zotTarget.isUnconscious
+        ? zotTarget
+        : shouldCastZoneOfTruth(actor, bf);
+      if (liveTarget) executeZoneOfTruth(actor, liveTarget, state);
+      break;
+    }
+
+    case 'enthrall': {
+      // Enthrall — PHB p.238: action, 60 ft, WIS save (multi-target up to 3),
+      // disadv on Perception (forward-compat flag on caster), concentration 1 min.
+      const entTargets = shouldCastEnthrall(actor, bf);
+      if (entTargets) executeEnthrall(actor, entTargets, state);
+      break;
+    }
+
+    case 'detectThoughts': {
+      // Detect Thoughts — PHB p.231: action, self (5-ft aura), WIS save probe
+      // (forward-compat flag on caster), concentration 1 min.
+      if (shouldCastDetectThoughts(actor, bf)) executeDetectThoughts(actor, state);
+      break;
+    }
+
+    case 'seeInvisibility': {
+      // See Invisibility — PHB p.274: action, self, see invisible 60 ft
+      // (forward-compat flag), NO concentration, 1 hr.
+      if (shouldCastSeeInvisibility(actor, bf)) executeSeeInvisibility(actor, state);
+      break;
+    }
+
+    case 'spiderClimb': {
+      // Spider Climb — PHB p.277: action, touch, climb speed (forward-compat
+      // flag on target), concentration 1 hr.
+      const scTargetId = plan.targetId;
+      const scTarget = scTargetId ? bf.combatants.get(scTargetId) ?? null : null;
+      const liveTarget = scTarget && !scTarget.isDead && !scTarget.isUnconscious
+        ? scTarget
+        : shouldCastSpiderClimb(actor, bf);
+      if (liveTarget) executeSpiderClimb(actor, liveTarget, state);
+      break;
+    }
+
+    case 'passWithoutTrace': {
+      // Pass without Trace — PHB p.264: action, self, +10 stealth aura
+      // (forward-compat flag on caster), concentration 1 hr.
+      if (shouldCastPassWithoutTrace(actor, bf)) executePassWithoutTrace(actor, state);
+      break;
+    }
+
+    case 'protectionFromPoison': {
+      // Protection from Poison — PHB p.270: action, touch, removes poisoned +
+      // advantage on saves vs poison (forward-compat flag), NO concentration, 1 hr.
+      const pfpTargetId = plan.targetId;
+      const pfpTarget = pfpTargetId ? bf.combatants.get(pfpTargetId) ?? null : null;
+      const liveTarget = pfpTarget && !pfpTarget.isDead && !pfpTarget.isUnconscious
+        ? pfpTarget
+        : shouldCastProtectionFromPoison(actor, bf);
+      if (liveTarget) executeProtectionFromPoison(actor, liveTarget, state);
+      break;
+    }
+
+    case 'prayerOfHealing': {
+      // Prayer of Healing — PHB p.267: action (canon: 10 min), 30 ft,
+      // 2d8+spellcasting heal up to 3 creatures, NO concentration.
+      // shouldCast returns Combatant[] (up to 3 wounded allies).
+      const pohTargets = shouldCastPrayerOfHealing(actor, bf);
+      if (pohTargets) executePrayerOfHealing(actor, pohTargets, state);
+      break;
+    }
+
+    case 'knock': {
+      // Knock — PHB p.254: action, 60 ft, opens objects (forward-compat flag
+      // on caster), NO concentration.
+      if (shouldCastKnock(actor, bf)) executeKnock(actor, state);
+      break;
+    }
+
+    case 'arcaneLock': {
+      // Arcane Lock — PHB p.215: action, touch, locks object (forward-compat
+      // flag on caster), permanent, NO concentration.
+      if (shouldCastArcaneLock(actor, bf)) executeArcaneLock(actor, state);
       break;
     }
   }

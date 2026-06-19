@@ -178,6 +178,29 @@ function _undoEffect(target: Combatant, effect: ActiveEffect): void {
           case 'Enhance Ability':
             delete target._enhanceAbilityActive;
             break;
+          case 'Silence':
+            delete target._silenceZoneActive;
+            break;
+          // ── Session 18 (Group C/D/E) — forward-compat flag scratch fields ──
+          case 'Detect Thoughts':
+            delete target._detectThoughtsActive;
+            break;
+          case 'Spider Climb':
+            delete target._spiderClimbActive;
+            break;
+          case 'Pass without Trace':
+            delete target._passWithoutTraceActive;
+            break;
+          case 'Zone of Truth':
+            delete target._zoneOfTruthActive;
+            break;
+          case 'Enthrall':
+            delete target._enthrallActive;
+            break;
+          // ── Session 18 (Group A) — Ray of Enfeeblement scratch field ──
+          case 'Ray of Enfeeblement':
+            delete target._rayOfEnfeeblementActive;
+            break;
         }
       }
       break;

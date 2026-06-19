@@ -995,6 +995,111 @@ export interface Combatant {
   // no concentration) — v1 applies the flag with no cleanup (persists for
   // the combat, like Aid's `_aidHPBonus`).
   _darkvisionActive?: boolean;
+
+  // ---- Session 18 — level-2 batch 4 scratch fields ---------------------------
+  // These scratch fields are set by the 20 new level-2 spell modules added in
+  // Session 18. All are optional (undefined = effect not active) and never
+  // persisted. Concentration-bound ones are cleaned by removeEffectsFromCaster
+  // via the damage_zone sentinel pattern (dieCount=0).
+
+  // ---- Ray of Enfeeblement (PHB p.271) scratch field ----
+  // Set on the TARGET (the enfeebled creature) when Ray of Enfeeblement hits.
+  // PHB p.271: "On a hit, the target deals only half damage with weapon
+  // attacks that use Strength." v1 simplification: applies to ALL weapon
+  // attacks (melee/ranged, NOT spell — mirror Enlarge/Reduce 'reduce' pattern
+  // but on a target, not the attacker). resolveAttack's damage branch checks
+  // the ATTACKER's flag: if true, halve the weapon damage (rounded down —
+  // PHB p.197 resistance, but NOT actual resistance so it composes by halving
+  // first). Concentration spell — removed by removeEffectsFromCaster when
+  // the caster's concentration breaks.
+  _rayOfEnfeeblementActive?: boolean;
+
+  // ---- Silence (PHB p.275) scratch field ----
+  // Set on the TARGET (caster) when Silence is cast (the silence zone is
+  // anchored to the caster in v1's single-target simplification). PHB p.275:
+  // "For the duration, no sound can be created within or pass through a
+  // 20-foot-radius sphere centered on a point you choose within range." v1
+  // has no spell-block subsystem — this flag is FORWARD-COMPAT only. Like
+  // Darkvision's `_darkvisionActive`. Concentration spell (PHB p.275: 10 min).
+  _silenceZoneActive?: boolean;
+
+  // ---- Zone of Truth (PHB p.289) scratch field ----
+  // Set on the TARGET (the truth-bound creature) when Zone of Truth is cast
+  // on them. PHB p.289: "For the duration, you know if a creature speaks
+  // truth... a creature can't speak a deliberate lie while in the 15-foot-
+  // radius sphere centered on you." v1 has no lie/speech subsystem — this
+  // flag is FORWARD-COMPAT only. Concentration spell (PHB p.289: 10 min).
+  _zoneOfTruthActive?: boolean;
+
+  // ---- Enthrall (PHB p.238) scratch field ----
+  // Set on the CASTER when Enthrall is cast (self-buff). PHB p.238: "You
+  // weave a distracting string of words, causing creatures of your choice
+  // that you can see within range and that can hear you to make a Wisdom
+  // saving throw. On a failed save, the targets have disadvantage on
+  // Perception checks and Perception checks made to hear anything but you
+  // for the duration." v1 has no perception subsystem — this flag is
+  // FORWARD-COMPAT only. Concentration spell (PHB p.238: 1 min).
+  _enthrallActive?: boolean;
+
+  // ---- Detect Thoughts (PHB p.231) scratch field ----
+  // Set on the CASTER when Detect Thoughts is cast (self-buff aura). PHB
+  // p.231: "For the duration, you can read the thoughts of certain creatures."
+  // v1 has no mind-reading subsystem — this flag is FORWARD-COMPAT only.
+  // Concentration spell (PHB p.231: 1 min, concentration).
+  _detectThoughtsActive?: boolean;
+
+  // ---- See Invisibility (PHB p.274) scratch field ----
+  // Set on the CASTER when See Invisibility is cast (self-buff). PHB p.274:
+  // "For the duration, you see invisible creatures and objects as if they
+  // were visible." v1 has no invisibility-detection subsystem — this flag is
+  // FORWARD-COMPAT only (would extend computeLOS to ignore the invisible
+  // condition). NOT a concentration spell (PHB p.274: 1 hr, no concentration)
+  // — v1 applies the flag with no cleanup (persists for the combat, like
+  // Darkvision's `_darkvisionActive`).
+  _seeInvisibilityActive?: boolean;
+
+  // ---- Spider Climb (PHB p.277) scratch field ----
+  // Set on the TARGET (the climbing creature) when Spider Climb is cast on
+  // them. PHB p.277: "the target gains the ability to move up, down, and
+  // across vertical surfaces and upside down along ceilings, while leaving
+  // its hands free." v1 has no climb-speed subsystem — this flag is
+  // FORWARD-COMPAT only. Concentration spell (PHB p.277: 1 hr, concentration).
+  _spiderClimbActive?: boolean;
+
+  // ---- Pass without Trace (PHB p.264) scratch field ----
+  // Set on the CASTER when Pass without Trace is cast (self-buff aura). PHB
+  // p.264: "Each creature you choose within 30 feet of you (including you)
+  // gains a +10 bonus to Dexterity (Stealth) checks." v1 has no stealth
+  // subsystem — this flag is FORWARD-COMPAT only. Concentration spell (PHB
+  // p.264: 1 hr, concentration).
+  _passWithoutTraceActive?: boolean;
+
+  // ---- Protection from Poison (PHB p.270) scratch field ----
+  // Set on the TARGET (the protected creature) when Protection from Poison
+  // is cast on them. PHB p.270: "For the duration, the target has advantage
+  // on saving throws against being poisoned, and it has resistance to poison
+  // damage." v1 has no poison-resistance subsystem — this flag is
+  // FORWARD-COMPAT only (would extend rollSave to grant advantage vs CON
+  // saves that are poison-related, and applyDamage to halve poison damage).
+  // NOT a concentration spell (PHB p.270: 1 hr, no concentration) — v1
+  // applies the flag with no cleanup.
+  _protectionFromPoisonActive?: boolean;
+
+  // ---- Knock (PHB p.254) scratch field ----
+  // Set on the TARGET (the unlocked object) when Knock is cast on it. PHB
+  // p.254: "Choose an object that you can see within range. The spell can
+  // open a stuck, barred, or locked door, container, or other barrier."
+  // v1 has no object/lock subsystem — this flag is FORWARD-COMPAT only. NOT
+  // a concentration spell (PHB p.254: instantaneous, no concentration).
+  _knockActive?: boolean;
+
+  // ---- Arcane Lock (PHB p.215) scratch field ----
+  // Set on the TARGET (the locked object) when Arcane Lock is cast on it.
+  // PHB p.215: "You touch a closed door, window, gate, chest, or other
+  // entryway, and it becomes locked for the duration." v1 has no
+  // object/lock subsystem — this flag is FORWARD-COMPAT only. NOT a
+  // concentration spell (PHB p.215: permanent, no concentration).
+  _arcaneLockActive?: boolean;
 }
 
 // ---- Obstacle -----------------------------------------------
@@ -1109,6 +1214,27 @@ export interface PlannedAction {
     | 'cordonOfArrows'     // Cordon of Arrows — 5 ft, DEX save 1d6 piercing, 4-piece damage_zone, 1 min
     | 'alterSelf'          // Alter Self — self, natural weapons (1d6 unarmed), concentration 10 min
     | 'darkvision'         // Darkvision — touch, grants darkvision 60 ft (forward-compat), 8 hr, no concentration
+    // ── Session 18 — level-2 batch 4 (20 new PHB level-2 spells) ──
+    | 'moonbeam'            // Moonbeam — 120 ft, CON save 2d10 radiant + persistent damage_zone, concentration 1 min
+    | 'scorchingRay'        // Scorching Ray — 120 ft, 3 ranged spell attacks 2d6 fire each (multi-attack)
+    | 'shatter'             // Shatter — 60 ft, CON save 3d8 thunder, 10-ft radius AoE
+    | 'spikeGrowth'         // Spike Growth — 150 ft, 2d4 piercing damage_zone terrain, concentration 10 min
+    | 'spiritualWeapon'     // Spiritual Weapon — 60 ft, melee spell attack 1d8 force + persistent damage_zone, BONUS ACTION, NO concentration, 1 min
+    | 'phantasmalForce'     // Phantasmal Force — 60 ft, INT save 1d6 psychic + persistent damage_zone, concentration 1 min
+    | 'rayOfEnfeeblement'   // Ray of Enfeeblement — 60 ft, ranged spell attack, target deals half weapon damage, concentration 1 min
+    | 'web'                 // Web — 60 ft, DEX save or restrained, concentration 1 min
+    | 'silence'             // Silence — 120 ft, AoE blocks verbal spells (forward-compat), concentration 10 min
+    | 'suggestion'          // Suggestion — 30 ft, WIS save or charmed, concentration 8 hr (concentration 1 min in v1)
+    | 'zoneOfTruth'         // Zone of Truth — 60 ft, CHA save, can't lie in 15-ft radius (forward-compat), concentration 10 min
+    | 'enthrall'            // Enthrall — 60 ft, WIS save, disadv on Perception (forward-compat), concentration 1 min
+    | 'detectThoughts'      // Detect Thoughts — self, WIS save mind-reading probe (forward-compat), concentration 1 min
+    | 'seeInvisibility'     // See Invisibility — self, see invisible 60 ft (forward-compat), NO concentration, 1 hr
+    | 'spiderClimb'         // Spider Climb — touch, climb speed (forward-compat), concentration 1 hr
+    | 'passWithoutTrace'    // Pass without Trace — self, +10 stealth aura (forward-compat), concentration 1 hr
+    | 'protectionFromPoison' // Protection from Poison — touch, removes poisoned + advantage on saves vs poison (forward-compat), NO concentration, 1 hr
+    | 'prayerOfHealing'     // Prayer of Healing — 30 ft, 2d8+spellcasting heal up to 3 creatures (v1: action cast), NO concentration
+    | 'knock'               // Knock — 60 ft, opens objects (forward-compat), NO concentration
+    | 'arcaneLock'          // Arcane Lock — touch, locks object (forward-compat), permanent, NO concentration
     | 'legendary';
   action: Action | null;
   targetId: string | null;

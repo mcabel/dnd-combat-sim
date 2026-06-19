@@ -53,6 +53,27 @@ import { shouldCast as shouldCastMagicWeapon } from '../spells/magic_weapon';
 import { shouldCast as shouldCastCordonOfArrows } from '../spells/cordon_of_arrows';
 import { shouldCast as shouldCastAlterSelf } from '../spells/alter_self';
 import { shouldCast as shouldCastDarkvision } from '../spells/darkvision';
+// ── Session 18 — level-2 batch 4 (20 new PHB level-2 spells) ──────────────
+import { shouldCast as shouldCastMoonbeam } from '../spells/moonbeam';
+import { shouldCast as shouldCastScorchingRay } from '../spells/scorching_ray';
+import { shouldCast as shouldCastShatter } from '../spells/shatter';
+import { shouldCast as shouldCastSpikeGrowth } from '../spells/spike_growth';
+import { shouldCast as shouldCastSpiritualWeapon } from '../spells/spiritual_weapon';
+import { shouldCast as shouldCastPhantasmalForce } from '../spells/phantasmal_force';
+import { shouldCast as shouldCastRayOfEnfeeblement } from '../spells/ray_of_enfeeblement';
+import { shouldCast as shouldCastWeb } from '../spells/web';
+import { shouldCast as shouldCastSilence } from '../spells/silence';
+import { shouldCast as shouldCastSuggestion } from '../spells/suggestion';
+import { shouldCast as shouldCastZoneOfTruth } from '../spells/zone_of_truth';
+import { shouldCast as shouldCastEnthrall } from '../spells/enthrall';
+import { shouldCast as shouldCastDetectThoughts } from '../spells/detect_thoughts';
+import { shouldCast as shouldCastSeeInvisibility } from '../spells/see_invisibility';
+import { shouldCast as shouldCastSpiderClimb } from '../spells/spider_climb';
+import { shouldCast as shouldCastPassWithoutTrace } from '../spells/pass_without_trace';
+import { shouldCast as shouldCastProtectionFromPoison } from '../spells/protection_from_poison';
+import { shouldCast as shouldCastPrayerOfHealing } from '../spells/prayer_of_healing';
+import { shouldCast as shouldCastKnock } from '../spells/knock';
+import { shouldCast as shouldCastArcaneLock } from '../spells/arcane_lock';
 import { selectAction, selfPreserveDecision, selectLegendaryAction } from './actions';
 import {
   canReach, bestAdjacentPos, bestRangedPosition,
@@ -412,6 +433,27 @@ function planBonusAction(
         action: null,
         targetId: self.id,    // self-targeted; destination is in the plan
         description: `${self.name} casts Misty Step (teleport 30 ft)`,
+      };
+    }
+  }
+
+  // --- 2.10. Spiritual Weapon (Cleric bonus-action attack + persistent zone) ---
+  // PHB p.278: bonus action, 60 ft, melee spell attack 1d8 force + persistent
+  // damage_zone 1d8 force/turn (ticksRemaining: 10), NO concentration, 1 min.
+  // Strong bonus action — pairs with a main-action attack or cantrip. The
+  // persistent damage_zone represents the spiritual weapon attacking the same
+  // target on subsequent turns (v1 simplification: no separate bonus-action
+  // attack command — the damage_zone auto-ticks). Priority: after Misty Step
+  // (which is movement-utility), before Bardic Inspiration. shouldCast
+  // returns Combatant | null (single highest-threat enemy within 60 ft).
+  if (self.actions.some(a => a.name === 'Spiritual Weapon')) {
+    const swTarget = shouldCastSpiritualWeapon(self, battlefield);
+    if (swTarget) {
+      return {
+        type: 'spiritualWeapon',
+        action: null,
+        targetId: swTarget.id,
+        description: `${self.name} casts Spiritual Weapon at ${swTarget.name} (1d8 force + persistent)`,
       };
     }
   }
@@ -1374,6 +1416,393 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
       };
       plan.targetId = dvTarget.id;
       plan.bonusAction = planBonusAction(self, dvTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // === LEVEL-2 SPELLS batch 4 (action-time, added in Cantrip-z Session 18) ===
+  // 19 new PHB level-2 spells. Each is guarded by `if (!plan.action)` so it
+  // only fires when no higher-priority spell was chosen. Order within the
+  // block is by tactical priority (highest first):
+  //   11X. Scorching Ray (3 rays, multi-attack, highest damage, NO concentration)
+  //   11Y. Shatter (3d8 thunder AoE, NO concentration)
+  //   11Z. Moonbeam (2d10 radiant + persistent, concentration)
+  //   11AA. Spiritual Weapon (1d8 force + persistent 1d8/turn, NO concentration)
+  //   11AB. Spike Growth (2d4 piercing persistent, concentration)
+  //   11AC. Phantasmal Force (1d6 psychic + persistent, concentration)
+  //   11AD. Ray of Enfeeblement (debuff — half weapon damage, concentration)
+  //   11AE. Web (DEX save or restrained, concentration)
+  //   11AF. Suggestion (WIS save or charmed, concentration)
+  //   11AG. Silence (AoE blocks verbal spells forward-compat, concentration)
+  //   11AH. Zone of Truth (CHA save forward-compat, concentration)
+  //   11AI. Enthrall (WIS save, perception debuff forward-compat, concentration)
+  //   11AJ. Prayer of Healing (multi-ally heal, NO concentration)
+  //   11AK. Protection from Poison (condition removal + buff, NO concentration)
+  //   11AL. Detect Thoughts (forward-compat, concentration)
+  //   11AM. See Invisibility (forward-compat, NO concentration)
+  //   11AN. Spider Climb (forward-compat, concentration)
+  //   11AO. Pass without Trace (forward-compat, concentration)
+  //   11AP. Knock (forward-compat, NO concentration)
+  //   11AQ. Arcane Lock (forward-compat, NO concentration)
+  // Spiritual Weapon is a BONUS ACTION and is added in planBonusAction (2.10).
+
+  // --- 11X. SCORCHING RAY (3 ranged spell attacks, NO concentration) ---
+  // PHB p.273: action, 120 ft, 3 rays 2d6 fire each. Highest-priority of the
+  // 19 new action-time spells — multi-attack with the highest damage potential
+  // (6d6 avg 21 if all 3 hit). NO concentration — can stack with another.
+  if (!plan.action && self.actions.some(a => a.name === 'Scorching Ray')) {
+    const srTargets = shouldCastScorchingRay(self, battlefield);
+    if (srTargets) {
+      const names = srTargets.map(t => t.name).join(', ');
+      plan.action = {
+        type: 'scorchingRay',
+        action: null,
+        targetId: srTargets[0].id,
+        description: `${self.name} casts Scorching Ray at ${names} (3 rays)`,
+      };
+      plan.targetId = srTargets[0].id;
+      plan.bonusAction = planBonusAction(self, srTargets[0], battlefield);
+      return plan;
+    }
+  }
+
+  // --- 11Y. SHATTER (CON save 3d8 thunder AoE, NO concentration) ---
+  // PHB p.275: action, 60 ft, 3d8 thunder (half on save), 10-ft radius AoE.
+  // High-priority AoE damage spell — avg 13.5 dmg to each enemy in radius.
+  if (!plan.action && self.actions.some(a => a.name === 'Shatter')) {
+    const shTargets = shouldCastShatter(self, battlefield);
+    if (shTargets) {
+      const names = shTargets.map(t => t.name).join(', ');
+      plan.action = {
+        type: 'shatter',
+        action: null,
+        targetId: shTargets[0].id,
+        description: `${self.name} casts Shatter on ${names}`,
+      };
+      plan.targetId = shTargets[0].id;
+      plan.bonusAction = planBonusAction(self, shTargets[0], battlefield);
+      return plan;
+    }
+  }
+
+  // --- 11Z. MOONBEAM (CON save 2d10 radiant + persistent, concentration) ---
+  // PHB p.261: action, 120 ft, CON save 2d10 radiant (half on save) +
+  // persistent 2d10 radiant/turn (CON save for half), concentration 1 min.
+  if (!plan.action && self.actions.some(a => a.name === 'Moonbeam')) {
+    const mbTarget = shouldCastMoonbeam(self, battlefield);
+    if (mbTarget) {
+      plan.action = {
+        type: 'moonbeam',
+        action: null,
+        targetId: mbTarget.id,
+        description: `${self.name} casts Moonbeam on ${mbTarget.name}`,
+      };
+      plan.targetId = mbTarget.id;
+      plan.bonusAction = planBonusAction(self, mbTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 11AA. SPIRITUAL WEAPON (1d8 force + persistent, NO concentration) ---
+  // NOTE: Spiritual Weapon is a BONUS ACTION — this action-time branch is
+  // a fallback for the rare case where the caster has only Spiritual Weapon
+  // (no other action-time spell available). The primary cast is via the
+  // bonus-action branch in planBonusAction (section 2.10). Action-time cast
+  // is allowed per PHB p.278 (the spell's casting time is bonus action, but
+  // the engine doesn't enforce action/bonus-action distinction for spell
+  // selection — v1 simplification).
+  if (!plan.action && self.actions.some(a => a.name === 'Spiritual Weapon')) {
+    const swTarget = shouldCastSpiritualWeapon(self, battlefield);
+    if (swTarget) {
+      plan.action = {
+        type: 'spiritualWeapon',
+        action: null,
+        targetId: swTarget.id,
+        description: `${self.name} casts Spiritual Weapon at ${swTarget.name}`,
+      };
+      plan.targetId = swTarget.id;
+      plan.bonusAction = planBonusAction(self, swTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 11AB. SPIKE GROWTH (2d4 piercing persistent, concentration) ---
+  // PHB p.277: action, 150 ft, 2d4 piercing damage_zone/turn (no save),
+  // concentration 10 min. NO on-cast damage (canon: target enters area).
+  if (!plan.action && self.actions.some(a => a.name === 'Spike Growth')) {
+    const sgTarget = shouldCastSpikeGrowth(self, battlefield);
+    if (sgTarget) {
+      plan.action = {
+        type: 'spikeGrowth',
+        action: null,
+        targetId: sgTarget.id,
+        description: `${self.name} casts Spike Growth on ${sgTarget.name}`,
+      };
+      plan.targetId = sgTarget.id;
+      plan.bonusAction = planBonusAction(self, sgTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 11AC. PHANTASMAL FORCE (1d6 psychic + persistent, concentration) ---
+  // PHB p.264: action, 60 ft, INT save 1d6 psychic + persistent 1d6/turn,
+  // concentration 1 min. On save success: no effect (target disbelieves).
+  if (!plan.action && self.actions.some(a => a.name === 'Phantasmal Force')) {
+    const pfTarget = shouldCastPhantasmalForce(self, battlefield);
+    if (pfTarget) {
+      plan.action = {
+        type: 'phantasmalForce',
+        action: null,
+        targetId: pfTarget.id,
+        description: `${self.name} casts Phantasmal Force at ${pfTarget.name}`,
+      };
+      plan.targetId = pfTarget.id;
+      plan.bonusAction = planBonusAction(self, pfTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 11AD. RAY OF ENFEEBLEMENT (debuff, concentration) ---
+  // PHB p.271: action, 60 ft, ranged spell attack, target deals half weapon
+  // damage, concentration 1 min. Strong vs weapon-attack enemies.
+  if (!plan.action && self.actions.some(a => a.name === 'Ray of Enfeeblement')) {
+    const roeTarget = shouldCastRayOfEnfeeblement(self, battlefield);
+    if (roeTarget) {
+      plan.action = {
+        type: 'rayOfEnfeeblement',
+        action: null,
+        targetId: roeTarget.id,
+        description: `${self.name} casts Ray of Enfeeblement at ${roeTarget.name}`,
+      };
+      plan.targetId = roeTarget.id;
+      plan.bonusAction = planBonusAction(self, roeTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 11AE. WEB (DEX save or restrained, concentration) ---
+  // PHB p.287: action, 60 ft, DEX save or restrained, concentration 1 min.
+  if (!plan.action && self.actions.some(a => a.name === 'Web')) {
+    const webTarget = shouldCastWeb(self, battlefield);
+    if (webTarget) {
+      plan.action = {
+        type: 'web',
+        action: null,
+        targetId: webTarget.id,
+        description: `${self.name} casts Web at ${webTarget.name}`,
+      };
+      plan.targetId = webTarget.id;
+      plan.bonusAction = planBonusAction(self, webTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 11AF. SUGGESTION (WIS save or charmed, concentration) ---
+  // PHB p.279: action, 30 ft, WIS save or charmed, concentration (canon 8 hr;
+  // v1: 1 min simplification).
+  if (!plan.action && self.actions.some(a => a.name === 'Suggestion')) {
+    const sugTarget = shouldCastSuggestion(self, battlefield);
+    if (sugTarget) {
+      plan.action = {
+        type: 'suggestion',
+        action: null,
+        targetId: sugTarget.id,
+        description: `${self.name} casts Suggestion on ${sugTarget.name}`,
+      };
+      plan.targetId = sugTarget.id;
+      plan.bonusAction = planBonusAction(self, sugTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 11AG. SILENCE (AoE blocks verbal spells forward-compat, concentration) ---
+  // PHB p.275: action, 120 ft, AoE blocks verbal spells (forward-compat flag),
+  // concentration 10 min. v1: no spell-block subsystem — forward-compat only.
+  if (!plan.action && self.actions.some(a => a.name === 'Silence')) {
+    const silTarget = shouldCastSilence(self, battlefield);
+    if (silTarget) {
+      plan.action = {
+        type: 'silence',
+        action: null,
+        targetId: silTarget.id,
+        description: `${self.name} casts Silence on ${silTarget.name}`,
+      };
+      plan.targetId = silTarget.id;
+      plan.bonusAction = planBonusAction(self, silTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 11AH. ZONE OF TRUTH (CHA save forward-compat, concentration) ---
+  // PHB p.289: action, 60 ft, CHA save, can't lie in 15-ft radius (forward-
+  // compat flag), concentration 10 min. v1: no lie subsystem.
+  if (!plan.action && self.actions.some(a => a.name === 'Zone of Truth')) {
+    const zotTarget = shouldCastZoneOfTruth(self, battlefield);
+    if (zotTarget) {
+      plan.action = {
+        type: 'zoneOfTruth',
+        action: null,
+        targetId: zotTarget.id,
+        description: `${self.name} casts Zone of Truth on ${zotTarget.name}`,
+      };
+      plan.targetId = zotTarget.id;
+      plan.bonusAction = planBonusAction(self, zotTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 11AI. ENTHRALL (WIS save, perception debuff forward-compat, concentration) ---
+  // PHB p.238: action, 60 ft, WIS save multi-target (up to 3), disadv on
+  // Perception (forward-compat flag), concentration 1 min. v1: no perception.
+  if (!plan.action && self.actions.some(a => a.name === 'Enthrall')) {
+    const entTargets = shouldCastEnthrall(self, battlefield);
+    if (entTargets) {
+      const names = entTargets.map(t => t.name).join(', ');
+      plan.action = {
+        type: 'enthrall',
+        action: null,
+        targetId: entTargets[0].id,
+        description: `${self.name} casts Enthrall at ${names}`,
+      };
+      plan.targetId = entTargets[0].id;
+      plan.bonusAction = planBonusAction(self, entTargets[0], battlefield);
+      return plan;
+    }
+  }
+
+  // --- 11AJ. PRAYER OF HEALING (multi-ally heal, NO concentration) ---
+  // PHB p.267: action (canon: 10 min — v1: action simplification), 30 ft,
+  // 2d8+spellcasting heal up to 3 creatures, NO concentration.
+  if (!plan.action && self.actions.some(a => a.name === 'Prayer of Healing')) {
+    const pohTargets = shouldCastPrayerOfHealing(self, battlefield);
+    if (pohTargets) {
+      const names = pohTargets.map(t => t.name).join(', ');
+      plan.action = {
+        type: 'prayerOfHealing',
+        action: null,
+        targetId: pohTargets[0].id,
+        description: `${self.name} casts Prayer of Healing on ${names}`,
+      };
+      plan.targetId = pohTargets[0].id;
+      plan.bonusAction = planBonusAction(self, pohTargets[0], battlefield);
+      return plan;
+    }
+  }
+
+  // --- 11AK. PROTECTION FROM POISON (condition removal + buff, NO concentration) ---
+  // PHB p.270: action, touch, removes poisoned + advantage on saves vs poison
+  // (forward-compat flag), NO concentration, 1 hr. Priority: defensive
+  // (removes debuffs from allies).
+  if (!plan.action && self.actions.some(a => a.name === 'Protection from Poison')) {
+    const pfpTarget = shouldCastProtectionFromPoison(self, battlefield);
+    if (pfpTarget) {
+      plan.action = {
+        type: 'protectionFromPoison',
+        action: null,
+        targetId: pfpTarget.id,
+        description: `${self.name} casts Protection from Poison on ${pfpTarget.name}`,
+      };
+      plan.targetId = pfpTarget.id;
+      plan.bonusAction = planBonusAction(self, pfpTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 11AL. DETECT THOUGHTS (forward-compat, concentration) ---
+  // PHB p.231: action, self, WIS save probe (forward-compat flag), concentration.
+  if (!plan.action && self.actions.some(a => a.name === 'Detect Thoughts')) {
+    if (shouldCastDetectThoughts(self, battlefield)) {
+      plan.action = {
+        type: 'detectThoughts',
+        action: null,
+        targetId: self.id,
+        description: `${self.name} casts Detect Thoughts`,
+      };
+      plan.targetId = self.id;
+      plan.bonusAction = planBonusAction(self, target, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 11AM. SEE INVISIBILITY (forward-compat, NO concentration) ---
+  // PHB p.274: action, self, see invisible 60 ft (forward-compat flag),
+  // NO concentration, 1 hr.
+  if (!plan.action && self.actions.some(a => a.name === 'See Invisibility')) {
+    if (shouldCastSeeInvisibility(self, battlefield)) {
+      plan.action = {
+        type: 'seeInvisibility',
+        action: null,
+        targetId: self.id,
+        description: `${self.name} casts See Invisibility`,
+      };
+      plan.targetId = self.id;
+      plan.bonusAction = planBonusAction(self, target, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 11AN. SPIDER CLIMB (forward-compat, concentration) ---
+  // PHB p.277: action, touch, climb speed (forward-compat flag), concentration.
+  if (!plan.action && self.actions.some(a => a.name === 'Spider Climb')) {
+    const scTarget = shouldCastSpiderClimb(self, battlefield);
+    if (scTarget) {
+      plan.action = {
+        type: 'spiderClimb',
+        action: null,
+        targetId: scTarget.id,
+        description: `${self.name} casts Spider Climb on ${scTarget.name}`,
+      };
+      plan.targetId = scTarget.id;
+      plan.bonusAction = planBonusAction(self, scTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 11AO. PASS WITHOUT TRACE (forward-compat, concentration) ---
+  // PHB p.264: action, self, +10 stealth aura (forward-compat flag), concentration.
+  if (!plan.action && self.actions.some(a => a.name === 'Pass without Trace')) {
+    if (shouldCastPassWithoutTrace(self, battlefield)) {
+      plan.action = {
+        type: 'passWithoutTrace',
+        action: null,
+        targetId: self.id,
+        description: `${self.name} casts Pass without Trace`,
+      };
+      plan.targetId = self.id;
+      plan.bonusAction = planBonusAction(self, target, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 11AP. KNOCK (forward-compat, NO concentration) ---
+  // PHB p.254: action, 60 ft, opens objects (forward-compat flag), NO concentration.
+  if (!plan.action && self.actions.some(a => a.name === 'Knock')) {
+    if (shouldCastKnock(self, battlefield)) {
+      plan.action = {
+        type: 'knock',
+        action: null,
+        targetId: self.id,
+        description: `${self.name} casts Knock`,
+      };
+      plan.targetId = self.id;
+      plan.bonusAction = planBonusAction(self, target, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 11AQ. ARCANE LOCK (forward-compat, NO concentration) ---
+  // PHB p.215: action, touch, locks object (forward-compat flag), permanent,
+  // NO concentration. Lowest priority — no mechanical effect in v1.
+  if (!plan.action && self.actions.some(a => a.name === 'Arcane Lock')) {
+    if (shouldCastArcaneLock(self, battlefield)) {
+      plan.action = {
+        type: 'arcaneLock',
+        action: null,
+        targetId: self.id,
+        description: `${self.name} casts Arcane Lock`,
+      };
+      plan.targetId = self.id;
+      plan.bonusAction = planBonusAction(self, target, battlefield);
       return plan;
     }
   }

@@ -631,6 +631,278 @@ export const SPELL_DB: Record<string, SpellTemplate> = {
     slotLevel: 2,
   },
 
+  // ── Session 18 — level-2 batch 4 (20 new PHB level-2 spells) ──────────
+
+  'moonbeam': {
+    // 2nd-level evocation, action, 120 ft, CON save 2d10 radiant (half on save),
+    // persistent damage_zone 2d10 radiant/turn (CON save for half), concentration 1 min.
+    attackType: 'save',
+    rangeNormal: 120,
+    damage: { count: 2, sides: 10, bonus: 0, average: avg(2, 10) },
+    damageType: 'radiant',
+    saveAbility: 'con',
+    isAoE: true,              // canon: 5-ft cylinder (v1: single-target)
+    isControl: true,          // persistent damage zone
+    requiresConcentration: true,
+    slotLevel: 2,
+  },
+
+  'scorching ray': {
+    // 2nd-level evocation, action, 120 ft, 3 ranged spell attacks 2d6 fire each.
+    // NO concentration. v1: multi-attack pattern (NEW).
+    attackType: 'spell',      // ranged spell attack (3 attacks in execute())
+    rangeNormal: 120,
+    damage: { count: 2, sides: 6, bonus: 0, average: avg(2, 6) },
+    damageType: 'fire',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 2,
+  },
+
+  'shatter': {
+    // 2nd-level evocation, action, 60 ft, CON save 3d8 thunder (half on save),
+    // 10-ft radius AoE. NO concentration.
+    attackType: 'save',
+    rangeNormal: 60,
+    damage: { count: 3, sides: 8, bonus: 0, average: avg(3, 8) },
+    damageType: 'thunder',
+    saveAbility: 'con',
+    isAoE: true,
+    aoeRadius: 10,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 2,
+  },
+
+  'spike growth': {
+    // 2nd-level transmutation, action, 150 ft, 2d4 piercing damage_zone/turn,
+    // NO on-cast damage, concentration 10 min.
+    attackType: null,         // no on-cast damage; persistent via damage_zone
+    rangeNormal: 150,
+    damage: { count: 2, sides: 4, bonus: 0, average: avg(2, 4) },
+    damageType: 'piercing',
+    isAoE: true,              // canon: 20-ft radius (v1: single-target)
+    isControl: true,          // persistent damage zone
+    requiresConcentration: true,
+    slotLevel: 2,
+  },
+
+  'spiritual weapon': {
+    // 2nd-level evocation, BONUS ACTION, 60 ft, melee spell attack 1d8 force +
+    // persistent damage_zone 1d8 force/turn (ticksRemaining: 10), NO concentration, 1 min.
+    attackType: 'spell',      // melee spell attack (resolved in execute())
+    rangeNormal: 60,
+    damage: { count: 1, sides: 8, bonus: 0, average: avg(1, 8) },
+    damageType: 'force',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 2,
+    bonusAction: true,
+  },
+
+  'phantasmal force': {
+    // 2nd-level illusion, action, 60 ft, INT save 1d6 psychic + persistent
+    // damage_zone 1d6 psychic/turn (no save), concentration 1 min. On save
+    // success: NO effect (target disbelieves).
+    attackType: 'save',
+    rangeNormal: 60,
+    damage: { count: 1, sides: 6, bonus: 0, average: avg(1, 6) },
+    damageType: 'psychic',
+    saveAbility: 'int',
+    isAoE: false,
+    isControl: true,          // persistent damage zone
+    requiresConcentration: true,
+    slotLevel: 2,
+  },
+
+  'ray of enfeeblement': {
+    // 2nd-level necromancy, action, 60 ft, ranged spell attack, target deals
+    // half weapon damage, concentration 1 min. NO damage on hit.
+    attackType: 'spell',      // ranged spell attack (resolved in execute())
+    rangeNormal: 60,
+    damage: null,             // NO direct damage; sets scratch field
+    damageType: null,
+    isAoE: false,
+    isControl: true,          // debuff — half weapon damage
+    requiresConcentration: true,
+    slotLevel: 2,
+  },
+
+  'web': {
+    // 2nd-level conjuration, action, 60 ft, DEX save or restrained,
+    // concentration 1 min. v1: single-target (canon: 20-ft cube AoE).
+    attackType: 'save',
+    rangeNormal: 60,
+    damage: null,
+    damageType: null,
+    saveAbility: 'dex',
+    isAoE: true,              // canon: 20-ft cube (v1: single-target)
+    isControl: true,          // restrained condition
+    requiresConcentration: true,
+    slotLevel: 2,
+  },
+
+  'silence': {
+    // 2nd-level illusion, action, 120 ft, AoE blocks verbal spells (forward-
+    // compat flag), concentration 10 min. NO save.
+    attackType: null,
+    rangeNormal: 120,
+    damage: null,
+    damageType: null,
+    isAoE: true,              // canon: 20-ft radius sphere (v1: single-target)
+    isControl: true,          // blocks verbal spells (forward-compat)
+    requiresConcentration: true,
+    slotLevel: 2,
+  },
+
+  'suggestion': {
+    // 2nd-level enchantment, action, 30 ft, WIS save or charmed, concentration
+    // (canon: 8 hr; v1: 1 min simplification).
+    attackType: 'save',
+    rangeNormal: 30,
+    damage: null,
+    damageType: null,
+    saveAbility: 'wis',
+    isAoE: false,
+    isControl: true,          // charmed condition
+    requiresConcentration: true,
+    slotLevel: 2,
+  },
+
+  'zone of truth': {
+    // 2nd-level enchantment, action, 60 ft, CHA save, can't lie in 15-ft radius
+    // (forward-compat flag), concentration 10 min.
+    attackType: 'save',
+    rangeNormal: 60,
+    damage: null,
+    damageType: null,
+    saveAbility: 'cha',
+    isAoE: true,              // canon: 15-ft radius (v1: single-target)
+    isControl: true,          // truth-enforcement (forward-compat)
+    requiresConcentration: true,
+    slotLevel: 2,
+  },
+
+  'enthrall': {
+    // 2nd-level enchantment, action, 60 ft, WIS save (multi-target up to 3),
+    // disadv on Perception (forward-compat flag on caster), concentration 1 min.
+    attackType: 'save',
+    rangeNormal: 60,
+    damage: null,
+    damageType: null,
+    saveAbility: 'wis',
+    isAoE: false,
+    isControl: true,          // perception debuff (forward-compat)
+    requiresConcentration: true,
+    slotLevel: 2,
+  },
+
+  'detect thoughts': {
+    // 2nd-level divination, action, self (5-ft aura), WIS save probe (forward-
+    // compat flag on caster), concentration 1 min.
+    attackType: null,
+    rangeNormal: 5,           // self aura
+    damage: null,
+    damageType: null,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 2,
+  },
+
+  'see invisibility': {
+    // 2nd-level divination, action, self, see invisible 60 ft (forward-compat
+    // flag), NO concentration, 1 hr.
+    attackType: null,
+    rangeNormal: 0,           // self
+    damage: null,
+    damageType: null,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 2,
+  },
+
+  'spider climb': {
+    // 2nd-level transmutation, action, touch, climb speed (forward-compat
+    // flag), concentration 1 hr.
+    attackType: null,
+    rangeNormal: 5,           // touch
+    damage: null,
+    damageType: null,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 2,
+  },
+
+  'pass without trace': {
+    // 2nd-level abjuration, action, self, +10 stealth aura (forward-compat
+    // flag), concentration 1 hr.
+    attackType: null,
+    rangeNormal: 0,           // self
+    damage: null,
+    damageType: null,
+    isAoE: true,              // canon: 30-ft radius aura (v1: self)
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 2,
+  },
+
+  'protection from poison': {
+    // 2nd-level abjuration, action, touch, removes poisoned + advantage on saves
+    // vs poison (forward-compat flag), NO concentration, 1 hr.
+    attackType: null,
+    rangeNormal: 5,           // touch
+    damage: null,
+    damageType: null,
+    isAoE: false,
+    isControl: true,          // removes poisoned condition
+    requiresConcentration: false,
+    slotLevel: 2,
+  },
+
+  'prayer of healing': {
+    // 2nd-level evocation, action (canon: 10 min — v1: action simplification),
+    // 30 ft, 2d8+spellcasting heal up to 3 creatures, NO concentration.
+    attackType: null,
+    rangeNormal: 30,
+    damage: null,             // healing, not damage
+    damageType: null,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 2,
+  },
+
+  'knock': {
+    // 2nd-level transmutation, action, 60 ft, opens objects (forward-compat
+    // flag), NO concentration.
+    attackType: null,
+    rangeNormal: 60,
+    damage: null,
+    damageType: null,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 2,
+  },
+
+  'arcane lock': {
+    // 2nd-level abjuration, action, touch, locks object (forward-compat flag),
+    // permanent, NO concentration.
+    attackType: null,
+    rangeNormal: 5,           // touch
+    damage: null,
+    damageType: null,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 2,
+  },
+
 };
 
 // ---- Lookup helper ------------------------------------------
