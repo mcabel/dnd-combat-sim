@@ -194,7 +194,10 @@ console.log('\n=== 3. Damage redirect (runCombat) ===\n');
     faction: 'party', pos: { x: 1, y: 0, z: 0 },    // adjacent to enemy
     maxHP: 100, currentHP: 100, ac: 4,               // very easy to hit
     wardingBond: { casterId },
-    actions: [meleeAction({ hitBonus: 20,             // kills enemy on own turn
+    // hitBonus: null → auto-hit so the enemy is killed deterministically on round 1.
+    // With a normal attack roll a nat 1 (5%) misses, letting the enemy survive and
+    // hit the bonded a second time (→ bonded HP 90, breaking the "HP > 90" assertion).
+    actions: [meleeAction({ hitBonus: null,
       damage: { count: 1, sides: 1, bonus: 9, average: 10 } })],
   });
 
@@ -202,7 +205,12 @@ console.log('\n=== 3. Damage redirect (runCombat) ===\n');
     id: enemyId, name: 'Orc',
     faction: 'enemy', pos: { x: 0, y: 0, z: 0 },
     maxHP: 5, currentHP: 5, ac: 4,
-    actions: [meleeAction({ hitBonus: 20,             // always hits bonded
+    // hitBonus: null → auto-hit. A normal attack roll (even hitBonus 20 vs AC 4)
+    // nat-1-misses 5% of the time (attackHits, PHB p.194); when that happens the
+    // bonded takes no damage and the caster takes no redirect damage (stays at 100),
+    // failing the "caster HP < 100" assertion flakily. Auto-hit exercises the
+    // redirect deterministically.
+    actions: [meleeAction({ hitBonus: null,
       damage: { count: 1, sides: 1, bonus: 9, average: 10 },  // exactly 10 damage
       damageType: 'slashing' })],
   });
@@ -260,7 +268,14 @@ console.log('\n=== 4. Bond break on caster death ===\n');
     id: enemyId, name: 'Bond Breaker',
     faction: 'enemy', pos: { x: 0, y: 0, z: 0 },
     maxHP: 5, currentHP: 5, ac: 4,
-    actions: [meleeAction({ hitBonus: 20,
+    // hitBonus: null → auto-hit (resolveAttack auto-hit path). This bypasses the
+    // d20 attack roll so the bonded ALWAYS takes damage on round 1. With a normal
+    // attack roll (even hitBonus 20 vs AC 4), a nat 1 (5%) is an auto-miss
+    // (attackHits, PHB p.194); when that happens the bonded takes no damage, the
+    // caster takes no redirect damage, survives at 5 HP, and the 3 bond-break
+    // assertions below fail flakily (~5% of runs). Auto-hit makes the redirect
+    // deterministic while still exercising applyWardingBondRedirect + checkDeath.
+    actions: [meleeAction({ hitBonus: null,
       damage: { count: 1, sides: 1, bonus: 9, average: 10 },
       damageType: 'fire' })],
   });

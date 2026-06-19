@@ -10,6 +10,10 @@ import { cleanup as cleanupShield } from '../spells/shield';
 import { cleanup as cleanupRayOfFrost } from '../spells/ray_of_frost';
 import { cleanup as cleanupChillTouch } from '../spells/chill_touch';
 import { cleanup as cleanupBladeWard } from '../spells/blade_ward';
+import { cleanup as cleanupViciousMockery } from '../spells/vicious_mockery';
+import { cleanup as cleanupMindSliver } from '../spells/mind_sliver';
+import { cleanup as cleanupBoomingBlade } from '../spells/booming_blade';
+import { cleanup as cleanupFrostbite } from '../spells/frostbite';
 
 // Damage types resisted by Blade Ward (PHB p.218) — bludgeoning/piercing/slashing.
 const BLADE_WARD_PHYSICAL_TYPES: DamageType[] = ['bludgeoning', 'piercing', 'slashing'];
@@ -128,7 +132,22 @@ export function rollSave(
   // Warding Bond: +1 to all saving throws while bonded (PHB p.287)
   const wbBonus = combatant.wardingBond ? 1 : 0;
 
-  const total = roll + mod + prof + biBonus + blessBonus + wbBonus;
+  // Mind Sliver (TCE p.108): one-shot save debuff — target subtracts
+  // 1d4 (or rollDie(storedSides)) from the next save it makes, then the
+  // flag is consumed (cleared) regardless of success/failure. The flag is
+  // set by Mind Sliver's applyCantripEffect on save-FAIL; rollSave is the
+  // choke point (new in this session — Vicious Mockery integrated into
+  // resolveAttack's attack-roll branch; Mind Sliver integrates here).
+  let mindSliverPenalty = 0;
+  if (combatant._mindSliverDiePenaltyNextSave !== undefined) {
+    mindSliverPenalty = rollDie(combatant._mindSliverDiePenaltyNextSave);
+    // Consume (one-shot) — clear the flag now so subsequent saves this
+    // turn (and beyond) are unaffected. TCE p.108: "the NEXT saving
+    // throw it makes" — singular.
+    delete combatant._mindSliverDiePenaltyNextSave;
+  }
+
+  const total = roll + mod + prof + biBonus + blessBonus + wbBonus - mindSliverPenalty;
   return { roll, total, success: total >= dc };
 }
 
@@ -237,6 +256,21 @@ export function resetBudget(c: Combatant): void {
   cleanupChillTouch(c);
   // Blade Ward resistance expires at start of caster's next turn (PHB p.218)
   cleanupBladeWard(c);
+  // Vicious Mockery one-shot disadv expires if not consumed by an attack roll
+  // before the end of the target's next turn (PHB p.285).
+  cleanupViciousMockery(c);
+  // Mind Sliver one-shot save penalty expires if not consumed by a save
+  // before the start of the target's next turn (TCE p.108). Codebase
+  // convention: clears at the start of the AFFECTED creature's next turn
+  // (slightly more lenient than PHB's "end of caster's next turn").
+  cleanupMindSliver(c);
+  // Booming Blade rider expires if the target didn't move willingly before
+  // the start of its next turn (TCE p.106). Same codebase convention.
+  cleanupBoomingBlade(c);
+  // Frostbite one-shot weapon-attack disadv expires if not consumed by a
+  // weapon attack before the start of the target's next turn (XGE p.156).
+  // Same codebase convention as Vicious Mockery / Mind Sliver / Booming Blade.
+  cleanupFrostbite(c);
 
   const speed = effectiveSpeed(c);
   c.budget = {

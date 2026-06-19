@@ -1,22 +1,46 @@
 {
   "level": 5,
-  "generatedAt": "2026-06-19T00:44:11.347Z",
-  "generatorVersion": 1,
+  "generatedAt": "2026-06-19T04:21:08.654Z",
+  "generatorVersion": 2,
+  "scopeRule": "pre-2024 canon; reprints: newest in-scope source wins; XPHB(2024) out of scope; creatures keep all variants (not applicable to spells)",
+  "sourceDates": {
+    "PHB": "2014-08-19",
+    "XGE": "2017-11-21",
+    "LLK": "2018-06-08",
+    "GGR": "2018-11-20",
+    "AI": "2019-07-16",
+    "EGW": "2020-03-17",
+    "EFA": "2020-07-01",
+    "IDRotF": "2020-09-15",
+    "TCE": "2020-11-17",
+    "AitFR-AVT": "2021-07-08",
+    "FTD": "2021-10-26",
+    "SCC": "2021-12-07",
+    "AAG": "2022-08-16",
+    "SatO": "2022-09-01",
+    "FRHoF": "2022-11-01",
+    "BMT": "2023-11-07",
+    "XPHB": "2024-09-03"
+  },
+  "outOfScopeSources": [
+    "XPHB"
+  ],
   "count": 67,
   "implementedCount": 0,
-  "remainingInScope2014": 64,
+  "remainingInScope": 64,
   "spells": [
     {
       "name": "Alustriel's Mooncloak",
       "source": "FRHoF",
+      "sourceDate": "2022-11-01",
       "sourceFile": "spells-frhof.json",
       "page": 142,
       "level": 5,
       "school": "Abjuration",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [],
+      "inScope": true,
+      "otherSources": [],
       "classes": [
         "Bard",
         "Druid",
@@ -37,15 +61,20 @@
     {
       "name": "Animate Objects",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 213,
       "level": 5,
       "school": "Transmutation",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Bard",
@@ -67,15 +96,20 @@
     {
       "name": "Antilife Shell",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 213,
       "level": 5,
       "school": "Abjuration",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Druid"
@@ -94,15 +128,20 @@
     {
       "name": "Awaken",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 216,
       "level": 5,
       "school": "Transmutation",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Bard",
@@ -122,15 +161,20 @@
     {
       "name": "Banishing Smite",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 216,
       "level": 5,
       "school": "Abjuration",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Paladin"
@@ -151,15 +195,20 @@
     {
       "name": "Bigby's Hand",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 218,
       "level": 5,
       "school": "Evocation",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Wizard",
@@ -179,15 +228,20 @@
     {
       "name": "Circle of Power",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 221,
       "level": 5,
       "school": "Abjuration",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Paladin"
@@ -206,15 +260,20 @@
     {
       "name": "Cloudkill",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 222,
       "level": 5,
       "school": "Conjuration",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Sorcerer",
@@ -234,15 +293,20 @@
     {
       "name": "Commune",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 223,
       "level": 5,
       "school": "Divination",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Cleric"
@@ -261,15 +325,20 @@
     {
       "name": "Commune with Nature",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 224,
       "level": 5,
       "school": "Divination",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Druid",
@@ -289,15 +358,20 @@
     {
       "name": "Cone of Cold",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 224,
       "level": 5,
       "school": "Evocation",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Sorcerer",
@@ -319,15 +393,20 @@
     {
       "name": "Conjure Elemental",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 225,
       "level": 5,
       "school": "Conjuration",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Druid",
@@ -347,15 +426,20 @@
     {
       "name": "Conjure Volley",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 226,
       "level": 5,
       "school": "Conjuration",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Ranger"
@@ -376,15 +460,20 @@
     {
       "name": "Contact Other Plane",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 226,
       "level": 5,
       "school": "Divination",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Warlock",
@@ -406,15 +495,20 @@
     {
       "name": "Contagion",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 227,
       "level": 5,
       "school": "Necromancy",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Cleric",
@@ -434,14 +528,15 @@
     {
       "name": "Control Winds",
       "source": "XGE",
+      "sourceDate": "2017-11-21",
       "sourceFile": "spells-xge.json",
       "page": 152,
       "level": 5,
       "school": "Transmutation",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [],
+      "inScope": true,
+      "otherSources": [],
       "classes": [],
       "effect": "STRENGTH save · 300 ft · timed",
       "meta": {
@@ -457,14 +552,15 @@
     {
       "name": "Create Spelljamming Helm",
       "source": "AAG",
+      "sourceDate": "2022-08-16",
       "sourceFile": "spells-aag.json",
       "page": 22,
       "level": 5,
       "school": "Transmutation",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [],
+      "inScope": true,
+      "otherSources": [],
       "classes": [
         "Wizard",
         "Artificer"
@@ -483,15 +579,20 @@
     {
       "name": "Creation",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 229,
       "level": 5,
       "school": "Illusion",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Sorcerer",
@@ -512,14 +613,15 @@
     {
       "name": "Danse Macabre",
       "source": "XGE",
+      "sourceDate": "2017-11-21",
       "sourceFile": "spells-xge.json",
       "page": 153,
       "level": 5,
       "school": "Necromancy",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [],
+      "inScope": true,
+      "otherSources": [],
       "classes": [],
       "effect": "utility · 60 ft · timed",
       "meta": {
@@ -535,14 +637,15 @@
     {
       "name": "Dawn",
       "source": "XGE",
+      "sourceDate": "2017-11-21",
       "sourceFile": "spells-xge.json",
       "page": 153,
       "level": 5,
       "school": "Evocation",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [],
+      "inScope": true,
+      "otherSources": [],
       "classes": [],
       "effect": "CONSTITUTION save · 60 ft · timed",
       "meta": {
@@ -558,15 +661,20 @@
     {
       "name": "Destructive Wave",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 231,
       "level": 5,
       "school": "Evocation",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Paladin"
@@ -589,15 +697,20 @@
     {
       "name": "Dispel Evil and Good",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 233,
       "level": 5,
       "school": "Abjuration",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Cleric",
@@ -617,15 +730,20 @@
     {
       "name": "Dominate Person",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 235,
       "level": 5,
       "school": "Enchantment",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Bard",
@@ -646,15 +764,20 @@
     {
       "name": "Dream",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 236,
       "level": 5,
       "school": "Illusion",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Bard",
@@ -675,14 +798,15 @@
     {
       "name": "Enervation",
       "source": "XGE",
+      "sourceDate": "2017-11-21",
       "sourceFile": "spells-xge.json",
       "page": 155,
       "level": 5,
       "school": "Necromancy",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [],
+      "inScope": true,
+      "otherSources": [],
       "classes": [],
       "effect": "DEXTERITY save · 2d8 necrotic + 4d8 · 60 ft · timed",
       "meta": {
@@ -701,14 +825,15 @@
     {
       "name": "Far Step",
       "source": "XGE",
+      "sourceDate": "2017-11-21",
       "sourceFile": "spells-xge.json",
       "page": 155,
       "level": 5,
       "school": "Conjuration",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [],
+      "inScope": true,
+      "otherSources": [],
       "classes": [],
       "effect": "utility · Self · timed",
       "meta": {
@@ -724,15 +849,20 @@
     {
       "name": "Flame Strike",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 242,
       "level": 5,
       "school": "Evocation",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Cleric"
@@ -754,15 +884,20 @@
     {
       "name": "Geas",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 244,
       "level": 5,
       "school": "Enchantment",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Bard",
@@ -787,15 +922,20 @@
     {
       "name": "Greater Restoration",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 246,
       "level": 5,
       "school": "Abjuration",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Bard",
@@ -817,15 +957,20 @@
     {
       "name": "Hallow",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 249,
       "level": 5,
       "school": "Evocation",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Cleric"
@@ -844,15 +989,20 @@
     {
       "name": "Hold Monster",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 251,
       "level": 5,
       "school": "Enchantment",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Bard",
@@ -874,14 +1024,15 @@
     {
       "name": "Holy Weapon",
       "source": "XGE",
+      "sourceDate": "2017-11-21",
       "sourceFile": "spells-xge.json",
       "page": 157,
       "level": 5,
       "school": "Evocation",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [],
+      "inScope": true,
+      "otherSources": [],
       "classes": [],
       "effect": "CONSTITUTION save · 2d8 radiant · Touch · timed",
       "meta": {
@@ -899,14 +1050,15 @@
     {
       "name": "Immolation",
       "source": "XGE",
+      "sourceDate": "2017-11-21",
       "sourceFile": "spells-xge.json",
       "page": 158,
       "level": 5,
       "school": "Evocation",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [],
+      "inScope": true,
+      "otherSources": [],
       "classes": [],
       "effect": "DEXTERITY save · 8d6 fire + 4d6 · 90 ft · timed",
       "meta": {
@@ -925,14 +1077,15 @@
     {
       "name": "Infernal Calling",
       "source": "XGE",
+      "sourceDate": "2017-11-21",
       "sourceFile": "spells-xge.json",
       "page": 158,
       "level": 5,
       "school": "Conjuration",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [],
+      "inScope": true,
+      "otherSources": [],
       "classes": [],
       "effect": "utility · 90 ft · timed",
       "meta": {
@@ -948,15 +1101,20 @@
     {
       "name": "Insect Plague",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 254,
       "level": 5,
       "school": "Conjuration",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Cleric",
@@ -977,14 +1135,15 @@
     {
       "name": "Jallarzi's Storm of Radiance",
       "source": "XPHB",
+      "sourceDate": "2024-09-03",
       "sourceFile": "spells-xphb.json",
       "page": 289,
       "level": 5,
       "school": "Evocation",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": false,
-      "reprintedIn": [],
+      "inScope": false,
+      "otherSources": [],
       "classes": [
         "Warlock",
         "Wizard"
@@ -1003,15 +1162,20 @@
     {
       "name": "Legend Lore",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 254,
       "level": 5,
       "school": "Divination",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Bard",
@@ -1032,14 +1196,15 @@
     {
       "name": "Maelstrom",
       "source": "XGE",
+      "sourceDate": "2017-11-21",
       "sourceFile": "spells-xge.json",
       "page": 160,
       "level": 5,
       "school": "Evocation",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [],
+      "inScope": true,
+      "otherSources": [],
       "classes": [],
       "effect": "STRENGTH save · 6d6 bludgeoning · 120 ft · timed",
       "meta": {
@@ -1057,15 +1222,20 @@
     {
       "name": "Mass Cure Wounds",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 258,
       "level": 5,
       "school": "Evocation",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Bard",
@@ -1086,15 +1256,20 @@
     {
       "name": "Mislead",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 260,
       "level": 5,
       "school": "Illusion",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Bard",
@@ -1114,15 +1289,20 @@
     {
       "name": "Modify Memory",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 261,
       "level": 5,
       "school": "Enchantment",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Bard",
@@ -1142,14 +1322,15 @@
     {
       "name": "Negative Energy Flood",
       "source": "XGE",
+      "sourceDate": "2017-11-21",
       "sourceFile": "spells-xge.json",
       "page": 163,
       "level": 5,
       "school": "Necromancy",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [],
+      "inScope": true,
+      "otherSources": [],
       "classes": [],
       "effect": "CONSTITUTION save · 5d12 necrotic · 60 ft · Instantaneous",
       "meta": {
@@ -1167,15 +1348,20 @@
     {
       "name": "Passwall",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 264,
       "level": 5,
       "school": "Transmutation",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Wizard"
@@ -1194,15 +1380,20 @@
     {
       "name": "Planar Binding",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 265,
       "level": 5,
       "school": "Abjuration",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Bard",
@@ -1224,15 +1415,20 @@
     {
       "name": "Raise Dead",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 270,
       "level": 5,
       "school": "Necromancy",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Bard",
@@ -1253,15 +1449,20 @@
     {
       "name": "Rary's Telepathic Bond",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 270,
       "level": 5,
       "school": "Divination",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Wizard"
@@ -1280,15 +1481,20 @@
     {
       "name": "Reincarnate",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 271,
       "level": 5,
       "school": "Transmutation",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Druid"
@@ -1307,15 +1513,20 @@
     {
       "name": "Scrying",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 273,
       "level": 5,
       "school": "Divination",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Bard",
@@ -1338,15 +1549,20 @@
     {
       "name": "Seeming",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 274,
       "level": 5,
       "school": "Illusion",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Bard",
@@ -1367,14 +1583,15 @@
     {
       "name": "Skill Empowerment",
       "source": "XGE",
+      "sourceDate": "2017-11-21",
       "sourceFile": "spells-xge.json",
       "page": 165,
       "level": 5,
       "school": "Transmutation",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [],
+      "inScope": true,
+      "otherSources": [],
       "classes": [],
       "effect": "utility · Touch · timed",
       "meta": {
@@ -1390,14 +1607,15 @@
     {
       "name": "Songal's Elemental Suffusion",
       "source": "FRHoF",
+      "sourceDate": "2022-11-01",
       "sourceFile": "spells-frhof.json",
       "page": 145,
       "level": 5,
       "school": "Transmutation",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [],
+      "inScope": true,
+      "otherSources": [],
       "classes": [
         "Druid",
         "Sorcerer",
@@ -1417,15 +1635,20 @@
     {
       "name": "Steel Wind Strike",
       "source": "XGE",
+      "sourceDate": "2017-11-21",
       "sourceFile": "spells-xge.json",
       "page": 166,
       "level": 5,
       "school": "Conjuration",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [],
       "effect": "melee spell attack · 6d10 force · 30 ft · Instantaneous",
@@ -1444,15 +1667,20 @@
     {
       "name": "Summon Celestial",
       "source": "TCE",
+      "sourceDate": "2020-11-17",
       "sourceFile": "spells-tce.json",
       "page": 110,
       "level": 5,
       "school": "Conjuration",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [],
       "effect": "utility · 90 ft · timed",
@@ -1469,14 +1697,15 @@
     {
       "name": "Summon Draconic Spirit",
       "source": "FTD",
+      "sourceDate": "2021-10-26",
       "sourceFile": "spells-ftd.json",
       "page": 21,
       "level": 5,
       "school": "Conjuration",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [],
+      "inScope": true,
+      "otherSources": [],
       "classes": [],
       "effect": "DEXTERITY save · 60 ft · timed",
       "meta": {
@@ -1492,14 +1721,15 @@
     {
       "name": "Summon Dragon",
       "source": "XPHB",
+      "sourceDate": "2024-09-03",
       "sourceFile": "spells-xphb.json",
       "page": 324,
       "level": 5,
       "school": "Conjuration",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": false,
-      "reprintedIn": [],
+      "inScope": false,
+      "otherSources": [],
       "classes": [
         "Wizard"
       ],
@@ -1517,15 +1747,20 @@
     {
       "name": "Swift Quiver",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 279,
       "level": 5,
       "school": "Transmutation",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Ranger"
@@ -1544,15 +1779,20 @@
     {
       "name": "Synaptic Static",
       "source": "XGE",
+      "sourceDate": "2017-11-21",
       "sourceFile": "spells-xge.json",
       "page": 167,
       "level": 5,
       "school": "Enchantment",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [],
       "effect": "INTELLIGENCE save · 8d6 psychic · 120 ft · Instantaneous",
@@ -1571,15 +1811,20 @@
     {
       "name": "Telekinesis",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 280,
       "level": 5,
       "school": "Transmutation",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Sorcerer",
@@ -1599,15 +1844,20 @@
     {
       "name": "Teleportation Circle",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 282,
       "level": 5,
       "school": "Conjuration",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Bard",
@@ -1628,14 +1878,15 @@
     {
       "name": "Temporal Shunt",
       "source": "EGW",
+      "sourceDate": "2020-03-17",
       "sourceFile": "spells-egw.json",
       "page": 189,
       "level": 5,
       "school": "Transmutation",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [],
+      "inScope": true,
+      "otherSources": [],
       "classes": [],
       "effect": "WISDOM save · 120 ft · timed",
       "meta": {
@@ -1651,14 +1902,15 @@
     {
       "name": "Transmute Rock",
       "source": "XGE",
+      "sourceDate": "2017-11-21",
       "sourceFile": "spells-xge.json",
       "page": 169,
       "level": 5,
       "school": "Transmutation",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [],
+      "inScope": true,
+      "otherSources": [],
       "classes": [],
       "effect": "STRENGTH save · 120 ft · Permanent",
       "meta": {
@@ -1674,15 +1926,20 @@
     {
       "name": "Tree Stride",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 283,
       "level": 5,
       "school": "Conjuration",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Druid",
@@ -1702,15 +1959,20 @@
     {
       "name": "Wall of Force",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 285,
       "level": 5,
       "school": "Evocation",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Wizard"
@@ -1729,14 +1991,15 @@
     {
       "name": "Wall of Light",
       "source": "XGE",
+      "sourceDate": "2017-11-21",
       "sourceFile": "spells-xge.json",
       "page": 170,
       "level": 5,
       "school": "Evocation",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [],
+      "inScope": true,
+      "otherSources": [],
       "classes": [],
       "effect": "ranged spell attack · 120 ft · timed",
       "meta": {
@@ -1752,15 +2015,20 @@
     {
       "name": "Wall of Stone",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 287,
       "level": 5,
       "school": "Evocation",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Druid",
@@ -1782,14 +2050,15 @@
     {
       "name": "Wrath of Nature",
       "source": "XGE",
+      "sourceDate": "2017-11-21",
       "sourceFile": "spells-xge.json",
       "page": 171,
       "level": 5,
       "school": "Evocation",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [],
+      "inScope": true,
+      "otherSources": [],
       "classes": [],
       "effect": "ranged spell attack · 120 ft · timed",
       "meta": {
@@ -1805,14 +2074,15 @@
     {
       "name": "Yolande's Regal Presence",
       "source": "XPHB",
+      "sourceDate": "2024-09-03",
       "sourceFile": "spells-xphb.json",
       "page": 343,
       "level": 5,
       "school": "Enchantment",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": false,
-      "reprintedIn": [],
+      "inScope": false,
+      "otherSources": [],
       "classes": [
         "Bard",
         "Wizard"

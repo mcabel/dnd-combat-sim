@@ -270,7 +270,7 @@ console.log('\n=== Rage engine integration ===');
     ac: 20,            // near-unhittable by enemy (+4 vs AC 20 → needs 16+)
     maxHP: 100, currentHP: 100,
     traits: ['Rage', 'Reckless Attack'],
-    actions: [meleeAction({ hitBonus: 20, damage: { count: 1, sides: 2, bonus: 0, average: 1.5 } })],
+    actions: [meleeAction({ hitBonus: null, damage: { count: 1, sides: 2, bonus: 0, average: 1.5 } })], // auto-hit (no nat-1 auto-miss flakiness)
     resources: {
       rage: { max: 2, remaining: 1, active: true, roundsRemaining: 10 },
     },

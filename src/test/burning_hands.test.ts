@@ -305,10 +305,16 @@ console.log('\n3. execute — damage, DEX save, slot consumed');
 }
 
 {
-  // High dex target — should take half on success (test probabilistically)
+  // High dex target — should take half on success.
+  // dex 30 → +10 mod. Use saveDC = 11 so even a nat 1 + 10 = 11 ≥ 11 succeeds
+  // (PHB 2014 saves have NO auto-fail on nat 1, unlike attack rolls — PHB p.179).
+  // The old DC 13 was NOT guaranteed: nat 1 (→11) and nat 2 (→12) fail ~10% of
+  // the time, making this test flaky. DC 11 makes it truly deterministic.
   const s = makeSorcerer();
-  const saveDC = 13;
-  // dex 30 → +10 mod → always succeeds DC 13 (need 3+, impossible to fail)
+  // Override the Sorcerer's Burning Hands saveDC to 11 for this test.
+  const bhAction = s.actions.find(a => a.name === 'Burning Hands');
+  if (bhAction) bhAction.saveDC = 11;
+  const saveDC = 11;
   const e = makeEnemy('e1', { x: 1, y: 0, z: 0 }, 30);
   e.currentHP = 40;
   const bf = makeBF([s, e]);
@@ -316,7 +322,8 @@ console.log('\n3. execute — damage, DEX save, slot consumed');
   execute(s, [e], state);
   // Check log for save_success
   const saveEvt = state.log.events.find(ev => ev.type === 'save_success' && ev.targetId === 'e1');
-  assert('save_success logged when target has dex 30 (guaranteed pass)', saveEvt !== undefined);
+  assert('save_success logged when target has dex 30 (DC 11 → guaranteed pass)', saveEvt !== undefined,
+    `events: ${state.log.events.map(ev => ev.type + ':' + ev.description?.slice(0,40)).join(' | ')}`);
 }
 
 {

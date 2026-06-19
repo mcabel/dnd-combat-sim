@@ -428,9 +428,14 @@ console.log('\n--- Section 3: Planner + Engine ---');
   // 3d: runCombat fires Faerie Fire events in round 1
   // Druid HP boosted to 100 so they survive regardless of initiative order.
   // Goblin at 40ft: within FF range but outside melee — Druid will cast.
+  // NOTE: Entangle is removed from the Druid's action list for this test
+  // because the AI planner (Session 36) gives Entangle higher priority than
+  // Faerie Fire. Without this fix, the Druid would cast Entangle instead of
+  // FF, making this test non-deterministic (no FF events in the log).
   const druid  = spawnClass('Druid', { x: 0, y: 0, z: 0 });
   druid.maxHP     = 100;
   druid.currentHP = 100;
+  druid.actions   = druid.actions.filter(a => a.name !== 'Entangle');
   const goblin = spawnGoblin('goblin1', { x: 8, y: 0, z: 0 });
 
   const bf     = makeFlatBattlefield(20, 20, [druid, goblin]);

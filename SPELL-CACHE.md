@@ -90,7 +90,7 @@ Example output (level 0, PHB, 5):
 ```
 
 ### `npm run spell-cache:show -- "Spell Name" [--pretty]`
-Print the **full raw 5etools JSON entry** for a spell. Use this when you're about to implement and need the complete `entries`, `scalingLevelDice`, component details, etc. (the cache only stores a summary). Prefers PHB over XPHB.
+Print the **full raw 5etools JSON entry** for a spell. Use this when you're about to implement and need the complete `entries`, `scalingLevelDice`, component details, etc. (the cache only stores a summary). Picks the **newest in-scope printing** (e.g. TCE over PHB for the same spell); falls back to the newest out-of-scope printing only if no in-scope version exists, and flags it as out-of-scope.
 
 ---
 
@@ -107,11 +107,17 @@ Print the **full raw 5etools JSON entry** for a spell. Use this when you're abou
 
 ## Design notes
 
+- **Project scope (per user).** Canon material published **pre-2024** is in scope. The 2024 revised core books (XPHB, and future XMM/XDMG) are **out of scope** and never override pre-2024 content. Add new 2024+ codes to `OUT_OF_SCOPE_SOURCES` in `build.ts` / `show.ts` when testDataSpells gains them.
+- **Reprint precedence: NEWEST in-scope source wins.** When the same spell appears in multiple pre-2024 sourcebooks (e.g. Booming Blade in SCAG 2015 → reprinted in TCE 2020), the **newest** printing is canonical — its `source`, `sourceFile`, `page`, and rules text take precedence. Older in-scope printings and any out-of-scope printings are recorded in `otherSources` (newest-first) for reference only. Example: Booming Blade → `source: "TCE"`, `otherSources: []` (SCAG isn't a separate file in testDataSpells; TCE's own entry is authoritative).
 - **`implemented` is auto-derived, never hand-edited.** The build script scans `src/spells/*.ts`, reads each module's `export const metadata = { name: '...' }` (falling back to filename→Title Case), and matches against spell names. This eliminates flag drift.
-- **Dedup by name, PHB canonical.** A spell reprinted in both PHB and XPHB appears once, with `source: "PHB"` and `reprintedIn: ["XPHB"]`. This cuts 936 name+source pairs down to 557 unique spells.
-- **`inScope2014`** = the spell exists in at least one non-XPHB source. XPHB (2024) is out of scope per `AGENTS.md` ("PHB 2014 rules only"); the picker excludes these by default.
+- **Dedup by name.** A spell reprinted across files appears once, with the canonical (newest in-scope) source primary and all other printings in `otherSources`. This cut 936 name+source pairs down to 557 unique spells.
+- **`inScope`** = the spell exists in at least one pre-2024 source. Spells that exist ONLY in XPHB (2024) — e.g. Sorcerous Burst, Arcane Vigor, the spell Divine Smite — have `inScope: false` and are excluded from the picker by default (use `--all` to include them).
 - **Damage summary** scans only `entries[0]` (the primary effect) for `{@damage NdN}`, so scaling cantrips show their base die (e.g. "1d6 acid") plus a `+scales` flag — not "1d6 + 2d6 + 3d6 + 4d6". Utility spells with `damageInflict` tags but no dice (e.g. Alter Self) correctly show no damage.
 - **Workstream routing in the picker:** cantrips (level 0) → Cantrip workstream (`zHANDOVER`); leveled spells → Core Engine workstream (`HANDOVER-SESSION-*`). The picker says so explicitly so agents don't cross workstream boundaries.
+
+### ⚠️ Creatures follow a DIFFERENT rule (not applied here)
+
+Per project scope: **creatures are allowed to have ALL reprinted versions as variants** — they are NOT deduped. This spell cache dedupes by name (newest in-scope wins) because that's the rule for **spells and features**. A future creature/monster cache must NOT copy this dedup logic; it should keep every printing as a separate variant entry. Do not port `build.ts`'s dedup to a creature cache without inverting this behavior.
 
 ---
 

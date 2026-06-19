@@ -20,8 +20,12 @@ jobs:
         run: |
           FAILED=0
           for f in src/test/*.test.ts; do
-            RESULT=$(TS_NODE_COMPILER_OPTIONS='{"lib":["ES2020","DOM"],"types":["node"]}' npx ts-node "$f" 2>&1 | grep "Results:")
-            echo "$(basename $f): $RESULT"
+            BASENAME=$(basename "$f")
+            # Per-file timeout (60s) prevents one hanging test from blocking
+            # the entire CI. If a test hangs, the timeout kills it, we log
+            # the failure, and move on to the next file.
+            RESULT=$(timeout 60 bash -c "TS_NODE_COMPILER_OPTIONS='{\"lib\":[\"ES2020\",\"DOM\"],\"types\":[\"node\"]}' npx ts-node \"$f\" 2>&1" | grep "Results:" || echo "Results: TIMEOUT or CRASH (no summary line)")
+            echo "$BASENAME: $RESULT"
             echo "$RESULT" | grep -q ", 0 failed" || FAILED=1
           done
           exit $FAILED

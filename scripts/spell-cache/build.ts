@@ -31,6 +31,48 @@ const SCHOOL_MAP: Record<string, string> = {
   I: 'Illusion',   N: 'Necromancy',  T: 'Transmutation', V: 'Evocation',
 };
 
+// ---- Sourcebook publication dates (ISO; used for reprint precedence) ----
+// PROJECT SCOPE RULE (per user): canon material published PRE-2024 is in scope.
+// Reprints within the in-scope corpus follow "NEWER HAS PRECEDENCE" — when the
+// same spell appears in PHB (2014) and TCE (2020), the TCE version is canonical.
+// Sources published 2024+ (the revised core books: XPHB, and future XMM/XDMG)
+// are OUT OF SCOPE and never override pre-2024 content.
+//
+// Dates are WotC street dates. A few lesser sources are best-effort (marked ~);
+// the ordering among them rarely matters since they have 1–19 spells each and
+// overlap is minimal. Edit this map freely as dates are confirmed.
+const SOURCE_DATES: Record<string, string> = {
+  'PHB':        '2014-08-19',  // Player's Handbook
+  'XGE':        '2017-11-21',  // Xanathar's Guide to Everything
+  'LLK':        '2018-06-08',  // Lost Laboratory of Kwalish  (~)
+  'GGR':        '2018-11-20',  // Guildmasters' Guide to Ravnica
+  'AI':         '2019-07-16',  // Acquisitions Incorporated
+  'EGW':        '2020-03-17',  // Explorer's Guide to Wildemount
+  'EFA':        '2020-07-01',  // (~ uncertain; pre-2024)
+  'IDRotF':     '2020-09-15',  // Icewind Dale: Rime of the Frostmaiden
+  'TCE':        '2020-11-17',  // Tasha's Cauldron of Everything
+  'AitFR-AVT':  '2021-07-08',  // Adventures in the Forgotten Realms (MtG)
+  'FTD':        '2021-10-26',  // Fizban's Treasury of Dragons
+  'SCC':        '2021-12-07',  // Strixhaven: A Curriculum of Chaos
+  'AAG':        '2022-08-16',  // Astral Adventurer's Guide (Spelljammer)
+  'SatO':       '2022-09-01',  // (~ uncertain; pre-2024)
+  'FRHoF':      '2022-11-01',  // (~ uncertain; pre-2024)
+  'BMT':        '2023-11-07',  // The Book of Many Things
+  'XPHB':       '2024-09-03',  // 2024 Player's Handbook (revised) — OUT OF SCOPE
+};
+
+// Sources that are OUT OF SCOPE (2024+ revised core books). Spells that exist
+// ONLY in these sources have inScope=false and are excluded from the picker by
+// default. Add 'XMM' / 'XDMG' here when those 2024 books are added to testDataSpells.
+const OUT_OF_SCOPE_SOURCES: Set<string> = new Set(['XPHB']);
+
+function sourceDate(code: string): string {
+  return SOURCE_DATES[code] ?? '1970-01-01'; // unknown → treated as oldest (safe default)
+}
+function isOutOfScope(code: string): boolean {
+  return OUT_OF_SCOPE_SOURCES.has(code);
+}
+
 // ---- Types --------------------------------------------------
 interface RawSpell {
   name: string;
@@ -50,17 +92,24 @@ interface RawSpell {
   miscTags?: string[];
 }
 
+interface SourceRef {
+  code: string;              // sourcebook code, e.g. 'PHB', 'TCE', 'XPHB'
+  date: string;              // ISO publication date (from SOURCE_DATES)
+  inScope: boolean;          // false for 2024+ revised core books (XPHB, …)
+}
+
 interface CachedSpell {
   name: string;
-  source: string;            // primary source (PHB preferred)
-  sourceFile: string;        // testDataSpells/<file>
-  page: number | null;
+  source: string;            // CANONICAL source = newest in-scope source (per project precedence rule)
+  sourceDate: string;        // ISO date of the canonical source
+  sourceFile: string;        // testDataSpells/<file> for the canonical source
+  page: number | null;       // page in the canonical source
   level: number;
   school: string;            // full name
   implemented: boolean;
   implementedModule: string | null;
-  inScope2014: boolean;      // false if ONLY in XPHB (2024)
-  reprintedIn: string[];     // other sourcebook codes
+  inScope: boolean;          // true if ≥1 pre-2024 source exists (false = XPHB-only)
+  otherSources: SourceRef[]; // every other source (older in-scope + any out-of-scope), newest-first
   classes: string[];         // from sources.json (best-effort)
   effect: string;            // one-line summary
   meta: {
@@ -210,8 +259,11 @@ function main(): void {
     }
   }
 
-  // Collect spells, dedupe by name. Prefer PHB as primary source.
-  const byName = new Map<string, { primary: RawSpell & { _file: string }; reprints: string[] }>();
+  // Collect ALL entries per spell name (a spell may appear in several sourcebooks).
+  // We do NOT dedupe creatures-style here — for spells, the project precedence rule
+  // is "newest in-scope source wins"; older in-scope + out-of-scope versions are
+  // recorded in `otherSources` for reference but do not override the canonical text.
+  const byName = new Map<string, Array<{ spell: RawSpell; file: string }>>();
 
   for (const [srcCode, file] of Object.entries(sourceMap)) {
     const full = path.join(DATA_DIR, file);
@@ -220,18 +272,8 @@ function main(): void {
     const arr: RawSpell[] = data.spell ?? [];
     for (const sp of arr) {
       if (!sp.name) continue;
-      const existing = byName.get(sp.name);
-      const entry = { ...sp, _file: file } as RawSpell & { _file: string };
-      if (!existing) {
-        byName.set(sp.name, { primary: entry, reprints: [] });
-      } else {
-        if (sp.source === 'PHB' && existing.primary.source !== 'PHB') {
-          existing.reprints.push(existing.primary.source);
-          existing.primary = entry;
-        } else if (sp.source !== existing.primary.source) {
-          existing.reprints.push(sp.source);
-        }
-      }
+      if (!byName.has(sp.name)) byName.set(sp.name, []);
+      byName.get(sp.name)!.push({ spell: sp, file });
     }
   }
 
@@ -239,7 +281,23 @@ function main(): void {
 
   const byLevel: CachedSpell[][] = Array.from({ length: 10 }, () => []);
 
-  for (const [name, { primary, reprints }] of byName) {
+  for (const [name, entries] of byName) {
+    // Canonical = NEWEST in-scope source. If a spell only exists in out-of-scope
+    // sources (e.g. a 2024-only spell), canonical = newest out-of-scope, and
+    // inScope=false so the picker excludes it by default.
+    const inScopeEntries = entries.filter(e => !isOutOfScope(e.spell.source ?? ''));
+    const pool = inScopeEntries.length > 0 ? inScopeEntries : entries;
+    // Sort newest-first by publication date (ties broken by source code for determinism)
+    pool.sort((a, b) => {
+      const da = sourceDate(a.spell.source ?? '');
+      const db = sourceDate(b.spell.source ?? '');
+      if (da !== db) return db.localeCompare(da);
+      return (a.spell.source ?? '').localeCompare(b.spell.source ?? '');
+    });
+    const canonical = pool[0];
+    const others = entries.filter(e => e !== canonical);
+
+    const primary = canonical.spell;
     const level = primary.level ?? -1;
     if (level < 0 || level > 9) continue;
     const schoolFull = SCHOOL_MAP[primary.school ?? ''] ?? (primary.school ?? '?');
@@ -257,20 +315,30 @@ function main(): void {
       scales: !!primary.scalingLevelDice,
     };
     const implMod = implemented.get(name) ?? null;
-    const allSources = [primary.source, ...reprints];
-    const inScope2014 = allSources.some(s => s !== 'XPHB');
-    const classes = classIndex[primary.source]?.[name] ?? [];
+
+    // otherSources: every other source (older in-scope + out-of-scope), newest-first
+    const otherSources: SourceRef[] = others
+      .map(o => ({
+        code: o.spell.source ?? '?',
+        date: sourceDate(o.spell.source ?? ''),
+        inScope: !isOutOfScope(o.spell.source ?? ''),
+      }))
+      .sort((a, b) => b.date.localeCompare(a.date) || a.code.localeCompare(b.code));
+
+    const inScope = inScopeEntries.length > 0;
+    const classes = classIndex[primary.source ?? '']?.[name] ?? [];
     byLevel[level].push({
       name,
-      source: primary.source,
-      sourceFile: primary._file,
+      source: primary.source ?? '?',
+      sourceDate: sourceDate(primary.source ?? ''),
+      sourceFile: canonical.file,
       page: primary.page ?? null,
       level,
       school: schoolFull,
       implemented: implMod !== null,
       implementedModule: implMod,
-      inScope2014,
-      reprintedIn: reprints,
+      inScope,
+      otherSources,
       classes,
       effect: buildEffectLine(primary, meta),
       meta,
@@ -283,22 +351,25 @@ function main(): void {
 
   if (!fs.existsSync(OUT_DIR)) fs.mkdirSync(OUT_DIR, { recursive: true });
   const generatedAt = new Date().toISOString();
-  let grandTotal = 0, grandImpl = 0, grandRemaining2014 = 0;
+  let grandTotal = 0, grandImpl = 0, grandRemainingInScope = 0;
 
   for (let lv = 0; lv <= 9; lv++) {
     const arr = byLevel[lv];
     const impl = arr.filter(s => s.implemented).length;
-    const remaining2014 = arr.filter(s => !s.implemented && s.inScope2014).length;
+    const remainingInScope = arr.filter(s => !s.implemented && s.inScope).length;
     grandTotal += arr.length;
     grandImpl += impl;
-    grandRemaining2014 += remaining2014;
+    grandRemainingInScope += remainingInScope;
     const out = {
       level: lv,
       generatedAt,
-      generatorVersion: 1,
+      generatorVersion: 2,
+      scopeRule: 'pre-2024 canon; reprints: newest in-scope source wins; XPHB(2024) out of scope; creatures keep all variants (not applicable to spells)',
+      sourceDates: SOURCE_DATES,
+      outOfScopeSources: Array.from(OUT_OF_SCOPE_SOURCES),
       count: arr.length,
       implementedCount: impl,
-      remainingInScope2014: remaining2014,
+      remainingInScope,
       spells: arr,
     };
     fs.writeFileSync(
@@ -313,19 +384,19 @@ function main(): void {
   lines.push('');
   lines.push(`Generated: \`${generatedAt}\``);
   lines.push('');
-  lines.push(`**Total spells:** ${grandTotal}  ·  **Implemented:** ${grandImpl}  ·  **Remaining (2014 in-scope):** ${grandRemaining2014}`);
+  lines.push(`**Total spells:** ${grandTotal}  ·  **Implemented:** ${grandImpl}  ·  **Remaining (in-scope, pre-2024):** ${grandRemainingInScope}`);
   lines.push('');
-  lines.push('> This index is regenerated by `npm run spell-cache:build`. Do not edit by hand.');
-  lines.push('> Per-level detail: `spell-cache/level-{0..9}.json`. Pick a batch: `npm run spell-cache:pick -- --level 0 --source PHB --count 5`.');
+  lines.push('> Scope: **canon published pre-2024**. Reprint precedence: **newest in-scope source wins** (e.g. TCE 2020 overrides PHB 2014 for the same spell). XPHB (2024 revised PHB) is out of scope. Creatures follow a different rule (all variants kept) — not applicable to this spell cache.');
+  lines.push('> Regenerated by `npm run spell-cache:build`. Do not edit by hand. Per-level detail: `spell-cache/level-{0..9}.json`. Pick a batch: `npm run spell-cache:pick -- --level 0 --source PHB --count 5`.');
   lines.push('');
-  lines.push('| Level | Total | Implemented | Remaining (2014) | Next 5 unimplemented (2014) |');
-  lines.push('|-------|-------|-------------|------------------|------------------------------|');
+  lines.push('| Level | Total | Implemented | Remaining (in-scope) | Canonical source of next 5 | Next 5 unimplemented (in-scope) |');
+  lines.push('|-------|-------|-------------|----------------------|------------------------------|----------------------------------|');
   for (let lv = 0; lv <= 9; lv++) {
     const arr = byLevel[lv];
     const impl = arr.filter(s => s.implemented).length;
-    const rem2014 = arr.filter(s => !s.implemented && s.inScope2014);
-    const next5 = rem2014.slice(0, 5).map(s => s.name).join(', ') || '—';
-    lines.push(`| ${lv} | ${arr.length} | ${impl} | ${rem2014.length} | ${next5} |`);
+    const remInScope = arr.filter(s => !s.implemented && s.inScope);
+    const next5 = remInScope.slice(0, 5).map(s => `${s.name} (${s.source})`).join(', ') || '—';
+    lines.push(`| ${lv} | ${arr.length} | ${impl} | ${remInScope.length} | — | ${next5} |`);
   }
   lines.push('');
   lines.push('## Implemented spells (auto-detected from `src/spells/*.ts`)');
@@ -334,17 +405,26 @@ function main(): void {
   if (implList.length === 0) {
     lines.push('_(none yet)_');
   } else {
-    lines.push('| Name | Level | School | Module |');
-    lines.push('|------|-------|--------|--------|');
+    lines.push('| Name | Level | School | Canonical source | Module |');
+    lines.push('|------|-------|--------|-------------------|--------|');
     for (const s of implList) {
-      lines.push(`| ${s.name} | ${s.level} | ${s.school} | \`src/spells/${s.implementedModule}\` |`);
+      lines.push(`| ${s.name} | ${s.level} | ${s.school} | ${s.source} (${s.sourceDate}) | \`src/spells/${s.implementedModule}\` |`);
     }
+  }
+  lines.push('');
+  lines.push('## Sourcebook publication dates (for reprint precedence)');
+  lines.push('');
+  lines.push('| Code | Date | In scope? |');
+  lines.push('|------|------|-----------|');
+  for (const [code, date] of Object.entries(SOURCE_DATES).sort((a, b) => a[1].localeCompare(b[1]))) {
+    const scope = isOutOfScope(code) ? '❌ out (2024+)' : '✅ in';
+    lines.push(`| ${code} | ${date} | ${scope} |`);
   }
   lines.push('');
   fs.writeFileSync(path.join(OUT_DIR, 'INDEX.md'), lines.join('\n') + '\n');
 
   console.log(`[spell-cache] wrote ${byLevel.flat().length} spells across 10 level files → ${OUT_DIR}/`);
-  console.log(`[spell-cache] implemented=${grandImpl}  remaining(2014)=${grandRemaining2014}  total=${grandTotal}`);
+  console.log(`[spell-cache] implemented=${grandImpl}  remaining(in-scope)=${grandRemainingInScope}  total=${grandTotal}`);
   console.log(`[spell-cache] INDEX.md dashboard written.`);
 }
 

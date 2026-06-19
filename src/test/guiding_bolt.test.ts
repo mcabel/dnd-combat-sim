@@ -457,5 +457,8 @@ console.log('\n── mark: advantage consumed on one attack ──');
 // SUMMARY
 // ============================================================
 console.log(`\n${'='.repeat(50)}`);
-console.log(`Guiding Bolt tests: ${passed} passed, ${failed} failed`);
+// IMPORTANT: the CI workflow (.github/workflows/test.yml) greps for the exact
+// pattern "Results:" in this summary line. Do NOT rename it — every other test
+// file in src/test/ uses this same format.
+console.log(`Results: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

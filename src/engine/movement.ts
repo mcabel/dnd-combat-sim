@@ -131,12 +131,19 @@ export function estimateMoveCostFt(
   terrainFn?: (pos: Vec3) => TerrainType
 ): number {
   let cost = 0;
-  let cur = { ...from };
+  // Snap to integer grid cells. Combat positions are grid cells, but some
+  // forced-movement effects (e.g. Thorn Whip's continuous-math pull) can leave a
+  // combatant on a fractional position. The step-by-step loop below assumes
+  // integer coordinates (it advances by ±1 via Math.sign); with fractional
+  // coordinates it overshoots and oscillates forever. Rounding to the nearest
+  // cell terminates the loop while preserving the integer-path cost estimate.
+  let cur = { x: Math.round(from.x), y: Math.round(from.y), z: Math.round(from.z) };
+  const dest = { x: Math.round(to.x), y: Math.round(to.y), z: Math.round(to.z) };
 
-  while (cur.x !== to.x || cur.y !== to.y || cur.z !== to.z) {
-    const dx = Math.sign(to.x - cur.x);
-    const dy = Math.sign(to.y - cur.y);
-    const dz = Math.sign(to.z - cur.z);
+  while (cur.x !== dest.x || cur.y !== dest.y || cur.z !== dest.z) {
+    const dx = Math.sign(dest.x - cur.x);
+    const dy = Math.sign(dest.y - cur.y);
+    const dz = Math.sign(dest.z - cur.z);
 
     const next: Vec3 = {
       x: cur.x + dx,

@@ -34,7 +34,7 @@ import { getSummonEntry }                           from '../summons/registry';
 import { rollGrappleContest, rollShoveContest, canGrappleOrShoveTarget } from './utils';
 import { computeLOS } from './los';
 import { removeEffectsFromCaster, getActiveAcBonus, getActiveBlessDie, getActiveHexDie } from './spell_effects';
-import { applyCantripEffect, getCantripAttackAdvantage, resolveCantripAction } from './cantrip_effects';
+import { applyCantripEffect, getCantripAttackAdvantage, resolveCantripAction, resolveCantripAoE } from './cantrip_effects';
 import { execute as executeHex } from '../spells/hex';
 import { execute as executeMagicMissile } from '../spells/magic_missile';
 import { execute as executeBurningHands, shouldCast as shouldCastBurningHands } from '../spells/burning_hands';
@@ -54,6 +54,7 @@ import {
   cleanupMarks as cleanupGuidingBoltMarks, consumeMark as consumeGuidingBoltMark,
 } from '../spells/guiding_bolt';
 import { execute as executeHealingWord } from '../spells/healing_word';
+import { rollDiceString as rollBoomingBladeDice } from '../spells/booming_blade';
 
 // ---- Combat log ---------------------------------------------
 
@@ -131,8 +132,13 @@ function makeState(battlefield: Battlefield): EngineState {
 /**
  * Resolve a single attack action against a target.
  * Handles: attack roll, hit check, damage roll, crit, death.
+ *
+ * Exported for direct testing of cantrip engine integration (e.g. Vicious
+ * Mockery's one-shot consume-on-attack semantics, Sacred Flame's
+ * bypassesCover, Chill Touch's undead-disadv). Normal callers should use
+ * runCombat / executePlannedAction rather than invoking this directly.
  */
-function resolveAttack(
+export function resolveAttack(
   attacker: Combatant,
   target: Combatant,
   action: Action,
@@ -144,7 +150,16 @@ function resolveAttack(
   // ── LOS / Cover check (PHB Ch.10, DMG Ch.8) ─────────────────────────────
   // Skip for save-based AoE (area is targeted, not an individual creature).
   // For melee/ranged/spell attacks: block on total cover; AC bonus otherwise.
-  const los = action.attackType !== 'save'
+  // For save-based single-target spells: block on total cover too — UNLESS the
+  // action bypasses cover (PHB p.272 Sacred Flame: "The target gains no benefit
+  // from cover for this saving throw."). action.bypassesCover === true skips
+  // the LOS check entirely, letting Sacred Flame target a creature even behind
+  // total cover.
+  const computeLosForAction =
+    action.attackType === 'save'
+      ? action.bypassesCover !== true   // save: skip LOS only when bypassesCover
+      : true;                            // non-save: always compute LOS
+  const los = computeLosForAction
     ? computeLOS(attacker, target, bf)
     : null;
 
@@ -183,6 +198,12 @@ function resolveAttack(
       if (dealt > 0) state.rageDamagedSinceLastTurn.add(target.id);
       applyWardingBondRedirect(target, dealt, state);
       checkDeath(target, state);
+    }
+    // Apply post-save-FAIL cantrip riders (e.g. Vicious Mockery disadv on next
+    // attack, PHB p.285). The dispatcher is a no-op for unknown cantrip names
+    // and for cantrips with no rider. Rider applies ONLY when the save failed.
+    if (!save.success) {
+      applyCantripEffect(attacker, target, action.name, state);
     }
     return;
   }
@@ -256,9 +277,55 @@ function resolveAttack(
     log(state, 'action', attacker.id,
       `${attacker.name} attacks ${target.name} with Disadvantage (Chill Touch).`, target.id);
   }
-  const disadvantage = baseDisadv || !!protectionRider || losDisadvantage || chillTouchDisadv;
+  // Vicious Mockery (PHB p.285): a creature that failed its WIS save against
+  // Vicious Mockery has disadvantage on the NEXT attack roll it makes before
+  // the end of its next turn. This is a ONE-SHOT debuff — consumed (set back
+  // to false) immediately after this attack roll resolves, hit or miss.
+  // Distinct from Chill Touch's ongoing undead-disadv (which lasts the whole
+  // turn). The flag is set by Vicious Mockery's applyCantripEffect on save-fail.
+  const viciousMockeryDisadv = attacker._viciousMockeryDisadvNextAttack === true;
+  if (viciousMockeryDisadv) {
+    log(state, 'action', attacker.id,
+      `${attacker.name} attacks ${target.name} with Disadvantage (Vicious Mockery).`, target.id);
+  }
+  // Frostbite (XGE p.156): a creature that failed its CON save against
+  // Frostbite has disadvantage on the NEXT WEAPON ATTACK roll it makes
+  // before the end of its next turn. ONE-SHOT (consumed after this attack).
+  // Distinct from Vicious Mockery in two ways:
+  //   1. Weapon attacks ONLY — spell attacks (attackType='spell') do NOT
+  //      consume the flag and do NOT suffer the disadvantage.
+  //   2. Damage type + save ability differ (cold / CON vs psychic / WIS).
+  // The flag is set by Frostbite's applyCantripEffect on save-FAIL.
+  const isWeaponAttack =
+    action.attackType === 'melee' || action.attackType === 'ranged';
+  const frostbiteDisadv =
+    isWeaponAttack && attacker._frostbiteDisadvNextWeaponAttack === true;
+  if (frostbiteDisadv) {
+    log(state, 'action', attacker.id,
+      `${attacker.name} attacks ${target.name} with Disadvantage (Frostbite).`, target.id);
+  }
+  const disadvantage = baseDisadv || !!protectionRider || losDisadvantage || chillTouchDisadv || viciousMockeryDisadv || frostbiteDisadv;
 
   const result = rollAttack(action.hitBonus ?? 0, advantage, disadvantage);
+
+  // Vicious Mockery one-shot consume: the debuff applies to exactly one attack
+  // roll (PHB p.285). Consume it now — whether the attack hit or missed — so
+  // subsequent attacks in the same turn (e.g. Multiattack) are unaffected.
+  if (viciousMockeryDisadv) {
+    attacker._viciousMockeryDisadvNextAttack = false;
+    log(state, 'condition_remove', attacker.id,
+      `${attacker.name}'s Vicious Mockery debuff fades (consumed by attack).`, target.id);
+  }
+  // Frostbite one-shot consume: same one-shot semantics as Vicious Mockery,
+  // but ONLY consumed when the attack is a weapon attack (the flag stays set
+  // if the marked creature casts a spell attack instead — XGE p.156 explicitly
+  // says "weapon attack roll", so spell attacks neither suffer the disadv nor
+  // consume the flag).
+  if (frostbiteDisadv) {
+    attacker._frostbiteDisadvNextWeaponAttack = false;
+    log(state, 'condition_remove', attacker.id,
+      `${attacker.name}'s Frostbite debuff fades (consumed by weapon attack).`, target.id);
+  }
 
   // Bardic Inspiration die — consumed on this attack roll (PHB p.54)
   const biBonus = consumeBardicInspiration(attacker);
@@ -502,7 +569,17 @@ function checkDeath(target: Combatant, state: EngineState, attacker?: Combatant)
  * Checks for OA triggers at each step (simplified: checks once at dest).
  * Full step-by-step OA checking is a future enhancement.
  */
-function executeMove(
+/**
+ * Move a combatant from their current position to `dest`, spending movement
+ * budget and triggering opportunity attacks (unless `isDisengage` is true).
+ *
+ * Exported for direct testing of cantrip engine integration (e.g. Booming
+ * Blade's movement-triggered rider, TCE p.106, which fires when a marked
+ * creature wills itself to move 5+ ft via this function). Normal callers
+ * should use `runCombat` / `executeTurnPlan` rather than invoking this
+ * directly.
+ */
+export function executeMove(
   mover: Combatant,
   dest: Vec3,  // mutable — will be clamped
   state: EngineState,
@@ -535,6 +612,41 @@ function executeMove(
     `${mover.name} moves from (${fromPos.x},${fromPos.y}) to (${dest.x},${dest.y})`,
     undefined);
   mover.pos = { ...dest };
+
+  // ── Booming Blade (TCE p.106) movement-triggered rider ──────────────────
+  // If the mover is sheathed in booming energy from a Booming Blade hit and
+  // just moved WILLINGLY 5+ ft (executeMove is only called for willing
+  // movement — forced movement like Thorn Whip pull / Thunderwave push /
+  // grapple drag modifies `pos` directly without calling executeMove), roll
+  // the stored thunder dice, apply the damage, and clear the rider.
+  //
+  // PHB p.196 / TCE p.106: "If the target willingly moves 5 feet or more
+  // before then [the start of the caster's next turn], the target takes
+  // 1d8 thunder damage, and the spell ends." Movement via Dash, normal
+  // movement, or Cunning Action all count as willing. Being pushed/pulled/
+  // dragged does NOT. The cost ≥5 ft check excludes the no-op case where
+  // dest === fromPos (already-there early return above handles that too).
+  if (mover._boomingBladePendingDamageDice && cost >= 5) {
+    const dice = mover._boomingBladePendingDamageDice;
+    const casterId = mover._boomingBladeCasterId;
+    const casterLabel = casterId
+      ? (bf.combatants.get(casterId)?.name ?? casterId)
+      : 'Booming Blade';
+    const dmg = rollBoomingBladeDice(dice);
+    // Apply with thunder damage type so resistances/immunities compose
+    // correctly via applyDamageWithTempHP (Blade Ward doesn't apply — it
+    // only resists B/P/S — but other sources like a hypothetical thunder
+    // resistance would).
+    const dealt = applyDamageWithTempHP(mover, dmg, 'thunder');
+    log(state, 'damage', mover.id,
+      `${casterLabel}'s Booming Blade detonates as ${mover.name} moves willingly — ${dealt} thunder damage! (rolled ${dmg} on ${dice})`,
+      mover.id, dealt);
+    // Clear the rider (spell ends, TCE p.106).
+    delete mover._boomingBladePendingDamageDice;
+    delete mover._boomingBladeCasterId;
+    // If the mover died from the rider damage, skip the OA loop.
+    if (mover.isDead || mover.isUnconscious) return;
+  }
 
   // OA check: did any watcher's melee reach get left?
   if (!isDisengage) {
@@ -580,6 +692,13 @@ function executePlannedAction(
       // target, so they must be handled BEFORE the target-null guard below. This
       // also keeps cantrip logic out of this switch (no `case 'spellName'`).
       if (plan.action && resolveCantripAction(actor, plan.action.name, state)) break;
+      // Caster-centered AoE cantrips (e.g. Thunderclap, XGE p.168: all creatures
+      // within 5 ft of the caster). These have no single target — the execute
+      // handler finds all targets in range itself. Routed BEFORE the target-null
+      // guard so the spell fires even when plan.targetId is null (the AI planner
+      // may or may not set a "primary target" for animation purposes). Mirrors
+      // resolveCantripAction for self-buffs; both bypass resolveAttack.
+      if (plan.action && resolveCantripAoE(actor, plan.action.name, state)) break;
       const target = plan.targetId ? bf.combatants.get(plan.targetId) : null;
       if (!target || target.isDead || target.isUnconscious) break;
       if (!plan.action) break;

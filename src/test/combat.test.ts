@@ -115,11 +115,11 @@ console.log('\n=== 1. Minimal fight — attacker wins ===\n');
 console.log('\n=== 2. Reversed initiative — party wins ===\n');
 
 {
-  // att2 has 7 HP / AC 10. def2 gets a guaranteed-hit, guaranteed-kill weapon (hitBonus +20,
-  // min damage 11). This isolates the "initiative order matters" logic without RNG variance.
+  // att2 has 7 HP / AC 10. def2 gets an auto-hit, guaranteed-kill weapon (hitBonus
+  // = null → auto-hit, no d20 roll → no nat-1 auto-miss flakiness; min damage 11).
   const guaranteedOneShot: Action = {
     ...clawAction(),
-    hitBonus: 20,
+    hitBonus: null, // auto-hit (PHB p.194 nat-1 auto-miss bypassed)
     damage: { count: 1, sides: 4, bonus: 10, average: 12.5 }, // min 11 > 7 HP
   };
   const att2 = makeC({ id: 'att2', faction: 'enemy', pos: {x:0,y:0,z:0}, maxHP: 7, currentHP: 7, ac: 10, actions: [clawAction()] });

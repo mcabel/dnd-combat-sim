@@ -1,23 +1,51 @@
 {
   "level": 0,
-  "generatedAt": "2026-06-19T00:44:11.347Z",
-  "generatorVersion": 1,
+  "generatedAt": "2026-06-19T04:21:08.654Z",
+  "generatorVersion": 2,
+  "scopeRule": "pre-2024 canon; reprints: newest in-scope source wins; XPHB(2024) out of scope; creatures keep all variants (not applicable to spells)",
+  "sourceDates": {
+    "PHB": "2014-08-19",
+    "XGE": "2017-11-21",
+    "LLK": "2018-06-08",
+    "GGR": "2018-11-20",
+    "AI": "2019-07-16",
+    "EGW": "2020-03-17",
+    "EFA": "2020-07-01",
+    "IDRotF": "2020-09-15",
+    "TCE": "2020-11-17",
+    "AitFR-AVT": "2021-07-08",
+    "FTD": "2021-10-26",
+    "SCC": "2021-12-07",
+    "AAG": "2022-08-16",
+    "SatO": "2022-09-01",
+    "FRHoF": "2022-11-01",
+    "BMT": "2023-11-07",
+    "XPHB": "2024-09-03"
+  },
+  "outOfScopeSources": [
+    "XPHB"
+  ],
   "count": 49,
-  "implementedCount": 5,
-  "remainingInScope2014": 41,
+  "implementedCount": 20,
+  "remainingInScope": 26,
   "spells": [
     {
       "name": "Acid Splash",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 211,
       "level": 0,
       "school": "Conjuration",
-      "implemented": false,
-      "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "implemented": true,
+      "implementedModule": "acid_splash.ts",
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Sorcerer",
@@ -40,15 +68,20 @@
     {
       "name": "Blade Ward",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 218,
       "level": 0,
       "school": "Abjuration",
       "implemented": true,
       "implementedModule": "blade_ward.ts",
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Bard",
@@ -70,14 +103,15 @@
     {
       "name": "Booming Blade",
       "source": "TCE",
+      "sourceDate": "2020-11-17",
       "sourceFile": "spells-tce.json",
       "page": 106,
       "level": 0,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [],
+      "implemented": true,
+      "implementedModule": "booming_blade.ts",
+      "inScope": true,
+      "otherSources": [],
       "classes": [
         "Artificer",
         "Sorcerer",
@@ -100,15 +134,20 @@
     {
       "name": "Chill Touch",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 221,
       "level": 0,
       "school": "Necromancy",
       "implemented": true,
       "implementedModule": "chill_touch.ts",
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Sorcerer",
@@ -131,14 +170,15 @@
     {
       "name": "Control Flames",
       "source": "XGE",
+      "sourceDate": "2017-11-21",
       "sourceFile": "spells-xge.json",
       "page": 152,
       "level": 0,
       "school": "Transmutation",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [],
+      "inScope": true,
+      "otherSources": [],
       "classes": [],
       "effect": "utility · 60 ft · Instantaneous",
       "meta": {
@@ -154,14 +194,15 @@
     {
       "name": "Create Bonfire",
       "source": "XGE",
+      "sourceDate": "2017-11-21",
       "sourceFile": "spells-xge.json",
       "page": 152,
       "level": 0,
       "school": "Conjuration",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [],
+      "inScope": true,
+      "otherSources": [],
       "classes": [],
       "effect": "DEXTERITY save · 1d8 fire · 60 ft · timed · +scales",
       "meta": {
@@ -179,15 +220,20 @@
     {
       "name": "Dancing Lights",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 230,
       "level": 0,
       "school": "Evocation",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Bard",
@@ -209,15 +255,20 @@
     {
       "name": "Druidcraft",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 236,
       "level": 0,
       "school": "Transmutation",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Druid"
@@ -236,15 +287,20 @@
     {
       "name": "Eldritch Blast",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 237,
       "level": 0,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "implemented": true,
+      "implementedModule": "eldritch_blast.ts",
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Warlock"
@@ -265,14 +321,15 @@
     {
       "name": "Elementalism",
       "source": "XPHB",
+      "sourceDate": "2024-09-03",
       "sourceFile": "spells-xphb.json",
       "page": 267,
       "level": 0,
       "school": "Transmutation",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": false,
-      "reprintedIn": [],
+      "inScope": false,
+      "otherSources": [],
       "classes": [
         "Druid",
         "Sorcerer",
@@ -293,14 +350,15 @@
     {
       "name": "Encode Thoughts",
       "source": "GGR",
+      "sourceDate": "2018-11-20",
       "sourceFile": "spells-ggr.json",
       "page": 47,
       "level": 0,
       "school": "Enchantment",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [],
+      "inScope": true,
+      "otherSources": [],
       "classes": [],
       "effect": "utility · Self · timed",
       "meta": {
@@ -316,15 +374,20 @@
     {
       "name": "Fire Bolt",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 242,
       "level": 0,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "implemented": true,
+      "implementedModule": "fire_bolt.ts",
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Sorcerer",
@@ -347,15 +410,20 @@
     {
       "name": "Friends",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 244,
       "level": 0,
       "school": "Enchantment",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Bard",
@@ -377,14 +445,15 @@
     {
       "name": "Frostbite",
       "source": "XGE",
+      "sourceDate": "2017-11-21",
       "sourceFile": "spells-xge.json",
       "page": 156,
       "level": 0,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [],
+      "implemented": true,
+      "implementedModule": "frostbite.ts",
+      "inScope": true,
+      "otherSources": [],
       "classes": [],
       "effect": "CONSTITUTION save · 1d6 cold · 60 ft · Instantaneous · +scales",
       "meta": {
@@ -402,14 +471,15 @@
     {
       "name": "Green-Flame Blade",
       "source": "TCE",
+      "sourceDate": "2020-11-17",
       "sourceFile": "spells-tce.json",
       "page": 107,
       "level": 0,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [],
+      "implemented": true,
+      "implementedModule": "green_flame_blade.ts",
+      "inScope": true,
+      "otherSources": [],
       "classes": [
         "Artificer",
         "Sorcerer",
@@ -430,15 +500,20 @@
     {
       "name": "Guidance",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 248,
       "level": 0,
       "school": "Divination",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Cleric",
@@ -459,14 +534,15 @@
     {
       "name": "Gust",
       "source": "XGE",
+      "sourceDate": "2017-11-21",
       "sourceFile": "spells-xge.json",
       "page": 157,
       "level": 0,
       "school": "Transmutation",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [],
+      "inScope": true,
+      "otherSources": [],
       "classes": [],
       "effect": "STRENGTH save · 30 ft · Instantaneous",
       "meta": {
@@ -482,14 +558,15 @@
     {
       "name": "Infestation",
       "source": "XGE",
+      "sourceDate": "2017-11-21",
       "sourceFile": "spells-xge.json",
       "page": 158,
       "level": 0,
       "school": "Conjuration",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [],
+      "inScope": true,
+      "otherSources": [],
       "classes": [],
       "effect": "CONSTITUTION save · 1d6 poison · 30 ft · Instantaneous · +scales",
       "meta": {
@@ -507,15 +584,20 @@
     {
       "name": "Light",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 255,
       "level": 0,
       "school": "Evocation",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Bard",
@@ -538,14 +620,15 @@
     {
       "name": "Lightning Lure",
       "source": "TCE",
+      "sourceDate": "2020-11-17",
       "sourceFile": "spells-tce.json",
       "page": 107,
       "level": 0,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [],
+      "implemented": true,
+      "implementedModule": "lightning_lure.ts",
+      "inScope": true,
+      "otherSources": [],
       "classes": [
         "Artificer",
         "Sorcerer",
@@ -568,15 +651,20 @@
     {
       "name": "Mage Hand",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 256,
       "level": 0,
       "school": "Conjuration",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Bard",
@@ -599,14 +687,15 @@
     {
       "name": "Magic Stone",
       "source": "XGE",
+      "sourceDate": "2017-11-21",
       "sourceFile": "spells-xge.json",
       "page": 160,
       "level": 0,
       "school": "Transmutation",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [],
+      "inScope": true,
+      "otherSources": [],
       "classes": [],
       "effect": "ranged spell attack · 1d6 bludgeoning · Touch · timed",
       "meta": {
@@ -624,15 +713,20 @@
     {
       "name": "Mending",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 259,
       "level": 0,
       "school": "Transmutation",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Bard",
@@ -656,15 +750,20 @@
     {
       "name": "Message",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 259,
       "level": 0,
       "school": "Transmutation",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Bard",
@@ -686,15 +785,20 @@
     {
       "name": "Mind Sliver",
       "source": "TCE",
+      "sourceDate": "2020-11-17",
       "sourceFile": "spells-tce.json",
       "page": 108,
       "level": 0,
       "school": "Enchantment",
-      "implemented": false,
-      "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "implemented": true,
+      "implementedModule": "mind_sliver.ts",
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [],
       "effect": "INTELLIGENCE save · 1d6 psychic · 60 ft · timed · +scales",
@@ -713,15 +817,20 @@
     {
       "name": "Minor Illusion",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 260,
       "level": 0,
       "school": "Illusion",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Bard",
@@ -743,14 +852,15 @@
     {
       "name": "Mold Earth",
       "source": "XGE",
+      "sourceDate": "2017-11-21",
       "sourceFile": "spells-xge.json",
       "page": 162,
       "level": 0,
       "school": "Transmutation",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [],
+      "inScope": true,
+      "otherSources": [],
       "classes": [],
       "effect": "utility · 30 ft · Instantaneous",
       "meta": {
@@ -766,15 +876,20 @@
     {
       "name": "Poison Spray",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 266,
       "level": 0,
       "school": "Conjuration",
-      "implemented": false,
-      "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "implemented": true,
+      "implementedModule": "poison_spray.ts",
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Druid",
@@ -799,15 +914,20 @@
     {
       "name": "Prestidigitation",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 267,
       "level": 0,
       "school": "Transmutation",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Bard",
@@ -830,14 +950,15 @@
     {
       "name": "Primal Savagery",
       "source": "XGE",
+      "sourceDate": "2017-11-21",
       "sourceFile": "spells-xge.json",
       "page": 163,
       "level": 0,
       "school": "Transmutation",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [],
+      "inScope": true,
+      "otherSources": [],
       "classes": [],
       "effect": "melee spell attack · 1d10 acid · Self · Instantaneous · +scales",
       "meta": {
@@ -855,15 +976,20 @@
     {
       "name": "Produce Flame",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 269,
       "level": 0,
       "school": "Conjuration",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Druid"
@@ -882,15 +1008,20 @@
     {
       "name": "Ray of Frost",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 271,
       "level": 0,
       "school": "Evocation",
       "implemented": true,
       "implementedModule": "ray_of_frost.ts",
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Sorcerer",
@@ -913,15 +1044,20 @@
     {
       "name": "Resistance",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 272,
       "level": 0,
       "school": "Abjuration",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Cleric",
@@ -942,15 +1078,20 @@
     {
       "name": "Sacred Flame",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 272,
       "level": 0,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "implemented": true,
+      "implementedModule": "sacred_flame.ts",
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Cleric"
@@ -971,14 +1112,15 @@
     {
       "name": "Sapping Sting",
       "source": "EGW",
+      "sourceDate": "2020-03-17",
       "sourceFile": "spells-egw.json",
       "page": 189,
       "level": 0,
       "school": "Necromancy",
-      "implemented": false,
-      "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [],
+      "implemented": true,
+      "implementedModule": "sapping_sting.ts",
+      "inScope": true,
+      "otherSources": [],
       "classes": [],
       "effect": "CONSTITUTION save · 1d4 necrotic · 30 ft · Instantaneous · +scales",
       "meta": {
@@ -996,14 +1138,15 @@
     {
       "name": "Shape Water",
       "source": "XGE",
+      "sourceDate": "2017-11-21",
       "sourceFile": "spells-xge.json",
       "page": 164,
       "level": 0,
       "school": "Transmutation",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [],
+      "inScope": true,
+      "otherSources": [],
       "classes": [],
       "effect": "utility · 30 ft · Instantaneous",
       "meta": {
@@ -1019,15 +1162,20 @@
     {
       "name": "Shillelagh",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 275,
       "level": 0,
       "school": "Transmutation",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Druid"
@@ -1046,15 +1194,20 @@
     {
       "name": "Shocking Grasp",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 275,
       "level": 0,
       "school": "Evocation",
       "implemented": true,
       "implementedModule": "shocking_grasp.ts",
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Sorcerer",
@@ -1077,14 +1230,15 @@
     {
       "name": "Sorcerous Burst",
       "source": "XPHB",
+      "sourceDate": "2024-09-03",
       "sourceFile": "spells-xphb.json",
       "page": 318,
       "level": 0,
       "school": "Evocation",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": false,
-      "reprintedIn": [],
+      "inScope": false,
+      "otherSources": [],
       "classes": [
         "Sorcerer"
       ],
@@ -1110,15 +1264,20 @@
     {
       "name": "Spare the Dying",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 277,
       "level": 0,
       "school": "Necromancy",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Cleric",
@@ -1138,14 +1297,15 @@
     {
       "name": "Starry Wisp",
       "source": "XPHB",
+      "sourceDate": "2024-09-03",
       "sourceFile": "spells-xphb.json",
       "page": 320,
       "level": 0,
       "school": "Evocation",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": false,
-      "reprintedIn": [],
+      "inScope": false,
+      "otherSources": [],
       "classes": [
         "Bard",
         "Druid"
@@ -1166,14 +1326,15 @@
     {
       "name": "Sword Burst",
       "source": "TCE",
+      "sourceDate": "2020-11-17",
       "sourceFile": "spells-tce.json",
       "page": 115,
       "level": 0,
       "school": "Conjuration",
-      "implemented": false,
-      "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [],
+      "implemented": true,
+      "implementedModule": "sword_burst.ts",
+      "inScope": true,
+      "otherSources": [],
       "classes": [
         "Artificer",
         "Sorcerer",
@@ -1196,15 +1357,20 @@
     {
       "name": "Thaumaturgy",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 282,
       "level": 0,
       "school": "Transmutation",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Cleric"
@@ -1223,15 +1389,20 @@
     {
       "name": "Thorn Whip",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 282,
       "level": 0,
       "school": "Transmutation",
       "implemented": true,
       "implementedModule": "thorn_whip.ts",
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Druid",
@@ -1253,15 +1424,20 @@
     {
       "name": "Thunderclap",
       "source": "XGE",
+      "sourceDate": "2017-11-21",
       "sourceFile": "spells-xge.json",
       "page": 168,
       "level": 0,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "implemented": true,
+      "implementedModule": "thunderclap.ts",
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [],
       "effect": "CONSTITUTION save · 1d6 thunder · 5 ft · Instantaneous · +scales",
@@ -1280,15 +1456,20 @@
     {
       "name": "Toll the Dead",
       "source": "XGE",
+      "sourceDate": "2017-11-21",
       "sourceFile": "spells-xge.json",
       "page": 169,
       "level": 0,
       "school": "Necromancy",
-      "implemented": false,
-      "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "implemented": true,
+      "implementedModule": "toll_the_dead.ts",
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [],
       "effect": "WISDOM save · 1d8 necrotic + 1d12 · 60 ft · Instantaneous · +scales",
@@ -1308,15 +1489,20 @@
     {
       "name": "True Strike",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 284,
       "level": 0,
       "school": "Divination",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Bard",
@@ -1338,15 +1524,20 @@
     {
       "name": "Vicious Mockery",
       "source": "PHB",
+      "sourceDate": "2014-08-19",
       "sourceFile": "spells-phb.json",
       "page": 285,
       "level": 0,
       "school": "Enchantment",
-      "implemented": false,
-      "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "implemented": true,
+      "implementedModule": "vicious_mockery.ts",
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [
         "Bard"
@@ -1367,15 +1558,20 @@
     {
       "name": "Word of Radiance",
       "source": "XGE",
+      "sourceDate": "2017-11-21",
       "sourceFile": "spells-xge.json",
       "page": 171,
       "level": 0,
       "school": "Evocation",
       "implemented": false,
       "implementedModule": null,
-      "inScope2014": true,
-      "reprintedIn": [
-        "XPHB"
+      "inScope": true,
+      "otherSources": [
+        {
+          "code": "XPHB",
+          "date": "2024-09-03",
+          "inScope": false
+        }
       ],
       "classes": [],
       "effect": "CONSTITUTION save · 1d6 radiant · 5 ft · Instantaneous · +scales",

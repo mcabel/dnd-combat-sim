@@ -141,6 +141,16 @@ export interface Action {
   costType: AICostType;
   legendaryCost: number;
   description: string;
+  /**
+   * Bypasses cover for this action's saving throw (PHB p.272 Sacred Flame:
+   * "The target gains no benefit from cover for this saving throw.").
+   *
+   * When true, resolveAttack's save branch skips the LOS / total-cover
+   * gating entirely — Sacred Flame can target a creature even behind total
+   * cover. Other save spells (default undefined/false) are subject to total
+   * cover blocking per PHB line-of-effect rules.
+   */
+  bypassesCover?: boolean;
 }
 
 // ---- LegendaryAction ----------------------------------------
@@ -428,6 +438,97 @@ export interface Combatant {
   // composes correctly with other resistances and never double-halves.
   // Cleared by cleanup() called from resetBudget() in utils.ts.
   _bladeWardActive?: boolean;
+
+  // ---- Vicious Mockery (PHB p.285) scratch field ----
+  // Set on the TARGET when it fails its WIS save against Vicious Mockery
+  // (post-hit rider dispatched from CANTRIP_EFFECTS). The target has
+  // disadvantage on the NEXT attack roll it makes before the end of its
+  // next turn (PHB p.285). resolveAttack() in combat.ts folds this into
+  // the attack's `disadvantage` boolean when the marked creature is the
+  // attacker, then CONSUMES the flag (sets it back to false) after the
+  // attack roll resolves — hit or miss. This is a one-shot debuff
+  // (distinct from Chill Touch's ongoing undead-disadv, which lasts the
+  // whole turn). If not consumed by end of the target's next turn,
+  // cleanup() called from resetBudget() clears it.
+  _viciousMockeryDisadvNextAttack?: boolean;
+
+  // ---- Mind Sliver (TCE p.108) scratch field ----
+  // Set on the TARGET when it fails its INT save against Mind Sliver
+  // (post-save-FAIL rider dispatched from CANTRIP_EFFECTS). The target
+  // subtracts 1d4 from the NEXT saving throw it makes before the end of
+  // the caster's next turn (TCE p.108). rollSave() in utils.ts folds
+  // this into the save total (subtracts rollDie(value)) and CONSUMES the
+  // flag (sets to undefined) after the save resolves — success or failure.
+  // This is a one-shot save debuff (analogous to Vicious Mockery's one-shot
+  // attack debuff, but for saves; the choke point is rollSave, not
+  // resolveAttack's attack-roll branch). The stored value is the die size
+  // (4 = d4) so the system is extensible to other die penalties.
+  // If not consumed by the start of the target's next turn, cleanup()
+  // called from resetBudget() clears it (codebase convention — slightly
+  // more lenient than PHB's "end of caster's next turn", but consistent
+  // with how Vicious Mockery is timed).
+  _mindSliverDiePenaltyNextSave?: number;
+
+  // ---- Booming Blade (TCE p.106) scratch fields ----
+  // Set on the TARGET when it is hit by Booming Blade (post-hit rider
+  // dispatched from CANTRIP_EFFECTS). The target becomes sheathed in
+  // booming energy until the start of the caster's next turn. If the
+  // target WILLS itself to move 5+ ft before then (i.e. executeMove is
+  // called on it — forced movement like Thorn Whip pull / Thunderwave
+  // push bypasses executeMove and does NOT trigger this rider), it
+  // immediately takes thunder damage equal to the stored dice string
+  // (e.g. '1d8') and the spell ends.
+  //
+  // _boomingBladePendingDamageDice: dice expression to roll on willing
+  //   movement (e.g. '1d8', '2d8' at higher levels). Cleared by cleanup()
+  //   called from resetBudget() if not triggered by movement before the
+  //   start of the target's next turn (codebase convention — slightly
+  //   more lenient than PHB's "start of caster's next turn").
+  // _boomingBladeCasterId: ID of the caster who applied the rider, used
+  //   for log attribution when the rider detonates. Optional.
+  _boomingBladePendingDamageDice?: string;
+  _boomingBladeCasterId?: string;
+
+  // ---- Frostbite (XGE p.156) scratch field ----
+  // Set on the TARGET when it fails its CON save against Frostbite
+  // (post-save-FAIL rider dispatched from CANTRIP_EFFECTS). The target
+  // has disadvantage on the NEXT WEAPON ATTACK roll it makes before the
+  // end of its next turn (XGE p.156). resolveAttack() in combat.ts folds
+  // this into the attack's `disadvantage` boolean when the marked
+  // creature is the ATTACKER AND `action.attackType === 'melee' ||
+  // 'ranged'` (i.e. weapon attacks ONLY — spell attacks are excluded
+  // per XGE p.156's "weapon attack roll" wording), then CONSUMES the
+  // flag (sets it back to false) after the attack roll resolves — hit
+  // or miss. This is a one-shot debuff — distinct from Vicious Mockery,
+  // which applies to ALL attack rolls (weapon + spell).
+  //
+  // If not consumed by end of the target's next turn, cleanup() called
+  // from resetBudget() clears it (codebase convention — slightly more
+  // lenient than PHB's "end of its next turn", consistent with Vicious
+  // Mockery and Mind Sliver timing).
+  _frostbiteDisadvNextWeaponAttack?: boolean;
+
+  // ---- Spellcasting ability modifier (for cantrips like Green-Flame Blade) ----
+  // The caster's spellcasting ability modifier (INT for Wizard, CHA for
+  // Sorcerer/Warlock, WIS for Cleric/Druid). Used by cantrips whose damage
+  // scales with the spellcasting modifier (e.g. Green-Flame Blade's splash
+  // damage, TCE p.107: "fire damage equal to your spellcasting ability
+  // modifier (minimum of 1)").
+  //
+  // Optional — populated by the parser from the caster's class. Tests set
+  // it directly for determinism. Defaults to 3 (typical level-1 caster
+  // with 16 in their spellcasting stat) via DEFAULT_SPELLCASTING_MOD in
+  // the Green-Flame Blade module when undefined.
+  spellcastingMod?: number;
+
+  // ---- Caster level (for cantrips that scale by caster level) ----
+  // The caster's character level (1–20). Used by cantrips whose damage
+  // scales at 5/11/17 (e.g. Green-Flame Blade's splash damage, TCE p.107:
+  // "At 5th level ... 1d8 + your spellcasting ability modifier").
+  //
+  // Optional — populated by the parser. Tests set it directly for
+  // determinism. Defaults to 1 when undefined.
+  casterLevel?: number;
 }
 
 // ---- Obstacle -----------------------------------------------
