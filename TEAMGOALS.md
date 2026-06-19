@@ -149,26 +149,30 @@ completed by a single agent without coordination.
 
 ### TG-006: Summon / Conjure subsystem (Session 19 — bulk-deferred blockers)
 
-- **Status:** OPEN
+- **Status:** OPEN — **see `docs/TG-006-SUMMON-PLAN.md` for full research + 4-phase plan (Session 21)**
 - **Owners:** Core Engine (driving — owns `src/engine/summons.ts` + `src/types/core.ts` summon-state shape) + Cantrip-z (consumes the subsystem in spell modules)
-- **Source:** `zHANDOVER-SESSION-19.md` (Session 19 bulk-implementation pass — 109 blocker spells identified)
-- **Summary:** v1 has NO summon subsystem. 38 in-scope spells from levels 2–9 are blocked on this subsystem: all `Summon *` (TCE), all `Conjure *` (PHB), plus Animate Dead, Create Undead, Create Magen, Find Familiar, Find Steed, Find Greater Steed, Magic Jar, Planar Ally, Planar Binding, Gate, Infernal Calling, Glyph of Warding, Symbol, Simulacrum, True Polymorph, Shapechange, Clone, Demiplane, Drawmij's Instant Summons, Leomund's Secret Chest, Programmed Illusion.
-- **Implementation plan:**
-  - Add `summons?: SummonState[]` field to `Battlefield` (Core Engine owns `src/types/core.ts`).
-  - Each `SummonState` tracks: summon ID, caster ID, stat block reference, expiry turn, control mode (loyal/hostile/wild), HP.
-  - Core Engine adds a `runSummonTurn` hook in `runCombat` (after the caster's turn).
-  - Cantrip-z wires each `Summon *` / `Conjure *` spell module to push a `SummonState` and consume the slot.
-- **Risk:** HIGH — adds a new turn-order dimension. All 38 spells must agree on `SummonState` shape.
-- **Coordination protocol:** Core Engine announces the RFC; Cantrip-z implements spell modules once the shape is locked.
-- **Blocked spells (38):**
+- **Source:** `zHANDOVER-SESSION-19.md` (Session 19 bulk-implementation pass — 109 blocker spells identified); Session 21 deep-research pass produced `docs/TG-006-SUMMON-PLAN.md`
+- **Summary:** v1 has PARTIAL summon infrastructure (`src/summons/registry.ts` + `spawner.ts` + `mount.ts` — 684 lines, 9 SUMMON_REGISTRY entries, 51/51 passing tests) but NO mid-combat summon insertion, NO concentration-break despawn, and NO spell modules wired to it. **43** in-scope spells (re-categorized from original 38 — `Illusory Script`, `Programmed Illusion`, `Leomund's Secret Chest`, `Drawmij's Instant Summons`, `Conjure Constructs` were missed in Session 19's regex). Of these 43: 12 TCE `Summon *` (LOW risk), 7 PHB `Conjure *` (MEDIUM risk), 3 Find Familiar/Steed (LOW risk) are implementable by Cantrip-z in 4-6 sessions. The remaining 19 (Animate Dead, Create Undead, Magic Jar, Simulacrum, True Polymorph, Glyph of Warding, etc.) need bespoke subsystems — defer to Core Engine.
+- **Re-categorization note (Session 21):** `Conjure Barrage` and `Conjure Volley` are damage spells (not summons) — they should be moved to the Session 19 generic registry immediately.
+- **Existing infrastructure (do NOT rebuild):** `SUMMON_REGISTRY`, `spawnSummon()`, `issueVerbalCommand()`, mount system (`mount.ts`), `runCombat` reads `bf.pendingCommands` (line 2332). See `docs/TG-006-SUMMON-PLAN.md` §"Existing infrastructure" for full list.
+- **Missing infrastructure (must build):** `isSummon`/`summonerId`/`summonSpellName` fields on `Combatant`; `pendingInitiativeInserts` on `Battlefield`; `'summonSpell'` PlannedAction type; `case 'summonSpell':` branch in `combat.ts`; mid-turn initiative-insert hook in `runCombat`; concentration-break despawn extension to `removeEffectsFromCaster`; CR-based creature picker for Conjure spells; 12 TCE stat blocks (hardcoded, not in bestiary).
+- **Implementation plan (4 phases):**
+  - **Phase 1 (2-3 sessions, LOW risk):** Infrastructure + 12 TCE `Summon *` spells with hardcoded stat blocks. Vertical slice: Summon Beast (L2) + Summon Fey (L3) + Summon Undead (L3) in Session 22.
+  - **Phase 2 (1-2 sessions, MEDIUM risk):** 7 PHB `Conjure *` spells with bestiary CR-based picker. (Excluding Conjure Barrage / Conjure Volley — re-categorize as damage spells.)
+  - **Phase 3 (1 session, LOW risk):** Find Familiar (L1), Find Steed (L2), Find Greater Steed (L4) — reuses existing `spawnSummon`.
+  - **Phase 4 (DEFER):** 19 remaining spells (Animate Dead, Create Undead, Magic Jar, Simulacrum, True Polymorph, Shapechange, Glyph of Warding, Symbol, Programmed Illusion, Illusory Script, Demiplane, Leomund's Secret Chest, Drawmij's Instant Summons, Planar Ally, Planar Binding, Gate, Infernal Calling, Create Magen, Clone) — each needs bespoke subsystem. Split into individual TG entries under TG-011 or new TG-012..TG-030.
+- **Risk:** LOW for Phase 1/3, MEDIUM for Phase 2, HIGH for Phase 4 (deferred). All type/engine changes are additive (optional fields, new case branch, new helper function) — no breakage to existing spells.
+- **Coordination protocol:** Post an RFC in TEAMGOALS.md before touching `combat.ts` `runCombat` loop — give Core Engine 1 session to object. See `docs/TG-006-SUMMON-PLAN.md` §"Cross-Workstream Touchpoints" for the full file-by-file checklist.
+- **Blocked spells (43 — original 38 + 5 missed in Session 19):**
+  - **Level 1 (2):** Find Familiar (PHB), Illusory Script (PHB) [missed in S19].
   - **Level 2 (2):** Find Steed (PHB), Summon Beast (TCE).
-  - **Level 3 (8):** Animate Dead (PHB), Conjure Animals (PHB), Conjure Barrage (PHB), Conjure Constructs (FRHoF), Glyph of Warding (PHB), Summon Fey (TCE), Summon Lesser Demons (XGE), Summon Shadowspawn (TCE), Summon Undead (TCE).
-  - **Level 4 (7):** Conjure Minor Elementals (PHB), Conjure Woodland Beings (PHB), Find Greater Steed (XGE), Leomund's Secret Chest (PHB), Summon Aberration (TCE), Summon Construct (TCE), Summon Elemental (TCE), Summon Greater Demon (XGE).
-  - **Level 5 (5):** Conjure Elemental (PHB), Conjure Volley (PHB), Infernal Calling (XGE), Planar Binding (PHB), Summon Celestial (TCE), Summon Draconic Spirit (FTD).
-  - **Level 6 (5):** Conjure Fey (PHB), Create Undead (PHB), Drawmij's Instant Summons (PHB), Magic Jar (PHB), Planar Ally (PHB), Programmed Illusion (PHB), Summon Fiend (TCE).
+  - **Level 3 (8):** Animate Dead (PHB), Conjure Animals (PHB), Conjure Barrage (PHB) [re-categorize as damage], Conjure Constructs (FRHoF) [missed in S19], Glyph of Warding (PHB), Summon Fey (TCE), Summon Lesser Demons (XGE), Summon Shadowspawn (TCE), Summon Undead (TCE).
+  - **Level 4 (7):** Conjure Minor Elementals (PHB), Conjure Woodland Beings (PHB), Find Greater Steed (XGE), Leomund's Secret Chest (PHB) [missed in S19], Summon Aberration (TCE), Summon Construct (TCE), Summon Elemental (TCE), Summon Greater Demon (XGE).
+  - **Level 5 (5):** Conjure Elemental (PHB), Conjure Volley (PHB) [re-categorize as damage], Infernal Calling (XGE), Planar Binding (PHB), Summon Celestial (TCE), Summon Draconic Spirit (FTD).
+  - **Level 6 (5):** Conjure Fey (PHB), Create Undead (PHB), Drawmij's Instant Summons (PHB), Magic Jar (PHB), Planar Ally (PHB), Programmed Illusion (PHB) [missed in S19], Summon Fiend (TCE).
   - **Level 7 (4):** Conjure Celestial (PHB), Create Magen (IDRotF), Simulacrum (PHB), Symbol (PHB).
   - **Level 8 (2):** Clone (PHB), Demiplane (PHB).
-  - **Level 9 (4):** Gate (PHB), Shapechange (PHB), True Polymorph (PHB), (Drawmij's Instant Summons counted at L6).
+  - **Level 9 (4):** Gate (PHB), Shapechange (PHB), True Polymorph (PHB).
 
 ### TG-007: Wall subsystem (Session 19 — bulk-deferred blockers)
 
