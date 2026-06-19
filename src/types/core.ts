@@ -400,6 +400,34 @@ export interface Combatant {
   // treated as "no metal armor". Populated by the parser when armor data is
   // available; tests may set it directly.
   hasMetalArmor?: boolean;
+
+  // ---- Creature type flag (for cantrips like Chill Touch, PHB p.221) ----
+  // True when the creature is Undead. Optional — undefined is treated as "not
+  // undead". Populated by the parser from the monster `type` field when armor
+  // data is available (parser tech debt, same pattern as hasMetalArmor); tests
+  // may set it directly.
+  isUndead?: boolean;
+
+  // ---- Chill Touch (PHB p.221) scratch fields ----
+  // Set on the TARGET by Chill Touch's post-hit rider. Cleared by each module's
+  // cleanup() called from resetBudget() in utils.ts.
+  //
+  // _chillTouchNoHealing: target cannot regain hit points until the start of
+  //   the caster's next turn (PHB p.221). applyHeal() in utils.ts checks this.
+  // _chillTouchDisadvVs:  if the target is undead, holds the ID of the caster
+  //   against whom the undead has disadvantage on attack rolls until the end of
+  //   the caster's next turn (PHB p.221). resolveAttack() in combat.ts checks
+  //   this when the undead is the attacker and the caster is the target.
+  _chillTouchNoHealing?: boolean;
+  _chillTouchDisadvVs?: string;
+
+  // ---- Blade Ward (PHB p.218) scratch field ----
+  // Set on the CASTER when it casts Blade Ward (self-buff cantrip). While true,
+  // incoming bludgeoning/piercing/slashing damage is halved (PHB p.197
+  // resistance, rounded down) — applied in applyDamageWithTempHP() so it
+  // composes correctly with other resistances and never double-halves.
+  // Cleared by cleanup() called from resetBudget() in utils.ts.
+  _bladeWardActive?: boolean;
 }
 
 // ---- Obstacle -----------------------------------------------

@@ -8,6 +8,11 @@ import { querySelf, queryVulnerability } from './adv_system';
 import { getActiveBlessDie } from './spell_effects';
 import { cleanup as cleanupShield } from '../spells/shield';
 import { cleanup as cleanupRayOfFrost } from '../spells/ray_of_frost';
+import { cleanup as cleanupChillTouch } from '../spells/chill_touch';
+import { cleanup as cleanupBladeWard } from '../spells/blade_ward';
+
+// Damage types resisted by Blade Ward (PHB p.218) — bludgeoning/piercing/slashing.
+const BLADE_WARD_PHYSICAL_TYPES: DamageType[] = ['bludgeoning', 'piercing', 'slashing'];
 
 // ---- Dice rolling -------------------------------------------
 
@@ -169,9 +174,17 @@ export function applyDamage(target: Combatant, amount: number): number {
   return actual;
 }
 
-/** Heal `amount` HP on a target (capped at maxHP). */
+/**
+ * Heal `amount` HP on a target (capped at maxHP).
+ *
+ * Chill Touch (PHB p.221): if the target was struck by Chill Touch this round,
+ * its _chillTouchNoHealing flag is set and it cannot regain HP until the start
+ * of the caster's next turn. We short-circuit and return 0 (no healing). The
+ * lock is logged by the cantrip's applyCantripEffect; here we stay silent.
+ */
 export function applyHeal(target: Combatant, amount: number): number {
   if (target.isDead) return 0; // Dead = no heal (stabilise is separate)
+  if (target._chillTouchNoHealing) return 0; // Chill Touch heal-block rider
   const was = target.currentHP;
   target.currentHP = Math.min(target.maxHP, target.currentHP + amount);
 
@@ -220,6 +233,10 @@ export function resetBudget(c: Combatant): void {
   cleanupShield(c);
   // Ray of Frost speed reduction expires at start of caster's next turn (PHB p.271)
   cleanupRayOfFrost(c);
+  // Chill Touch riders (no-heal + undead disadv) expire at start of next turn (PHB p.221)
+  cleanupChillTouch(c);
+  // Blade Ward resistance expires at start of caster's next turn (PHB p.218)
+  cleanupBladeWard(c);
 
   const speed = effectiveSpeed(c);
   c.budget = {
@@ -578,10 +595,16 @@ export function applyDamageWithTempHP(
 ): number {
   // PHB p.197: resistance halves damage (rounded down) before temp HP absorption.
   // Warding Bond (PHB p.287) grants resistance to ALL damage types.
+  // Blade Ward (PHB p.218) grants resistance to bludgeoning/piercing/slashing.
+  // All three are folded into a single boolean so resistance never stacks
+  // (PHB p.197: two sources of the same resistance = half, not quarter).
   let effective = amount;
   const hasResistance =
     target.wardingBond !== null ||
-    (damageType != null && (target.resistances?.includes(damageType) ?? false));
+    (damageType != null && (target.resistances?.includes(damageType) ?? false)) ||
+    (target._bladeWardActive === true &&
+      damageType != null &&
+      BLADE_WARD_PHYSICAL_TYPES.includes(damageType));
   if (hasResistance) {
     effective = Math.floor(amount / 2);
   }

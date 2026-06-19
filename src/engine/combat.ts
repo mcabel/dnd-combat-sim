@@ -34,7 +34,7 @@ import { getSummonEntry }                           from '../summons/registry';
 import { rollGrappleContest, rollShoveContest, canGrappleOrShoveTarget } from './utils';
 import { computeLOS } from './los';
 import { removeEffectsFromCaster, getActiveAcBonus, getActiveBlessDie, getActiveHexDie } from './spell_effects';
-import { applyCantripEffect, getCantripAttackAdvantage } from './cantrip_effects';
+import { applyCantripEffect, getCantripAttackAdvantage, resolveCantripAction } from './cantrip_effects';
 import { execute as executeHex } from '../spells/hex';
 import { execute as executeMagicMissile } from '../spells/magic_missile';
 import { execute as executeBurningHands, shouldCast as shouldCastBurningHands } from '../spells/burning_hands';
@@ -246,7 +246,16 @@ function resolveAttack(
     log(state, 'action', attacker.id,
       `${attacker.name} attacks ${target.name} with Disadvantage (vision blocked).`, target.id);
   }
-  const disadvantage = baseDisadv || !!protectionRider || losDisadvantage;
+  // Chill Touch (PHB p.221): an undead hit by Chill Touch has disadvantage on
+  // attack rolls against the caster who struck it, until end of caster's next
+  // turn. The undead's _chillTouchDisadvVs holds the caster's ID.
+  const chillTouchDisadv =
+    !!attacker._chillTouchDisadvVs && attacker._chillTouchDisadvVs === target.id;
+  if (chillTouchDisadv) {
+    log(state, 'action', attacker.id,
+      `${attacker.name} attacks ${target.name} with Disadvantage (Chill Touch).`, target.id);
+  }
+  const disadvantage = baseDisadv || !!protectionRider || losDisadvantage || chillTouchDisadv;
 
   const result = rollAttack(action.hitBonus ?? 0, advantage, disadvantage);
 
@@ -565,6 +574,11 @@ function executePlannedAction(
   switch (plan.type) {
     case 'attack':
     case 'cast': {
+      // Non-attack self-buff cantrips (e.g. Blade Ward, PHB p.218): route via the
+      // CANTRIP_SELF_EFFECTS registry instead of resolveAttack. These have no
+      // target, so they must be handled BEFORE the target-null guard below. This
+      // also keeps cantrip logic out of this switch (no `case 'spellName'`).
+      if (plan.action && resolveCantripAction(actor, plan.action.name, state)) break;
       const target = plan.targetId ? bf.combatants.get(plan.targetId) : null;
       if (!target || target.isDead || target.isUnconscious) break;
       if (!plan.action) break;

@@ -6,13 +6,19 @@
 // that are applied after a successful hit.
 //
 // Supported cantrips:
-//   - Thorn Whip: Pulls Large/smaller targets 10 ft closer
-//   - Ray of Frost: Reduces target speed by 10 ft
-//   - Shocking Grasp: Prevents reactions on hit
-//   - (Future: Chill Touch, Blade Ward, etc.)
+//   - Thorn Whip: Pulls Large/smaller targets 10 ft closer  (post-hit)
+//   - Ray of Frost: Reduces target speed by 10 ft           (post-hit)
+//   - Shocking Grasp: Prevents reactions on hit + adv vs metal (pre-roll + post-hit)
+//   - Chill Touch: No healing + undead disadv vs caster      (post-hit)
+//   - Blade Ward: Self resistance to B/P/S (NON-attack self-buff)
 //
 // Integration:
-//   Called from resolveAttack in combat.ts after damage is dealt.
+//   - Post-hit attack cantrips: called from resolveAttack in combat.ts
+//     after damage is dealt, via applyCantripEffect() below.
+//   - Non-attack self-buff cantrips (Blade Ward): routed by
+//     resolveCantripAction() below, which executePlannedAction in
+//     combat.ts consults BEFORE resolveAttack so self-buffs never go
+//     through the attack-roll path.
 // ============================================================
 
 import { Combatant } from '../types/core';
@@ -20,6 +26,8 @@ import { EngineState } from '../engine/combat';
 import { applyCantripEffect as applyThornWhipEffect } from '../spells/thorn_whip';
 import { applyCantripEffect as applyRayOfFrostEffect } from '../spells/ray_of_frost';
 import { applyCantripEffect as applyShockingGraspEffect, cantripAttackAdvantage as shockingGraspAdvantage } from '../spells/shocking_grasp';
+import { applyCantripEffect as applyChillTouchEffect } from '../spells/chill_touch';
+import { applySelfEffect as applyBladeWardSelfEffect } from '../spells/blade_ward';
 
 // ---- Cantrip effect handlers --------------------------------
 
@@ -35,7 +43,8 @@ const CANTRIP_EFFECTS: Record<
   'Thorn Whip': applyThornWhipEffect,
   'Ray of Frost': applyRayOfFrostEffect,
   'Shocking Grasp': applyShockingGraspEffect,
-  // Future cantrips will be added here
+  'Chill Touch': applyChillTouchEffect,
+  // Future post-hit cantrips will be added here
 };
 
 // ---- Pre-roll cantrip advantage registry --------------------
@@ -96,5 +105,55 @@ export function applyCantripEffect(
     console.error(
       `[cantrip_effects] Error applying effect for ${actionName}: ${e instanceof Error ? e.message : String(e)}`
     );
+  }
+}
+
+// ---- Non-attack self-buff cantrip registry -------------------
+
+/**
+ * Map of cantrip names to their SELF-EFFECT handler functions for
+ * non-attack cantrips (self-buffs like Blade Ward). Each handler takes
+ * (caster, state) and returns true if the effect was applied.
+ *
+ * These cantrips do NOT ride resolveAttack (no attack roll, no target).
+ * executePlannedAction() in combat.ts consults resolveCantripAction()
+ * BEFORE resolveAttack; if it returns true the action is fully resolved
+ * as a self-buff and resolveAttack is skipped. This keeps cantrip logic
+ * out of the executePlannedAction switch (no `case 'spellName'`).
+ */
+const CANTRIP_SELF_EFFECTS: Record<
+  string,
+  (caster: Combatant, state: EngineState) => boolean
+> = {
+  'Blade Ward': applyBladeWardSelfEffect,
+  // Future non-attack self-buff cantrips will be added here
+};
+
+/**
+ * Resolve a non-attack (self-buff) cantrip action.
+ *
+ * If `actionName` is registered in CANTRIP_SELF_EFFECTS, applies the
+ * self-effect and returns true. Otherwise returns false (caller should
+ * fall through to resolveAttack or another handler).
+ *
+ * Called from executePlannedAction() in combat.ts for 'attack'/'cast'
+ * actions, BEFORE resolveAttack, so self-buff cantrips bypass the
+ * attack-roll path entirely.
+ */
+export function resolveCantripAction(
+  caster: Combatant,
+  actionName: string,
+  state: EngineState,
+): boolean {
+  const handler = CANTRIP_SELF_EFFECTS[actionName];
+  if (!handler) return false;
+
+  try {
+    return handler(caster, state);
+  } catch (e) {
+    console.error(
+      `[cantrip_effects] Error applying self-effect for ${actionName}: ${e instanceof Error ? e.message : String(e)}`
+    );
+    return false;
   }
 }
