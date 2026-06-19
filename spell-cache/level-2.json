@@ -1,6 +1,6 @@
 {
   "level": 2,
-  "generatedAt": "2026-06-19T19:50:59.092Z",
+  "generatedAt": "2026-06-19T20:31:52.701Z",
   "generatorVersion": 2,
   "scopeRule": "pre-2024 canon; reprints: newest in-scope source wins; XPHB(2024) out of scope; creatures keep all variants (not applicable to spells)",
   "sourceDates": {
@@ -26,8 +26,8 @@
     "XPHB"
   ],
   "count": 94,
-  "implementedCount": 6,
-  "remainingInScope": 86,
+  "implementedCount": 11,
+  "remainingInScope": 81,
   "spells": [
     {
       "name": "Aganazzar's Scorcher",
@@ -480,8 +480,8 @@
       "page": 221,
       "level": 2,
       "school": "Enchantment",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "calm_emotions.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -513,8 +513,8 @@
       "page": 222,
       "level": 2,
       "school": "Conjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "cloud_of_daggers.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -618,8 +618,8 @@
       "page": 229,
       "level": 2,
       "school": "Enchantment",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "crown_of_madness.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1364,8 +1364,8 @@
       "page": 251,
       "level": 2,
       "school": "Enchantment",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "hold_person.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1879,8 +1879,8 @@
       "page": 260,
       "level": 2,
       "school": "Illusion",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "mirror_image.ts",
       "inScope": true,
       "otherSources": [
         {

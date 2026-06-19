@@ -354,6 +354,79 @@ export const SPELL_DB: Record<string, SpellTemplate> = {
     bonusAction: true,
   },
 
+  'calm emotions': {
+    // 2nd-level enchantment, action, 60 ft, concentration 1 min.
+    // Removes charmed/frightened from allies (v1: allies voluntarily fail save).
+    // No damage, no save in v1 (allies voluntarily fail). attackType null —
+    // NOT selected by selectAction; dispatched via a case branch in combat.ts.
+    attackType: null,
+    rangeNormal: 60,
+    damage: null,
+    damageType: null,
+    isAoE: true,             // canon: 20-ft-radius sphere (v1: all allies within 60 ft)
+    isControl: true,         // removes control conditions (charmed/frightened)
+    requiresConcentration: true,
+    slotLevel: 2,
+  },
+
+  'cloud of daggers': {
+    // 2nd-level conjuration, action, 60 ft, concentration 1 min.
+    // 4d4 slashing on cast (no save) + persistent damage_zone effect.
+    // attackType null — NOT selected by selectAction (dispatched via case
+    // branch in combat.ts). The damage is applied inside execute(), not
+    // via resolveAttack's save branch.
+    attackType: null,
+    rangeNormal: 60,
+    damage: { count: 4, sides: 4, bonus: 0, average: avg(4, 4) },
+    damageType: 'slashing',
+    isAoE: true,             // canon: 5-ft cube (v1: single-target)
+    isControl: true,         // persistent damage zone controls enemy positioning
+    requiresConcentration: true,
+    slotLevel: 2,
+  },
+
+  'crown of madness': {
+    // 2nd-level enchantment, action, 120 ft, WIS save or charmed, concentration 1 min.
+    // v1: forced-attack rider NOT modelled; charmed condition only.
+    attackType: 'save',
+    rangeNormal: 120,
+    damage: null,
+    damageType: null,
+    saveAbility: 'wis',
+    isAoE: false,
+    isControl: true,         // imposes charmed condition
+    requiresConcentration: true,
+    slotLevel: 2,
+  },
+
+  'hold person': {
+    // 2nd-level enchantment, action, 60 ft, WIS save or paralyzed, concentration 1 min.
+    // v1: end-of-turn save NOT modelled.
+    attackType: 'save',
+    rangeNormal: 60,
+    damage: null,
+    damageType: null,
+    saveAbility: 'wis',
+    isAoE: false,
+    isControl: true,         // imposes paralyzed condition
+    requiresConcentration: true,
+    slotLevel: 2,
+  },
+
+  'mirror image': {
+    // 2nd-level illusion, action, self, NO concentration, 1 min.
+    // 3 illusory duplicates; attackers must roll d20 to retarget.
+    // No damage, no save. attackType null — NOT selected by selectAction.
+    attackType: null,
+    rangeNormal: 0,    // self
+    damage: null,
+    damageType: null,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 2,
+  },
+
 };
 
 // ---- Lookup helper ------------------------------------------

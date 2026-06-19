@@ -32,6 +32,11 @@ import { shouldCast as shouldCastBarkskin } from '../spells/barkskin';
 import { shouldCast as shouldCastBlur } from '../spells/blur';
 import { shouldCast as shouldCastBlindnessDeafness } from '../spells/blindness_deafness';
 import { shouldCast as shouldCastBrandingSmite } from '../spells/branding_smite';
+import { shouldCast as shouldCastCalmEmotions } from '../spells/calm_emotions';
+import { shouldCast as shouldCastCloudOfDaggers } from '../spells/cloud_of_daggers';
+import { shouldCast as shouldCastCrownOfMadness } from '../spells/crown_of_madness';
+import { shouldCast as shouldCastHoldPerson } from '../spells/hold_person';
+import { shouldCast as shouldCastMirrorImage } from '../spells/mirror_image';
 import { selectAction, selfPreserveDecision, selectLegendaryAction } from './actions';
 import {
   canReach, bestAdjacentPos, bestRangedPosition,
@@ -924,6 +929,122 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
       action: null,
       targetId: self.id,
       description: `${self.name} casts Blur`,
+    };
+    plan.targetId = self.id;
+    plan.bonusAction = planBonusAction(self, target, battlefield);
+    return plan;
+  }
+
+  // === LEVEL-2 SPELLS batch 2 (action-time, added in Cantrip-z Session 16) ===
+  // 5 new PHB level-2 spells. Each is guarded by `if (!plan.action)` so it
+  // only fires when no higher-priority spell was chosen. Order within the
+  // block: Hold Person (save-or-paralyzed, highest control value) →
+  // Crown of Madness (save-or-charmed, similar but weaker) →
+  // Cloud of Daggers (damage + persistent zone) →
+  // Calm Emotions (ally debuff removal, niche) →
+  // Mirror Image (self-buff, NO concentration — can stack with the above).
+  // All five return early via `return plan` when they fire so the AI
+  // doesn't fall through to SELECT ACTION.
+
+  // --- 11E. HOLD PERSON (single-target save-or-paralyzed, concentration) ---
+  // PHB p.251: action, 60 ft, WIS save or paralyzed, concentration 1 min.
+  // Paralyzed is one of the strongest conditions in 5e (incapacitated +
+  // can't move + attacks vs target have advantage + melee attacks auto-crit
+  // — though v1's engine doesn't model the auto-crit). Highest priority of
+  // the 5 new spells — removing the biggest enemy's action economy for the
+  // entire combat (v1: end-of-turn save NOT modelled) is game-changing.
+  // The caster must NOT be already concentrating (shouldCast guards this).
+  if (!plan.action && self.actions.some(a => a.name === 'Hold Person')) {
+    const hpTarget = shouldCastHoldPerson(self, battlefield);
+    if (hpTarget) {
+      plan.action = {
+        type: 'holdPerson',
+        action: null,
+        targetId: hpTarget.id,
+        description: `${self.name} casts Hold Person at ${hpTarget.name}`,
+      };
+      plan.targetId = hpTarget.id;
+      plan.bonusAction = planBonusAction(self, hpTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 11F. CROWN OF MADNESS (single-target save-or-charmed, concentration) ---
+  // PHB p.229: action, 120 ft, WIS save or charmed, concentration 1 min.
+  // v1: forced-attack rider NOT modelled — functionally a save-or-charmed
+  // debuff. Priority: after Hold Person (paralyzed is strictly stronger
+  // than charmed). The caster must NOT be already concentrating.
+  if (!plan.action && self.actions.some(a => a.name === 'Crown of Madness')) {
+    const comTarget = shouldCastCrownOfMadness(self, battlefield);
+    if (comTarget) {
+      plan.action = {
+        type: 'crownOfMadness',
+        action: null,
+        targetId: comTarget.id,
+        description: `${self.name} casts Crown of Madness at ${comTarget.name}`,
+      };
+      plan.targetId = comTarget.id;
+      plan.bonusAction = planBonusAction(self, comTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 11G. CLOUD OF DAGGERS (single-target damage + persistent zone, concentration) ---
+  // PHB p.222: action, 60 ft, 4d4 slashing on cast (no save) + persistent
+  // damage_zone (4d4 at start of each of target's turns). Priority: after
+  // the save-or-control spells (Hold Person / Crown of Madness) since
+  // those remove enemy action economy entirely, while Cloud of Daggers
+  // "only" deals damage. The caster must NOT be already concentrating.
+  if (!plan.action && self.actions.some(a => a.name === 'Cloud of Daggers')) {
+    const codTarget = shouldCastCloudOfDaggers(self, battlefield);
+    if (codTarget) {
+      plan.action = {
+        type: 'cloudOfDaggers',
+        action: null,
+        targetId: codTarget.id,
+        description: `${self.name} casts Cloud of Daggers at ${codTarget.name}`,
+      };
+      plan.targetId = codTarget.id;
+      plan.bonusAction = planBonusAction(self, codTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 11H. CALM EMOTIONS (ally debuff removal, concentration) ---
+  // PHB p.221: action, 60 ft, concentration 1 min. v1: removes
+  // charmed/frightened from allies (allies voluntarily fail the CHA save).
+  // Niche — only fires when an ally is charmed or frightened. Priority:
+  // after the offensive spells (Hold Person / Crown of Madness / Cloud of
+  // Daggers) since those are more universally useful. The caster must NOT
+  // be already concentrating.
+  if (!plan.action && self.actions.some(a => a.name === 'Calm Emotions')) {
+    const ceTargets = shouldCastCalmEmotions(self, battlefield);
+    if (ceTargets && ceTargets.length > 0) {
+      plan.action = {
+        type: 'calmEmotions',
+        action: null,
+        targetId: ceTargets[0].id,
+        description: `${self.name} casts Calm Emotions (suppressing charm/frighten on ${ceTargets.length} all${ceTargets.length !== 1 ? 'ies' : 'y'})`,
+      };
+      plan.targetId = ceTargets[0].id;
+      plan.bonusAction = planBonusAction(self, target, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 11I. MIRROR IMAGE (self-buff, NO concentration) ---
+  // PHB p.260: action, self, NO concentration, 1 min. 3 illusory
+  // duplicates; attackers must roll d20 to retarget. Lowest priority of
+  // the 5 new spells — fires only when no other spell was chosen. NOT
+  // concentration, so it can stack with an existing concentration spell
+  // (e.g. a Wizard concentrating on Blur could also cast Mirror Image).
+  // Useful for squishy casters expecting to be attacked.
+  if (!plan.action && self.actions.some(a => a.name === 'Mirror Image') && shouldCastMirrorImage(self, battlefield)) {
+    plan.action = {
+      type: 'mirrorImage',
+      action: null,
+      targetId: self.id,
+      description: `${self.name} casts Mirror Image`,
     };
     plan.targetId = self.id;
     plan.bonusAction = planBonusAction(self, target, battlefield);

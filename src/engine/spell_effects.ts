@@ -77,7 +77,10 @@ export function applySpellEffect(
     case 'ac_bonus':
     case 'ac_floor':
     case 'bless_die':
+    case 'damage_zone':
       // No immediate side-effect — read at resolution time.
+      // (damage_zone: the start-of-turn damage tick is in combat.ts's
+      // runCombat loop, right after resetBudget.)
       break;
   }
 
@@ -147,6 +150,7 @@ function _undoEffect(target: Combatant, effect: ActiveEffect): void {
     case 'ac_bonus':
     case 'ac_floor':
     case 'bless_die':
+    case 'damage_zone':
       // Read-only at resolution — nothing to undo structurally.
       break;
   }
@@ -205,4 +209,21 @@ export function getActiveHexDie(target: Combatant, attackerId: string): number {
     e => e.effectType === 'hex_damage' && e.casterId === attackerId
   );
   return effect?.payload.hexDie ?? 0;
+}
+
+// ---- Damage zone query (used by combat.ts runCombat loop) ---
+
+/**
+ * Returns all active damage_zone effects on a combatant. Each entry deals
+ * `dieCount`d`dieSides` `damageType` damage at the start of the combatant's
+ * turn (PHB p.222 Cloud of Daggers: "starts its turn there"). Multiple
+ * damage_zone effects from different casters all tick independently (rare
+ * but possible — e.g. two Cloud of Daggers casters overlapping zones).
+ *
+ * Called by the start-of-turn damage tick in combat.ts's runCombat loop
+ * (right after resetBudget). The damage is applied via applyDamageWithTempHP
+ * so resistances / temp HP / Warding Bond redirect all work as expected.
+ */
+export function getActiveDamageZones(c: Combatant): ActiveEffect[] {
+  return c.activeEffects.filter(e => e.effectType === 'damage_zone');
 }

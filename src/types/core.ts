@@ -92,7 +92,8 @@ export type SpellEffectType =
   | 'ac_floor'          // AC minimum / floor (e.g. Barkskin sets AC ≥ 16 — PHB p.217)
   | 'bless_die'         // add a bonus die to this creature's attack rolls & saves (Bless 1d4)
   | 'condition_apply'   // apply a condition to this creature (e.g. Entangle → restrained)
-  | 'hex_damage';       // +1d6 necrotic on each hit by the caster (Hex PHB p.251)
+  | 'hex_damage'        // +1d6 necrotic on each hit by the caster (Hex PHB p.251)
+  | 'damage_zone';      // persistent damage aura on this creature (e.g. Cloud of Daggers 4d4 slashing)
 
 export interface ActiveEffect {
   id: string;               // unique per instance, e.g. 'eff_1'
@@ -113,6 +114,14 @@ export interface ActiveEffect {
     condition?: Condition;
     // hex_damage
     hexDie?: number;   // always 6 (d6); stored for extensibility
+    // damage_zone — persistent damage aura (e.g. Cloud of Daggers PHB p.222)
+    // Deals `dieCount`d`dieSides` `damageType` damage at the start of each
+    // affected creature's turn (PHB p.222: "starts its turn there"). The
+    // effect is applied on cast; the start-of-turn damage tick is in
+    // combat.ts's runCombat loop (right after resetBudget). Removed when
+    // the caster's concentration breaks (sourceIsConcentration: true).
+    dieCount?: number;                // e.g. 4 for 4d4
+    damageType?: DamageType;          // e.g. 'slashing' for Cloud of Daggers
   };
   sourceIsConcentration: boolean;     // if true, removed when caster's concentration ends
 }
@@ -810,6 +819,54 @@ export interface Combatant {
   //   Shillelagh:     _shillelaghActive     = true  [melee-only, persistent, +1d8 radiant]
   //   Branding Smite: _brandingSmiteActive  = true  [weapon-only, one-shot, +2d6 radiant]
   _brandingSmiteActive?: boolean;
+
+  // ---- Mirror Image (PHB p.260) scratch field ----
+  // Set on the CASTER when it casts Mirror Image (2nd-level illusion,
+  // PHB p.260: "Three illusory duplicates of yourself appear in your
+  // space... Each time a creature targets you with an attack during the
+  // spell's duration, roll a d20 to determine whether the attack instead
+  // targets one of your duplicates."). The field tracks the number of
+  // remaining duplicates (3 → 2 → 1 → 0). When the count reaches 0, the
+  // spell ends (PHB p.260: "The spell ends when all three duplicates are
+  // destroyed.").
+  //
+  // While `_mirrorImageDuplicates > 0`, resolveAttack's attack-roll
+  // branch (in combat.ts) rolls a d20 BEFORE the normal attack roll to
+  // determine whether the attack is retargeted to a duplicate:
+  //   3 duplicates: d20 ≥ 6  retargets to a duplicate
+  //   2 duplicates: d20 ≥ 8  retargets to a duplicate
+  //   1 duplicate:  d20 ≥ 11 retargets to a duplicate
+  // If retargeted, a SEPARATE attack roll is made against the duplicate's
+  // AC (10 + caster's DEX mod). On a hit, one duplicate is destroyed
+  // (decrement the counter). The attack doesn't affect the real caster.
+  // On a miss, the attack simply misses (no effect on the caster or any
+  // duplicate).
+  //
+  // v1 simplifications:
+  //   1. Duration: canon 1 min (10 rounds), NO concentration → v1 does
+  //      NOT track the duration. The spell lasts until all duplicates
+  //      are destroyed (the canon end condition). If the caster is never
+  //      attacked, the spell persists for the entire combat. Documented
+  //      via the metadata flag `mirrorImageDurationV1Simplified: true`.
+  //   2. Sight-dependency immunity: PHB p.260 says "A creature is
+  //      unaffected by this spell if it can't see, if it relies on senses
+  //      other than sight, such as blindsight, or if it can perceive
+  //      illusions as false, as with truesight." v1 does NOT model this
+  //      — all attackers are subject to the retargeting roll. The
+  //      `isBlindImmune` flag does NOT exist on Combatant yet — adding
+  //      it is part of TG-004 (parser tech debt) in TEAMGOALS.md.
+  //      Documented via the metadata flag
+  //      `mirrorImageSightDependencyV1Implemented: false`.
+  //   3. NOT a concentration spell (PHB p.260: no concentration noted).
+  //      The duplicates persist regardless of the caster's condition
+  //      (incapacitated, etc.) until all are destroyed or the 1-min
+  //      duration expires (v1 simplification: duration not tracked).
+  //
+  // Distinct from other self-buff scratch fields: Mirror Image is the
+  // FIRST self-buff that modifies an incoming attack's TARGET (not the
+  // attack roll, damage, or AC). The retargeting logic lives in
+  // resolveAttack's pre-roll section.
+  _mirrorImageDuplicates?: number;
 }
 
 // ---- Obstacle -----------------------------------------------
@@ -903,6 +960,11 @@ export interface PlannedAction {
     | 'blur'             // Blur — self, disadv on attacks vs caster, concentration 1 min (Wizard/Sorcerer)
     | 'blindnessDeafness'// Blindness/Deafness — CON save or blinded, 1 min, NO concentration (Cleric/Sorcerer/Wizard)
     | 'brandingSmite'    // Branding Smite — bonus action, next weapon hit +2d6 radiant, concentration 1 min (Paladin/Ranger)
+    | 'calmEmotions'     // Calm Emotions — 60 ft, removes charmed/frightened from allies, concentration 1 min (Bard/Cleric/Druid/Paladin)
+    | 'cloudOfDaggers'   // Cloud of Daggers — 60 ft, 4d4 slashing + persistent damage_zone, concentration 1 min (Bard/Sorcerer/Warlock/Wizard)
+    | 'crownOfMadness'   // Crown of Madness — 120 ft, WIS save or charmed, concentration 1 min (Bard/Sorcerer/Warlock/Wizard)
+    | 'holdPerson'       // Hold Person — 60 ft, WIS save or paralyzed, concentration 1 min (Bard/Cleric/Druid/Paladin/Sorcerer/Warlock/Wizard)
+    | 'mirrorImage'      // Mirror Image — self, 3 duplicates, NO concentration, 1 min (Bard/Sorcerer/Warlock/Wizard)
     | 'legendary';
   action: Action | null;
   targetId: string | null;

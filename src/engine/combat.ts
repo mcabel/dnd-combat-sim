@@ -33,7 +33,7 @@ import { tickAdvantages, grantSelf, grantVulnerability } from './adv_system';
 import { getSummonEntry }                           from '../summons/registry';
 import { rollGrappleContest, rollShoveContest, canGrappleOrShoveTarget } from './utils';
 import { computeLOS } from './los';
-import { removeEffectsFromCaster, getActiveAcBonus, getActiveAcFloor, getActiveBlessDie, getActiveHexDie } from './spell_effects';
+import { removeEffectsFromCaster, getActiveAcBonus, getActiveAcFloor, getActiveBlessDie, getActiveHexDie, getActiveDamageZones } from './spell_effects';
 import { applyCantripEffect, getCantripAttackAdvantage, resolveCantripAction, resolveCantripAoE, resolveCantripTouchEffect } from './cantrip_effects';
 import { execute as executeHex } from '../spells/hex';
 import { execute as executeMagicMissile } from '../spells/magic_missile';
@@ -60,6 +60,11 @@ import { shouldCast as shouldCastBarkskin, execute as executeBarkskin } from '..
 import { shouldCast as shouldCastBlur, execute as executeBlur } from '../spells/blur';
 import { shouldCast as shouldCastBlindnessDeafness, execute as executeBlindnessDeafness } from '../spells/blindness_deafness';
 import { shouldCast as shouldCastBrandingSmite, execute as executeBrandingSmite } from '../spells/branding_smite';
+import { shouldCast as shouldCastCalmEmotions, execute as executeCalmEmotions } from '../spells/calm_emotions';
+import { shouldCast as shouldCastCloudOfDaggers, execute as executeCloudOfDaggers } from '../spells/cloud_of_daggers';
+import { shouldCast as shouldCastCrownOfMadness, execute as executeCrownOfMadness } from '../spells/crown_of_madness';
+import { shouldCast as shouldCastHoldPerson, execute as executeHoldPerson } from '../spells/hold_person';
+import { shouldCast as shouldCastMirrorImage, execute as executeMirrorImage } from '../spells/mirror_image';
 
 // ---- Combat log ---------------------------------------------
 
@@ -349,6 +354,36 @@ export function resolveAttack(
   }
   const shillelaghHitBonus = (action.hitBonus ?? 0) + shillelaghHitBonusDelta;
 
+  // ── Mirror Image retargeting (PHB p.260) ─────────────────────────────
+  // Before the attack roll, if the target has Mirror Image active, roll a
+  // d20 to determine whether the attack instead targets one of the
+  // illusory duplicates. Retargeting thresholds (PHB p.260):
+  //   3 duplicates: d20 ≥ 6 retargets
+  //   2 duplicates: d20 ≥ 8 retargets
+  //   1 duplicate:  d20 ≥ 11 retargets
+  // If retargeted, the SAME attack roll is compared against the duplicate's
+  // AC (10 + target's DEX mod) instead of the caster's effective AC. On a
+  // hit, one duplicate is destroyed (decrement `_mirrorImageDuplicates`).
+  // On a miss, the attack simply misses (no effect on the caster or any
+  // duplicate). Either way, the attack doesn't affect the real caster.
+  // The spell ends when all three duplicates are destroyed (PHB p.260).
+  // v1 simplifications: duration not tracked (lasts until all duplicates
+  // destroyed); sight-dependency immunity (blindsight/truesight) NOT
+  // modelled (TG-004). See `_mirrorImageDuplicates` doc comment in core.ts.
+  const mirrorDuplicates = target._mirrorImageDuplicates ?? 0;
+  let mirrorRetargeted = false;
+  if (mirrorDuplicates > 0) {
+    // Thresholds indexed by remaining duplicate count. Index 0 unused.
+    // (Mirrors metadata.retargetThresholds in src/spells/mirror_image.ts.)
+    const mirrorThresholds = [0, 11, 8, 6];
+    const mirrorThreshold = mirrorThresholds[mirrorDuplicates] ?? 11;
+    const mirrorRoll = rollDie(20);
+    mirrorRetargeted = mirrorRoll >= mirrorThreshold;
+    log(state, 'action', attacker.id,
+      `${target.name}'s Mirror Image: retarget roll ${mirrorRoll} vs DC ${mirrorThreshold} (${mirrorDuplicates} duplicate${mirrorDuplicates !== 1 ? 's' : ''}) → ${mirrorRetargeted ? 'attack redirected to a duplicate!' : 'attack proceeds against the real ' + target.name}.`,
+      target.id, mirrorRoll);
+  }
+
   const result = rollAttack(shillelaghHitBonus, advantage, disadvantage);
 
   // Vicious Mockery one-shot consume: the debuff applies to exactly one attack
@@ -401,10 +436,45 @@ export function resolveAttack(
   // Cover: +2 (half) or +5 (three-quarters) to AC from obstacles (DMG Ch.8 p.196)
   // Barkskin: AC can't be less than 16 (PHB p.217) — ac_floor effect applied
   //   by spell_effects.ts; the floor is applied to natural AC BEFORE bonuses.
-  const acFloor = getActiveAcFloor(target);
-  const naturalAC = acFloor > 0 ? Math.max(target.ac, acFloor) : target.ac;
-  const effectiveAC = naturalAC + (target.wardingBond ? 1 : 0) + (los?.coverACBonus ?? 0) + getActiveAcBonus(target);
+  // Mirror Image: if the attack was retargeted to a duplicate (PHB p.260),
+  //   the effective AC is the duplicate's AC (10 + target's DEX mod) — NOT
+  //   the caster's normal AC. The duplicate ignores all bonuses (Warding
+  //   Bond, cover, ac_bonus, ac_floor) — it's a separate target.
+  let effectiveAC: number;
+  if (mirrorRetargeted) {
+    effectiveAC = 10 + abilityMod(target.dex);  // PHB p.260: duplicate's AC
+  } else {
+    const acFloor = getActiveAcFloor(target);
+    const naturalAC = acFloor > 0 ? Math.max(target.ac, acFloor) : target.ac;
+    effectiveAC = naturalAC + (target.wardingBond ? 1 : 0) + (los?.coverACBonus ?? 0) + getActiveAcBonus(target);
+  }
   const hits = isCritOverride ?? attackHits(result.roll, result.total, effectiveAC);
+
+  // ── Mirror Image duplicate resolution (PHB p.260) ────────────────────
+  // If the attack was retargeted to a duplicate, resolve it now: on hit,
+  // destroy one duplicate (decrement the counter); on miss, the attack
+  // simply misses. Either way, the attack doesn't affect the real caster
+  // — return early (skip the damage section entirely). The duplicate
+  // "ignores all other damage and effects" (PHB p.260).
+  if (mirrorRetargeted) {
+    if (hits) {
+      const newDuplicateCount = mirrorDuplicates - 1;
+      target._mirrorImageDuplicates = newDuplicateCount;
+      log(state, 'action', attacker.id,
+        `${attacker.name}'s attack hits a mirror image duplicate and destroys it! (${newDuplicateCount} duplicate${newDuplicateCount !== 1 ? 's' : ''} remaining)`,
+        target.id);
+      if (newDuplicateCount === 0) {
+        log(state, 'condition_remove', target.id,
+          `${target.name}'s Mirror Image ends — all duplicates destroyed!`,
+          target.id);
+      }
+    } else {
+      log(state, 'attack_miss', attacker.id,
+        `${attacker.name}'s attack misses the mirror image duplicate (rolled ${result.roll}+${action.hitBonus}=${result.total} vs duplicate AC ${effectiveAC})`,
+        target.id, result.roll);
+    }
+    return;  // Attack doesn't affect the real caster (PHB p.260)
+  }
 
   if (!hits) {
     log(state, 'attack_miss', attacker.id,
@@ -1278,6 +1348,63 @@ function executePlannedAction(
       if (shouldCastBrandingSmite(actor, bf)) executeBrandingSmite(actor, state);
       break;
     }
+
+    case 'calmEmotions': {
+      // Calm Emotions — PHB p.221: action, 60 ft, concentration 1 min.
+      // Removes charmed/frightened from allies (v1: allies voluntarily fail
+      // the CHA save; suppress mode only). Re-run shouldCast to get the live
+      // target list (planning may be stale).
+      const ceTargets = shouldCastCalmEmotions(actor, bf);
+      if (!ceTargets || ceTargets.length === 0) break;
+      executeCalmEmotions(actor, ceTargets, state);
+      break;
+    }
+
+    case 'cloudOfDaggers': {
+      // Cloud of Daggers — PHB p.222: action, 60 ft, concentration 1 min.
+      // 4d4 slashing on cast (no save) + persistent damage_zone effect that
+      // ticks 4d4 at the start of each of the target's turns (PHB p.222:
+      // "starts its turn there"). v1: single-target; no movement tracking.
+      const codTargetId = plan.targetId;
+      const codTarget = codTargetId ? bf.combatants.get(codTargetId) ?? null : null;
+      // shouldCast returns the live target; fall back to plan.targetId if so.
+      const liveTarget = codTarget && !codTarget.isDead && !codTarget.isUnconscious
+        ? codTarget
+        : shouldCastCloudOfDaggers(actor, bf);
+      if (!liveTarget) break;
+      executeCloudOfDaggers(actor, liveTarget, state);
+      break;
+    }
+
+    case 'crownOfMadness': {
+      // Crown of Madness — PHB p.229: action, 120 ft, WIS save or charmed,
+      // concentration 1 min. v1: forced-attack rider NOT modelled.
+      const comTargetId = plan.targetId;
+      if (!comTargetId) break;
+      const comTarget = bf.combatants.get(comTargetId);
+      if (!comTarget || comTarget.isDead || comTarget.isUnconscious) break;
+      executeCrownOfMadness(actor, comTarget, state);
+      break;
+    }
+
+    case 'holdPerson': {
+      // Hold Person — PHB p.251: action, 60 ft, WIS save or paralyzed,
+      // concentration 1 min. v1: end-of-turn save NOT modelled.
+      const hpTargetId = plan.targetId;
+      if (!hpTargetId) break;
+      const hpTarget = bf.combatants.get(hpTargetId);
+      if (!hpTarget || hpTarget.isDead || hpTarget.isUnconscious) break;
+      executeHoldPerson(actor, hpTarget, state);
+      break;
+    }
+
+    case 'mirrorImage': {
+      // Mirror Image — PHB p.260: action, self, NO concentration, 1 min.
+      // 3 illusory duplicates; attackers must roll d20 to retarget. v1:
+      // duration not tracked (lasts until all duplicates destroyed).
+      if (shouldCastMirrorImage(actor, bf)) executeMirrorImage(actor, state);
+      break;
+    }
   }
 }
 
@@ -1557,6 +1684,58 @@ export function runCombat(
 
       // Reset budget (movement, action, bonus, reaction)
       resetBudget(actor);
+
+      // ── Cloud of Daggers / damage_zone start-of-turn tick (PHB p.222) ────
+      // PHB p.222: "A creature takes 4d4 slashing damage when it enters the
+      // spell's area for the first time on a turn or STARTS ITS TURN THERE."
+      // This hook applies the "starts its turn there" damage — it runs right
+      // after resetBudget, at the very start of the actor's turn, BEFORE the
+      // actor gets to plan or act. The damage is applied via
+      // applyDamageWithTempHP so resistances / temp HP / Warding Bond
+      // redirect all work as expected. v1 simplification: doesn't track
+      // whether the creature moved out of the zone (damage applies
+      // regardless of position — see `cloudOfDaggersMovementTrackingV1Implemented`
+      // metadata flag).
+      //
+      // Multiple damage_zone effects from different casters all tick
+      // independently (rare but possible — e.g. two Cloud of Daggers
+      // casters overlapping zones). Each effect rolls its own dice.
+      const damageZones = getActiveDamageZones(actor);
+      if (damageZones.length > 0 && !actor.isDead && !actor.isUnconscious) {
+        for (const zone of damageZones) {
+          // Re-check liveness (a prior zone in this loop may have killed
+          // the actor — e.g. two overlapping Cloud of Daggers zones).
+          if (actor.isDead || actor.isUnconscious) break;
+
+          const dieCount = zone.payload.dieCount ?? 0;
+          const dieSides = zone.payload.dieSides ?? 0;
+          const damageType = zone.payload.damageType ?? null;
+          if (dieCount <= 0 || dieSides <= 0) continue;
+
+          // Roll the damage (mirror Cloud of Daggers's rollDamage helper).
+          let dmgRoll = 0;
+          for (let i = 0; i < dieCount; i++) dmgRoll += rollDie(dieSides);
+
+          const dealt = applyDamageWithTempHP(actor, dmgRoll, damageType);
+          log(state, 'damage', zone.casterId,
+            `${actor.name} takes ${dealt} ${damageType ?? ''} damage from ${zone.spellName} (start of turn: ${dieCount}d${dieSides}=${dmgRoll})`,
+            actor.id, dealt);
+
+          // Concentration check if the actor was concentrating (the damage
+          // from a damage_zone can break concentration — PHB p.203).
+          if (actor.concentration?.active && dealt > 0) {
+            const maintained = rollConcentrationSave(actor, dealt);
+            if (!maintained) {
+              removeEffectsFromCaster(actor.id, battlefield);
+              log(state, 'condition_remove', actor.id,
+                `${actor.name} loses concentration on ${actor.concentration?.spellName ?? 'spell'} (damaged by ${zone.spellName})!`, undefined);
+            }
+          }
+
+          // Death check (the damage may have killed the actor).
+          checkDeath(actor, state);
+        }
+      }
 
       // Guiding Bolt fallback expiry: remove any marks this caster placed last turn (PHB p.248).
       // Primary expiry happens in resolveAttack (consumeGuidingBoltMark); this is the safety net.
