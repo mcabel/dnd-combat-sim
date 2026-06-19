@@ -306,7 +306,28 @@ export function resolveAttack(
   }
   const disadvantage = baseDisadv || !!protectionRider || losDisadvantage || chillTouchDisadv || viciousMockeryDisadv || frostbiteDisadv;
 
-  const result = rollAttack(action.hitBonus ?? 0, advantage, disadvantage);
+  // Shillelagh (PHB p.275): while the self-buff is active, MELEE attacks use
+  // WIS mod instead of STR mod for the attack roll. The substitution delta is
+  // (WIS_mod - STR_mod) — applied to the hitBonus only when
+  // `_shillelaghActive === true && action.attackType === 'melee'`. Ranged and
+  // spell attacks do NOT benefit (PHB p.275: "melee attacks using that weapon").
+  // v1 simplification: the +1d8 radiant damage on hit is added separately in
+  // the damage section below. See src/spells/shillelagh.ts for details.
+  const shillelaghActive =
+    attacker._shillelaghActive === true && action.attackType === 'melee';
+  let shillelaghHitBonusDelta = 0;
+  if (shillelaghActive) {
+    const wisMod = abilityMod(attacker.wis);
+    const strMod = abilityMod(attacker.str);
+    shillelaghHitBonusDelta = wisMod - strMod;
+    if (shillelaghHitBonusDelta !== 0) {
+      log(state, 'action', attacker.id,
+        `${attacker.name} channels Shillelagh — melee attack uses WIS (${wisMod >= 0 ? '+' : ''}${wisMod}) instead of STR (${strMod >= 0 ? '+' : ''}${strMod}) for the attack roll (delta ${shillelaghHitBonusDelta >= 0 ? '+' : ''}${shillelaghHitBonusDelta}).`, target.id);
+    }
+  }
+  const shillelaghHitBonus = (action.hitBonus ?? 0) + shillelaghHitBonusDelta;
+
+  const result = rollAttack(shillelaghHitBonus, advantage, disadvantage);
 
   // Vicious Mockery one-shot consume: the debuff applies to exactly one attack
   // roll (PHB p.285). Consume it now — whether the attack hit or missed — so
@@ -417,6 +438,26 @@ export function resolveAttack(
       dmg += rageBonus;
       log(state, 'action', attacker.id,
         `${attacker.name} adds Rage bonus (+${rageBonus} damage)!`, target.id, rageBonus);
+    }
+
+    // Shillelagh (PHB p.275): while the self-buff is active, MELEE attacks
+    // gain +1d8 radiant damage on hit (v1 simplification — canonically the
+    // weapon's damage die BECOMES 1d8, but v1 adds +1d8 radiant on top of
+    // the weapon's existing damage to sidestep the engine complexity of
+    // identifying which Action is the buffed weapon). The WIS-for-STR
+    // substitution on the attack ROLL was already applied above (before
+    // rollAttack). This block handles the DAMAGE substitution only.
+    // Mirrors Divine Smite / Hex bonus-damage patterns (roll die, add to dmg,
+    // log). Crit doubles the dice via rollDamage — but Shillelagh's +1d8 is
+    // rolled separately via rollDie (not part of action.damage), so we
+    // manually double it on crit for consistency with PHB p.196.
+    if (shillelaghActive) {
+      let shillelaghDice = isCrit ? 2 : 1; // crit doubles damage dice (PHB p.196)
+      let shillelaghBonus = 0;
+      for (let i = 0; i < shillelaghDice; i++) shillelaghBonus += rollDie(8);
+      dmg += shillelaghBonus;
+      log(state, 'action', attacker.id,
+        `${attacker.name} adds Shillelagh bonus (+${shillelaghBonus} radiant${isCrit ? ' CRIT' : ''})!`, target.id, shillelaghBonus);
     }
 
     // Hex damage: +1d6 necrotic when the warlock who hexed the target hits it (PHB p.251)

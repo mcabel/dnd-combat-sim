@@ -11,6 +11,7 @@
 //   - Shocking Grasp: Prevents reactions on hit + adv vs metal (pre-roll + post-hit)
 //   - Chill Touch: No healing + undead disadv vs caster      (post-hit)
 //   - Blade Ward: Self resistance to B/P/S (NON-attack self-buff)
+//   - Shillelagh: WIS-for-STR melee + +1d8 radiant (NON-attack self-buff)
 //   - Vicious Mockery: Disadv on target's next attack (post-save-FAIL)
 //   - Mind Sliver: −1d4 to target's next save (post-save-FAIL)
 //   - Booming Blade: Thunder rider on target's next willing move (post-hit)
@@ -18,8 +19,10 @@
 //   - Sapping Sting: Target falls prone (post-save-FAIL — condition, not scratch field)
 //   - Lightning Lure: Pull 10 ft + conditional lightning damage (post-save-FAIL)
 //   - Green-Flame Blade: Fire splash to 2nd creature within 5 ft of primary (post-hit)
+//   - Infestation: Random d4 forced movement (N/S/E/W) on save-FAIL (post-save-FAIL)
 //   - Thunderclap: Caster-centered 5-ft AoE CON save (NON-attack AoE)
 //   - Sword Burst: Caster-centered 5-ft AoE DEX save (NON-attack AoE)
+//   - Word of Radiance: Caster-centered 5-ft AoE CON save, radiant (NON-attack AoE)
 //
 // Integration:
 //   - Post-hit attack cantrips: called from resolveAttack in combat.ts
@@ -49,9 +52,12 @@ import { applyCantripEffect as applyFrostbiteEffect } from '../spells/frostbite'
 import { applyCantripEffect as applySappingStingEffect } from '../spells/sapping_sting';
 import { applyCantripEffect as applyLightningLureEffect } from '../spells/lightning_lure';
 import { applyCantripEffect as applyGreenFlameBladeEffect } from '../spells/green_flame_blade';
+import { applyCantripEffect as applyInfestationEffect } from '../spells/infestation';
 import { applySelfEffect as applyBladeWardSelfEffect } from '../spells/blade_ward';
+import { applySelfEffect as applyShillelaghSelfEffect } from '../spells/shillelagh';
 import { execute as executeThunderclap } from '../spells/thunderclap';
 import { execute as executeSwordBurst } from '../spells/sword_burst';
+import { execute as executeWordOfRadiance } from '../spells/word_of_radiance';
 
 // ---- Cantrip effect handlers --------------------------------
 
@@ -75,6 +81,7 @@ const CANTRIP_EFFECTS: Record<
   'Sapping Sting': applySappingStingEffect,    // post-save-FAIL: target falls prone (EGW p.189)
   'Lightning Lure': applyLightningLureEffect,  // post-save-FAIL: pull 10 ft + conditional lightning (TCE p.107)
   'Green-Flame Blade': applyGreenFlameBladeEffect,  // post-hit: fire splash to 2nd creature within 5 ft (TCE p.107)
+  'Infestation': applyInfestationEffect,            // post-save-FAIL: random d4 forced movement (XGE p.158)
   // Future post-hit / post-save-FAIL cantrips will be added here
 };
 
@@ -157,6 +164,7 @@ const CANTRIP_SELF_EFFECTS: Record<
   (caster: Combatant, state: EngineState) => boolean
 > = {
   'Blade Ward': applyBladeWardSelfEffect,
+  'Shillelagh': applyShillelaghSelfEffect,  // PHB p.275: WIS-for-STR melee + +1d8 radiant (1-round v1)
   // Future non-attack self-buff cantrips will be added here
 };
 
@@ -217,10 +225,10 @@ const CANTRIP_AOE_EFFECTS: Record<
   string,
   (caster: Combatant, state: EngineState) => void
 > = {
-  'Thunderclap': executeThunderclap,    // XGE p.168: 5-ft radius CON save, 1d6 thunder
-  'Sword Burst': executeSwordBurst,     // TCE p.115: 5-ft radius DEX save, 1d6 force
+  'Thunderclap': executeThunderclap,        // XGE p.168: 5-ft radius CON save, 1d6 thunder
+  'Sword Burst': executeSwordBurst,         // TCE p.115: 5-ft radius DEX save, 1d6 force
+  'Word of Radiance': executeWordOfRadiance,// XGE p.171: 5-ft radius CON save, 1d6 radiant
   // Future caster-centered AoE cantrips will be added here
-  // (e.g. Word of Radiance, Thunderwave as a cantrip if it existed)
 };
 
 /**

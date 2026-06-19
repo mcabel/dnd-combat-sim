@@ -529,6 +529,36 @@ export interface Combatant {
   // Optional — populated by the parser. Tests set it directly for
   // determinism. Defaults to 1 when undefined.
   casterLevel?: number;
+
+  // ---- Shillelagh (PHB p.275) scratch field ----
+  // Set on the CASTER when it casts Shillelagh (self-buff cantrip, PHB
+  // p.275: "For the duration, you can use your spellcasting ability
+  // instead of Strength for the attack and damage rolls of melee attacks
+  // using that weapon, and the weapon's damage die becomes a d8. The
+  // weapon also becomes magical, if it isn't already.").
+  //
+  // While `_shillelaghActive === true`, resolveAttack's attack-roll
+  // branch — when `action.attackType === 'melee'` — substitutes the
+  // caster's WIS modifier for the STR modifier in hitBonus, AND adds
+  // +1d8 radiant damage to the damage roll (v1 simplification: the
+  // cantrip's effect is modeled as +1d8 radiant, since canonically the
+  // weapon damage BECOMES 1d8 but modeling that would require the
+  // engine to know which Action is the "club or quarterstaff" — the
+  // spell's material component. v1 sidesteps this by adding +1d8
+  // radiant on top of the weapon's existing damage dice).
+  //
+  // v1 simplification: PHB p.275 says the duration is 1 minute (10
+  // rounds). v1 treats Shillelagh as a 1-round buff (clears at the
+  // start of the caster's next turn via cleanup() called from
+  // resetBudget(), mirroring Blade Ward's timing). Documented via the
+  // metadata flag `shillelaghDurationV1Simplified: true`. Future work:
+  // a persistent-buff subsystem that tracks 1-minute durations.
+  //
+  // Distinct from Blade Ward (also a self-buff cantrip): Blade Ward
+  // grants damage RESISTANCE (read by applyDamageWithTempHP); Shillelagh
+  // grants ATTACK-ROLL substitution + BONUS DAMAGE (read by
+  // resolveAttack's attack-roll branch). Both live in CANTRIP_SELF_EFFECTS.
+  _shillelaghActive?: boolean;
 }
 
 // ---- Obstacle -----------------------------------------------

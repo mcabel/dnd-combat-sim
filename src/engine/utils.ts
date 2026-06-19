@@ -14,6 +14,8 @@ import { cleanup as cleanupViciousMockery } from '../spells/vicious_mockery';
 import { cleanup as cleanupMindSliver } from '../spells/mind_sliver';
 import { cleanup as cleanupBoomingBlade } from '../spells/booming_blade';
 import { cleanup as cleanupFrostbite } from '../spells/frostbite';
+import { cleanup as cleanupInfestation } from '../spells/infestation';
+import { cleanup as cleanupShillelagh } from '../spells/shillelagh';
 
 // Damage types resisted by Blade Ward (PHB p.218) — bludgeoning/piercing/slashing.
 const BLADE_WARD_PHYSICAL_TYPES: DamageType[] = ['bludgeoning', 'piercing', 'slashing'];
@@ -277,6 +279,16 @@ export function resetBudget(c: Combatant): void {
   // weapon attack before the start of the target's next turn (XGE p.156).
   // Same codebase convention as Vicious Mockery / Mind Sliver / Booming Blade.
   cleanupFrostbite(c);
+  // Infestation random-direction move is instant (forced movement applied
+  // immediately on save-FAIL). No scratch fields persist across turns — the
+  // cleanup is a no-op, exported for symmetry with the other cantrip modules.
+  cleanupInfestation(c);
+  // Shillelagh self-buff (PHB p.275) — v1 simplification: 1-round duration,
+  // clears at the start of the caster's next turn (canonically 1 minute / 10
+  // rounds). While `_shillelaghActive === true`, resolveAttack's attack-roll
+  // branch substitutes WIS mod for STR mod on melee attacks AND adds +1d8
+  // radiant damage on hit.
+  cleanupShillelagh(c);
 
   const speed = effectiveSpeed(c);
   c.budget = {

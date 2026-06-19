@@ -1,6 +1,6 @@
 {
   "level": 1,
-  "generatedAt": "2026-06-19T04:21:08.654Z",
+  "generatedAt": "2026-06-19T08:02:58.200Z",
   "generatorVersion": 2,
   "scopeRule": "pre-2024 canon; reprints: newest in-scope source wins; XPHB(2024) out of scope; creatures keep all variants (not applicable to spells)",
   "sourceDates": {
@@ -26,8 +26,8 @@
     "XPHB"
   ],
   "count": 82,
-  "implementedCount": 14,
-  "remainingInScope": 67,
+  "implementedCount": 15,
+  "remainingInScope": 66,
   "spells": [
     {
       "name": "Absorb Elements",
@@ -1448,8 +1448,8 @@
       "page": 250,
       "level": 1,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "healing_word.ts",
       "inScope": true,
       "otherSources": [
         {

@@ -1,6 +1,6 @@
 {
   "level": 0,
-  "generatedAt": "2026-06-19T04:21:08.654Z",
+  "generatedAt": "2026-06-19T08:02:58.200Z",
   "generatorVersion": 2,
   "scopeRule": "pre-2024 canon; reprints: newest in-scope source wins; XPHB(2024) out of scope; creatures keep all variants (not applicable to spells)",
   "sourceDates": {
@@ -26,8 +26,8 @@
     "XPHB"
   ],
   "count": 49,
-  "implementedCount": 20,
-  "remainingInScope": 26,
+  "implementedCount": 25,
+  "remainingInScope": 21,
   "spells": [
     {
       "name": "Acid Splash",
@@ -199,8 +199,8 @@
       "page": 152,
       "level": 0,
       "school": "Conjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "create_bonfire.ts",
       "inScope": true,
       "otherSources": [],
       "classes": [],
@@ -563,8 +563,8 @@
       "page": 158,
       "level": 0,
       "school": "Conjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "infestation.ts",
       "inScope": true,
       "otherSources": [],
       "classes": [],
@@ -981,8 +981,8 @@
       "page": 269,
       "level": 0,
       "school": "Conjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "produce_flame.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1167,8 +1167,8 @@
       "page": 275,
       "level": 0,
       "school": "Transmutation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "shillelagh.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1563,8 +1563,8 @@
       "page": 171,
       "level": 0,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "word_of_radiance.ts",
       "inScope": true,
       "otherSources": [
         {
