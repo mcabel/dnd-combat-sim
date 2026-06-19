@@ -21,6 +21,7 @@ import { cleanup as cleanupResistance } from '../spells/resistance';
 import { cleanup as cleanupGuidance } from '../spells/guidance';
 import { cleanup as cleanupFriends } from '../spells/friends';
 import { cleanup as cleanupLight } from '../spells/light';
+import { cleanup as cleanupMending } from '../spells/mending';
 
 // Damage types resisted by Blade Ward (PHB p.218) — bludgeoning/piercing/slashing.
 const BLADE_WARD_PHYSICAL_TYPES: DamageType[] = ['bludgeoning', 'piercing', 'slashing'];
@@ -355,6 +356,19 @@ export function resetBudget(c: Combatant): void {
   // cleanup also defensively clears the flag from ANY combatant that has
   // it set (no-op if the flag isn't set).
   cleanupLight(c);
+  // Mending touch-effect (PHB p.259) — v1 simplification: 1-round cleanup
+  // window, clears at the start of the caster's next turn (CANON casting
+  // time is 1 MINUTE — the FIRST cantrip with a non-action casting time;
+  // v1 treats Mending as a standard ACTION for engine simplicity, and the
+  // cleanup is defensive since canonically the spell is INSTANT). The
+  // `_mended` flag is set on the TARGET (not the caster), but v1's cleanup
+  // operates on the combatant whose turn is starting (the caster). This
+  // means the flag is only cleared if the caster is also the target (self-
+  // cast Mending, which is rare). For v1, this is acceptable — the flag is
+  // forward-compat only (the object-state subsystem is not yet implemented).
+  // The cleanup also defensively clears the flag from ANY combatant that
+  // has it set (no-op if the flag isn't set).
+  cleanupMending(c);
 
   const speed = effectiveSpeed(c);
   c.budget = {

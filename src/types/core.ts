@@ -709,6 +709,41 @@ export interface Combatant {
   // false`). The handler still fizzles on monsters (PHB p.197:
   // monsters die at 0 HP — Spare the Dying has no effect).
   _isStabilized?: boolean;
+
+  // ---- Mending (PHB p.259) scratch field ----
+  // Set on the TARGET when it is touched by Mending (touch cantrip,
+  // PHB p.259: "This spell repairs a single break or tear in an object
+  // you touch, such as broken chain link, two halves of a broken key,
+  // a torn cloak, or a leaking wineskin."). v1 simplification: the
+  // engine does NOT yet model an object-state subsystem (no system
+  // tracks broken/mended objects — forward-compat TODO via the
+  // metadata flag `mendingObjectStateIntegrationV1Implemented: false`,
+  // a sibling to Light's `lightVisionIntegrationV1Implemented`). The
+  // flag is set for forward-compatibility — the future object-state
+  // subsystem will read it. v1 still clears the flag at the start of
+  // the caster's NEXT turn via cleanup() called from resetBudget() (v1
+  // 1-round simplification — canonically the spell is INSTANT, but the
+  // engine treats Mending as a 1-action spell for v1 simplicity, and
+  // the cleanup is defensive).
+  //
+  // CANON CASTING TIME: 1 MINUTE (PHB p.259 — "time":[{"number":1,
+  // "unit":"minute"}] per the 5etools JSON). This is the FIRST cantrip
+  // with a non-action casting time (1 min = 10 rounds = out-of-combat
+  // only per PHB p.192 casting-time rules). v1 simplification: the
+  // engine treats Mending as a standard ACTION for engine simplicity
+  // (canon: 1 min; v1: 1 action) — documented via the metadata flag
+  // `mendingCastingTimeV1Simplified: true`. The cleanup's 1-round
+  // window is therefore a v1 artifact (canonically the spell is
+  // instant, so there's nothing to clean up — but v1 clears the
+  // forward-compat flag defensively to match the other touch cantrip
+  // patterns).
+  //
+  // Distinct from the other cantrip scratch fields: Mending's flag is
+  // set on the TARGET (the object being repaired), not the CASTER.
+  // This is the same target-set pattern as Light's `_lightSourceActive`
+  // flag and Spare the Dying's `_isStabilized` flag (also touch
+  // cantrips).
+  _mended?: boolean;
 }
 
 // ---- Obstacle -----------------------------------------------

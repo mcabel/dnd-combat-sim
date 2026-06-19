@@ -1,6 +1,6 @@
 {
   "level": 0,
-  "generatedAt": "2026-06-19T16:56:03.316Z",
+  "generatedAt": "2026-06-19T17:24:02.059Z",
   "generatorVersion": 2,
   "scopeRule": "pre-2024 canon; reprints: newest in-scope source wins; XPHB(2024) out of scope; creatures keep all variants (not applicable to spells)",
   "sourceDates": {
@@ -26,8 +26,8 @@
     "XPHB"
   ],
   "count": 49,
-  "implementedCount": 35,
-  "remainingInScope": 11,
+  "implementedCount": 40,
+  "remainingInScope": 6,
   "spells": [
     {
       "name": "Acid Splash",
@@ -656,8 +656,8 @@
       "page": 256,
       "level": 0,
       "school": "Conjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "mage_hand.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -718,8 +718,8 @@
       "page": 259,
       "level": 0,
       "school": "Transmutation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "mending.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -755,8 +755,8 @@
       "page": 259,
       "level": 0,
       "school": "Transmutation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "message.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -919,8 +919,8 @@
       "page": 267,
       "level": 0,
       "school": "Transmutation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "prestidigitation.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1362,8 +1362,8 @@
       "page": 282,
       "level": 0,
       "school": "Transmutation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "thaumaturgy.ts",
       "inScope": true,
       "otherSources": [
         {

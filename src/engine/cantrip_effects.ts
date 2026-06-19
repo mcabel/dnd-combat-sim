@@ -5,7 +5,7 @@
 // This module provides a central dispatch for cantrip effects
 // that are applied after a successful hit.
 //
-// Supported cantrips:
+// Supported cantrips (40 total across 5 registries after Session 12):
 //   - Thorn Whip: Pulls Large/smaller targets 10 ft closer  (post-hit)
 //   - Ray of Frost: Reduces target speed by 10 ft           (post-hit)
 //   - Shocking Grasp: Prevents reactions on hit + adv vs metal (pre-roll + post-hit)
@@ -17,6 +17,10 @@
 //   - Guidance: +1d4 to next ability check (NON-attack self-buff, future rollAbilityCheck integration)
 //   - Friends: Advantage on next CHA check (NON-attack self-buff, future rollAbilityCheck integration)
 //   - Minor Illusion: Flavor log only (NON-attack self-buff, no mechanical effect in v1)
+//   - Mage Hand: Flavor log only (NON-attack self-buff, no mechanical effect in v1)
+//   - Prestidigitation: Flavor log only (NON-attack self-buff, no mechanical effect in v1)
+//   - Thaumaturgy: Flavor log only (NON-attack self-buff, V-only, no mechanical effect in v1)
+//   - Message: Flavor log only (NON-attack self-buff, no mechanical effect in v1)
 //   - Vicious Mockery: Disadv on target's next attack (post-save-FAIL)
 //   - Mind Sliver: −1d4 to target's next save (post-save-FAIL)
 //   - Booming Blade: Thunder rider on target's next willing move (post-hit)
@@ -31,6 +35,7 @@
 //   - Word of Radiance: Caster-centered 5-ft AoE CON save, radiant (NON-attack AoE)
 //   - Spare the Dying: Stabilize a downed PC ally (NON-attack touch-effect — NEW registry)
 //   - Light: Set _lightSourceActive flag on target (NON-attack touch-effect — NEW registry)
+//   - Mending: Set _mended flag on target (NON-attack touch-effect, canon 1-min casting time, v1: 1 action)
 //
 // Integration:
 //   - Post-hit attack cantrips: called from resolveAttack in combat.ts
@@ -78,11 +83,16 @@ import { applySelfEffect as applyResistanceSelfEffect } from '../spells/resistan
 import { applySelfEffect as applyGuidanceSelfEffect } from '../spells/guidance';
 import { applySelfEffect as applyFriendsSelfEffect } from '../spells/friends';
 import { applySelfEffect as applyMinorIllusionSelfEffect } from '../spells/minor_illusion';
+import { applySelfEffect as applyMageHandSelfEffect } from '../spells/mage_hand';
+import { applySelfEffect as applyPrestidigitationSelfEffect } from '../spells/prestidigitation';
+import { applySelfEffect as applyThaumaturgySelfEffect } from '../spells/thaumaturgy';
+import { applySelfEffect as applyMessageSelfEffect } from '../spells/message';
 import { execute as executeThunderclap } from '../spells/thunderclap';
 import { execute as executeSwordBurst } from '../spells/sword_burst';
 import { execute as executeWordOfRadiance } from '../spells/word_of_radiance';
 import { applyTouchEffect as applySpareTheDyingTouchEffect } from '../spells/spare_the_dying';
 import { applyTouchEffect as applyLightTouchEffect } from '../spells/light';
+import { applyTouchEffect as applyMendingTouchEffect } from '../spells/mending';
 
 // ---- Cantrip effect handlers --------------------------------
 
@@ -196,6 +206,10 @@ const CANTRIP_SELF_EFFECTS: Record<
   'Guidance': applyGuidanceSelfEffect,      // PHB p.248: +1d4 to next ability check (1-round v1; ability-check integration TODO)
   'Friends': applyFriendsSelfEffect,        // PHB p.244: advantage on next CHA check (1-round v1; CHA-check integration TODO)
   'Minor Illusion': applyMinorIllusionSelfEffect, // PHB p.260: flavor log only (1-round v1; illusion mechanics TODO)
+  'Mage Hand': applyMageHandSelfEffect,           // PHB p.256: flavor log only (1-round v1; persistent-hand control TODO)
+  'Prestidigitation': applyPrestidigitationSelfEffect, // PHB p.267: flavor log only (1-round v1; multi-effect tracking TODO)
+  'Thaumaturgy': applyThaumaturgySelfEffect,     // PHB p.282: flavor log only (V-only, 1-round v1; multi-effect tracking TODO)
+  'Message': applyMessageSelfEffect,             // PHB p.259: flavor log only (1-round canon; communication subsystem TODO)
   // Future non-attack self-buff cantrips will be added here
 };
 
@@ -331,6 +345,7 @@ const CANTRIP_TOUCH_EFFECTS: Record<
 > = {
   'Spare the Dying': applySpareTheDyingTouchEffect, // PHB p.277: stabilize a downed PC ally (instant, no save)
   'Light': applyLightTouchEffect,                   // PHB p.255: set _lightSourceActive flag on target (1-hour canon, 1-round v1, no save v1)
+  'Mending': applyMendingTouchEffect,               // PHB p.259: set _mended flag on target (canon 1-min casting time, v1: 1 action; instant canon, 1-round v1 cleanup)
   // Future non-attack touch-effect cantrips will be added here
 };
 
