@@ -62,12 +62,6 @@ import {
 } from './ceremony';
 
 import {
-  shouldCast as shouldCastChaosBolt,
-  execute as executeChaosBolt,
-  metadata as metadataChaosBolt,
-} from './chaos_bolt';
-
-import {
   shouldCast as shouldCastCharmPerson,
   execute as executeCharmPerson,
   metadata as metadataCharmPerson,
@@ -116,12 +110,6 @@ import {
 } from './divine_favor';
 
 import {
-  shouldCast as shouldCastEarthTremor,
-  execute as executeEarthTremor,
-  metadata as metadataEarthTremor,
-} from './earth_tremor';
-
-import {
   shouldCast as shouldCastEnsnaringStrike,
   execute as executeEnsnaringStrike,
   metadata as metadataEnsnaringStrike,
@@ -138,12 +126,6 @@ import {
   execute as executeFalseLife,
   metadata as metadataFalseLife,
 } from './false_life';
-
-import {
-  shouldCast as shouldCastFrostFingers,
-  execute as executeFrostFingers,
-  metadata as metadataFrostFingers,
-} from './frost_fingers';
 
 import {
   shouldCast as shouldCastGiftOfAlacrity,
@@ -194,22 +176,10 @@ import {
 } from './jump';
 
 import {
-  shouldCast as shouldCastMagnifyGravity,
-  execute as executeMagnifyGravity,
-  metadata as metadataMagnifyGravity,
-} from './magnify_gravity';
-
-import {
   shouldCast as shouldCastPurifyFoodAndDrink,
   execute as executePurifyFoodAndDrink,
   metadata as metadataPurifyFoodAndDrink,
 } from './purify_food_and_drink';
-
-import {
-  shouldCast as shouldCastRayOfSickness,
-  execute as executeRayOfSickness,
-  metadata as metadataRayOfSickness,
-} from './ray_of_sickness';
 
 import {
   shouldCast as shouldCastSanctuary,
@@ -242,12 +212,6 @@ import {
 } from './speak_with_animals';
 
 import {
-  shouldCast as shouldCastSpellfireFlare,
-  execute as executeSpellfireFlare,
-  metadata as metadataSpellfireFlare,
-} from './spellfire_flare';
-
-import {
   shouldCast as shouldCastTashasCausticBrew,
   execute as executeTashasCausticBrew,
   metadata as metadataTashasCausticBrew,
@@ -276,18 +240,6 @@ import {
   execute as executeUnseenServant,
   metadata as metadataUnseenServant,
 } from './unseen_servant';
-
-import {
-  shouldCast as shouldCastWardaway,
-  execute as executeWardaway,
-  metadata as metadataWardaway,
-} from './wardaway';
-
-import {
-  shouldCast as shouldCastWitchBolt,
-  execute as executeWitchBolt,
-  metadata as metadataWitchBolt,
-} from './witch_bolt';
 
 import {
   shouldCast as shouldCastWrathfulSmite,
@@ -1870,12 +1822,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     shouldCast: shouldCastCeremony,
     execute: executeCeremony,
   },
-  'Chaos Bolt': {
-    name: 'Chaos Bolt',
-    level: metadataChaosBolt.level,
-    shouldCast: shouldCastChaosBolt,
-    execute: executeChaosBolt,
-  },
   'Charm Person': {
     name: 'Charm Person',
     level: metadataCharmPerson.level,
@@ -1924,12 +1870,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     shouldCast: shouldCastDivineFavor,
     execute: executeDivineFavor,
   },
-  'Earth Tremor': {
-    name: 'Earth Tremor',
-    level: metadataEarthTremor.level,
-    shouldCast: shouldCastEarthTremor,
-    execute: executeEarthTremor,
-  },
   'Ensnaring Strike': {
     name: 'Ensnaring Strike',
     level: metadataEnsnaringStrike.level,
@@ -1947,12 +1887,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     level: metadataFalseLife.level,
     shouldCast: shouldCastFalseLife,
     execute: executeFalseLife,
-  },
-  'Frost Fingers': {
-    name: 'Frost Fingers',
-    level: metadataFrostFingers.level,
-    shouldCast: shouldCastFrostFingers,
-    execute: executeFrostFingers,
   },
   'Gift of Alacrity': {
     name: 'Gift of Alacrity',
@@ -2002,23 +1936,11 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     shouldCast: shouldCastJump,
     execute: executeJump,
   },
-  'Magnify Gravity': {
-    name: 'Magnify Gravity',
-    level: metadataMagnifyGravity.level,
-    shouldCast: shouldCastMagnifyGravity,
-    execute: executeMagnifyGravity,
-  },
   'Purify Food and Drink': {
     name: 'Purify Food and Drink',
     level: metadataPurifyFoodAndDrink.level,
     shouldCast: shouldCastPurifyFoodAndDrink,
     execute: executePurifyFoodAndDrink,
-  },
-  'Ray of Sickness': {
-    name: 'Ray of Sickness',
-    level: metadataRayOfSickness.level,
-    shouldCast: shouldCastRayOfSickness,
-    execute: executeRayOfSickness,
   },
   'Sanctuary': {
     name: 'Sanctuary',
@@ -2050,12 +1972,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     shouldCast: shouldCastSpeakWithAnimals,
     execute: executeSpeakWithAnimals,
   },
-  'Spellfire Flare': {
-    name: 'Spellfire Flare',
-    level: metadataSpellfireFlare.level,
-    shouldCast: shouldCastSpellfireFlare,
-    execute: executeSpellfireFlare,
-  },
   "Tasha's Caustic Brew": {
     name: "Tasha's Caustic Brew",
     level: metadataTashasCausticBrew.level,
@@ -2085,18 +2001,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     level: metadataUnseenServant.level,
     shouldCast: shouldCastUnseenServant,
     execute: executeUnseenServant,
-  },
-  'Wardaway': {
-    name: 'Wardaway',
-    level: metadataWardaway.level,
-    shouldCast: shouldCastWardaway,
-    execute: executeWardaway,
-  },
-  'Witch Bolt': {
-    name: 'Witch Bolt',
-    level: metadataWitchBolt.level,
-    shouldCast: shouldCastWitchBolt,
-    execute: executeWitchBolt,
   },
   'Wrathful Smite': {
     name: 'Wrathful Smite',

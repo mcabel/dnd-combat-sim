@@ -102,6 +102,20 @@ import { shouldCast as shouldCastFingerOfDeath } from '../spells/finger_of_death
 import { shouldCast as shouldCastSunburst } from '../spells/sunburst';
 import { shouldCast as shouldCastPowerWordKill } from '../spells/power_word_kill';
 
+// ── Session 24 — Megabatch batch 1 (L1 combat damage spells) ────────────
+// Migrated from the Session 19/20 generic dispatch registry to bespoke
+// implementations with real mechanical effects. Each planner branch mirrors
+// the Session 21/22/23 bespoke pattern. Witch Bolt's branch auto-detects
+// DoT mode (concentrating on Witch Bolt) vs fresh cast.
+import { shouldCast as shouldCastChaosBolt } from '../spells/chaos_bolt';
+import { shouldCast as shouldCastEarthTremor } from '../spells/earth_tremor';
+import { shouldCast as shouldCastFrostFingers } from '../spells/frost_fingers';
+import { shouldCast as shouldCastMagnifyGravity } from '../spells/magnify_gravity';
+import { shouldCast as shouldCastRayOfSickness } from '../spells/ray_of_sickness';
+import { shouldCast as shouldCastSpellfireFlare } from '../spells/spellfire_flare';
+import { shouldCast as shouldCastWardaway } from '../spells/wardaway';
+import { shouldCast as shouldCastWitchBolt } from '../spells/witch_bolt';
+
 // ── Session 19 — bulk-implementation generic dispatch (262 new spells) ────
 import { GENERIC_SPELL_LIST } from '../spells/_generic_registry';
 import { selectAction, selfPreserveDecision, selectLegendaryAction } from './actions';
@@ -2151,6 +2165,167 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
       };
       plan.targetId = blightTarget.id;
       plan.bonusAction = planBonusAction(self, blightTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // ── Session 24 — Megabatch batch 1 (L1 combat damage spells) ──────
+  // 8 L1 bespoke spell branches. Numbered 12O–12V. Tactical priority:
+  // all L1 (lowest bespoke priority) — these sit after the L4–L9
+  // Session 22/23 branches and before the Session 19 generic loop.
+  // Witch Bolt (12V) auto-detects DoT mode (concentrating on Witch Bolt)
+  // vs fresh cast via shouldCast's internal check.
+
+  // --- 12O. CHAOS BOLT (ranged spell attack 2d8 random-type, L1, NO concentration) ---
+  // XGE p.151: 120 ft, ranged spell attack, 2d8 random chaos-type damage,
+  // crit doubles. Avg 9 damage on hit. Sorcerer-only spell.
+  if (!plan.action && self.actions.some(a => a.name === 'Chaos Bolt')) {
+    const cbTarget = shouldCastChaosBolt(self, battlefield);
+    if (cbTarget) {
+      plan.action = {
+        type: 'chaosBolt',
+        action: null,
+        targetId: cbTarget.id,
+        description: `${self.name} casts Chaos Bolt at ${cbTarget.name}`,
+      };
+      plan.targetId = cbTarget.id;
+      plan.bonusAction = planBonusAction(self, cbTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12P. EARTH TREMOR (CON save 1d6 bludgeoning + prone, L1, NO concentration) ---
+  // XGE p.155: Self (10-ft radius), CON save 1d6 bludgeoning + prone on fail,
+  // caster excluded. AoE — shouldCast returns Combatant[] (all enemies within
+  // 10 ft of the caster). Avg 3.5 damage + prone rider.
+  if (!plan.action && self.actions.some(a => a.name === 'Earth Tremor')) {
+    const etTargets = shouldCastEarthTremor(self, battlefield);
+    if (etTargets) {
+      const names = etTargets.map(t => t.name).join(', ');
+      plan.action = {
+        type: 'earthTremor',
+        action: null,
+        targetId: etTargets[0].id,
+        description: `${self.name} casts Earth Tremor, catching ${names}`,
+      };
+      plan.targetId = etTargets[0].id;
+      plan.bonusAction = planBonusAction(self, etTargets[0], battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12Q. FROST FINGERS (CON save 2d8 cold, L1, NO concentration) ---
+  // XGE p.161: Self (15-ft cone), CON save 2d8 cold (half on save). AoE —
+  // shouldCast returns Combatant[] (enemies in the cone). Avg 9 cold.
+  if (!plan.action && self.actions.some(a => a.name === 'Frost Fingers')) {
+    const ffTargets = shouldCastFrostFingers(self, battlefield);
+    if (ffTargets) {
+      const names = ffTargets.map(t => t.name).join(', ');
+      plan.action = {
+        type: 'frostFingers',
+        action: null,
+        targetId: ffTargets[0].id,
+        description: `${self.name} casts Frost Fingers, catching ${names}`,
+      };
+      plan.targetId = ffTargets[0].id;
+      plan.bonusAction = planBonusAction(self, ffTargets[0], battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12R. MAGNIFY GRAVITY (CON save 2d8 force, L1, NO concentration) ---
+  // EGtW p.161: 60 ft, CON save 2d8 force (half on save), 10-ft radius AoE.
+  // shouldCast returns Combatant[] (enemies in the sphere). Avg 9 force.
+  if (!plan.action && self.actions.some(a => a.name === 'Magnify Gravity')) {
+    const mgTargets = shouldCastMagnifyGravity(self, battlefield);
+    if (mgTargets) {
+      const names = mgTargets.map(t => t.name).join(', ');
+      plan.action = {
+        type: 'magnifyGravity',
+        action: null,
+        targetId: mgTargets[0].id,
+        description: `${self.name} casts Magnify Gravity, catching ${names}`,
+      };
+      plan.targetId = mgTargets[0].id;
+      plan.bonusAction = planBonusAction(self, mgTargets[0], battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12S. RAY OF SICKNESS (ranged spell attack 2d8 poison + poisoned, L1, NO concentration) ---
+  // PHB p.271: 60 ft, ranged spell attack, 2d8 poison + poisoned on hit, crit
+  // doubles. Avg 9 poison + poison rider (disadv on target's attacks).
+  if (!plan.action && self.actions.some(a => a.name === 'Ray of Sickness')) {
+    const rosTarget = shouldCastRayOfSickness(self, battlefield);
+    if (rosTarget) {
+      plan.action = {
+        type: 'rayOfSickness',
+        action: null,
+        targetId: rosTarget.id,
+        description: `${self.name} casts Ray of Sickness at ${rosTarget.name}`,
+      };
+      plan.targetId = rosTarget.id;
+      plan.bonusAction = planBonusAction(self, rosTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12T. SPELLFIRE FLARE (AUTO-HIT 2d10+mod fire, L1, NO concentration) ---
+  // SCAG p.149: 60 ft, auto-hit (no save, no attack), 2d10+spellcasting mod
+  // fire. Avg 11+mod guaranteed damage. Sorcerer-associated spell.
+  if (!plan.action && self.actions.some(a => a.name === 'Spellfire Flare')) {
+    const sfTarget = shouldCastSpellfireFlare(self, battlefield);
+    if (sfTarget) {
+      plan.action = {
+        type: 'spellfireFlare',
+        action: null,
+        targetId: sfTarget.id,
+        description: `${self.name} casts Spellfire Flare at ${sfTarget.name} (auto-hit)`,
+      };
+      plan.targetId = sfTarget.id;
+      plan.bonusAction = planBonusAction(self, sfTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12U. WARDAWAY (CON save 2d4 force, L1, NO concentration) ---
+  // 60 ft, CON save 2d4 force (half on save), single-target. Avg 5 force
+  // (force is rarely resisted — reliable chip damage).
+  if (!plan.action && self.actions.some(a => a.name === 'Wardaway')) {
+    const waTarget = shouldCastWardaway(self, battlefield);
+    if (waTarget) {
+      plan.action = {
+        type: 'wardaway',
+        action: null,
+        targetId: waTarget.id,
+        description: `${self.name} casts Wardaway at ${waTarget.name}`,
+      };
+      plan.targetId = waTarget.id;
+      plan.bonusAction = planBonusAction(self, waTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12V. WITCH BOLT (ranged spell attack 1d12 lightning + concentration DoT, L1) ---
+  // PHB p.289: 30 ft, ranged spell attack 1d12 lightning on hit + START
+  // concentration. On subsequent turns while concentrating, shouldCast
+  // returns the linked target (DoT mode: auto-hit 1d12, no slot). The
+  // "ends on other action" guard in combat.ts breaks concentration if the
+  // caster uses their action for anything else.
+  if (!plan.action && self.actions.some(a => a.name === 'Witch Bolt')) {
+    const wbTarget = shouldCastWitchBolt(self, battlefield);
+    if (wbTarget) {
+      const isDoT = !!self.concentration?.active && self.concentration.spellName === 'Witch Bolt';
+      plan.action = {
+        type: 'witchBolt',
+        action: null,
+        targetId: wbTarget.id,
+        description: isDoT
+          ? `${self.name} sustains Witch Bolt on ${wbTarget.name} (DoT)`
+          : `${self.name} casts Witch Bolt at ${wbTarget.name}`,
+      };
+      plan.targetId = wbTarget.id;
+      plan.bonusAction = planBonusAction(self, wbTarget, battlefield);
       return plan;
     }
   }

@@ -287,6 +287,50 @@ import {
   execute as executePowerWordKill,
 } from '../spells/power_word_kill';
 
+// ── Session 24 — Megabatch batch 1 (L1 combat damage spells) ────────────
+// Migrated from the Session 19/20 generic dispatch registry to bespoke
+// implementations with real mechanical effects. Mirrors the Session 21/22/23
+// bespoke patterns. Includes a NEW per-turn concentration-DoT pattern for
+// Witch Bolt (auto-hit 1d12 while concentration holds; ends if the caster
+// uses their action for anything else — see the guard at the top of
+// executePlannedAction). Each migrated spell:
+//   - Removed from _generic_registry.ts (no longer dispatched via 'genericSpell')
+//   - Has its own case branch in executePlannedAction (below)
+//   - Has its own planner branch in planner.ts
+//   - Has its own test file in src/test/<spell>.test.ts
+import {
+  shouldCast as shouldCastChaosBolt,
+  execute as executeChaosBolt,
+} from '../spells/chaos_bolt';
+import {
+  shouldCast as shouldCastEarthTremor,
+  execute as executeEarthTremor,
+} from '../spells/earth_tremor';
+import {
+  shouldCast as shouldCastFrostFingers,
+  execute as executeFrostFingers,
+} from '../spells/frost_fingers';
+import {
+  shouldCast as shouldCastMagnifyGravity,
+  execute as executeMagnifyGravity,
+} from '../spells/magnify_gravity';
+import {
+  shouldCast as shouldCastRayOfSickness,
+  execute as executeRayOfSickness,
+} from '../spells/ray_of_sickness';
+import {
+  shouldCast as shouldCastSpellfireFlare,
+  execute as executeSpellfireFlare,
+} from '../spells/spellfire_flare';
+import {
+  shouldCast as shouldCastWardaway,
+  execute as executeWardaway,
+} from '../spells/wardaway';
+import {
+  shouldCast as shouldCastWitchBolt,
+  execute as executeWitchBolt,
+} from '../spells/witch_bolt';
+
 // ── Session 19 — bulk-implementation generic dispatch (262 new spells) ────
 import {
   lookupGenericSpell,
@@ -1201,6 +1245,23 @@ function executePlannedAction(
   state: EngineState
 ): void {
   const bf = state.battlefield;
+
+  // ── Session 24 — Witch Bolt "ends on other action" guard (PHB p.289) ──
+  // "The spell ends if you use your action for anything else." If the
+  // caster is concentrating on Witch Bolt and the planned action is NOT
+  // 'witchBolt' (the DoT re-fire), Witch Bolt's concentration breaks
+  // BEFORE the new action executes. Bonus actions and reactions live in
+  // plan.bonusAction / plan.reaction (not plan.type), so they do NOT
+  // trigger this guard (using a bonus action or reaction does not end
+  // Witch Bolt per PHB p.289).
+  if (actor.concentration?.active &&
+      actor.concentration.spellName === 'Witch Bolt' &&
+      plan.type !== 'witchBolt') {
+    log(state, 'condition_remove', actor.id,
+      `${actor.name}'s Witch Bolt ends — they used their action for something else!`,
+      undefined);
+    actor.concentration = null;
+  }
 
   switch (plan.type) {
     case 'attack':
@@ -2295,6 +2356,103 @@ function executePlannedAction(
         ? pwkTarget
         : shouldCastPowerWordKill(actor, bf);
       if (liveTarget) executePowerWordKill(actor, liveTarget, state);
+      break;
+    }
+
+    // ── Session 24 — Megabatch batch 1 (L1 combat damage spells) ──────
+    // Each migrated L1 spell routes to its bespoke shouldCast + execute.
+    // Single-target spells (chaosBolt, rayOfSickness, spellfireFlare,
+    // wardaway, witchBolt) resolve the target from plan.targetId with a
+    // shouldCast fallback (mirrors powerWordKill). AoE spells
+    // (earthTremor, frostFingers, magnifyGravity) re-run shouldCast to
+    // collect the target list (mirrors shatter/fireball).
+
+    case 'chaosBolt': {
+      // Chaos Bolt — XGE p.151: 120 ft, ranged spell attack 2d8 random-
+      // type, crit doubles. shouldCast → single Combatant.
+      const cbTargetId = plan.targetId;
+      const cbTarget = cbTargetId ? bf.combatants.get(cbTargetId) ?? null : null;
+      const liveTarget = cbTarget && !cbTarget.isDead && !cbTarget.isUnconscious
+        ? cbTarget
+        : shouldCastChaosBolt(actor, bf);
+      if (liveTarget) executeChaosBolt(actor, liveTarget, state);
+      break;
+    }
+
+    case 'earthTremor': {
+      // Earth Tremor — XGE p.155: Self (10-ft radius), CON save 1d6
+      // bludgeoning + prone, caster excluded. shouldCast → Combatant[].
+      const etTargets = shouldCastEarthTremor(actor, bf);
+      if (etTargets) executeEarthTremor(actor, etTargets, state);
+      break;
+    }
+
+    case 'frostFingers': {
+      // Frost Fingers — XGE p.161: Self (15-ft cone), CON save 2d8 cold.
+      // shouldCast → Combatant[].
+      const ffTargets = shouldCastFrostFingers(actor, bf);
+      if (ffTargets) executeFrostFingers(actor, ffTargets, state);
+      break;
+    }
+
+    case 'magnifyGravity': {
+      // Magnify Gravity — EGtW p.161: 60 ft, CON save 2d8 force, 10-ft
+      // radius AoE. shouldCast → Combatant[].
+      const mgTargets = shouldCastMagnifyGravity(actor, bf);
+      if (mgTargets) executeMagnifyGravity(actor, mgTargets, state);
+      break;
+    }
+
+    case 'rayOfSickness': {
+      // Ray of Sickness — PHB p.271: 60 ft, ranged spell attack 2d8
+      // poison + poisoned on hit, crit doubles. shouldCast → single Combatant.
+      const rosTargetId = plan.targetId;
+      const rosTarget = rosTargetId ? bf.combatants.get(rosTargetId) ?? null : null;
+      const liveTarget = rosTarget && !rosTarget.isDead && !rosTarget.isUnconscious
+        ? rosTarget
+        : shouldCastRayOfSickness(actor, bf);
+      if (liveTarget) executeRayOfSickness(actor, liveTarget, state);
+      break;
+    }
+
+    case 'spellfireFlare': {
+      // Spellfire Flare — SCAG p.149: 60 ft, AUTO-HIT 2d10+mod fire (no
+      // save, no attack). shouldCast → single Combatant.
+      const sfTargetId = plan.targetId;
+      const sfTarget = sfTargetId ? bf.combatants.get(sfTargetId) ?? null : null;
+      const liveTarget = sfTarget && !sfTarget.isDead && !sfTarget.isUnconscious
+        ? sfTarget
+        : shouldCastSpellfireFlare(actor, bf);
+      if (liveTarget) executeSpellfireFlare(actor, liveTarget, state);
+      break;
+    }
+
+    case 'wardaway': {
+      // Wardaway: 60 ft, CON save 2d4 force, single-target.
+      // shouldCast → single Combatant.
+      const waTargetId = plan.targetId;
+      const waTarget = waTargetId ? bf.combatants.get(waTargetId) ?? null : null;
+      const liveTarget = waTarget && !waTarget.isDead && !waTarget.isUnconscious
+        ? waTarget
+        : shouldCastWardaway(actor, bf);
+      if (liveTarget) executeWardaway(actor, liveTarget, state);
+      break;
+    }
+
+    case 'witchBolt': {
+      // Witch Bolt — PHB p.289: 30 ft, ranged spell attack 1d12 lightning
+      // + concentration per-turn action DoT. shouldCast auto-detects DoT
+      // mode (concentrating on Witch Bolt) vs fresh cast. The "ends on
+      // other action" guard at the top of executePlannedAction breaks
+      // concentration when plan.type !== 'witchBolt'.
+      const wbTargetId = plan.targetId;
+      const wbTarget = wbTargetId ? bf.combatants.get(wbTargetId) ?? null : null;
+      // In DoT mode the target is the linked concentration target; in
+      // fresh-cast mode it's the highest-threat enemy within 30 ft.
+      const liveTarget = wbTarget && !wbTarget.isDead && !wbTarget.isUnconscious
+        ? wbTarget
+        : shouldCastWitchBolt(actor, bf);
+      if (liveTarget) executeWitchBolt(actor, liveTarget, state);
       break;
     }
 

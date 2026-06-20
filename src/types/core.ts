@@ -342,6 +342,13 @@ export interface Combatant {
     active: boolean;
     spellName: string | null;    // name of the held spell
     dcIfHit: number;             // current DC (max(10, half last damage)
+    // ── Session 24 — Witch Bolt linked-target tracking ──────────────
+    // Optional: the id of the target linked to a per-turn concentration
+    // DoT (Witch Bolt, PHB p.289). null/undefined for concentration
+    // spells with no single linked target (Hex, Bless, Barkskin, etc.).
+    // Backward-compatible: existing concentration objects don't set this
+    // field, so it's undefined (treated as "no linked target").
+    targetId?: string | null;
   } | null;
 
   // Death saving throws (PHB p.197) — PCs only
@@ -1287,6 +1294,26 @@ export interface PlannedAction {
     | 'fingerOfDeath'      // Finger of Death — PHB p.241: 60 ft, CON save 7d8+30 necrotic (half on save), single-target + zombie-raise-on-kill (simplified, TG-006 pending), NO concentration
     | 'sunburst'           // Sunburst — PHB p.284: 150 ft, CON save 12d6 radiant (half on save), 60-ft radius AoE + blinded on failed save, NO concentration
     | 'powerWordKill'      // Power Word Kill — PHB p.266: 60 ft, NO save, NO attack — instakill if currentHP ≤ 100, NO concentration
+    // ── Session 24 — Megabatch batch 1 (L1 combat damage spells) ──
+    // Migrated from the Session 19/20 generic dispatch registry to bespoke
+    // implementations with real mechanical effects (ranged spell attacks,
+    // AoE saves + conditions, auto-hit, single-target saves, and a NEW
+    // per-turn concentration-DoT pattern for Witch Bolt). Mirrors the
+    // Session 21/22/23 bespoke patterns (Chromatic Orb, Scorching Ray,
+    // Shatter, Sunburst, Catapult, Inflict Wounds, Magic Missile).
+    // Each migrated spell:
+    //   - Removed from _generic_registry.ts (no longer dispatched via 'genericSpell')
+    //   - Has its own case branch in combat.ts executePlannedAction
+    //   - Has its own planner branch in planner.ts
+    //   - Has its own test file in src/test/<spell>.test.ts
+    | 'chaosBolt'           // Chaos Bolt — XGE p.151: 120 ft, ranged spell attack 2d8 random-type (chaos), crit doubles, NO concentration
+    | 'earthTremor'         // Earth Tremor — XGE p.155: Self (10-ft radius), CON save 1d6 bludgeoning + prone on fail, caster excluded, NO concentration
+    | 'frostFingers'        // Frost Fingers — XGE p.161: Self (15-ft cone), CON save 2d8 cold (half on save), NO concentration
+    | 'magnifyGravity'      // Magnify Gravity — EGtW p.161: 60 ft, CON save 2d8 force (half on save), 10-ft radius AoE, NO concentration
+    | 'rayOfSickness'       // Ray of Sickness — PHB p.271: 60 ft, ranged spell attack 2d8 poison + poisoned on hit, crit doubles, NO concentration
+    | 'spellfireFlare'      // Spellfire Flare — SCAG p.149: 60 ft, AUTO-HIT 2d10+spellcasting mod fire (no save, no attack), NO concentration
+    | 'wardaway'            // Wardaway: 60 ft, CON save 2d4 force (half on save), single-target, NO concentration
+    | 'witchBolt'           // Witch Bolt — PHB p.289: 30 ft, ranged spell attack 1d12 lightning + concentration per-turn action DoT (auto-hit 1d12), crit doubles initial
     // ── Session 19 — bulk-implementation generic dispatch (262 new spells L2-9) ──
     // All non-blocker in-scope spells from levels 2-9 that have not been
     // implemented as bespoke case branches are routed through 'genericSpell'.

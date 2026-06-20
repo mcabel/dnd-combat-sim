@@ -140,8 +140,12 @@ assert('Registry is non-empty', SPELL_COUNT > 0);
 // implementations. The registry then had 306 spells (313 − 7).
 // Session 23: lowered from 290 to 280 after migrating 7 more high-damage
 // spells (Blight, Cloudkill, Disintegrate, Harm, Finger of Death,
-// Sunburst, Power Word Kill). The registry now has 299 spells (306 − 7).
-assert(`Registry has at least 280 spells (got ${SPELL_COUNT})`, SPELL_COUNT >= 280);
+// Sunburst, Power Word Kill). The registry then had 299 spells (306 − 7).
+// Session 24: lowered from 280 to 270 after migrating 8 L1 combat-damage
+// spells (Chaos Bolt, Earth Tremor, Frost Fingers, Magnify Gravity, Ray
+// of Sickness, Spellfire Flare, Wardaway, Witch Bolt). The registry now
+// has 291 spells (299 − 8). Cumulative migrated: 22 (7+7+8) → floor 277.
+assert(`Registry has at least 270 spells (got ${SPELL_COUNT})`, SPELL_COUNT >= 270);
 console.log(`  📊 Total bulk-implemented spells: ${SPELL_COUNT}`);
 
 // Sample spells — one per level 1-9. Updated in Session 23 to avoid the
@@ -197,6 +201,26 @@ const MIGRATED_SPELLS_S23 = [
   'Finger of Death', 'Sunburst', 'Power Word Kill',
 ];
 for (const migrated of MIGRATED_SPELLS_S23) {
+  eq(`  ${migrated} is no longer in the registry (migrated to bespoke)`,
+    lookupGenericSpell(migrated), null);
+}
+
+// ============================================================
+// 1d. Session 24 — migrated spells are NO LONGER in the registry
+// ============================================================
+// The 8 L1 combat-damage spells migrated in Session 24 to bespoke
+// implementations must NOT appear in the generic registry. Their bespoke
+// modules at src/spells/<snake>.ts have a different execute signature
+// (single-target Combatant, or Combatant[] for AoE) that doesn't fit the
+// generic dispatch shape (caster, state) → void. Witch Bolt additionally
+// has a per-turn concentration-DoT pattern (auto-detected DoT mode) that
+// the generic dispatch cannot express.
+console.log('\n=== 1d. Session 24 — migrated spells removed from registry ===\n');
+const MIGRATED_SPELLS_S24 = [
+  'Chaos Bolt', 'Earth Tremor', 'Frost Fingers', 'Magnify Gravity',
+  'Ray of Sickness', 'Spellfire Flare', 'Wardaway', 'Witch Bolt',
+];
+for (const migrated of MIGRATED_SPELLS_S24) {
   eq(`  ${migrated} is no longer in the registry (migrated to bespoke)`,
     lookupGenericSpell(migrated), null);
 }
