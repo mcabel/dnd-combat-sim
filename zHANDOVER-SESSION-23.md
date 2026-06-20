@@ -166,20 +166,32 @@ Each migrated spell:
 > After all 4 batches: spell cache 420 → 544/557 implemented (97.7%). The remaining 13
 > are TG-006..011 blockers (summons, walls, reactions, antimagic, LOS, complex mechanics).
 >
-> **To run the megabatch:** Launch a long-running task agent with the prompt below. The
-> prompt is also embedded in `MEGABATCH-MIGRATION-PLAN.md` §"AGENT LAUNCH PROMPT" — copy
-> it from there for the exact wording. The key operational rules: **commit incrementally
-> every 8-12 spells** (NOT once at the end — so progress survives a crash), **push after
-> every commit**, and **keep going** until all 4 batches are done OR the time budget is hit.
+> **To run the megabatch:** Launch a long-running task agent with the self-bootstrapping
+> prompt below. The prompt is also embedded in `MEGABATCH-MIGRATION-PLAN.md` §"AGENT LAUNCH
+> PROMPT" — copy it from there for the exact wording. **The prompt clones the repo itself,**
+> so the agent doesn't need any pre-placed files — it works in any environment. The key
+> operational rules: **commit incrementally every 8-12 spells** (NOT once at the end — so
+> progress survives a crash), **push after every commit**, and **keep going** until all 4
+> batches are done OR the time budget is hit.
 >
 > ```
-> You are migrating D&D 5e spells in the dnd-combat-sim repo at
-> /home/z/my-project/dnd-combat-sim.
+> You are migrating D&D 5e spells in the dnd-combat-sim GitHub repo.
 >
-> STEP 1: Read /home/z/my-project/dnd-combat-sim/MEGABATCH-MIGRATION-PLAN.md IN FULL
-> before doing anything else. It is the complete spec — follow it exactly.
+> STEP 0 — BOOTSTRAP THE REPO (run once at the start):
+>   # Replace <GITHUB_PAT> below with the PAT the user gives you. Do NOT commit the PAT
+>   # to any file — GitHub's secret scanning will block the push. Keep it only in the
+>   # clone URL (which is stored in .git/config, not in a tracked file).
+>   git clone https://mcabel:<GITHUB_PAT>@github.com/mcabel/dnd-combat-sim.git
+>   cd dnd-combat-sim
+>   npm install
+>   npm run spell-cache:build   # confirm 420/557 implemented
+>   # All subsequent commands run from this repo root. Do NOT use absolute /home/z/ paths.
 >
-> STEP 2: `git pull origin main && npm install` to sync.
+> STEP 1: Read MEGABATCH-MIGRATION-PLAN.md IN FULL (it's in the repo root you just cloned).
+> It is the complete spec — follow it exactly. If you were also given the plan as a file
+> attachment, use either copy (they're identical).
+>
+> STEP 2: `git pull origin main` to sync (in case anything landed since the clone).
 >
 > STEP 3: Execute Batch 1 (44 combat damage spells), then Batch 2 (35 save-or-condition),
 > then Batch 3 (23 buffs), then Batch 4 (22 zones/heals) — IN ORDER. Use the per-spell
@@ -189,6 +201,7 @@ Each migrated spell:
 > - COMMIT INCREMENTALLY every 8-12 spells (NOT once at the end). Use commit messages
 >   like "Cantrip-24 (spells 1-10 of 44): combat damage — chaos_bolt, earth_tremor, ...".
 > - PUSH after every commit (`git push origin main`) so work is safely on GitHub.
+>   (The PAT is stored in .git/config from the clone URL in STEP 0 — push will just work. Do NOT commit the PAT to any tracked file — GitHub secret scanning will block it.)
 > - KEEP GOING after each commit — a commit is a checkpoint, not a stopping point.
 >   Continue until you finish all 4 batches OR you hit the time budget for this run.
 > - If a spell is harder than expected, SKIP it (note in handover) and move to the next.

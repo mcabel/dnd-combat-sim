@@ -34,16 +34,34 @@ for the megabatch — see `TEAMGOALS.md` for their blocker status.
 
 ## AGENT LAUNCH PROMPT (copy-paste this into the long-running task)
 
+> **This prompt is self-bootstrapping — it works in any environment.** The agent clones
+> the repo itself, so you don't need to pre-place any files. Just give the agent this
+> prompt **plus the GitHub PAT** (the agent will substitute it into the clone URL in STEP 0).
+> The PAT is NOT embedded in this file because GitHub's secret scanning would block the
+> commit — provide it to the agent in your launch message.
+>
+> **Repo:** https://github.com/mcabel/dnd-combat-sim (private — needs PAT for clone + push)
+>
 > **Recommended prompt for the overnight long-running task agent:**
 >
 > ```
-> You are migrating D&D 5e spells in the dnd-combat-sim repo at
-> /home/z/my-project/dnd-combat-sim.
+> You are migrating D&D 5e spells in the dnd-combat-sim GitHub repo.
 >
-> STEP 1: Read /home/z/my-project/dnd-combat-sim/MEGABATCH-MIGRATION-PLAN.md IN FULL
-> before doing anything else. It is the complete spec — follow it exactly.
+> STEP 0 — BOOTSTRAP THE REPO (run once at the start):
+>   # Replace <GITHUB_PAT> below with the PAT the user gives you. Do NOT commit the PAT
+>   # to any file — GitHub's secret scanning will block the push. Keep it only in the
+>   # clone URL (which is stored in .git/config, not in a tracked file).
+>   git clone https://mcabel:<GITHUB_PAT>@github.com/mcabel/dnd-combat-sim.git
+>   cd dnd-combat-sim
+>   npm install
+>   npm run spell-cache:build   # confirm 420/557 implemented
+>   # All subsequent commands run from this repo root. Do NOT use absolute /home/z/ paths.
 >
-> STEP 2: `git pull origin main && npm install` to sync.
+> STEP 1: Read MEGABATCH-MIGRATION-PLAN.md IN FULL (it's in the repo root you just cloned).
+> It is the complete spec — follow it exactly. If you were also given the plan as a file
+> attachment, use either copy (they're identical).
+>
+> STEP 2: `git pull origin main` to sync (in case anything landed since the clone).
 >
 > STEP 3: Execute Batch 1 (44 combat damage spells), then Batch 2 (35 save-or-condition),
 > then Batch 3 (23 buffs), then Batch 4 (22 zones/heals) — IN ORDER. Use the per-spell
@@ -53,6 +71,7 @@ for the megabatch — see `TEAMGOALS.md` for their blocker status.
 > - COMMIT INCREMENTALLY every 8-12 spells (NOT once at the end). Use commit messages
 >   like "Cantrip-24 (spells 1-10 of 44): combat damage — chaos_bolt, earth_tremor, ...".
 > - PUSH after every commit (`git push origin main`) so work is safely on GitHub.
+>   (The PAT is stored in .git/config from the clone URL in STEP 0 — push will just work. Do NOT commit the PAT to any tracked file — GitHub secret scanning will block it.)
 > - KEEP GOING after each commit — a commit is a checkpoint, not a stopping point.
 >   Continue until you finish all 4 batches OR you hit the time budget for this run.
 > - If a spell is harder than expected, SKIP it (note in handover) and move to the next.
@@ -69,18 +88,18 @@ for the megabatch — see `TEAMGOALS.md` for their blocker status.
 > after all 4 batches it should be 544/557 (97.7%).
 > ```
 >
-> **Why this wording:** It explicitly tells the agent to (a) commit incrementally so
-> progress isn't lost on crash, (b) keep going after each commit until the batch is done
-> or time runs out, and (c) continue to the next batch if time allows. The original
-> wording ("Commit as Cantrip-24, push, then write zHANDOVER-SESSION-24.md") was
-> ambiguous — it could be read as "do all 44 spells, commit once at the end, stop" which
-> risks losing everything on a crash.
+> **Why this wording:** It explicitly tells the agent to (a) clone the repo itself so no
+> pre-placed files are needed, (b) commit incrementally so progress isn't lost on crash,
+> (c) keep going after each commit until the batch is done or time runs out, and (d)
+> continue to the next batch if time allows. The PAT is in the clone URL (.git/config) so push
+> works without re-auth. All paths in the plan are relative to the repo root (the `cd
+> dnd-combat-sim` in STEP 0) — there are no absolute `/home/z/` paths to break.
 
 ---
 
 ## STARTUP CHECKLIST (run before EVERY batch)
 
-1. `cd /home/z/my-project/dnd-combat-sim && git pull origin main` — get latest.
+1. `git pull origin main` (from the repo root — the `cd dnd-combat-sim` from STEP 0) — get latest.
 2. `npm install` — deps: ts-node, typescript.
 3. `npm run spell-cache:build` — confirm current count (should be 420/557 before Batch 1;
    will rise to 544/557 after all 4 batches).
