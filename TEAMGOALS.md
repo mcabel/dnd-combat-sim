@@ -339,6 +339,33 @@ completed by a single agent without coordination.
 
 (none yet)
 
+### TG-013: Move `rollDiceString` from `booming_blade.ts` to `utils.ts`
+
+- **Status:** OPEN
+- **Owners:** Cantrip-z (driving — owns `src/spells/booming_blade.ts`) + Core Engine (must update `src/engine/combat.ts` import)
+- **Source:** Core Engine peer review, Session 45
+- **Summary:** `rollDiceString` (parses `"NdM"` strings and rolls them) is exported from `src/spells/booming_blade.ts` and imported directly by `src/engine/combat.ts` (line 57) for the Booming Blade detonation in `executeMove`. A spell module must not be a utility dependency of the engine. `utils.ts` already owns `rollDie` and `rollDice`; this function belongs there too.
+- **Implementation plan:**
+  - Cantrip-z: add `export function rollDiceString(expr: string): number` to `src/engine/utils.ts` (identical body to the current one in `booming_blade.ts`).
+  - Cantrip-z: remove the export from `booming_blade.ts`, or replace it with `export { rollDiceString } from '../engine/utils'` if `booming_blade.test.ts` imports it directly from the spell module.
+  - Core Engine (or Cantrip-z if Core Engine approves): update `combat.ts` line 57 to `import { ..., rollDiceString } from './utils'` and remove the alias `rollBoomingBladeDice`.
+  - Run `booming_blade.test.ts` and `combat.test.ts` to confirm no regressions.
+- **Risk:** LOW — pure refactor, no behaviour change. The function body is identical; only the import path changes.
+- **Coordination protocol:** Cantrip-z may make the `utils.ts` addition and `booming_blade.ts` change unilaterally. The `combat.ts` import line is Core Engine territory — Cantrip-z should either make it in the same PR and note the change in their handover, or flag it here for Core Engine to pick up.
+
+### TG-014: Fix "melee spell attack" label in Booming Blade and Green-Flame Blade comments
+
+- **Status:** OPEN
+- **Owners:** Cantrip-z (driving — owns both spell modules)
+- **Source:** Core Engine peer review, Session 45
+- **Summary:** TCE is unambiguous — both spells say "make a melee attack with it… the target suffers the **weapon attack's** normal effects." The current module headers and inline comments incorrectly label the primary hit as a "melee spell attack (attackType='spell')". No behaviour change is needed (the engine routes these through the weapons array, so `hitBonus` is already sourced from the weapon, not `spellAttackBonus`), but the incorrect label risks misleading a future implementer into routing them through the SPELL_DB spell-attack path.
+- **Implementation plan:**
+  - `src/spells/booming_blade.ts` line 31: change "melee spell attack (attackType='spell')" → "melee weapon attack".
+  - `src/spells/green_flame_blade.ts` line 36: same change.
+  - `src/spells/green_flame_blade.ts` line 263: update "after the melee spell" → "after the melee weapon attack".
+- **Risk:** LOW — comment-only change, zero behaviour impact.
+- **Coordination protocol:** Cantrip-z owns both files; no Core Engine sign-off needed.
+
 ---
 
 ## SECTION TEMPLATE
