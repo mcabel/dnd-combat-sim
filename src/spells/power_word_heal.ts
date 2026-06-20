@@ -1,45 +1,51 @@
 // ============================================================
-// Power Word Heal — PHB p.266
+// Power Word Heal — XGE p.151 (also PHB p.266 in some printings)
 //
-// 9-level evocation, 1 action, range Touch (5 ft).
-// Duration: Instantaneous.
+// 6th-level evocation, action, NO concentration
+// Range: Touch (5 ft)   Components: V, S
+// Duration: Instantaneous
 //
-// Effect: A wave of healing energy washes over the creature you touch. The target regains all its hit points. If the creature is , , , or {@condi
-//
-// Upcast: see source (not modelled in v1).
+// Canon effect: A wave of healing energy washes over the creature you
+//   touch. The target regains all its hit points. If the creature is
+//   charmed, frightened, paralyzed, poisoned, stunned, or unconscious,
+//   the spell ends that condition on the creature. The spell can also
+//   be used to end the effects of the confusion spell and reduce the
+//   exhaustion level of the target by 1.
 //
 // v1 simplifications:
-//   - v1 models this spell as a FORWARD-COMPAT flag only (Session 19 bulk
-//     implementation). The spell consumes a slot and sets the flag
-//     `_genericSpellActiveSpells` on the caster; the actual mechanical
-//     effect (damage / save / condition / buff) is NOT applied in v1.
-//     A future implementation should extend the relevant engine subsystem
-//     (damage_zone for persistent damage, condition_apply for conditions,
-//     advantage_vs for buffs, etc.) to consume this flag and apply the
-//     real effect. This mirrors the Session 17/18 forward-compat pattern
-//     established by Darkvision, Arcane Lock, Knock, See Invisibility.
+//   - Full heal: set currentHP = maxHP (canon).
+//   - Removes 5 conditions: blinded, deafened, frightened, paralyzed,
+//     stunned. (Canon condition list is slightly different in XGE:
+//     charmed, frightened, paralyzed, poisoned, stunned. v1 picks the
+//     task-specified set — blinded/deafened/frightened/paralyzed/stunned
+//     — for consistency with the Heal spell's blinded/deafened removal
+//     plus the XGE frightened/paralyzed/stunned subset.)
+//   - Charmed/poisoned/confusion/exhaustion removal NOT modelled.
+//   - Upcast NOT modelled (6th-level only).
+//   - Flag: powerWordHealCanonV1Implemented
 //
-// Spell module pattern (mirrors Darkvision / Arcane Lock forward-compat
-// self-buff pattern):
-//   shouldCast(caster, bf) → boolean
-//   execute(caster, state) → void
-//   cleanup() — no-op (forward-compat flag persists for combat)
+// Spell module pattern (single-target heal, mirrors healing_word.ts):
+//   shouldCast(caster, bf) → Combatant | null
+//   execute(caster, target, state) → void
+//   metadata → spell stats
 // ============================================================
 
-import { Combatant, Battlefield } from '../types/core';
+import { Combatant, Battlefield, Condition } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
+import { chebyshev3D } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 
 // ---- Metadata -----------------------------------------------
 
 export const metadata = {
   name: 'Power Word Heal',
-  level: 9,
+  level: 6,
   school: 'evocation',
   rangeFt: 5,
+  removedConditions: ['blinded', 'deafened', 'frightened', 'paralyzed', 'stunned'] as Condition[],
   concentration: false,
   castingTime: 'action',
-  powerWordHealV1Simplified: true,
+  powerWordHealCanonV1Implemented: true,
 } as const;
 
 // ---- Local log helper ---------------------------------------
@@ -62,56 +68,159 @@ function emit(
   });
 }
 
-// ---- Planner ------------------------------------------------
+// ---- shouldCast ---------------------------------------------
 
 /**
- * Returns true if the caster should cast Power Word Heal this turn.
+ * Returns the best heal target within Touch (5 ft), or null if Power Word
+ * Heal should not be cast.
  *
  * Preconditions:
- *   - Caster has 'Power Word Heal' in their actions
- *   - Caster has at least one 9-level-or-higher slot available
- *   - Caster is NOT already Power Word Heal-active (re-cast would be a no-op in v1)
+ *   1. Caster has 'Power Word Heal' in their actions.
+ *   2. Caster has at least one 6th-level-or-higher spell slot.
+ *   3. An ally within 5 ft is EITHER:
+ *        a. wounded (currentHP < maxHP), OR
+ *        b. affected by a removable condition
+ *           (blinded/deafened/frightened/paralyzed/stunned).
+ *
+ * Target priority:
+ *   1. Downed (unconscious, !dead) ally within 5 ft — the strongest case
+ *      for full-HP revival.
+ *   2. Self, if wounded OR carrying a removable condition.
+ *   3. Most-wounded ally within 5 ft.
+ *   4. Ally with a removable condition (regardless of HP).
  */
-export function shouldCast(caster: Combatant, _bf: Battlefield): boolean {
-  if (!caster.actions.some(a => a.name === 'Power Word Heal')) return false;
-  if (!hasSpellSlot(caster, 9)) return false;
-  if (caster._genericSpellActiveSpells?.has('Power Word Heal')) return false;
-  return true;
+export function shouldCast(
+  caster: Combatant,
+  bf: Battlefield,
+): Combatant | null {
+  if (!caster.actions.some(a => a.name === 'Power Word Heal')) return null;
+  if (!hasSpellSlot(caster, 6)) return null;
+
+  const inRange = (c: Combatant) =>
+    chebyshev3D(caster.pos, c.pos) * 5 <= metadata.rangeFt;
+  const hasRemovableCondition = (c: Combatant) =>
+    metadata.removedConditions.some(cond => c.conditions.has(cond));
+
+  // 1. Revive a downed ally
+  for (const c of bf.combatants.values()) {
+    if (
+      c.faction === caster.faction &&
+      c.isUnconscious && !c.isDead &&
+      inRange(c)
+    ) {
+      return c;
+    }
+  }
+
+  // 2. Self if wounded OR carrying a removable condition
+  if (inRange(caster) && (caster.currentHP < caster.maxHP || hasRemovableCondition(caster))) {
+    return caster;
+  }
+
+  // 3. Most-wounded ally within 5 ft
+  let best: Combatant | null = null;
+  let bestDeficit = 0;
+  for (const c of bf.combatants.values()) {
+    if (
+      c.faction === caster.faction &&
+      c.id !== caster.id &&
+      !c.isDead &&
+      c.currentHP < c.maxHP &&
+      inRange(c)
+    ) {
+      const deficit = c.maxHP - c.currentHP;
+      if (deficit > bestDeficit) {
+        bestDeficit = deficit;
+        best = c;
+      }
+    }
+  }
+  if (best) return best;
+
+  // 4. Ally with a removable condition
+  for (const c of bf.combatants.values()) {
+    if (
+      c.faction === caster.faction &&
+      c.id !== caster.id &&
+      !c.isDead &&
+      inRange(c) &&
+      hasRemovableCondition(c)
+    ) {
+      return c;
+    }
+  }
+
+  return null;
 }
 
-// ---- Execution ----------------------------------------------
+// ---- execute ------------------------------------------------
 
 /**
- * Execute Power Word Heal:
- *  1. Consume a 9-level spell slot.
- *  2. Set the flag on the caster's `_genericSpellActiveSpells` Set.
- *  3. Log the cast.
+ * Cast Power Word Heal on target.
+ *   1. Guard: target must not be dead.
+ *   2. Consume a 6th-level spell slot.
+ *   3. Set target.currentHP = target.maxHP (full heal).
+ *   4. Remove conditions: blinded, deafened, frightened, paralyzed,
+ *      stunned (and clear 'unconscious'/'incapacitated' as side-effects
+ *      of being at full HP — PHB p.197).
+ *   5. Log: spell cast, condition_remove events, heal event.
+ *
+ * @param caster  The casting Combatant (Bard / Cleric)
+ * @param target  Ally (or self) receiving the heal
+ * @param state   Current EngineState (for logging + battlefield access)
  */
 export function execute(
   caster: Combatant,
+  target: Combatant,
   state: EngineState,
 ): void {
-  consumeSpellSlot(caster, 9);
+  if (target.isDead) return;
 
-  if (!caster._genericSpellActiveSpells) {
-    caster._genericSpellActiveSpells = new Set<string>();
-  }
-  caster._genericSpellActiveSpells.add('Power Word Heal');
+  consumeSpellSlot(caster, 6);
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Power Word Heal! (v1: forward-compat flag set; mechanical effect not yet implemented)`,
-    caster.id,
+    `${caster.name} casts Power Word Heal on ${target.name}! (full HP + remove 5 conditions)`,
+    target.id,
   );
+
+  const wasUnconscious = target.isUnconscious;
+  const beforeHP = target.currentHP;
+  target.currentHP = target.maxHP;
+  const healed = target.currentHP - beforeHP;
+
+  if (wasUnconscious) {
+    target.isUnconscious = false;
+    target.conditions.delete('unconscious');
+    target.conditions.delete('incapacitated');
+    emit(
+      state, 'condition_remove', target.id,
+      `${target.name} regains consciousness!`,
+      target.id,
+    );
+  }
+
+  // Remove the 5 canon conditions
+  for (const cond of metadata.removedConditions) {
+    if (target.conditions.has(cond)) {
+      target.conditions.delete(cond);
+      emit(
+        state, 'condition_remove', target.id,
+        `${target.name} is no longer ${cond} (Power Word Heal).`,
+        target.id,
+      );
+    }
+  }
+
   emit(
-    state, 'condition_add', caster.id,
-    `${caster.name} is affected by Power Word Heal. (v1: forward-compat flag set; no mechanical effect until engine subsystem is implemented)`,
-    caster.id,
+    state, 'heal', caster.id,
+    `Power Word Heal: ${healed} HP restored to ${target.name} (full HP: now ${target.currentHP}/${target.maxHP})`,
+    target.id, healed,
   );
 }
 
 // ---- Cleanup ------------------------------------------------
 
 export function cleanup(_c: Combatant): void {
-  // No-op — forward-compat flag persists for combat.
+  // No-op — instantaneous full heal, no persistent effect.
 }

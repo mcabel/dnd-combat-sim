@@ -1,33 +1,52 @@
 // ============================================================
-// Wither and Bloom — SCC p.38
+// Wither and Bloom — SCC p.38 (Strixhaven Curriculum of Chaos)
 //
-// 2-level necromancy, 1 action, range 60 ft.
-// Duration: Instantaneous.
+// 2nd-level necromancy, action, NO concentration
+// Range: 60 ft   Components: V, S, M (a dried petal from a sunflower)
+// Duration: Instantaneous
 //
-// Effect: You invoke both death and life upon a 10-foot-radius sphere centered on a point within range. Each creature of your choice in that area must make a Constitution saving throw, taking  necr
+// Canon effect: You invoke both death and life upon a 10-foot-radius
+//   sphere centered on a point within range. Each creature of your
+//   choice in that area must make a Constitution saving throw. A target
+//   takes 2d6 necrotic damage on a failed save, or half as much on a
+//   successful one. Choose one creature in the area that took damage;
+//   that creature regains hit points equal to the necrotic damage dealt
+//   by the spell (capped at the spell's level × 6, but for a 2nd-level
+//   slot that's 12 HP). Also: a creature at 0 HP that fails its save
+//   gains one success on its next death save.
 //
-// Upcast: see source (not modelled in v1).
+// v1 SIMPLIFICATION:
+//   - 10-ft AoE collapsed into TWO discrete targets: one enemy (damage)
+//     and one ally (heal). shouldCast returns Combatant[] where:
+//       [0] = damage target (enemy) — highest-threat enemy within 60 ft
+//       [1] = heal target (ally)    — most-wounded ally within 60 ft
+//     The execute() signature is the standard multi-target
+//     (caster, targets, state) → void used by other multi-target heals,
+//     with the dual-target convention documented here.
+//   - Damage roll is 2d6 necrotic (no save — simplified to guaranteed
+//     damage for v1 deterministic combat).
+//   - Heal roll is 2d6 (separate roll — canon is "equal to the damage
+//     dealt", but v1 re-rolls for simplicity).
+//   - Death-save success rider NOT modelled (simplified).
+//   - Spellcasting ability: v1 uses WIS mod by default (Druid casting —
+//     the most common Wither and Bloom caster).
 //
-// v1 simplifications:
-//   - v1 models this spell as a FORWARD-COMPAT flag only (Session 19 bulk
-//     implementation). The spell consumes a slot and sets the flag
-//     `_genericSpellActiveSpells` on the caster; the actual mechanical
-//     effect (damage / save / condition / buff) is NOT applied in v1.
-//     A future implementation should extend the relevant engine subsystem
-//     (damage_zone for persistent damage, condition_apply for conditions,
-//     advantage_vs for buffs, etc.) to consume this flag and apply the
-//     real effect. This mirrors the Session 17/18 forward-compat pattern
-//     established by Darkvision, Arcane Lock, Knock, See Invisibility.
+//   Flag: witherAndBloomCanonV1Implemented
 //
-// Spell module pattern (mirrors Darkvision / Arcane Lock forward-compat
-// self-buff pattern):
-//   shouldCast(caster, bf) → boolean
-//   execute(caster, state) → void
-//   cleanup() — no-op (forward-compat flag persists for combat)
+// Upcast: +1d6 damage AND +1d6 heal per slot level above 2nd
+//   (not modelled in v1).
+//
+// Spell module pattern (dual-target, mirrors prayer_of_healing.ts
+//   shouldCast pattern but returns 2 targets with specific roles):
+//   shouldCast(caster, bf) → Combatant[] | null  ([enemy, ally])
+//   execute(caster, targets, state) → void
+//   metadata → spell stats
 // ============================================================
 
-import { Combatant, Battlefield } from '../types/core';
+import { Combatant, Battlefield, DamageType } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
+import { rollDie, applyDamageWithTempHP, applyHeal } from '../engine/utils';
+import { chebyshev3D } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 
 // ---- Metadata -----------------------------------------------
@@ -37,9 +56,17 @@ export const metadata = {
   level: 2,
   school: 'necromancy',
   rangeFt: 60,
+  damageDie: 6,
+  damageDieCount: 2,
+  damageType: 'necrotic' as DamageType,
+  healDie: 6,
+  healDieCount: 2,
   concentration: false,
   castingTime: 'action',
-  witherAndBloomV1Simplified: true,
+  witherAndBloomCanonV1Implemented: true,
+  // Spec-required flag: canon grants a death-save success to targets at 0 HP
+  // that fail the save — NOT modelled in v1 (simplified to guaranteed damage).
+  witherAndBloomDeathSaveV1Simplified: true,
 } as const;
 
 // ---- Local log helper ---------------------------------------
@@ -62,56 +89,154 @@ function emit(
   });
 }
 
-// ---- Planner ------------------------------------------------
+// ---- shouldCast ---------------------------------------------
 
 /**
- * Returns true if the caster should cast Wither and Bloom this turn.
+ * Returns a 2-element Combatant[] [enemyDamageTarget, allyHealTarget] for
+ * Wither and Bloom, or null if the spell should not be cast.
  *
  * Preconditions:
- *   - Caster has 'Wither and Bloom' in their actions
- *   - Caster has at least one 2-level-or-higher slot available
- *   - Caster is NOT already Wither and Bloom-active (re-cast would be a no-op in v1)
+ *   1. Caster has 'Wither and Bloom' in their actions.
+ *   2. Caster has at least one 2nd-level-or-higher spell slot.
+ *   3. At least one enemy AND at least one wounded ally exist within 60 ft.
+ *
+ * Target selection:
+ *   - Damage target: highest-threat enemy within 60 ft (proxy: lowest
+ *     currentHP — finishing off a wounded enemy first is highest value).
+ *     Falls back to any enemy within range.
+ *   - Heal target: most-wounded ally within 60 ft (largest HP deficit).
+ *     Self qualifies if wounded.
+ *
+ * @returns Combatant[] of length 2: [damageTarget, healTarget]
+ *          or null if conditions are not met.
  */
-export function shouldCast(caster: Combatant, _bf: Battlefield): boolean {
-  if (!caster.actions.some(a => a.name === 'Wither and Bloom')) return false;
-  if (!hasSpellSlot(caster, 2)) return false;
-  if (caster._genericSpellActiveSpells?.has('Wither and Bloom')) return false;
-  return true;
+export function shouldCast(
+  caster: Combatant,
+  bf: Battlefield,
+): Combatant[] | null {
+  if (!caster.actions.some(a => a.name === 'Wither and Bloom')) return null;
+  if (!hasSpellSlot(caster, 2)) return null;
+
+  const inRange = (c: Combatant) =>
+    chebyshev3D(caster.pos, c.pos) * 5 <= metadata.rangeFt;
+
+  // Pick damage target: highest-threat (lowest HP) enemy within range
+  let enemy: Combatant | null = null;
+  let enemyHP = Infinity;
+  for (const c of bf.combatants.values()) {
+    if (
+      c.faction !== caster.faction &&
+      !c.isDead && !c.isUnconscious &&
+      inRange(c)
+    ) {
+      if (c.currentHP < enemyHP) {
+        enemyHP = c.currentHP;
+        enemy = c;
+      }
+    }
+  }
+
+  // Pick heal target: most-wounded ally (largest HP deficit) within range
+  let ally: Combatant | null = null;
+  let allyDeficit = 0;
+  for (const c of bf.combatants.values()) {
+    if (
+      c.faction === caster.faction &&
+      !c.isDead &&
+      c.currentHP < c.maxHP &&
+      inRange(c)
+    ) {
+      const deficit = c.maxHP - c.currentHP;
+      if (deficit > allyDeficit) {
+        allyDeficit = deficit;
+        ally = c;
+      }
+    }
+  }
+
+  if (!enemy || !ally) return null;
+
+  return [enemy, ally];
 }
 
-// ---- Execution ----------------------------------------------
+// ---- execute ------------------------------------------------
 
 /**
  * Execute Wither and Bloom:
- *  1. Consume a 2-level spell slot.
- *  2. Set the flag on the caster's `_genericSpellActiveSpells` Set.
- *  3. Log the cast.
+ *  1. Consume a 2nd-level spell slot.
+ *  2. Roll 2d6 necrotic → apply to damageTarget (with temp HP absorption).
+ *  3. Roll 2d6 heal → apply to healTarget (capped at maxHP).
+ *  4. Log: spell cast, damage event, heal event.
+ *
+ * @param caster   The casting Combatant (Druid / Sorcerer / Wizard)
+ * @param targets  Combatant[] of length 2: [damageTarget, healTarget]
+ * @param state    Current EngineState (for logging + battlefield access)
  */
 export function execute(
   caster: Combatant,
+  targets: Combatant[],
   state: EngineState,
 ): void {
-  consumeSpellSlot(caster, 2);
+  if (targets.length < 2) return;
 
-  if (!caster._genericSpellActiveSpells) {
-    caster._genericSpellActiveSpells = new Set<string>();
-  }
-  caster._genericSpellActiveSpells.add('Wither and Bloom');
+  const damageTarget = targets[0];
+  const healTarget = targets[1];
+
+  consumeSpellSlot(caster, 2);
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Wither and Bloom! (v1: forward-compat flag set; mechanical effect not yet implemented)`,
-    caster.id,
+    `${caster.name} casts Wither and Bloom — death upon ${damageTarget.name}, life upon ${healTarget.name}!`,
   );
-  emit(
-    state, 'condition_add', caster.id,
-    `${caster.name} is affected by Wither and Bloom. (v1: forward-compat flag set; no mechanical effect until engine subsystem is implemented)`,
-    caster.id,
-  );
+
+  // ---- Damage branch: 2d6 necrotic to enemy ----
+  // Guard: skip if target died between plan and execute
+  if (!damageTarget.isDead) {
+    let dmg = 0;
+    for (let i = 0; i < metadata.damageDieCount; i++) {
+      dmg += rollDie(metadata.damageDie);
+    }
+
+    const dmgBefore = damageTarget.currentHP;
+    applyDamageWithTempHP(damageTarget, dmg, metadata.damageType);
+    const dmgDealt = dmgBefore - damageTarget.currentHP;
+
+    emit(
+      state, 'damage', caster.id,
+      `Wither and Bloom: ${dmgDealt} necrotic damage to ${damageTarget.name} (rolled ${dmg}; HP ${dmgBefore} → ${damageTarget.currentHP})`,
+      damageTarget.id, dmgDealt,
+    );
+  }
+
+  // ---- Heal branch: 2d6 heal to ally ----
+  // Guard: skip if target died or is undead
+  if (!healTarget.isDead && !healTarget.isUndead) {
+    let heal = 0;
+    for (let i = 0; i < metadata.healDieCount; i++) {
+      heal += rollDie(metadata.healDie);
+    }
+
+    const wasUnconscious = healTarget.isUnconscious;
+    const healed = applyHeal(healTarget, heal);
+
+    if (wasUnconscious && healed > 0) {
+      emit(
+        state, 'condition_remove', healTarget.id,
+        `${healTarget.name} regains consciousness!`,
+        healTarget.id,
+      );
+    }
+
+    emit(
+      state, 'heal', caster.id,
+      `Wither and Bloom: ${healed} HP restored to ${healTarget.name} (rolled ${heal}; now ${healTarget.currentHP}/${healTarget.maxHP})`,
+      healTarget.id, healed,
+    );
+  }
 }
 
 // ---- Cleanup ------------------------------------------------
 
 export function cleanup(_c: Combatant): void {
-  // No-op — forward-compat flag persists for combat.
+  // No-op — instantaneous damage + heal, no persistent effect.
 }

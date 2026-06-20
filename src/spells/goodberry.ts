@@ -1,34 +1,38 @@
 // ============================================================
 // Goodberry — PHB p.246
 //
-// 1-level transmutation, 1 action, range Touch (5 ft).
-// Duration: Instantaneous.
+// 1st-level transmutation, action, NO concentration
+// Range: Touch (5 ft)   Components: V, S, M (a sprig of mistletoe)
+// Duration: Instantaneous
 //
-// Effect: Up to ten berries appear in your hand and are infused with magic for the duration. A creature can use its action to eat one berry. Eating a berry restores 1 hit point, and the berry provides enough no
+// Canon effect: Up to ten berries appear in your hand and are infused
+//   with magic. A creature can use its action to eat one berry; eating
+//   a berry restores 1 hit point and provides enough nourishment for a
+//   day. The berries remain potent for 24 hours; otherwise they wither.
 //
-// Upcast: see source (not modelled in v1).
+// v1 SIMPLIFICATION (in-combat): rather than modelling per-berry eating
+//   as a separate action (10 berries × 1 HP × 10 actions = out of
+//   combat), v1 collapses the spell into a single heal: the caster eats
+//   all 10 berries themselves and feeds any wounded ally within 30 ft
+//   in the same action — represented as a single 10-HP flat heal to one
+//   ally within 30 ft. This makes the spell castable in combat.
 //
-// v1 simplifications:
-//   - v1 models this spell as a FORWARD-COMPAT flag only (Session 20 bulk
-//     implementation — level-1 backfill). The spell consumes a slot and
-//     sets the flag `_genericSpellActiveSpells` on the caster; the actual
-//     mechanical effect (damage / save / condition / buff) is NOT applied
-//     in v1. A future implementation should extend the relevant engine
-//     subsystem (damage_zone for persistent damage, condition_apply for
-//     conditions, advantage_vs for buffs, etc.) to consume this flag and
-//     apply the real effect. This mirrors the Session 17/18 forward-compat
-//     pattern established by Darkvision, Arcane Lock, Knock, See Invisibility
-//     and the Session 19 bulk-implementation pattern.
+//   Flag: goodberryMultiBerryV1SimplifiedToSingleHeal
+//   Deviation from canon Touch range: v1 uses 30 ft (so the spell can
+//   affect any frontliner). Future work: per-berry inventory system.
 //
-// Spell module pattern (mirrors Darkvision / Arcane Lock forward-compat
-// self-buff pattern):
-//   shouldCast(caster, bf) → boolean
-//   execute(caster, state) → void
-//   cleanup() — no-op (forward-compat flag persists for combat)
+// Upcast: +10 berries (10 HP) per slot level above 1st (not modelled in v1).
+//
+// Spell module pattern (mirrors healing_word.ts):
+//   shouldCast(caster, bf) → Combatant | null   (target or null)
+//   execute(caster, target, state) → void
+//   metadata → spell stats
 // ============================================================
 
 import { Combatant, Battlefield } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
+import { applyHeal } from '../engine/utils';
+import { chebyshev3D } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 
 // ---- Metadata -----------------------------------------------
@@ -37,10 +41,11 @@ export const metadata = {
   name: 'Goodberry',
   level: 1,
   school: 'transmutation',
-  rangeFt: 5,
+  rangeFt: 30,                                  // v1: 30 ft (canon Touch 5 ft)
+  healFlat: 10,                                 // 10 berries × 1 HP each
   concentration: false,
   castingTime: 'action',
-  goodberryV1Simplified: true,
+  goodberryMultiBerryV1SimplifiedToSingleHeal: true,
 } as const;
 
 // ---- Local log helper ---------------------------------------
@@ -63,56 +68,130 @@ function emit(
   });
 }
 
-// ---- Planner ------------------------------------------------
+// ---- shouldCast ---------------------------------------------
 
 /**
- * Returns true if the caster should cast Goodberry this turn.
+ * Returns the best heal target within 30 ft, or null if Goodberry should not
+ * be cast.
  *
  * Preconditions:
- *   - Caster has 'Goodberry' in their actions
- *   - Caster has at least one 1-level-or-higher slot available
- *   - Caster is NOT already Goodberry-active (re-cast would be a no-op in v1)
+ *   1. Caster has 'Goodberry' in their actions.
+ *   2. Caster has at least one 1st-level spell slot.
+ *   3. A wounded ally (currentHP < maxHP, !dead, !undead) is within range.
+ *
+ * Target priority (mirror healing_word.ts):
+ *   1. Downed (unconscious, !isDead) ally within range.
+ *   2. Self, if wounded (currentHP < maxHP).
+ *   3. Most-wounded ally (lowest HP%) within range.
  */
-export function shouldCast(caster: Combatant, _bf: Battlefield): boolean {
-  if (!caster.actions.some(a => a.name === 'Goodberry')) return false;
-  if (!hasSpellSlot(caster, 1)) return false;
-  if (caster._genericSpellActiveSpells?.has('Goodberry')) return false;
-  return true;
+export function shouldCast(
+  caster: Combatant,
+  bf: Battlefield,
+): Combatant | null {
+  if (!caster.actions.some(a => a.name === 'Goodberry')) return null;
+  if (!hasSpellSlot(caster, 1)) return null;
+
+  const inRange = (c: Combatant) =>
+    chebyshev3D(caster.pos, c.pos) * 5 <= metadata.rangeFt;
+  const validTarget = (c: Combatant) => !c.isUndead; // PHB p.246: no effect on undead
+
+  // 1. Revive a downed ally
+  for (const c of bf.combatants.values()) {
+    if (
+      c.faction === caster.faction &&
+      c.isUnconscious && !c.isDead &&
+      inRange(c) && validTarget(c)
+    ) {
+      return c;
+    }
+  }
+
+  // 2. Self-heal if wounded (self is always in range)
+  if (caster.currentHP < caster.maxHP && validTarget(caster)) {
+    return caster;
+  }
+
+  // 3. Most-wounded ally within range
+  let best: Combatant | null = null;
+  let bestDeficit = 0;
+  for (const c of bf.combatants.values()) {
+    if (
+      c.faction === caster.faction &&
+      c.id !== caster.id &&
+      !c.isDead && !c.isUnconscious &&
+      c.currentHP < c.maxHP &&
+      inRange(c) && validTarget(c)
+    ) {
+      const deficit = c.maxHP - c.currentHP;
+      if (deficit > bestDeficit) {
+        bestDeficit = deficit;
+        best = c;
+      }
+    }
+  }
+
+  return best;
 }
 
-// ---- Execution ----------------------------------------------
+// ---- execute ------------------------------------------------
 
 /**
- * Execute Goodberry:
- *  1. Consume a 1-level spell slot.
- *  2. Set the flag on the caster's `_genericSpellActiveSpells` Set.
- *  3. Log the cast.
+ * Cast Goodberry on target.
+ *   1. Guard: target must not be dead or undead.
+ *   2. Consume a 1st-level spell slot.
+ *   3. Apply 10 HP flat heal (applyHeal caps at maxHP and clears
+ *      'unconscious' if target was at 0 HP and healed > 0).
+ *   4. Log: spell cast, condition_remove (if revived), heal amount.
+ *
+ * @param caster  The casting Combatant (Druid / Ranger)
+ * @param target  Ally (or self) receiving the heal
+ * @param state   Current EngineState (for logging + battlefield access)
  */
 export function execute(
   caster: Combatant,
+  target: Combatant,
   state: EngineState,
 ): void {
-  consumeSpellSlot(caster, 1);
-
-  if (!caster._genericSpellActiveSpells) {
-    caster._genericSpellActiveSpells = new Set<string>();
+  // Guard: dead creatures cannot be healed
+  if (target.isDead) return;
+  // Guard: no effect on undead (PHB p.246)
+  if (target.isUndead) {
+    emit(
+      state, 'action', caster.id,
+      `${caster.name} casts Goodberry on ${target.name} — no effect (undead)!`,
+      target.id,
+    );
+    return;
   }
-  caster._genericSpellActiveSpells.add('Goodberry');
+
+  consumeSpellSlot(caster, 1);
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Goodberry! (v1: forward-compat flag set; mechanical effect not yet implemented)`,
-    caster.id,
+    `${caster.name} casts Goodberry on ${target.name}! (10 berries → 10 HP)`,
+    target.id,
   );
+
+  const wasUnconscious = target.isUnconscious;
+  const healed = applyHeal(target, metadata.healFlat);
+
+  if (wasUnconscious && healed > 0) {
+    emit(
+      state, 'condition_remove', target.id,
+      `${target.name} regains consciousness!`,
+      target.id,
+    );
+  }
+
   emit(
-    state, 'condition_add', caster.id,
-    `${caster.name} is affected by Goodberry. (v1: forward-compat flag set; no mechanical effect until engine subsystem is implemented)`,
-    caster.id,
+    state, 'heal', caster.id,
+    `Goodberry: ${healed} HP restored to ${target.name} (flat 10 HP, capped at maxHP ${target.maxHP})`,
+    target.id, healed,
   );
 }
 
 // ---- Cleanup ------------------------------------------------
 
 export function cleanup(_c: Combatant): void {
-  // No-op — forward-compat flag persists for combat.
+  // No-op — instantaneous heal, no persistent effect.
 }

@@ -212,6 +212,29 @@ import { shouldCast as shouldCastBeaconOfHope } from '../spells/beacon_of_hope';
 import { shouldCast as shouldCastIntellectFortress } from '../spells/intellect_fortress';
 import { shouldCast as shouldCastHolyAura } from '../spells/holy_aura';
 import { shouldCast as shouldCastForesight } from '../spells/foresight';
+// ── Session 27 — Batch 4 persistent zones + healing + temp HP (22 spells) ──
+import { shouldCast as shouldCastDeathArmor } from '../spells/death_armor';
+import { shouldCast as shouldCastDustDevil } from '../spells/dust_devil';
+import { shouldCast as shouldCastHealingSpirit } from '../spells/healing_spirit';
+import { shouldCast as shouldCastCacophonicShield } from '../spells/cacophonic_shield';
+import { shouldCast as shouldCastCallLightning } from '../spells/call_lightning';
+import { shouldCast as shouldCastHungerOfHadar } from '../spells/hunger_of_hadar';
+import { shouldCast as shouldCastSpiritGuardians } from '../spells/spirit_guardians';
+import { shouldCast as shouldCastGuardianOfFaith } from '../spells/guardian_of_faith';
+import { shouldCast as shouldCastDawn } from '../spells/dawn';
+import { shouldCast as shouldCastInsectPlague } from '../spells/insect_plague';
+import { shouldCast as shouldCastStormOfVengeance } from '../spells/storm_of_vengeance';
+import { shouldCast as shouldCastGoodberry } from '../spells/goodberry';
+import { shouldCast as shouldCastWitherAndBloom } from '../spells/wither_and_bloom';
+import { shouldCast as shouldCastAuraOfVitality } from '../spells/aura_of_vitality';
+import { shouldCast as shouldCastMassHealingWord } from '../spells/mass_healing_word';
+import { shouldCast as shouldCastMassCureWounds } from '../spells/mass_cure_wounds';
+import { shouldCast as shouldCastHeal } from '../spells/heal';
+import { shouldCast as shouldCastRegenerate } from '../spells/regenerate';
+import { shouldCast as shouldCastMassHeal } from '../spells/mass_heal';
+import { shouldCast as shouldCastPowerWordHeal } from '../spells/power_word_heal';
+import { shouldCast as shouldCastArmorOfAgathys } from '../spells/armor_of_agathys';
+import { shouldCast as shouldCastFalseLife } from '../spells/false_life';
 
 // ── Session 19 — bulk-implementation generic dispatch (262 new spells) ────
 import { GENERIC_SPELL_LIST } from '../spells/_generic_registry';
@@ -3782,6 +3805,42 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
   }
   if (!plan.action && self.actions.some(a => a.name === 'Divine Favor') && shouldCastDivineFavor(self, battlefield)) {
     plan.action = { type: 'divineFavor', action: null, targetId: self.id, description: `${self.name} casts Divine Favor (+1d4 radiant)` }; return plan;
+  }
+
+  // === SESSION 27 — BATCH 4 PERSISTENT ZONES + HEALING + TEMP HP (22 spells: 12DC+) ===
+  // Priority: high-level damage zones first (L9→L2), then heals (L9→L1), then temp HP.
+  // Damage zones: Combatant[] (enemies in AoE). Heals: Combatant|Combatant[] (wounded allies). Temp HP: boolean (self).
+
+  // --- Damage zones (L9→L2) ---
+  if (!plan.action && self.actions.some(a => a.name === 'Storm of Vengeance')) { const t = shouldCastStormOfVengeance(self, battlefield); if (t) { plan.action = { type: 'stormOfVengeance', action: null, targetId: t[0].id, description: `${self.name} casts Storm of Vengeance` }; return plan; } }
+  if (!plan.action && self.actions.some(a => a.name === 'Insect Plague')) { const t = shouldCastInsectPlague(self, battlefield); if (t) { plan.action = { type: 'insectPlague', action: null, targetId: t[0].id, description: `${self.name} casts Insect Plague` }; return plan; } }
+  if (!plan.action && self.actions.some(a => a.name === 'Dawn')) { const t = shouldCastDawn(self, battlefield); if (t) { plan.action = { type: 'dawn', action: null, targetId: t[0].id, description: `${self.name} casts Dawn` }; return plan; } }
+  if (!plan.action && self.actions.some(a => a.name === 'Guardian of Faith')) { const t = shouldCastGuardianOfFaith(self, battlefield); if (t) { plan.action = { type: 'guardianOfFaith', action: null, targetId: t[0].id, description: `${self.name} casts Guardian of Faith` }; return plan; } }
+  if (!plan.action && self.actions.some(a => a.name === 'Spirit Guardians')) { const t = shouldCastSpiritGuardians(self, battlefield); if (t) { plan.action = { type: 'spiritGuardians', action: null, targetId: t[0].id, description: `${self.name} casts Spirit Guardians` }; return plan; } }
+  if (!plan.action && self.actions.some(a => a.name === 'Hunger of Hadar')) { const t = shouldCastHungerOfHadar(self, battlefield); if (t) { plan.action = { type: 'hungerOfHadar', action: null, targetId: t[0].id, description: `${self.name} casts Hunger of Hadar` }; return plan; } }
+  if (!plan.action && self.actions.some(a => a.name === 'Call Lightning')) { const t = shouldCastCallLightning(self, battlefield); if (t) { plan.action = { type: 'callLightning', action: null, targetId: t[0].id, description: `${self.name} casts Call Lightning` }; return plan; } }
+  if (!plan.action && self.actions.some(a => a.name === 'Cacophonic Shield')) { const t = shouldCastCacophonicShield(self, battlefield); if (t) { plan.action = { type: 'cacophonicShield', action: null, targetId: t[0].id, description: `${self.name} casts Cacophonic Shield` }; return plan; } }
+  if (!plan.action && self.actions.some(a => a.name === 'Dust Devil')) { const t = shouldCastDustDevil(self, battlefield); if (t) { plan.action = { type: 'dustDevil', action: null, targetId: t[0].id, description: `${self.name} casts Dust Devil` }; return plan; } }
+  if (!plan.action && self.actions.some(a => a.name === 'Death Armor')) { const t = shouldCastDeathArmor(self, battlefield); if (t) { plan.action = { type: 'deathArmor', action: null, targetId: t[0].id, description: `${self.name} casts Death Armor` }; return plan; } }
+
+  // --- Heals (L9→L1) — target wounded allies ---
+  if (!plan.action && self.actions.some(a => a.name === 'Mass Heal')) { const t = shouldCastMassHeal(self, battlefield); if (t) { plan.action = { type: 'massHeal', action: null, targetId: t[0].id, description: `${self.name} casts Mass Heal` }; return plan; } }
+  if (!plan.action && self.actions.some(a => a.name === 'Regenerate')) { const t = shouldCastRegenerate(self, battlefield); if (t) { plan.action = { type: 'regenerate', action: null, targetId: (t as any).id, description: `${self.name} casts Regenerate on ${(t as any).name}` }; return plan; } }
+  if (!plan.action && self.actions.some(a => a.name === 'Heal')) { const t = shouldCastHeal(self, battlefield); if (t) { plan.action = { type: 'heal', action: null, targetId: (t as any).id, description: `${self.name} casts Heal on ${(t as any).name}` }; return plan; } }
+  if (!plan.action && self.actions.some(a => a.name === 'Power Word Heal')) { const t = shouldCastPowerWordHeal(self, battlefield); if (t) { plan.action = { type: 'powerWordHeal', action: null, targetId: (t as any).id, description: `${self.name} casts Power Word Heal on ${(t as any).name}` }; return plan; } }
+  if (!plan.action && self.actions.some(a => a.name === 'Mass Cure Wounds')) { const t = shouldCastMassCureWounds(self, battlefield); if (t) { plan.action = { type: 'massCureWounds', action: null, targetId: t[0].id, description: `${self.name} casts Mass Cure Wounds` }; return plan; } }
+  if (!plan.action && self.actions.some(a => a.name === 'Aura of Vitality')) { const t = shouldCastAuraOfVitality(self, battlefield); if (t) { plan.action = { type: 'auraOfVitality', action: null, targetId: t[0].id, description: `${self.name} casts Aura of Vitality` }; return plan; } }
+  if (!plan.action && self.actions.some(a => a.name === 'Wither and Bloom')) { const t = shouldCastWitherAndBloom(self, battlefield); if (t) { plan.action = { type: 'witherAndBloom', action: null, targetId: t[0].id, description: `${self.name} casts Wither and Bloom` }; return plan; } }
+  if (!plan.action && self.actions.some(a => a.name === 'Mass Healing Word')) { const t = shouldCastMassHealingWord(self, battlefield); if (t) { plan.action = { type: 'massHealingWord', action: null, targetId: t[0].id, description: `${self.name} casts Mass Healing Word` }; return plan; } }
+  if (!plan.action && self.actions.some(a => a.name === 'Goodberry')) { const t = shouldCastGoodberry(self, battlefield); if (t) { plan.action = { type: 'goodberry', action: null, targetId: (t as any).id, description: `${self.name} casts Goodberry on ${(t as any).name}` }; return plan; } }
+  if (!plan.action && self.actions.some(a => a.name === 'Healing Spirit')) { const t = shouldCastHealingSpirit(self, battlefield); if (t) { plan.action = { type: 'healingSpirit', action: null, targetId: t[0].id, description: `${self.name} casts Healing Spirit` }; return plan; } }
+
+  // --- Temp HP (L1) — self-buff ---
+  if (!plan.action && self.actions.some(a => a.name === 'Armor of Agathys') && shouldCastArmorOfAgathys(self, battlefield)) {
+    plan.action = { type: 'armorOfAgathys', action: null, targetId: self.id, description: `${self.name} casts Armor of Agathys (5 temp HP)` }; return plan;
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'False Life') && shouldCastFalseLife(self, battlefield)) {
+    plan.action = { type: 'falseLife', action: null, targetId: self.id, description: `${self.name} casts False Life (1d4+4 temp HP)` }; return plan;
   }
 
   // === SESSION 19 — GENERIC SPELL LOOP (262 bulk-implemented spells) ===

@@ -1,34 +1,48 @@
 // ============================================================
 // Dawn — XGE p.153
 //
-// 5-level evocation, 1 action, range 60 ft, concentration.
-// Duration: 1 minute.
+// 5th-level evocation, action, range 60 ft, concentration (1 min).
+// Components: V, S, M (a sunburst pendant amulet).
 //
-// Effect: The light of dawn shines down on a location you specify within range. Until the spell ends, a 30-foot-radius, 40-foot-high cylinder of bright light glimmers there. This light is sunlight.
-//
-// Upcast: see source (not modelled in v1).
+// Effect (canon): The light of dawn shines down on a location you specify
+//                 within range. Until the spell ends, a 30-foot-radius,
+//                 40-foot-high cylinder of bright light glimmers there.
+//                 This light is sunlight. When a creature enters the spell's
+//                 area for the first time on a turn or starts its turn
+//                 there, it must make a Constitution saving throw. The
+//                 creature takes 4d10 radiant damage on a failed save, or
+//                 half as much on a successful one. A creature doesn't
+//                 need to take the damage if it has cover.
+//                 (Upcast: +1d10 per slot level above 5th.)
 //
 // v1 simplifications:
-//   - v1 models this spell as a FORWARD-COMPAT flag only (Session 19 bulk
-//     implementation). The spell consumes a slot and sets the flag
-//     `_genericSpellActiveSpells` on the caster; the actual mechanical
-//     effect (damage / save / condition / buff) is NOT applied in v1.
-//     A future implementation should extend the relevant engine subsystem
-//     (damage_zone for persistent damage, condition_apply for conditions,
-//     advantage_vs for buffs, etc.) to consume this flag and apply the
-//     real effect. This mirrors the Session 17/18 forward-compat pattern
-//     established by Darkvision, Arcane Lock, Knock, See Invisibility.
-//   - Concentration spell (forward-compat flag persists for combat).
+//   - Cylinder placement: canon lets the caster place the cylinder on any
+//     point within 60 ft. v1 simplification: the cylinder is centered on
+//     the highest-threat enemy within 60 ft of the caster — flag
+//     `dawnCenterPointV1SimplifiedToHighestThreat`.
+//   - Cylinder radius: canon 30 ft; v1 uses 30 ft (matches canon).
+//   - Persistent damage: canon says "starts its turn there" → 4d10 radiant,
+//     CON save for half. v1 also applies 4d10 on cast (the "enters the area
+//     for the first time on a turn" trigger).
+//   - Cover-based damage avoidance NOT modelled (no cover subsystem in v1).
+//     Flag `dawnCoverRiderV1NotModelled`.
+//   - Sunlight property (affects creatures vulnerable to sunlight) NOT
+//     modelled. Flag `dawnSunlightPropertyV1NotModelled`.
+//   - Duration: canon 1 min concentration → v1: concentration is started,
+//     but NOT enforced (TG-002).
+//   - Upcast: +1d10/slot-level NOT modelled.
 //
-// Spell module pattern (mirrors Darkvision / Arcane Lock forward-compat
-// self-buff pattern):
-//   shouldCast(caster, bf) → boolean
-//   execute(caster, state) → void
-//   cleanup() — no-op (forward-compat flag persists for combat)
+// Spell module pattern (Session 31 architecture — multi-target center-point zone):
+//   shouldCast(caster, bf) → Combatant[] | null
+//   execute(caster, targets, state) → void
+//   cleanup(_c) — no-op (concentration break handles cleanup)
 // ============================================================
 
-import { Combatant, Battlefield } from '../types/core';
+import { Combatant, Battlefield, DamageType, AbilityScore, Vec3 } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
+import { applySpellEffect, removeEffectsFromCaster } from '../engine/spell_effects';
+import { startConcentration, rollSave, rollDie, applyDamageWithTempHP } from '../engine/utils';
+import { chebyshev3D } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 
 // ---- Metadata -----------------------------------------------
@@ -37,10 +51,18 @@ export const metadata = {
   name: 'Dawn',
   level: 5,
   school: 'evocation',
-  rangeFt: 60,
+  rangeFt: 60,          // caster-to-center range
+  aoeSizeFt: 30,        // 30-ft cylinder radius (matches canon)
+  dieCount: 4,
+  dieSides: 10,
+  damageType: 'radiant' as const as DamageType,
   concentration: true,
+  saveAbility: 'con' as const as AbilityScore,
   castingTime: 'action',
-  dawnV1Simplified: true,
+  dawnCenterPointV1SimplifiedToHighestThreat: true,    // canon: any point within 60 ft; v1: highest-threat enemy
+  dawnCoverRiderV1NotModelled: true,                   // cover-based damage avoidance not in v1
+  dawnSunlightPropertyV1NotModelled: true,             // sunlight property not in v1
+  dawnUpcastV1Implemented: false,                      // +1d10/slot-level not modelled
 } as const;
 
 // ---- Local log helper ---------------------------------------
@@ -63,56 +85,164 @@ function emit(
   });
 }
 
+// ---- Dice helper --------------------------------------------
+
+/**
+ * Roll `metadata.dieCount`d`metadata.dieSides` and return the total.
+ */
+export function rollDamage(): number {
+  let total = 0;
+  for (let i = 0; i < metadata.dieCount; i++) total += rollDie(metadata.dieSides);
+  return total;
+}
+
 // ---- Planner ------------------------------------------------
 
 /**
- * Returns true if the caster should cast Dawn this turn.
+ * Returns candidate targets for Dawn (all living enemies within 30 ft of
+ * the highest-threat enemy within 60 ft of the caster, not already
+ * affected by this caster's Dawn), or null when the spell should not be cast.
+ *
+ * Target priority:
+ *   1. Find the highest-threat (maxHP) living enemy within 60 ft of the
+ *      caster — this enemy is the cylinder's CENTER.
+ *   2. Collect all living enemies within 30 ft of that center.
+ *   3. Return those as targets.
  *
  * Preconditions:
+ *   - Caster is NOT already concentrating on any spell
  *   - Caster has 'Dawn' in their actions
- *   - Caster has at least one 5-level-or-higher slot available
- *   - Caster is NOT already Dawn-active (re-cast would be a no-op in v1)
+ *   - Caster has at least one 5th-level (or higher) slot available
+ *   - At least 1 valid enemy target exists within 60 ft of the caster
  */
-export function shouldCast(caster: Combatant, _bf: Battlefield): boolean {
-  if (!caster.actions.some(a => a.name === 'Dawn')) return false;
-  if (!hasSpellSlot(caster, 5)) return false;
-  if (caster._genericSpellActiveSpells?.has('Dawn')) return false;
-  return true;
+export function shouldCast(caster: Combatant, bf: Battlefield): Combatant[] | null {
+  if (caster.concentration?.active) return null;
+  if (!caster.actions.some(a => a.name === 'Dawn')) return null;
+  if (!hasSpellSlot(caster, 5)) return null;
+
+  // Step 1: find the center enemy (highest maxHP within 60 ft of caster).
+  const candidates: Array<{ c: Combatant; threat: number; dist: number }> = [];
+  for (const c of bf.combatants.values()) {
+    if (c.id === caster.id) continue;
+    if (c.faction === caster.faction) continue;
+    if (c.isDead || c.isUnconscious) continue;
+
+    const distFt = chebyshev3D(caster.pos, c.pos) * 5;
+    if (distFt > metadata.rangeFt) continue;
+
+    candidates.push({ c, threat: c.maxHP, dist: distFt });
+  }
+  if (candidates.length === 0) return null;
+
+  candidates.sort((a, b) => {
+    if (a.threat !== b.threat) return b.threat - a.threat;
+    return a.dist - b.dist;
+  });
+
+  const center: Vec3 = candidates[0].c.pos;
+
+  // Step 2: collect all living enemies within 30 ft of the center.
+  const targets: Combatant[] = [];
+  for (const c of bf.combatants.values()) {
+    if (c.id === caster.id) continue;
+    if (c.faction === caster.faction) continue;
+    if (c.isDead || c.isUnconscious) continue;
+
+    const distFromCenter = chebyshev3D(center, c.pos) * 5;
+    if (distFromCenter > metadata.aoeSizeFt) continue;
+
+    if (c.activeEffects.some(e =>
+      e.casterId === caster.id && e.spellName === 'Dawn'
+    )) continue;
+
+    targets.push(c);
+  }
+
+  if (targets.length === 0) return null;
+  return targets;
 }
 
 // ---- Execution ----------------------------------------------
 
 /**
  * Execute Dawn:
- *  1. Consume a 5-level spell slot.
- *  2. Set the flag on the caster's `_genericSpellActiveSpells` Set.
- *  3. Log the cast.
+ *  1. Consume a 5th-level spell slot.
+ *  2. Break any existing concentration (safety net).
+ *  3. Start concentration on Dawn.
+ *  4. For each target (enemy within 30 ft of the center):
+ *     (a) Roll CON save vs caster's saveDC. On fail, 4d10 radiant; on
+ *         success, half. Apply immediately (on-cast trigger).
+ *     (b) Apply a `damage_zone` effect for persistent start-of-turn damage
+ *         (4d10 radiant, CON save for half, sourceIsConcentration: true).
  */
 export function execute(
   caster: Combatant,
+  targets: Combatant[],
   state: EngineState,
 ): void {
+  const action = caster.actions.find(a => a.name === 'Dawn');
+  const saveDC = action?.saveDC ?? 13;
+
   consumeSpellSlot(caster, 5);
 
-  if (!caster._genericSpellActiveSpells) {
-    caster._genericSpellActiveSpells = new Set<string>();
+  if (caster.concentration?.active) {
+    removeEffectsFromCaster(caster.id, state.battlefield);
   }
-  caster._genericSpellActiveSpells.add('Dawn');
+  startConcentration(caster, 'Dawn');
 
+  const names = targets.map(t => t.name).join(', ');
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Dawn! (v1: forward-compat flag set; mechanical effect not yet implemented)`,
-    caster.id,
+    `${caster.name} casts Dawn! A cylinder of sunlight blazes down (${targets.length} enem${targets.length !== 1 ? 'ies' : 'y'}: ${names}) — DC ${saveDC} CON, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}, half on save`,
   );
-  emit(
-    state, 'condition_add', caster.id,
-    `${caster.name} is affected by Dawn. (v1: forward-compat flag set; no mechanical effect until engine subsystem is implemented)`,
-    caster.id,
-  );
+
+  for (const target of targets) {
+    if (target.isDead || target.isUnconscious) continue;
+
+    // 1. Immediate on-cast damage: CON save for half.
+    const save = rollSave(target, metadata.saveAbility, saveDC);
+    const fullDmg = rollDamage();
+    const dmg = save.success ? Math.floor(fullDmg / 2) : fullDmg;
+    const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);
+
+    emit(
+      state,
+      save.success ? 'save_success' : 'save_fail',
+      caster.id,
+      `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} CON save vs Dawn (rolled ${save.total}) — ${dealt} ${metadata.damageType} damage (${metadata.dieCount}d${metadata.dieSides}=${fullDmg}${save.success ? ', halved' : ''})`,
+      target.id, save.roll,
+    );
+    emit(
+      state, 'damage', caster.id,
+      `${target.name} takes ${dealt} ${metadata.damageType} damage from Dawn (on cast)`,
+      target.id, dealt,
+    );
+
+    // 2. Apply damage_zone effect for persistent start-of-turn damage.
+    applySpellEffect(target, {
+      casterId: caster.id,
+      spellName: 'Dawn',
+      effectType: 'damage_zone',
+      payload: {
+        dieCount: metadata.dieCount,
+        dieSides: metadata.dieSides,
+        damageType: metadata.damageType,
+        saveDC,
+        saveAbility: metadata.saveAbility,
+      },
+      sourceIsConcentration: true,
+    });
+
+    emit(
+      state, 'condition_add', caster.id,
+      `${target.name} is bathed in dawn's light! (will take ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType} at the start of each of its turns, CON save for half)`,
+      target.id,
+    );
+  }
 }
 
 // ---- Cleanup ------------------------------------------------
 
 export function cleanup(_c: Combatant): void {
-  // No-op — forward-compat flag persists for combat.
+  // No-op — concentration break handles cleanup via removeEffectsFromCaster.
 }

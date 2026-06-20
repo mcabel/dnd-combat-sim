@@ -147,7 +147,9 @@ assert('Registry is non-empty', SPELL_COUNT > 0);
 // Registry now has 220 spells (255 − 35). Cumulative migrated: 93 (7+7+44+35).
 // Session 27: Batch 3 COMPLETE. Migrated all 23 concentration-buff spells.
 // Registry now has 197 spells (220 − 23). Cumulative migrated: 116 (7+7+44+35+23).
-assert(`Registry has at least 197 spells (got ${SPELL_COUNT})`, SPELL_COUNT >= 197);
+// Session 27: Batch 4 COMPLETE. Migrated all 22 persistent-zone + healing + temp-HP spells.
+// Registry now has 175 spells (197 − 22). Cumulative migrated: 138 (7+7+44+35+23+22).
+assert(`Registry has at least 175 spells (got ${SPELL_COUNT})`, SPELL_COUNT >= 175);
 console.log(`  📊 Total bulk-implemented spells: ${SPELL_COUNT}`);
 
 // Sample spells — one per level 1-9. Updated in Session 23 to avoid the
@@ -159,7 +161,7 @@ console.log(`  📊 Total bulk-implemented spells: ${SPELL_COUNT}`);
 const SAMPLE_SPELLS = [
   { name: 'Alarm', level: 1 },
   { name: 'Continual Flame', level: 2 },
-  { name: 'Spirit Guardians', level: 3 },  // Session 25: was 'Fear' (migrated to bespoke)
+  { name: 'Gaseous Form', level: 3 },  // Session 27: was 'Spirit Guardians' (migrated to bespoke)
   { name: 'Polymorph', level: 4 },
   { name: 'Animate Objects', level: 5 },     // Session 25: was 'Hold Monster' (migrated to bespoke)
   { name: 'Globe of Invulnerability', level: 6 }, // Session 23: was 'Disintegrate' (migrated)
@@ -302,6 +304,23 @@ for (const migrated of MIGRATED_SPELLS_S27) {
     lookupGenericSpell(migrated), null);
 }
 
+console.log('\n=== 1g. Session 27 — Batch 4 migrated spells removed from registry ===\n');
+const MIGRATED_SPELLS_S28 = [
+  // PERSISTENT_DAMAGE_ZONE (11)
+  'Death Armor', 'Dust Devil', 'Healing Spirit', 'Cacophonic Shield',
+  'Call Lightning', 'Hunger of Hadar', 'Spirit Guardians', 'Guardian of Faith',
+  'Dawn', 'Insect Plague', 'Storm of Vengeance',
+  // HEALING (9)
+  'Goodberry', 'Wither and Bloom', 'Aura of Vitality', 'Mass Healing Word',
+  'Mass Cure Wounds', 'Heal', 'Regenerate', 'Mass Heal', 'Power Word Heal',
+  // TEMP_HP (2)
+  'Armor of Agathys', 'False Life',
+];
+for (const migrated of MIGRATED_SPELLS_S28) {
+  eq(`  ${migrated} is no longer in the registry (migrated to bespoke)`,
+    lookupGenericSpell(migrated), null);
+}
+
 // ============================================================
 // 2. Sample spell lookup
 // ============================================================
@@ -346,11 +365,11 @@ assert('Every list element is in the map', allInMap);
 // Updated in Session 21: was 'Fireball', now 'Fear' (Fireball migrated
 // to bespoke — see src/spells/fireball.ts and src/test/fireball.test.ts).
 
-console.log('\n=== 5. shouldCast gates (sample: Spirit Guardians) ===\n');
+console.log('\n=== 5. shouldCast gates (sample: Gaseous Form) ===\n');
 
-const sampleDesc = lookupGenericSpell('Spirit Guardians');
+const sampleDesc = lookupGenericSpell('Gaseous Form');
 if (sampleDesc) {
-  // 5a. No Fear action → false
+  // 5a. No Gaseous Form action → false
   {
     const caster = makeCombatant('wiz', {
       actions: [],
@@ -358,12 +377,12 @@ if (sampleDesc) {
     });
     const enemy = makeCombatant('e1', { faction: 'enemy', pos: { x: 1, y: 0, z: 0 } });
     const bf = makeBF([caster, enemy]);
-    eq('Returns false when caster lacks Fear action', sampleDesc.shouldCast(caster, bf as any), false);
+    eq('Returns false when caster lacks Gaseous Form action', sampleDesc.shouldCast(caster, bf as any), false);
   }
   // 5b. No 3rd-level slots → false
   {
     const caster = makeCombatant('wiz', {
-      actions: [makeSpellAction('Spirit Guardians', 3)],
+      actions: [makeSpellAction('Gaseous Form', 3)],
       resources: withSlots(3, 0),
     });
     const enemy = makeCombatant('e1', { faction: 'enemy', pos: { x: 1, y: 0, z: 0 } });
@@ -373,18 +392,18 @@ if (sampleDesc) {
   // 5c. Already active → false
   {
     const caster = makeCombatant('wiz', {
-      actions: [makeSpellAction('Spirit Guardians', 3)],
+      actions: [makeSpellAction('Gaseous Form', 3)],
       resources: withSlots(3, 2),
     });
-    caster._genericSpellActiveSpells = new Set<string>(['Spirit Guardians']);
+    caster._genericSpellActiveSpells = new Set<string>(['Gaseous Form']);
     const enemy = makeCombatant('e1', { faction: 'enemy', pos: { x: 1, y: 0, z: 0 } });
     const bf = makeBF([caster, enemy]);
-    eq('Returns false when already Fear-active', sampleDesc.shouldCast(caster, bf as any), false);
+    eq('Returns false when already Gaseous Form-active', sampleDesc.shouldCast(caster, bf as any), false);
   }
   // 5d. All preconditions met → true
   {
     const caster = makeCombatant('wiz', {
-      actions: [makeSpellAction('Spirit Guardians', 3)],
+      actions: [makeSpellAction('Gaseous Form', 3)],
       resources: withSlots(3, 2),
     });
     const enemy = makeCombatant('e1', { faction: 'enemy', pos: { x: 1, y: 0, z: 0 } });
@@ -394,15 +413,15 @@ if (sampleDesc) {
 }
 
 // ============================================================
-// 6. execute applies the flag + consumes the slot (sample: Spirit Guardians)
+// 6. execute applies the flag + consumes the slot (sample: Gaseous Form)
 // ============================================================
-// Updated in Session 21: was 'Fireball', now 'Fear' (Fireball migrated).
+// Updated in Session 27: was 'Spirit Guardians' (migrated to bespoke in Batch 4).
 
-console.log('\n=== 6. execute (sample: Spirit Guardians) ===\n');
+console.log('\n=== 6. execute (sample: Gaseous Form) ===\n');
 
 if (sampleDesc) {
   const caster = makeCombatant('wiz', {
-    actions: [makeSpellAction('Spirit Guardians', 3)],
+    actions: [makeSpellAction('Gaseous Form', 3)],
     resources: withSlots(3, 2),
   });
   const enemy = makeCombatant('e1', { faction: 'enemy', pos: { x: 1, y: 0, z: 0 } });
@@ -416,7 +435,7 @@ if (sampleDesc) {
     (caster.resources as any).spellSlots[3].remaining, 1);
   // 6b. Flag set
   assert('Flag set on caster',
-    caster._genericSpellActiveSpells?.has('Spirit Guardians') === true);
+    caster._genericSpellActiveSpells?.has('Gaseous Form') === true);
   // 6c. Log events emitted
   const actions = state.log.events.filter(e => e.type === 'action');
   assert('Action log emitted', actions.length === 1);
@@ -424,20 +443,20 @@ if (sampleDesc) {
   assert('Condition-add log emitted', condAdds.length === 1);
   // 6d. Log description contains spell name
   if (actions.length === 1) {
-    assert('Action log mentions Fear', actions[0].description.includes('Spirit Guardians'));
+    assert('Action log mentions Gaseous Form', actions[0].description.includes('Gaseous Form'));
   }
 }
 
 // ============================================================
-// 7. Re-cast is blocked by the flag (sample: Spirit Guardians)
+// 7. Re-cast is blocked by the flag (sample: Gaseous Form)
 // ============================================================
-// Updated in Session 21: was 'Fireball', now 'Fear' (Fireball migrated).
+// Updated in Session 27: was 'Spirit Guardians' (migrated to bespoke in Batch 4).
 
 console.log('\n=== 7. Re-cast blocked by flag ===\n');
 
 if (sampleDesc) {
   const caster = makeCombatant('wiz', {
-    actions: [makeSpellAction('Spirit Guardians', 3)],
+    actions: [makeSpellAction('Gaseous Form', 3)],
     resources: withSlots(3, 2),
   });
   const enemy = makeCombatant('e1', { faction: 'enemy', pos: { x: 1, y: 0, z: 0 } });

@@ -1,34 +1,58 @@
 // ============================================================
 // Spirit Guardians — PHB p.278
 //
-// 3-level conjuration, 1 action, range 15 ft, concentration.
-// Duration: 10 minutes.
+// 3rd-level conjuration, action, range Self (10-ft aura), concentration (10 min).
+// Components: V, S, M (a holy symbol).
 //
-// Effect: You call forth spirits to protect you. They flit around you to a distance of 15 feet for the duration. If you are good or neutral, their spectral form appears angelic or fey (your choice). If you are
-//
-// Upcast: see source (not modelled in v1).
+// Effect (canon): You call forth spirits to protect you. They flit around
+//                 you to a distance of 15 feet for the duration. If you are
+//                 good or neutral, their spectral form appears angelic or fey
+//                 (your choice). If you are evil, they appear fiendish. When
+//                 you cast this spell, you can designate any number of
+//                 creatures you can see to be unaffected by it. An affected
+//                 creature's speed is halved in the area, and when the
+//                 creature enters the spell's area for the first time on a
+//                 turn or starts its turn there, it must make a Wisdom
+//                 saving throw. The creature takes 3d6 radiant damage on a
+//                 failed save, or half as much on a successful one.
+//                 (Upcast: +1d6 per slot level above 3rd.)
 //
 // v1 simplifications:
-//   - v1 models this spell as a FORWARD-COMPAT flag only (Session 19 bulk
-//     implementation). The spell consumes a slot and sets the flag
-//     `_genericSpellActiveSpells` on the caster; the actual mechanical
-//     effect (damage / save / condition / buff) is NOT applied in v1.
-//     A future implementation should extend the relevant engine subsystem
-//     (damage_zone for persistent damage, condition_apply for conditions,
-//     advantage_vs for buffs, etc.) to consume this flag and apply the
-//     real effect. This mirrors the Session 17/18 forward-compat pattern
-//     established by Darkvision, Arcane Lock, Knock, See Invisibility.
-//   - Concentration spell (forward-compat flag persists for combat).
+//   - Damage type: canon chooses radiant (good/neutral) OR necrotic (evil)
+//     based on caster alignment. v1 has no alignment subsystem, so v1 picks
+//     radiant — flag `spiritGuardiansDamageTypeV1SimplifiedToRadiant`.
+//   - Aura radius: canon is 15 ft; v1 uses 10 ft (the task spec). Documented
+//     via `spiritGuardiansAuraRadiusV1SimplifiedTo10Ft` flag.
+//   - Aura movement: canon emanation is centered on the caster (moves with
+//     them). v1 simplification: the effect is applied at cast time on each
+//     enemy within the aura radius; enemies that enter the aura later are
+//     NOT affected (no positional AoE subsystem). Flag
+//     `spiritGuardiansMovingAuraV1Simplified`.
+//   - Speed-halving rider NOT modelled (no per-creature speed-modifier
+//     subsystem). Flag `spiritGuardiansSpeedHalvingV1NotModelled`.
+//   - Persistent damage: canon says "starts its turn there" → 3d8 radiant,
+//     WIS save for half. v1 also applies 3d8 on cast (the "enters the area
+//     for the first time on a turn" trigger — the targets are in the area
+//     when the spell is cast). Note: canon uses 3d6 (not 3d8) — task spec
+//     requests 3d8; v1 follows the task spec and flags this via
+//     `spiritGuardiansDieSidesV1AdjustedTo8`.
+//   - Duration: canon 10 min concentration → v1: concentration is started,
+//     but NOT enforced (TG-002).
+//   - Upcast: +1d6/slot-level NOT modelled.
+//   - Designated-unaffected creatures: NOT modelled (the caster is the
+//     caster; the v1 planner only selects enemies as targets anyway).
 //
-// Spell module pattern (mirrors Darkvision / Arcane Lock forward-compat
-// self-buff pattern):
-//   shouldCast(caster, bf) → boolean
-//   execute(caster, state) → void
-//   cleanup() — no-op (forward-compat flag persists for combat)
+// Spell module pattern (Session 31 architecture — multi-target aura):
+//   shouldCast(caster, bf) → Combatant[] | null
+//   execute(caster, targets, state) → void
+//   cleanup(_c) — no-op (concentration break handles cleanup)
 // ============================================================
 
-import { Combatant, Battlefield } from '../types/core';
+import { Combatant, Battlefield, DamageType, AbilityScore } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
+import { applySpellEffect, removeEffectsFromCaster } from '../engine/spell_effects';
+import { startConcentration, rollSave, rollDie, applyDamageWithTempHP } from '../engine/utils';
+import { chebyshev3D } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 
 // ---- Metadata -----------------------------------------------
@@ -37,10 +61,19 @@ export const metadata = {
   name: 'Spirit Guardians',
   level: 3,
   school: 'conjuration',
-  rangeFt: 15,
+  rangeFt: 10,          // v1 aura radius (canon: 15 ft)
+  aoeSizeFt: 10,        // 10-ft aura around caster (v1 simplified)
+  dieCount: 3,
+  dieSides: 8,
+  damageType: 'radiant' as const as DamageType,
   concentration: true,
+  saveAbility: 'wis' as const as AbilityScore,
   castingTime: 'action',
-  spiritGuardiansV1Simplified: true,
+  spiritGuardiansDamageTypeV1SimplifiedToRadiant: true,    // canon: radiant OR necrotic by alignment
+  spiritGuardiansAuraRadiusV1SimplifiedTo10Ft: true,       // canon: 15 ft; v1: 10 ft
+  spiritGuardiansMovingAuraV1Simplified: true,             // aura anchored at cast time
+  spiritGuardiansSpeedHalvingV1NotModelled: true,          // speed-halving rider not in v1
+  spiritGuardiansDieSidesV1AdjustedTo8: true,              // canon: d6; v1: d8 (per task spec)
 } as const;
 
 // ---- Local log helper ---------------------------------------
@@ -63,56 +96,142 @@ function emit(
   });
 }
 
+// ---- Dice helper --------------------------------------------
+
+/**
+ * Roll `metadata.dieCount`d`metadata.dieSides` and return the total.
+ */
+export function rollDamage(): number {
+  let total = 0;
+  for (let i = 0; i < metadata.dieCount; i++) total += rollDie(metadata.dieSides);
+  return total;
+}
+
 // ---- Planner ------------------------------------------------
 
 /**
- * Returns true if the caster should cast Spirit Guardians this turn.
+ * Returns candidate targets for Spirit Guardians (living enemies within
+ * 10 ft of the caster, not already affected by this caster's Spirit
+ * Guardians), or null when the spell should not be cast.
+ *
+ * Target priority: closest enemies first (all within 10 ft).
  *
  * Preconditions:
+ *   - Caster is NOT already concentrating on any spell
  *   - Caster has 'Spirit Guardians' in their actions
- *   - Caster has at least one 3-level-or-higher slot available
- *   - Caster is NOT already Spirit Guardians-active (re-cast would be a no-op in v1)
+ *   - Caster has at least one 3rd-level (or higher) slot available
+ *   - At least 1 valid enemy target exists within 10 ft of the caster
  */
-export function shouldCast(caster: Combatant, _bf: Battlefield): boolean {
-  if (!caster.actions.some(a => a.name === 'Spirit Guardians')) return false;
-  if (!hasSpellSlot(caster, 3)) return false;
-  if (caster._genericSpellActiveSpells?.has('Spirit Guardians')) return false;
-  return true;
+export function shouldCast(caster: Combatant, bf: Battlefield): Combatant[] | null {
+  if (caster.concentration?.active) return null;
+  if (!caster.actions.some(a => a.name === 'Spirit Guardians')) return null;
+  if (!hasSpellSlot(caster, 3)) return null;
+
+  const candidates: Array<{ c: Combatant; dist: number }> = [];
+
+  for (const c of bf.combatants.values()) {
+    if (c.id === caster.id) continue;
+    if (c.faction === caster.faction) continue;
+    if (c.isDead || c.isUnconscious) continue;
+
+    const distFt = chebyshev3D(caster.pos, c.pos) * 5;
+    if (distFt > metadata.aoeSizeFt) continue;
+
+    if (c.activeEffects.some(e =>
+      e.casterId === caster.id && e.spellName === 'Spirit Guardians'
+    )) continue;
+
+    candidates.push({ c, dist: distFt });
+  }
+
+  if (candidates.length === 0) return null;
+
+  candidates.sort((a, b) => a.dist - b.dist);
+
+  return candidates.map(e => e.c);
 }
 
 // ---- Execution ----------------------------------------------
 
 /**
  * Execute Spirit Guardians:
- *  1. Consume a 3-level spell slot.
- *  2. Set the flag on the caster's `_genericSpellActiveSpells` Set.
- *  3. Log the cast.
+ *  1. Consume a 3rd-level spell slot.
+ *  2. Break any existing concentration (safety net).
+ *  3. Start concentration on Spirit Guardians.
+ *  4. For each target (enemy within 10 ft of caster):
+ *     (a) Roll WIS save vs caster's saveDC. On fail, 3d8 radiant; on success,
+ *         half. Apply immediately (on-cast trigger).
+ *     (b) Apply a `damage_zone` effect for persistent start-of-turn damage
+ *         (3d8 radiant, WIS save for half, sourceIsConcentration: true).
  */
 export function execute(
   caster: Combatant,
+  targets: Combatant[],
   state: EngineState,
 ): void {
+  const action = caster.actions.find(a => a.name === 'Spirit Guardians');
+  const saveDC = action?.saveDC ?? 13;
+
   consumeSpellSlot(caster, 3);
 
-  if (!caster._genericSpellActiveSpells) {
-    caster._genericSpellActiveSpells = new Set<string>();
+  if (caster.concentration?.active) {
+    removeEffectsFromCaster(caster.id, state.battlefield);
   }
-  caster._genericSpellActiveSpells.add('Spirit Guardians');
+  startConcentration(caster, 'Spirit Guardians');
 
+  const names = targets.map(t => t.name).join(', ');
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Spirit Guardians! (v1: forward-compat flag set; mechanical effect not yet implemented)`,
-    caster.id,
+    `${caster.name} casts Spirit Guardians! Spectral protectors flit around them in a 10-ft aura (DC ${saveDC} WIS, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}, half on save — ${targets.length} enem${targets.length !== 1 ? 'ies' : 'y'}: ${names})`,
   );
-  emit(
-    state, 'condition_add', caster.id,
-    `${caster.name} is affected by Spirit Guardians. (v1: forward-compat flag set; no mechanical effect until engine subsystem is implemented)`,
-    caster.id,
-  );
+
+  for (const target of targets) {
+    if (target.isDead || target.isUnconscious) continue;
+
+    // 1. Immediate on-cast damage: WIS save for half.
+    const save = rollSave(target, metadata.saveAbility, saveDC);
+    const fullDmg = rollDamage();
+    const dmg = save.success ? Math.floor(fullDmg / 2) : fullDmg;
+    const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);
+
+    emit(
+      state,
+      save.success ? 'save_success' : 'save_fail',
+      caster.id,
+      `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} WIS save vs Spirit Guardians (rolled ${save.total}) — ${dealt} ${metadata.damageType} damage (${metadata.dieCount}d${metadata.dieSides}=${fullDmg}${save.success ? ', halved' : ''})`,
+      target.id, save.roll,
+    );
+    emit(
+      state, 'damage', caster.id,
+      `${target.name} takes ${dealt} ${metadata.damageType} damage from Spirit Guardians (on cast)`,
+      target.id, dealt,
+    );
+
+    // 2. Apply damage_zone effect for persistent start-of-turn damage.
+    applySpellEffect(target, {
+      casterId: caster.id,
+      spellName: 'Spirit Guardians',
+      effectType: 'damage_zone',
+      payload: {
+        dieCount: metadata.dieCount,
+        dieSides: metadata.dieSides,
+        damageType: metadata.damageType,
+        saveDC,
+        saveAbility: metadata.saveAbility,
+      },
+      sourceIsConcentration: true,
+    });
+
+    emit(
+      state, 'condition_add', caster.id,
+      `${target.name} is beset by spirit guardians! (will take ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType} at the start of each of its turns, WIS save for half)`,
+      target.id,
+    );
+  }
 }
 
 // ---- Cleanup ------------------------------------------------
 
 export function cleanup(_c: Combatant): void {
-  // No-op — forward-compat flag persists for combat.
+  // No-op — concentration break handles cleanup via removeEffectsFromCaster.
 }

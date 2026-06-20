@@ -1,30 +1,31 @@
 // ============================================================
 // Armor of Agathys — PHB p.215
 //
-// 1-level abjuration, 1 action, range Self.
-// Duration: 1 hour.
+// 1st-level abjuration, action, NO concentration
+// Range: Self   Components: V, S, M (a cup of water)
+// Duration: 1 hour
 //
-// Effect: A protective magical force surrounds you, manifesting as a spectral frost that covers you and your gear. You gain 5 temporary hit points for the duration. If a creature hits you with a melee attack wh
+// Canon effect: A protective magical force surrounds you, manifesting
+//   as a spectral frost that covers you and your gear. You gain 5
+//   temporary hit points for the duration. If a creature hits you
+//   with a melee attack while you have these hit points, the creature
+//   takes 5 cold damage.
 //
-// Upcast: see source (not modelled in v1).
+// Upcast: +5 temp HP AND +5 cold damage per slot level above 1st
+//   (not modelled in v1).
 //
 // v1 simplifications:
-//   - v1 models this spell as a FORWARD-COMPAT flag only (Session 20 bulk
-//     implementation — level-1 backfill). The spell consumes a slot and
-//     sets the flag `_genericSpellActiveSpells` on the caster; the actual
-//     mechanical effect (damage / save / condition / buff) is NOT applied
-//     in v1. A future implementation should extend the relevant engine
-//     subsystem (damage_zone for persistent damage, condition_apply for
-//     conditions, advantage_vs for buffs, etc.) to consume this flag and
-//     apply the real effect. This mirrors the Session 17/18 forward-compat
-//     pattern established by Darkvision, Arcane Lock, Knock, See Invisibility
-//     and the Session 19 bulk-implementation pattern.
+//   - Grants 5 temp HP (canon) — applies the standard "temp HP doesn't
+//     stack" rule: target.tempHP = Math.max(target.tempHP, 5).
+//   - Retaliation cold damage NOT modelled (no on-attacked hook in v1).
+//     Flag: armorOfAgathysRetaliationV1NotModelled
+//   - 1-hour duration NOT tracked — temp HP persists until consumed.
+//   - Upcast NOT modelled.
 //
-// Spell module pattern (mirrors Darkvision / Arcane Lock forward-compat
-// self-buff pattern):
+// Spell module pattern (self-buff temp HP):
 //   shouldCast(caster, bf) → boolean
 //   execute(caster, state) → void
-//   cleanup() — no-op (forward-compat flag persists for combat)
+//   metadata → spell stats
 // ============================================================
 
 import { Combatant, Battlefield } from '../types/core';
@@ -38,9 +39,12 @@ export const metadata = {
   level: 1,
   school: 'abjuration',
   rangeFt: 0,
+  tempHP: 5,
+  retaliationDamage: 5,
+  retaliationType: 'cold',
   concentration: false,
   castingTime: 'action',
-  armorOfAgathysV1Simplified: true,
+  armorOfAgathysRetaliationV1NotModelled: true,
 } as const;
 
 // ---- Local log helper ---------------------------------------
@@ -63,15 +67,17 @@ function emit(
   });
 }
 
-// ---- Planner ------------------------------------------------
+// ---- shouldCast ---------------------------------------------
 
 /**
  * Returns true if the caster should cast Armor of Agathys this turn.
  *
  * Preconditions:
- *   - Caster has 'Armor of Agathys' in their actions
- *   - Caster has at least one 1-level-or-higher slot available
- *   - Caster is NOT already Armor of Agathys-active (re-cast would be a no-op in v1)
+ *   1. Caster has 'Armor of Agathys' in their actions.
+ *   2. Caster has at least one 1st-level-or-higher spell slot.
+ *   3. Caster does NOT already have temp HP from this spell
+ *      (re-cast would be wasted in v1 since retaliation isn't modelled
+ *      and temp HP doesn't stack — only the higher of old/new is kept).
  */
 export function shouldCast(caster: Combatant, _bf: Battlefield): boolean {
   if (!caster.actions.some(a => a.name === 'Armor of Agathys')) return false;
@@ -84,9 +90,15 @@ export function shouldCast(caster: Combatant, _bf: Battlefield): boolean {
 
 /**
  * Execute Armor of Agathys:
- *  1. Consume a 1-level spell slot.
- *  2. Set the flag on the caster's `_genericSpellActiveSpells` Set.
- *  3. Log the cast.
+ *  1. Consume a 1st-level spell slot.
+ *  2. Set caster._genericSpellActiveSpells marker (so shouldCast gates
+ *     re-cast while the buff is active).
+ *  3. Set caster.tempHP = Math.max(caster.tempHP, 5) — temp HP doesn't
+ *     stack (PHB p.198).
+ *  4. Log: spell cast + condition_add (buff marker).
+ *
+ * @param caster  The casting Combatant (Warlock)
+ * @param state   Current EngineState (for logging)
  */
 export function execute(
   caster: Combatant,
@@ -99,20 +111,25 @@ export function execute(
   }
   caster._genericSpellActiveSpells.add('Armor of Agathys');
 
+  const prevTempHP = caster.tempHP;
+  caster.tempHP = Math.max(caster.tempHP, metadata.tempHP);
+  const gained = caster.tempHP - prevTempHP;
+
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Armor of Agathys! (v1: forward-compat flag set; mechanical effect not yet implemented)`,
+    `${caster.name} casts Armor of Agathys! (+${metadata.tempHP} temp HP${gained < metadata.tempHP ? ` — only +${gained} (did not stack with existing ${prevTempHP})` : ''}; retaliation NOT modelled in v1)`,
     caster.id,
   );
   emit(
     state, 'condition_add', caster.id,
-    `${caster.name} is affected by Armor of Agathys. (v1: forward-compat flag set; no mechanical effect until engine subsystem is implemented)`,
-    caster.id,
+    `${caster.name} gains spectral frost armor (+${gained} temp HP, now ${caster.tempHP}).`,
+    caster.id, gained,
   );
 }
 
 // ---- Cleanup ------------------------------------------------
 
 export function cleanup(_c: Combatant): void {
-  // No-op — forward-compat flag persists for combat.
+  // No-op — temp HP persists until consumed (canon 1 hr >> combat).
+  // The activeSpells marker persists for combat duration.
 }

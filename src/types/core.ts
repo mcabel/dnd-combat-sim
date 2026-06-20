@@ -1475,6 +1475,29 @@ export interface PlannedAction {
     | 'intellectFortress' // Intellect Fortress — XGE: adv on INT/WIS/CHA saves (v1: all saves), conc (allies; psychic-resist NOT modelled)
     | 'holyAura'          // Holy Aura — PHB p.251: 30-ft aura, adv on saves, conc (all allies; light+blind-attackers simplified)
     | 'foresight'         // Foresight — PHB p.244: Touch (5 ft), adv on all d20 rolls, conc (1 ally; enemies-disadv + 8hr NOT modelled)
+    // ── Session 27 — Batch 4 persistent zones + healing + temp HP (22 spells) ──
+    | 'deathArmor'        // Death Armor — XGE: 5-ft aura 1d4 slashing, conc (retaliation→aura simplified)
+    | 'dustDevil'         // Dust Devil — XGE: 5-ft aura 1d8 bludgeoning, conc (moving simplified)
+    | 'healingSpirit'     // Healing Spirit — XGE: 30-ft aura 1d6 heal, conc (per-turn re-heal simplified to one-shot)
+    | 'cacophonicShield'  // Cacophonic Shield — AI: 10-ft aura 2d6 thunder, conc
+    | 'callLightning'     // Call Lightning — PHB p.220: 60 ft, 3d10 lightning zone, conc (strike-choice simplified)
+    | 'hungerOfHadar'     // Hunger of Hadar — PHB p.241: 20-ft sphere, 2d6 cold + 4d6 acid (DUAL), conc
+    | 'spiritGuardians'   // Spirit Guardians — PHB p.278: 10-ft aura 3d8 radiant (WIS half), conc (necrotic→radiant simplified)
+    | 'guardianOfFaith'   // Guardian of Faith — PHB p.246: 10-ft zone 20d6 radiant one-shot, NO conc (budget simplified)
+    | 'dawn'              // Dawn — XGE: 30-ft cylinder 4d10 radiant (CON half), conc
+    | 'insectPlague'      // Insect Plague — PHB p.252: 20-ft sphere 4d10 piercing (CON half), conc
+    | 'stormOfVengeance'  // Storm of Vengeance — PHB p.279: 60-ft zone 2d6 thunder + 6d6 lightning (DUAL), conc (other effects simplified)
+    | 'goodberry'         // Goodberry — PHB p.246: 30 ft, 10 HP heal (multi-berry simplified), NO conc
+    | 'witherAndBloom'    // Wither and Bloom — Strixhaven: 2d6 necrotic + 2d6 heal (dual target), NO conc
+    | 'auraOfVitality'    // Aura of Vitality — PHB p.216: 30-ft aura 2d6 heal, conc (per-turn re-heal simplified)
+    | 'massHealingWord'   // Mass Healing Word — PHB p.258: 60 ft, 1d4+mod heal up to 6, NO conc (bonus action)
+    | 'massCureWounds'    // Mass Cure Wounds — PHB p.258: 60 ft, 3d8+mod heal up to 6, NO conc
+    | 'heal'              // Heal — PHB p.250: 60 ft, 70 HP + remove blinded/deafened, NO conc (disease not modelled)
+    | 'regenerate'        // Regenerate — PHB p.271: Touch, 4d8+mod heal, NO conc (1HP/turn not modelled)
+    | 'massHeal'          // Mass Heal — PHB p.257: 60 ft, 700 HP split, NO conc
+    | 'powerWordHeal'     // Power Word Heal — XGE: Touch, full HP + remove 5 conditions, NO conc
+    | 'armorOfAgathys'    // Armor of Agathys — PHB p.215: self, 5 temp HP, NO conc (retaliation not modelled)
+    | 'falseLife'         // False Life — PHB p.239: self, 1d4+4 temp HP, NO conc (1hr not tracked)
     // ── Session 19 — bulk-implementation generic dispatch (262 new spells L2-9) ──
     // All non-blocker in-scope spells from levels 2-9 that have not been
     // implemented as bespoke case branches are routed through 'genericSpell'.

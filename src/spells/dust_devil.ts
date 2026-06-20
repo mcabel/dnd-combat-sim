@@ -1,34 +1,48 @@
 // ============================================================
 // Dust Devil — XGE p.154
 //
-// 2-level conjuration, 1 action, range 60 ft, concentration.
-// Duration: 1 minute.
+// 2nd-level conjuration, action, range 60 ft, concentration (1 min).
+// Components: V, S, M (a handful of dust).
 //
-// Effect: Choose an unoccupied 5-foot cube of air that you can see within range. An elemental force that resembles a dust devil appears in the cube and lasts for the spell's duration.
+// Effect (canon): Choose an unoccupied 5-foot cube of air that you can see
+//                 within range. An elemental force that resembles a dust
+//                 devil appears in the cube and lasts for the spell's
+//                 duration. When a creature enters the spell's area for the
+//                 first time on a turn or starts its turn there, that
+//                 creature takes 1d8 bludgeoning damage. As a bonus action,
+//                 you can move the dust devil up to 30 feet in any direction.
 //
-// Upcast: see source (not modelled in v1).
+// Upcast: +1d8 per slot level above 2nd (not modelled in v1).
 //
 // v1 simplifications:
-//   - v1 models this spell as a FORWARD-COMPAT flag only (Session 19 bulk
-//     implementation). The spell consumes a slot and sets the flag
-//     `_genericSpellActiveSpells` on the caster; the actual mechanical
-//     effect (damage / save / condition / buff) is NOT applied in v1.
-//     A future implementation should extend the relevant engine subsystem
-//     (damage_zone for persistent damage, condition_apply for conditions,
-//     advantage_vs for buffs, etc.) to consume this flag and apply the
-//     real effect. This mirrors the Session 17/18 forward-compat pattern
-//     established by Darkvision, Arcane Lock, Knock, See Invisibility.
-//   - Concentration spell (forward-compat flag persists for combat).
+//   - Aura movement: canon the dust devil moves with the caster's bonus
+//     action (a moving 5-ft-cube aura). v1 simplification: the spell is
+//     modelled as a damage_zone aura applied at cast time on each enemy
+//     within 5 ft of the CASTER (the cube is anchored to the caster for
+//     v1's purposes — flag `dustDevilMovingAuraV1Simplified`). Enemies
+//     entering the cube later are NOT affected.
+//   - Multi-creature: v1 affects all enemies within 5 ft at cast time
+//     (canon cube is 5 ft, so it typically hits 1 creature).
+//   - Persistent damage: PHB says "starts its turn there" → 1d8 bludgeoning.
+//     v1 also applies 1d8 on cast (the "enters the area for the first time
+//     on a turn" trigger — the targets are in the area when the spell is
+//     cast).
+//   - Duration: canon 1 min concentration → v1: concentration is started,
+//     but NOT enforced (TG-002).
+//   - Upcast: +1d8/slot-level NOT modelled.
+//   - No save (PHB p.154: no saving throw listed).
 //
-// Spell module pattern (mirrors Darkvision / Arcane Lock forward-compat
-// self-buff pattern):
-//   shouldCast(caster, bf) → boolean
-//   execute(caster, state) → void
-//   cleanup() — no-op (forward-compat flag persists for combat)
+// Spell module pattern (Session 31 architecture — multi-target aura):
+//   shouldCast(caster, bf) → Combatant[] | null
+//   execute(caster, targets, state) → void
+//   cleanup(_c) — no-op (concentration break handles cleanup)
 // ============================================================
 
-import { Combatant, Battlefield } from '../types/core';
+import { Combatant, Battlefield, DamageType } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
+import { applySpellEffect, removeEffectsFromCaster } from '../engine/spell_effects';
+import { startConcentration, rollDie, applyDamageWithTempHP } from '../engine/utils';
+import { chebyshev3D } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 
 // ---- Metadata -----------------------------------------------
@@ -37,10 +51,15 @@ export const metadata = {
   name: 'Dust Devil',
   level: 2,
   school: 'conjuration',
-  rangeFt: 60,
+  rangeFt: 60,          // canon range (point within 60 ft)
+  aoeSizeFt: 5,         // 5-ft aura around caster (v1 simplified)
+  dieCount: 1,
+  dieSides: 8,
+  damageType: 'bludgeoning' as const as DamageType,
   concentration: true,
   castingTime: 'action',
-  dustDevilV1Simplified: true,
+  dustDevilMovingAuraV1Simplified: true,            // cube anchored to caster (canon moves with bonus action)
+  dustDevilUpcastV1Implemented: false,              // +1d8/slot-level not modelled
 } as const;
 
 // ---- Local log helper ---------------------------------------
@@ -63,56 +82,126 @@ function emit(
   });
 }
 
+// ---- Dice helper --------------------------------------------
+
+/**
+ * Roll `metadata.dieCount`d`metadata.dieSides` and return the total.
+ */
+export function rollDamage(): number {
+  let total = 0;
+  for (let i = 0; i < metadata.dieCount; i++) total += rollDie(metadata.dieSides);
+  return total;
+}
+
 // ---- Planner ------------------------------------------------
 
 /**
- * Returns true if the caster should cast Dust Devil this turn.
+ * Returns candidate targets for Dust Devil (living enemies within 5 ft of
+ * the caster, not already affected by this caster's Dust Devil), or null
+ * when the spell should not be cast.
+ *
+ * Target priority: closest enemies first (all within 5 ft).
  *
  * Preconditions:
+ *   - Caster is NOT already concentrating on any spell
  *   - Caster has 'Dust Devil' in their actions
- *   - Caster has at least one 2-level-or-higher slot available
- *   - Caster is NOT already Dust Devil-active (re-cast would be a no-op in v1)
+ *   - Caster has at least one 2nd-level (or higher) slot available
+ *   - At least 1 valid enemy target exists within 5 ft of the caster
  */
-export function shouldCast(caster: Combatant, _bf: Battlefield): boolean {
-  if (!caster.actions.some(a => a.name === 'Dust Devil')) return false;
-  if (!hasSpellSlot(caster, 2)) return false;
-  if (caster._genericSpellActiveSpells?.has('Dust Devil')) return false;
-  return true;
+export function shouldCast(caster: Combatant, bf: Battlefield): Combatant[] | null {
+  if (caster.concentration?.active) return null;
+  if (!caster.actions.some(a => a.name === 'Dust Devil')) return null;
+  if (!hasSpellSlot(caster, 2)) return null;
+
+  const candidates: Array<{ c: Combatant; dist: number }> = [];
+
+  for (const c of bf.combatants.values()) {
+    if (c.id === caster.id) continue;
+    if (c.faction === caster.faction) continue;
+    if (c.isDead || c.isUnconscious) continue;
+
+    const distFt = chebyshev3D(caster.pos, c.pos) * 5;
+    if (distFt > metadata.aoeSizeFt) continue;
+
+    if (c.activeEffects.some(e =>
+      e.casterId === caster.id && e.spellName === 'Dust Devil'
+    )) continue;
+
+    candidates.push({ c, dist: distFt });
+  }
+
+  if (candidates.length === 0) return null;
+
+  candidates.sort((a, b) => a.dist - b.dist);
+
+  return candidates.map(e => e.c);
 }
 
 // ---- Execution ----------------------------------------------
 
 /**
  * Execute Dust Devil:
- *  1. Consume a 2-level spell slot.
- *  2. Set the flag on the caster's `_genericSpellActiveSpells` Set.
- *  3. Log the cast.
+ *  1. Consume a 2nd-level spell slot.
+ *  2. Break any existing concentration (safety net).
+ *  3. Start concentration on Dust Devil.
+ *  4. For each target (enemy within 5 ft of caster):
+ *     (a) Roll 1d8 bludgeoning, apply immediately (on-cast trigger).
+ *     (b) Apply a `damage_zone` effect for persistent start-of-turn damage
+ *         (1d8 bludgeoning, no save, sourceIsConcentration: true).
  */
 export function execute(
   caster: Combatant,
+  targets: Combatant[],
   state: EngineState,
 ): void {
   consumeSpellSlot(caster, 2);
 
-  if (!caster._genericSpellActiveSpells) {
-    caster._genericSpellActiveSpells = new Set<string>();
+  if (caster.concentration?.active) {
+    removeEffectsFromCaster(caster.id, state.battlefield);
   }
-  caster._genericSpellActiveSpells.add('Dust Devil');
+  startConcentration(caster, 'Dust Devil');
 
+  const names = targets.map(t => t.name).join(', ');
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Dust Devil! (v1: forward-compat flag set; mechanical effect not yet implemented)`,
-    caster.id,
+    `${caster.name} casts Dust Devil! A swirling 5-ft vortex surrounds them (${targets.length} enem${targets.length !== 1 ? 'ies' : 'y'} in range: ${names})`,
   );
-  emit(
-    state, 'condition_add', caster.id,
-    `${caster.name} is affected by Dust Devil. (v1: forward-compat flag set; no mechanical effect until engine subsystem is implemented)`,
-    caster.id,
-  );
+
+  for (const target of targets) {
+    if (target.isDead || target.isUnconscious) continue;
+
+    // 1. Immediate on-cast damage (1d8 bludgeoning, no save).
+    const immediateDmg = rollDamage();
+    const dealtImmediate = applyDamageWithTempHP(target, immediateDmg, metadata.damageType);
+    emit(
+      state, 'damage', caster.id,
+      `${target.name} takes ${dealtImmediate} ${metadata.damageType} damage from Dust Devil (on cast: ${metadata.dieCount}d${metadata.dieSides}=${immediateDmg})`,
+      target.id, dealtImmediate,
+    );
+
+    // 2. Apply damage_zone effect for persistent start-of-turn damage.
+    applySpellEffect(target, {
+      casterId: caster.id,
+      spellName: 'Dust Devil',
+      effectType: 'damage_zone',
+      payload: {
+        dieCount: metadata.dieCount,
+        dieSides: metadata.dieSides,
+        damageType: metadata.damageType,
+      },
+      sourceIsConcentration: true,
+    });
+
+    emit(
+      state, 'condition_add', caster.id,
+      `${target.name} is caught in the dust devil! (will take ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType} at the start of each of its turns)`,
+      target.id,
+    );
+  }
 }
 
 // ---- Cleanup ------------------------------------------------
 
 export function cleanup(_c: Combatant): void {
-  // No-op — forward-compat flag persists for combat.
+  // No-op — concentration break handles cleanup via removeEffectsFromCaster.
 }

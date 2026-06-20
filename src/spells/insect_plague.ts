@@ -1,34 +1,48 @@
 // ============================================================
 // Insect Plague — PHB p.254
 //
-// 5-level conjuration, 1 action, range 300 ft, concentration.
-// Duration: 10 minutes.
+// 5th-level conjuration, action, range 300 ft, concentration (10 min).
+// Components: V, S, M (a few granules of sugar, some kernels of grain,
+//             and a smear of fat).
 //
-// Effect: Swarming, biting locusts fill a 20-foot-radius sphere centered on a point you choose within range. The sphere spreads around corners. The sphere remains for the duration, and its area is {@quickref Vi
-//
-// Upcast: see source (not modelled in v1).
+// Effect (canon): Swarming, biting locusts fill a 20-foot-radius sphere
+//                 centered on a point you choose within range. The sphere
+//                 spreads around corners. The sphere remains for the
+//                 duration, and its area is lightly obscured. The sphere's
+//                 area is difficult terrain. When a creature enters the
+//                 spell's area for the first time on a turn or starts its
+//                 turn there, it must make a Constitution saving throw.
+//                 The creature takes 4d10 piercing damage on a failed
+//                 save, or half as much on a successful one.
+//                 (Upcast: +1d10 per slot level above 5th.)
 //
 // v1 simplifications:
-//   - v1 models this spell as a FORWARD-COMPAT flag only (Session 19 bulk
-//     implementation). The spell consumes a slot and sets the flag
-//     `_genericSpellActiveSpells` on the caster; the actual mechanical
-//     effect (damage / save / condition / buff) is NOT applied in v1.
-//     A future implementation should extend the relevant engine subsystem
-//     (damage_zone for persistent damage, condition_apply for conditions,
-//     advantage_vs for buffs, etc.) to consume this flag and apply the
-//     real effect. This mirrors the Session 17/18 forward-compat pattern
-//     established by Darkvision, Arcane Lock, Knock, See Invisibility.
-//   - Concentration spell (forward-compat flag persists for combat).
+//   - Sphere placement: canon lets the caster place the sphere on any
+//     point within 300 ft. v1 simplification: the sphere is centered on
+//     the highest-threat enemy within 60 ft of the caster (battlefield
+//     scale). Flag `insectPlagueCenterPointV1SimplifiedTo60Ft`.
+//   - Sphere radius: canon 20 ft; v1 uses 20 ft (matches canon).
+//   - Persistent damage: canon says "starts its turn there" → 4d10
+//     piercing, CON save for half. v1 also applies 4d10 on cast (the
+//     "enters the area for the first time on a turn" trigger).
+//   - Lightly-obscured + difficult-terrain riders NOT modelled (no
+//     terrain-modifier subsystem in v1). Flag
+//     `insectPlagueObscureAndTerrainV1NotModelled`.
+//   - Duration: canon 10 min concentration → v1: concentration is started,
+//     but NOT enforced (TG-002).
+//   - Upcast: +1d10/slot-level NOT modelled.
 //
-// Spell module pattern (mirrors Darkvision / Arcane Lock forward-compat
-// self-buff pattern):
-//   shouldCast(caster, bf) → boolean
-//   execute(caster, state) → void
-//   cleanup() — no-op (forward-compat flag persists for combat)
+// Spell module pattern (Session 31 architecture — multi-target center-point zone):
+//   shouldCast(caster, bf) → Combatant[] | null
+//   execute(caster, targets, state) → void
+//   cleanup(_c) — no-op (concentration break handles cleanup)
 // ============================================================
 
-import { Combatant, Battlefield } from '../types/core';
+import { Combatant, Battlefield, DamageType, AbilityScore, Vec3 } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
+import { applySpellEffect, removeEffectsFromCaster } from '../engine/spell_effects';
+import { startConcentration, rollSave, rollDie, applyDamageWithTempHP } from '../engine/utils';
+import { chebyshev3D } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 
 // ---- Metadata -----------------------------------------------
@@ -37,10 +51,17 @@ export const metadata = {
   name: 'Insect Plague',
   level: 5,
   school: 'conjuration',
-  rangeFt: 300,
+  rangeFt: 60,          // caster-to-center range (canon: 300 ft)
+  aoeSizeFt: 20,        // 20-ft sphere radius (matches canon)
+  dieCount: 4,
+  dieSides: 10,
+  damageType: 'piercing' as const as DamageType,
   concentration: true,
+  saveAbility: 'con' as const as AbilityScore,
   castingTime: 'action',
-  insectPlagueV1Simplified: true,
+  insectPlagueCenterPointV1SimplifiedTo60Ft: true,    // canon: any point within 300 ft; v1: highest-threat enemy within 60 ft
+  insectPlagueObscureAndTerrainV1NotModelled: true,   // lightly-obscured + difficult-terrain riders
+  insectPlagueUpcastV1Implemented: false,             // +1d10/slot-level not modelled
 } as const;
 
 // ---- Local log helper ---------------------------------------
@@ -63,56 +84,165 @@ function emit(
   });
 }
 
+// ---- Dice helper --------------------------------------------
+
+/**
+ * Roll `metadata.dieCount`d`metadata.dieSides` and return the total.
+ */
+export function rollDamage(): number {
+  let total = 0;
+  for (let i = 0; i < metadata.dieCount; i++) total += rollDie(metadata.dieSides);
+  return total;
+}
+
 // ---- Planner ------------------------------------------------
 
 /**
- * Returns true if the caster should cast Insect Plague this turn.
+ * Returns candidate targets for Insect Plague (all living enemies within
+ * 20 ft of the highest-threat enemy within 60 ft of the caster, not
+ * already affected by this caster's Insect Plague), or null when the
+ * spell should not be cast.
+ *
+ * Target priority:
+ *   1. Find the highest-threat (maxHP) living enemy within 60 ft of the
+ *      caster — this enemy is the sphere's CENTER.
+ *   2. Collect all living enemies within 20 ft of that center.
+ *   3. Return those as targets.
  *
  * Preconditions:
+ *   - Caster is NOT already concentrating on any spell
  *   - Caster has 'Insect Plague' in their actions
- *   - Caster has at least one 5-level-or-higher slot available
- *   - Caster is NOT already Insect Plague-active (re-cast would be a no-op in v1)
+ *   - Caster has at least one 5th-level (or higher) slot available
+ *   - At least 1 valid enemy target exists within 60 ft of the caster
  */
-export function shouldCast(caster: Combatant, _bf: Battlefield): boolean {
-  if (!caster.actions.some(a => a.name === 'Insect Plague')) return false;
-  if (!hasSpellSlot(caster, 5)) return false;
-  if (caster._genericSpellActiveSpells?.has('Insect Plague')) return false;
-  return true;
+export function shouldCast(caster: Combatant, bf: Battlefield): Combatant[] | null {
+  if (caster.concentration?.active) return null;
+  if (!caster.actions.some(a => a.name === 'Insect Plague')) return null;
+  if (!hasSpellSlot(caster, 5)) return null;
+
+  // Step 1: find the center enemy (highest maxHP within 60 ft of caster).
+  const candidates: Array<{ c: Combatant; threat: number; dist: number }> = [];
+  for (const c of bf.combatants.values()) {
+    if (c.id === caster.id) continue;
+    if (c.faction === caster.faction) continue;
+    if (c.isDead || c.isUnconscious) continue;
+
+    const distFt = chebyshev3D(caster.pos, c.pos) * 5;
+    if (distFt > metadata.rangeFt) continue;
+
+    candidates.push({ c, threat: c.maxHP, dist: distFt });
+  }
+  if (candidates.length === 0) return null;
+
+  candidates.sort((a, b) => {
+    if (a.threat !== b.threat) return b.threat - a.threat;
+    return a.dist - b.dist;
+  });
+
+  const center: Vec3 = candidates[0].c.pos;
+
+  // Step 2: collect all living enemies within 20 ft of the center.
+  const targets: Combatant[] = [];
+  for (const c of bf.combatants.values()) {
+    if (c.id === caster.id) continue;
+    if (c.faction === caster.faction) continue;
+    if (c.isDead || c.isUnconscious) continue;
+
+    const distFromCenter = chebyshev3D(center, c.pos) * 5;
+    if (distFromCenter > metadata.aoeSizeFt) continue;
+
+    if (c.activeEffects.some(e =>
+      e.casterId === caster.id && e.spellName === 'Insect Plague'
+    )) continue;
+
+    targets.push(c);
+  }
+
+  if (targets.length === 0) return null;
+  return targets;
 }
 
 // ---- Execution ----------------------------------------------
 
 /**
  * Execute Insect Plague:
- *  1. Consume a 5-level spell slot.
- *  2. Set the flag on the caster's `_genericSpellActiveSpells` Set.
- *  3. Log the cast.
+ *  1. Consume a 5th-level spell slot.
+ *  2. Break any existing concentration (safety net).
+ *  3. Start concentration on Insect Plague.
+ *  4. For each target (enemy within 20 ft of the center):
+ *     (a) Roll CON save vs caster's saveDC. On fail, 4d10 piercing; on
+ *         success, half. Apply immediately (on-cast trigger).
+ *     (b) Apply a `damage_zone` effect for persistent start-of-turn damage
+ *         (4d10 piercing, CON save for half, sourceIsConcentration: true).
  */
 export function execute(
   caster: Combatant,
+  targets: Combatant[],
   state: EngineState,
 ): void {
+  const action = caster.actions.find(a => a.name === 'Insect Plague');
+  const saveDC = action?.saveDC ?? 13;
+
   consumeSpellSlot(caster, 5);
 
-  if (!caster._genericSpellActiveSpells) {
-    caster._genericSpellActiveSpells = new Set<string>();
+  if (caster.concentration?.active) {
+    removeEffectsFromCaster(caster.id, state.battlefield);
   }
-  caster._genericSpellActiveSpells.add('Insect Plague');
+  startConcentration(caster, 'Insect Plague');
 
+  const names = targets.map(t => t.name).join(', ');
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Insect Plague! (v1: forward-compat flag set; mechanical effect not yet implemented)`,
-    caster.id,
+    `${caster.name} casts Insect Plague! A swarm of biting locusts fills the air (${targets.length} enem${targets.length !== 1 ? 'ies' : 'y'}: ${names}) — DC ${saveDC} CON, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}, half on save`,
   );
-  emit(
-    state, 'condition_add', caster.id,
-    `${caster.name} is affected by Insect Plague. (v1: forward-compat flag set; no mechanical effect until engine subsystem is implemented)`,
-    caster.id,
-  );
+
+  for (const target of targets) {
+    if (target.isDead || target.isUnconscious) continue;
+
+    // 1. Immediate on-cast damage: CON save for half.
+    const save = rollSave(target, metadata.saveAbility, saveDC);
+    const fullDmg = rollDamage();
+    const dmg = save.success ? Math.floor(fullDmg / 2) : fullDmg;
+    const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);
+
+    emit(
+      state,
+      save.success ? 'save_success' : 'save_fail',
+      caster.id,
+      `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} CON save vs Insect Plague (rolled ${save.total}) — ${dealt} ${metadata.damageType} damage (${metadata.dieCount}d${metadata.dieSides}=${fullDmg}${save.success ? ', halved' : ''})`,
+      target.id, save.roll,
+    );
+    emit(
+      state, 'damage', caster.id,
+      `${target.name} takes ${dealt} ${metadata.damageType} damage from Insect Plague (on cast)`,
+      target.id, dealt,
+    );
+
+    // 2. Apply damage_zone effect for persistent start-of-turn damage.
+    applySpellEffect(target, {
+      casterId: caster.id,
+      spellName: 'Insect Plague',
+      effectType: 'damage_zone',
+      payload: {
+        dieCount: metadata.dieCount,
+        dieSides: metadata.dieSides,
+        damageType: metadata.damageType,
+        saveDC,
+        saveAbility: metadata.saveAbility,
+      },
+      sourceIsConcentration: true,
+    });
+
+    emit(
+      state, 'condition_add', caster.id,
+      `${target.name} is swarmed by biting locusts! (will take ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType} at the start of each of its turns, CON save for half)`,
+      target.id,
+    );
+  }
 }
 
 // ---- Cleanup ------------------------------------------------
 
 export function cleanup(_c: Combatant): void {
-  // No-op — forward-compat flag persists for combat.
+  // No-op — concentration break handles cleanup via removeEffectsFromCaster.
 }

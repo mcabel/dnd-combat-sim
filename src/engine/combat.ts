@@ -641,6 +641,29 @@ import { shouldCast as shouldCastBeaconOfHope,    execute as executeBeaconOfHope
 import { shouldCast as shouldCastIntellectFortress, execute as executeIntellectFortress } from '../spells/intellect_fortress';
 import { shouldCast as shouldCastHolyAura,        execute as executeHolyAura }        from '../spells/holy_aura';
 import { shouldCast as shouldCastForesight,       execute as executeForesight }       from '../spells/foresight';
+// ── Session 27 — Batch 4 persistent zones + healing + temp HP (22 spells) ──
+import { shouldCast as shouldCastDeathArmor,      execute as executeDeathArmor }      from '../spells/death_armor';
+import { shouldCast as shouldCastDustDevil,       execute as executeDustDevil }       from '../spells/dust_devil';
+import { shouldCast as shouldCastHealingSpirit,   execute as executeHealingSpirit }   from '../spells/healing_spirit';
+import { shouldCast as shouldCastCacophonicShield, execute as executeCacophonicShield } from '../spells/cacophonic_shield';
+import { shouldCast as shouldCastCallLightning,   execute as executeCallLightning }   from '../spells/call_lightning';
+import { shouldCast as shouldCastHungerOfHadar,   execute as executeHungerOfHadar }   from '../spells/hunger_of_hadar';
+import { shouldCast as shouldCastSpiritGuardians, execute as executeSpiritGuardians } from '../spells/spirit_guardians';
+import { shouldCast as shouldCastGuardianOfFaith, execute as executeGuardianOfFaith } from '../spells/guardian_of_faith';
+import { shouldCast as shouldCastDawn,            execute as executeDawn }            from '../spells/dawn';
+import { shouldCast as shouldCastInsectPlague,    execute as executeInsectPlague }    from '../spells/insect_plague';
+import { shouldCast as shouldCastStormOfVengeance, execute as executeStormOfVengeance } from '../spells/storm_of_vengeance';
+import { shouldCast as shouldCastGoodberry,       execute as executeGoodberry }       from '../spells/goodberry';
+import { shouldCast as shouldCastWitherAndBloom,  execute as executeWitherAndBloom }  from '../spells/wither_and_bloom';
+import { shouldCast as shouldCastAuraOfVitality,  execute as executeAuraOfVitality }  from '../spells/aura_of_vitality';
+import { shouldCast as shouldCastMassHealingWord, execute as executeMassHealingWord } from '../spells/mass_healing_word';
+import { shouldCast as shouldCastMassCureWounds,  execute as executeMassCureWounds }  from '../spells/mass_cure_wounds';
+import { shouldCast as shouldCastHeal,            execute as executeHeal }            from '../spells/heal';
+import { shouldCast as shouldCastRegenerate,      execute as executeRegenerate }      from '../spells/regenerate';
+import { shouldCast as shouldCastMassHeal,        execute as executeMassHeal }        from '../spells/mass_heal';
+import { shouldCast as shouldCastPowerWordHeal,   execute as executePowerWordHeal }   from '../spells/power_word_heal';
+import { shouldCast as shouldCastArmorOfAgathys,  execute as executeArmorOfAgathys }  from '../spells/armor_of_agathys';
+import { shouldCast as shouldCastFalseLife,       execute as executeFalseLife }       from '../spells/false_life';
 
 // ── Session 19 — bulk-implementation generic dispatch (262 new spells) ────
 import {
@@ -3515,6 +3538,34 @@ function executePlannedAction(
     case 'flameArrows':       if (shouldCastFlameArrows(actor, bf))       executeFlameArrows(actor, state);       break;
     case 'holyWeapon':        if (shouldCastHolyWeapon(actor, bf))        executeHolyWeapon(actor, state);        break;
     case 'swiftQuiver':       if (shouldCastSwiftQuiver(actor, bf))       executeSwiftQuiver(actor, state);       break;
+
+    // ── Session 27 — Batch 4 persistent zones + healing + temp HP (22 spells) ──
+    // 11 damage_zone spells (Combatant[] signature):
+    case 'deathArmor':        { const t = shouldCastDeathArmor(actor, bf);      if (t) executeDeathArmor(actor, t, state);      break; }
+    case 'dustDevil':         { const t = shouldCastDustDevil(actor, bf);       if (t) executeDustDevil(actor, t, state);       break; }
+    case 'healingSpirit':     { const t = shouldCastHealingSpirit(actor, bf);   if (t) executeHealingSpirit(actor, t, state);   break; }
+    case 'cacophonicShield':  { const t = shouldCastCacophonicShield(actor, bf); if (t) executeCacophonicShield(actor, t, state); break; }
+    case 'callLightning':     { const t = shouldCastCallLightning(actor, bf);   if (t) executeCallLightning(actor, t, state);   break; }
+    case 'hungerOfHadar':     { const t = shouldCastHungerOfHadar(actor, bf);   if (t) executeHungerOfHadar(actor, t, state);   break; }
+    case 'spiritGuardians':   { const t = shouldCastSpiritGuardians(actor, bf); if (t) executeSpiritGuardians(actor, t, state); break; }
+    case 'guardianOfFaith':   { const t = shouldCastGuardianOfFaith(actor, bf); if (t) executeGuardianOfFaith(actor, t, state); break; }
+    case 'dawn':              { const t = shouldCastDawn(actor, bf);            if (t) executeDawn(actor, t, state);            break; }
+    case 'insectPlague':      { const t = shouldCastInsectPlague(actor, bf);    if (t) executeInsectPlague(actor, t, state);    break; }
+    case 'stormOfVengeance':  { const t = shouldCastStormOfVengeance(actor, bf); if (t) executeStormOfVengeance(actor, t, state); break; }
+    // 4 single-target heals (Combatant | null signature):
+    case 'goodberry':         { const t = shouldCastGoodberry(actor, bf);       if (t) executeGoodberry(actor, t, state);       break; }
+    case 'heal':              { const t = shouldCastHeal(actor, bf);            if (t) executeHeal(actor, t, state);            break; }
+    case 'regenerate':        { const t = shouldCastRegenerate(actor, bf);      if (t) executeRegenerate(actor, t, state);      break; }
+    case 'powerWordHeal':     { const t = shouldCastPowerWordHeal(actor, bf);   if (t) executePowerWordHeal(actor, t, state);   break; }
+    // 4 multi-target heals + wither_and_bloom (Combatant[] signature):
+    case 'witherAndBloom':    { const t = shouldCastWitherAndBloom(actor, bf);  if (t) executeWitherAndBloom(actor, t, state);  break; }
+    case 'auraOfVitality':    { const t = shouldCastAuraOfVitality(actor, bf);  if (t) executeAuraOfVitality(actor, t, state);  break; }
+    case 'massHealingWord':   { const t = shouldCastMassHealingWord(actor, bf); if (t) executeMassHealingWord(actor, t, state); break; }
+    case 'massCureWounds':    { const t = shouldCastMassCureWounds(actor, bf);  if (t) executeMassCureWounds(actor, t, state);  break; }
+    case 'massHeal':          { const t = shouldCastMassHeal(actor, bf);        if (t) executeMassHeal(actor, t, state);        break; }
+    // 2 temp-HP self-buffs (boolean signature):
+    case 'armorOfAgathys':    if (shouldCastArmorOfAgathys(actor, bf))  executeArmorOfAgathys(actor, state);  break;
+    case 'falseLife':         if (shouldCastFalseLife(actor, bf))       executeFalseLife(actor, state);       break;
 
     // ── Session 19 — generic spell dispatch ────────────────────────────
     // Routes any spell in the GENERIC_SPELLS registry (262 bulk-implemented

@@ -1,33 +1,40 @@
 // ============================================================
 // Regenerate — PHB p.271
 //
-// 7-level transmutation, 1 minute, range Touch (5 ft).
-// Duration: 1 hour.
+// 7th-level transmutation, action (canon: 1 minute — v1: action),
+//   NO concentration
+// Range: Touch (5 ft)   Components: V, S, M (a monster's heart)
+// Duration: 1 hour
 //
-// Effect: You touch a creature and stimulate its natural healing ability. The target regains  hit points. For the duration of the spell, the target regains 1 hit point at the start of each of it
-//
-// Upcast: see source (not modelled in v1).
+// Canon effect: You touch a creature and stimulate its natural healing
+//   ability. The target regains 4d8 + your spellcasting ability modifier
+//   hit points. For the duration of the spell, the target regains 1 hit
+//   point at the start of each of its turns (10 HP per minute). The
+//   target's severed body members (fingers, legs, tails, and so on),
+//   if any, are restored after 1 minute. If you cast this spell on a
+//   creature that is missing body parts, the spell restores them.
 //
 // v1 simplifications:
-//   - v1 models this spell as a FORWARD-COMPAT flag only (Session 19 bulk
-//     implementation). The spell consumes a slot and sets the flag
-//     `_genericSpellActiveSpells` on the caster; the actual mechanical
-//     effect (damage / save / condition / buff) is NOT applied in v1.
-//     A future implementation should extend the relevant engine subsystem
-//     (damage_zone for persistent damage, condition_apply for conditions,
-//     advantage_vs for buffs, etc.) to consume this flag and apply the
-//     real effect. This mirrors the Session 17/18 forward-compat pattern
-//     established by Darkvision, Arcane Lock, Knock, See Invisibility.
+//   - Casting time: PHB p.271 says "1 minute" (out-of-combat ritual
+//     heal). v1 models it as an ACTION to make it castable in combat
+//     — flagged via metadata flag `regenerateCastTimeV1Simplified`.
+//   - Initial heal: 4d8 + spellcastingMod (WIS mod) — modelled.
+//   - Per-turn 1 HP/turn rider NOT modelled (no per-turn regen hook).
+//     Flag: regeneratePerTurnHealV1NotModelled
+//   - Severed-limb restoration NOT modelled (no body-part subsystem).
+//   - 1-hour duration NOT tracked (instantaneous in v1).
+//   - Upcast NOT modelled.
 //
-// Spell module pattern (mirrors Darkvision / Arcane Lock forward-compat
-// self-buff pattern):
-//   shouldCast(caster, bf) → boolean
-//   execute(caster, state) → void
-//   cleanup() — no-op (forward-compat flag persists for combat)
+// Spell module pattern (single-target heal, mirrors healing_word.ts):
+//   shouldCast(caster, bf) → Combatant | null
+//   execute(caster, target, state) → void
+//   metadata → spell stats
 // ============================================================
 
 import { Combatant, Battlefield } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
+import { rollDie, applyHeal, abilityMod } from '../engine/utils';
+import { chebyshev3D } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 
 // ---- Metadata -----------------------------------------------
@@ -37,9 +44,13 @@ export const metadata = {
   level: 7,
   school: 'transmutation',
   rangeFt: 5,
+  healDie: 8,
+  healDieCount: 4,
+  castingAbility: 'wis',
   concentration: false,
-  castingTime: '1min',
-  regenerateV1Simplified: true,
+  castingTime: 'action',
+  regenerateCastTimeV1Simplified: true,       // canon: 1 min → v1: action
+  regeneratePerTurnHealV1NotModelled: true,
 } as const;
 
 // ---- Local log helper ---------------------------------------
@@ -62,56 +73,135 @@ function emit(
   });
 }
 
-// ---- Planner ------------------------------------------------
+// ---- shouldCast ---------------------------------------------
 
 /**
- * Returns true if the caster should cast Regenerate this turn.
+ * Returns the best heal target within Touch (5 ft), or null if Regenerate
+ * should not be cast.
  *
  * Preconditions:
- *   - Caster has 'Regenerate' in their actions
- *   - Caster has at least one 7-level-or-higher slot available
- *   - Caster is NOT already Regenerate-active (re-cast would be a no-op in v1)
+ *   1. Caster has 'Regenerate' in their actions.
+ *   2. Caster has at least one 7th-level-or-higher spell slot.
+ *   3. A wounded ally (currentHP < maxHP, !dead, !undead) is within 5 ft.
+ *
+ * Target priority:
+ *   1. Downed (unconscious, !dead) ally within 5 ft.
+ *   2. Self, if wounded.
+ *   3. Most-wounded ally within 5 ft (largest HP deficit).
  */
-export function shouldCast(caster: Combatant, _bf: Battlefield): boolean {
-  if (!caster.actions.some(a => a.name === 'Regenerate')) return false;
-  if (!hasSpellSlot(caster, 7)) return false;
-  if (caster._genericSpellActiveSpells?.has('Regenerate')) return false;
-  return true;
+export function shouldCast(
+  caster: Combatant,
+  bf: Battlefield,
+): Combatant | null {
+  if (!caster.actions.some(a => a.name === 'Regenerate')) return null;
+  if (!hasSpellSlot(caster, 7)) return null;
+
+  const inRange = (c: Combatant) =>
+    chebyshev3D(caster.pos, c.pos) * 5 <= metadata.rangeFt;
+  const validTarget = (c: Combatant) => !c.isUndead;
+
+  // 1. Revive a downed ally
+  for (const c of bf.combatants.values()) {
+    if (
+      c.faction === caster.faction &&
+      c.isUnconscious && !c.isDead &&
+      inRange(c) && validTarget(c)
+    ) {
+      return c;
+    }
+  }
+
+  // 2. Self-heal if wounded
+  if (caster.currentHP < caster.maxHP && validTarget(caster)) {
+    return caster;
+  }
+
+  // 3. Most-wounded ally
+  let best: Combatant | null = null;
+  let bestDeficit = 0;
+  for (const c of bf.combatants.values()) {
+    if (
+      c.faction === caster.faction &&
+      c.id !== caster.id &&
+      !c.isDead && !c.isUnconscious &&
+      c.currentHP < c.maxHP &&
+      inRange(c) && validTarget(c)
+    ) {
+      const deficit = c.maxHP - c.currentHP;
+      if (deficit > bestDeficit) {
+        bestDeficit = deficit;
+        best = c;
+      }
+    }
+  }
+  return best;
 }
 
-// ---- Execution ----------------------------------------------
+// ---- execute ------------------------------------------------
 
 /**
- * Execute Regenerate:
- *  1. Consume a 7-level spell slot.
- *  2. Set the flag on the caster's `_genericSpellActiveSpells` Set.
- *  3. Log the cast.
+ * Cast Regenerate on target.
+ *   1. Guard: target must not be dead or undead.
+ *   2. Consume a 7th-level spell slot.
+ *   3. Roll 4d8 + spellcastingMod (WIS mod) healing.
+ *   4. Apply heal via applyHeal (caps at maxHP, clears unconscious).
+ *   5. Log: spell cast, condition_remove (if revived), heal event.
+ *
+ * @param caster  The casting Combatant (Cleric / Druid / Bard)
+ * @param target  Ally (or self) receiving the heal
+ * @param state   Current EngineState (for logging + battlefield access)
  */
 export function execute(
   caster: Combatant,
+  target: Combatant,
   state: EngineState,
 ): void {
+  if (target.isDead) return;
+  if (target.isUndead) {
+    emit(
+      state, 'action', caster.id,
+      `${caster.name} casts Regenerate on ${target.name} — no effect (undead)!`,
+      target.id,
+    );
+    return;
+  }
+
   consumeSpellSlot(caster, 7);
 
-  if (!caster._genericSpellActiveSpells) {
-    caster._genericSpellActiveSpells = new Set<string>();
-  }
-  caster._genericSpellActiveSpells.add('Regenerate');
+  const spellcastingMod = abilityMod(caster.wis);
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Regenerate! (v1: forward-compat flag set; mechanical effect not yet implemented)`,
-    caster.id,
+    `${caster.name} casts Regenerate on ${target.name}! (4d8 + ${spellcastingMod} HP; per-turn regen not modelled in v1)`,
+    target.id,
   );
+
+  let heal = spellcastingMod;
+  for (let i = 0; i < metadata.healDieCount; i++) {
+    heal += rollDie(metadata.healDie);
+  }
+  if (heal < 0) heal = 0;
+
+  const wasUnconscious = target.isUnconscious;
+  const healed = applyHeal(target, heal);
+
+  if (wasUnconscious && healed > 0) {
+    emit(
+      state, 'condition_remove', target.id,
+      `${target.name} regains consciousness!`,
+      target.id,
+    );
+  }
+
   emit(
-    state, 'condition_add', caster.id,
-    `${caster.name} is affected by Regenerate. (v1: forward-compat flag set; no mechanical effect until engine subsystem is implemented)`,
-    caster.id,
+    state, 'heal', caster.id,
+    `Regenerate: ${healed} HP restored to ${target.name} (rolled ${heal}; now ${target.currentHP}/${target.maxHP})`,
+    target.id, healed,
   );
 }
 
 // ---- Cleanup ------------------------------------------------
 
 export function cleanup(_c: Combatant): void {
-  // No-op — forward-compat flag persists for combat.
+  // No-op — v1 simplification: instantaneous heal, no per-turn regen.
 }
