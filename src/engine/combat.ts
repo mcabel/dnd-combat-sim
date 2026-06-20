@@ -488,6 +488,30 @@ import {
   shouldCast as shouldCastDominateMonster,
   execute as executeDominateMonster,
 } from '../spells/dominate_monster';
+import {
+  shouldCast as shouldCastPowerWordPain,
+  execute as executePowerWordPain,
+} from '../spells/power_word_pain';
+import {
+  shouldCast as shouldCastWhirlwind,
+  execute as executeWhirlwind,
+} from '../spells/whirlwind';
+import {
+  shouldCast as shouldCastReverseGravity,
+  execute as executeReverseGravity,
+} from '../spells/reverse_gravity';
+import {
+  shouldCast as shouldCastEyebite,
+  execute as executeEyebite,
+} from '../spells/eyebite';
+import {
+  shouldCast as shouldCastFleshToStone,
+  execute as executeFleshToStone,
+} from '../spells/flesh_to_stone';
+import {
+  shouldCast as shouldCastMassSuggestion,
+  execute as executeMassSuggestion,
+} from '../spells/mass_suggestion';
 
 // ── Session 19 — bulk-implementation generic dispatch (262 new spells) ────
 import {
@@ -2964,6 +2988,66 @@ function executePlannedAction(
         ? dmTarget
         : shouldCastDominateMonster(actor, bf);
       if (liveTarget) executeDominateMonster(actor, liveTarget, state);
+      break;
+    }
+
+    case 'powerWordPain': {
+      // Power Word Pain — XGE p.163: 60 ft, NO save/attack — 4d8 psychic +
+      // restrained if HP ≤ 60. shouldCast → single Combatant.
+      const pwpTargetId = plan.targetId;
+      const pwpTarget = pwpTargetId ? bf.combatants.get(pwpTargetId) ?? null : null;
+      const pwpLive = pwpTarget && !pwpTarget.isDead && !pwpTarget.isUnconscious
+        ? pwpTarget
+        : shouldCastPowerWordPain(actor, bf);
+      if (pwpLive) executePowerWordPain(actor, pwpLive, state);
+      break;
+    }
+
+    case 'whirlwind': {
+      // Whirlwind — PHB p.298: 50-ft cone, CON save or restrained, conc.
+      // shouldCast → Combatant[].
+      const whTargets = shouldCastWhirlwind(actor, bf);
+      if (whTargets) executeWhirlwind(actor, whTargets, state);
+      break;
+    }
+
+    case 'reverseGravity': {
+      // Reverse Gravity — PHB p.277: 100 ft, 50-ft radius AoE, DEX save or
+      // restrained, concentration. shouldCast → Combatant[].
+      const rgTargets = shouldCastReverseGravity(actor, bf);
+      if (rgTargets) executeReverseGravity(actor, rgTargets, state);
+      break;
+    }
+
+    case 'eyebite': {
+      // Eyebite — PHB p.238: 60 ft, WIS save or sleeping, concentration.
+      // shouldCast → single Combatant.
+      const ebTargetId = plan.targetId;
+      const ebTarget = ebTargetId ? bf.combatants.get(ebTargetId) ?? null : null;
+      const ebLive = ebTarget && !ebTarget.isDead && !ebTarget.isUnconscious
+        ? ebTarget
+        : shouldCastEyebite(actor, bf);
+      if (ebLive) executeEyebite(actor, ebLive, state);
+      break;
+    }
+
+    case 'fleshToStone': {
+      // Flesh to Stone — PHB p.241: 60 ft, CON save or restrained, conc.
+      // shouldCast → single Combatant.
+      const ftsTargetId = plan.targetId;
+      const ftsTarget = ftsTargetId ? bf.combatants.get(ftsTargetId) ?? null : null;
+      const ftsLive = ftsTarget && !ftsTarget.isDead && !ftsTarget.isUnconscious
+        ? ftsTarget
+        : shouldCastFleshToStone(actor, bf);
+      if (ftsLive) executeFleshToStone(actor, ftsLive, state);
+      break;
+    }
+
+    case 'massSuggestion': {
+      // Mass Suggestion — PHB p.258: 60 ft, WIS save or charmed, up to 12
+      // targets, NO concentration. shouldCast → Combatant[].
+      const msTargets = shouldCastMassSuggestion(actor, bf);
+      if (msTargets) executeMassSuggestion(actor, msTargets, state);
       break;
     }
 

@@ -1,34 +1,57 @@
 // ============================================================
-// Flesh to Stone — PHB p.243
+// Flesh to Stone — PHB p.241
 //
-// 6-level transmutation, 1 action, range 60 ft, concentration.
-// Duration: 1 minute.
+// 6th-level transmutation, action, range 60 ft, concentration (1 min).
+// Components: V, S, M (a pinch of lime, water, and earth).
 //
-// Effect: You attempt to turn one creature that you can see within range into stone. If the target's body is made of flesh, the creature must make a Constitution saving throw. On a failed save, it is {@conditio
+// Effect: You attempt to turn one creature that you can see within range
+//         into stone. If the target's body is made of flesh, the creature
+//         must make a Constitution saving throw. On a failed save, it is
+//         restrained as its flesh begins to harden. On a successful save,
+//         it isn't affected. A creature restrained by this spell must make
+//         another Constitution saving throw at the end of its next turn.
+//         If it successfully saves against this spell three times, the
+//         spell ends. If it fails its saves three times, it is turned to
+//         stone and subjected to the petrified condition.
 //
-// Upcast: see source (not modelled in v1).
+// Upcast: none (6th-level spell — no upcast).
 //
 // v1 simplifications:
-//   - v1 models this spell as a FORWARD-COMPAT flag only (Session 19 bulk
-//     implementation). The spell consumes a slot and sets the flag
-//     `_genericSpellActiveSpells` on the caster; the actual mechanical
-//     effect (damage / save / condition / buff) is NOT applied in v1.
-//     A future implementation should extend the relevant engine subsystem
-//     (damage_zone for persistent damage, condition_apply for conditions,
-//     advantage_vs for buffs, etc.) to consume this flag and apply the
-//     real effect. This mirrors the Session 17/18 forward-compat pattern
-//     established by Darkvision, Arcane Lock, Knock, See Invisibility.
-//   - Concentration spell (forward-compat flag persists for combat).
+//   - 3-fail petrification (PHB p.241: restrained → 3 failed saves →
+//     petrified): v1 simplifies to ONE condition — `restrained` on the
+//     initial failed save. The petrified-on-3-fails escalation is NOT
+//     modelled (no per-target save-counter subsystem). Documented via
+//     `fleshToStonePetrifiedOn3FailsV1Simplified`.
+//   - End-of-turn repeat save (PHB p.241): NOT modelled — v1 has no
+//     end-of-turn save hook. The restrained persists for the entire
+//     combat (or until concentration breaks). Documented via
+//     `fleshToStoneEndOfTurnSaveV1Implemented: false`.
+//   - Range: canon 60 ft. v1 uses chebyshev3D * 5 (square approx).
+//   - Concentration: canon 1 min concentration. v1 starts concentration
+//     via startConcentration(); engine does NOT enforce concentration
+//     checks on damage taken (TG-002). The restrained is
+//     sourceIsConcentration: true.
+//   - Flesh-only restriction (PHB p.241: "If the target's body is made
+//     of flesh"): NOT enforced — v1 has no creature-composition tag.
 //
-// Spell module pattern (mirrors Darkvision / Arcane Lock forward-compat
-// self-buff pattern):
-//   shouldCast(caster, bf) → boolean
-//   execute(caster, state) → void
-//   cleanup() — no-op (forward-compat flag persists for combat)
+// Migration note (Session 25 / Batch 2): migrated from the generic
+// forward-compat flag to a bespoke CON-save-or-restrained (concentration).
+// Removed from `_generic_registry.ts`; routed via `case 'fleshToStone':`
+// in combat.ts and a planner branch in planner.ts. Mirrors Hold Person
+// (single-target concentration save-or-condition) but with CON save +
+// restrained (3-fail petrified simplified).
+//
+// Spell module pattern (single-target save-or-condition, concentration):
+//   shouldCast(caster, bf) → Combatant | null
+//   execute(caster, target, state) → void
+//   cleanup() — no-op (concentration break handles cleanup)
 // ============================================================
 
 import { Combatant, Battlefield } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
+import { applySpellEffect, removeEffectsFromCaster } from '../engine/spell_effects';
+import { startConcentration, rollSave } from '../engine/utils';
+import { chebyshev3D } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 
 // ---- Metadata -----------------------------------------------
@@ -37,10 +60,13 @@ export const metadata = {
   name: 'Flesh to Stone',
   level: 6,
   school: 'transmutation',
-  rangeFt: 60,
+  rangeFt: 60,                   // PHB p.241: 60 ft
   concentration: true,
+  saveAbility: 'con' as const,
   castingTime: 'action',
-  fleshToStoneV1Simplified: true,
+  fleshToStonePetrifiedOn3FailsV1Simplified: true,         // petrified escalation NOT modelled
+  fleshToStoneEndOfTurnSaveV1Implemented: false,           // end-of-turn save skipped
+  fleshToStoneFleshOnlyRestrictionV1Simplified: true,      // no creature-composition tag
 } as const;
 
 // ---- Local log helper ---------------------------------------
@@ -66,53 +92,123 @@ function emit(
 // ---- Planner ------------------------------------------------
 
 /**
- * Returns true if the caster should cast Flesh to Stone this turn.
+ * Returns the single best target for Flesh to Stone (a living enemy
+ * within 60 ft, not already restrained), or null when the spell should
+ * not be cast.
+ *
+ * Target priority:
+ *   1. Highest-threat enemy (maxHP) within 60 ft.
+ *   2. Tie-break: closest enemy.
  *
  * Preconditions:
  *   - Caster has 'Flesh to Stone' in their actions
- *   - Caster has at least one 6-level-or-higher slot available
- *   - Caster is NOT already Flesh to Stone-active (re-cast would be a no-op in v1)
+ *   - Caster has at least one 6th-level-or-higher slot available
+ *   - Caster is NOT already concentrating on any spell
+ *   - At least 1 valid enemy target exists within 60 ft
  */
-export function shouldCast(caster: Combatant, _bf: Battlefield): boolean {
-  if (!caster.actions.some(a => a.name === 'Flesh to Stone')) return false;
-  if (!hasSpellSlot(caster, 6)) return false;
-  if (caster._genericSpellActiveSpells?.has('Flesh to Stone')) return false;
-  return true;
+export function shouldCast(caster: Combatant, bf: Battlefield): Combatant | null {
+  if (caster.concentration?.active) return null;
+  if (!caster.actions.some(a => a.name === 'Flesh to Stone')) return null;
+  if (!hasSpellSlot(caster, 6)) return null;
+
+  const candidates: Array<{ c: Combatant; threat: number; dist: number }> = [];
+
+  for (const c of bf.combatants.values()) {
+    if (c.id === caster.id) continue;
+    if (c.faction === caster.faction) continue;
+    if (c.isDead || c.isUnconscious) continue;
+
+    const distFt = chebyshev3D(caster.pos, c.pos) * 5;
+    if (distFt > 60) continue;
+
+    if (c.conditions.has('restrained') || c.conditions.has('petrified')) continue;
+    if (c.activeEffects.some(e => e.casterId === caster.id && e.spellName === 'Flesh to Stone')) continue;
+
+    candidates.push({ c, threat: c.maxHP, dist: distFt });
+  }
+
+  if (candidates.length === 0) return null;
+
+  candidates.sort((a, b) => {
+    if (a.threat !== b.threat) return b.threat - a.threat;
+    return a.dist - b.dist;
+  });
+
+  return candidates[0].c;
 }
 
 // ---- Execution ----------------------------------------------
 
 /**
  * Execute Flesh to Stone:
- *  1. Consume a 6-level spell slot.
- *  2. Set the flag on the caster's `_genericSpellActiveSpells` Set.
- *  3. Log the cast.
+ *  1. Consume a 6th-level spell slot.
+ *  2. Break any existing concentration (safety net).
+ *  3. Start concentration on Flesh to Stone.
+ *  4. Roll the target's CON save; on fail apply restrained (conc-sourced).
+ *
+ * @param caster  The casting Combatant (Warlock / Wizard)
+ * @param target  The candidate from shouldCast (single enemy in range)
+ * @param state   Current EngineState
  */
 export function execute(
   caster: Combatant,
+  target: Combatant,
   state: EngineState,
 ): void {
+  const action = caster.actions.find(a => a.name === 'Flesh to Stone');
+  const saveDC = action?.saveDC ?? 13;
+
   consumeSpellSlot(caster, 6);
 
-  if (!caster._genericSpellActiveSpells) {
-    caster._genericSpellActiveSpells = new Set<string>();
+  if (caster.concentration?.active) {
+    removeEffectsFromCaster(caster.id, state.battlefield);
   }
-  caster._genericSpellActiveSpells.add('Flesh to Stone');
+  startConcentration(caster, 'Flesh to Stone');
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Flesh to Stone! (v1: forward-compat flag set; mechanical effect not yet implemented)`,
-    caster.id,
+    `${caster.name} casts Flesh to Stone at ${target.name}! (DC ${saveDC} CON)`,
+    target.id,
   );
+
+  if (target.isDead || target.isUnconscious) return;
+
+  const save = rollSave(target, 'con', saveDC);
+  emit(
+    state,
+    save.success ? 'save_success' : 'save_fail',
+    caster.id,
+    `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} CON save vs Flesh to Stone (rolled ${save.total})`,
+    target.id,
+    save.roll,
+  );
+
+  if (save.success) {
+    emit(
+      state, 'action', caster.id,
+      `${target.name} resists Flesh to Stone — not restrained!`,
+      target.id,
+    );
+    return;
+  }
+
+  applySpellEffect(target, {
+    casterId: caster.id,
+    spellName: 'Flesh to Stone',
+    effectType: 'condition_apply',
+    payload: { condition: 'restrained' },
+    sourceIsConcentration: true,
+  });
+
   emit(
     state, 'condition_add', caster.id,
-    `${caster.name} is affected by Flesh to Stone. (v1: forward-compat flag set; no mechanical effect until engine subsystem is implemented)`,
-    caster.id,
+    `${target.name} is RESTRAINED as flesh begins to harden! (v1: 3-fail petrified escalation NOT modelled)`,
+    target.id,
   );
 }
 
 // ---- Cleanup ------------------------------------------------
 
 export function cleanup(_c: Combatant): void {
-  // No-op — forward-compat flag persists for combat.
+  // No-op — concentration break handles cleanup.
 }

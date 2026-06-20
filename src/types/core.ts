@@ -1365,6 +1365,12 @@ export interface PlannedAction {
     | 'weird'              // Weird — PHB p.288: 120 ft, WIS save 4d10 psychic (half on save) + frightened on fail, 30-ft radius AoE, concentration (DoT simplified one-shot)
     | 'powerWordStun'      // Power Word Stun — PHB p.267: 60 ft, NO save, NO attack — stunned if currentHP ≤ 150, NO concentration
     | 'dominateMonster'    // Dominate Monster — PHB p.235: 60 ft, WIS save or charmed (control simplified), concentration, any creature
+    | 'powerWordPain'      // Power Word Pain — XGE p.163: 60 ft, NO save/attack — 4d8 psychic + restrained if HP ≤ 60, NO concentration (slowed→restrained, DoT one-shot)
+    | 'whirlwind'          // Whirlwind — PHB p.298: 50-ft cone, CON save or restrained, concentration (canon 7d8 damage dropped per plan; no damage v1)
+    | 'reverseGravity'     // Reverse Gravity — PHB p.277: 100 ft, 50-ft radius AoE, DEX save or restrained, concentration (fall-upward→restrained)
+    | 'eyebite'            // Eyebite — PHB p.238: 60 ft, WIS save or sleeping (Asleep option), concentration, one-shot (per-turn re-target simplified)
+    | 'fleshToStone'       // Flesh to Stone — PHB p.241: 60 ft, CON save or restrained, concentration (3-fail petrified simplified)
+    | 'massSuggestion'     // Mass Suggestion — PHB p.258: 60 ft, WIS save or charmed, up to 12 targets, NO concentration (24-hr not tracked)
     // ── Session 19 — bulk-implementation generic dispatch (262 new spells L2-9) ──
     // All non-blocker in-scope spells from levels 2-9 that have not been
     // implemented as bespoke case branches are routed through 'genericSpell'.

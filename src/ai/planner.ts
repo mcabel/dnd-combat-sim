@@ -156,6 +156,12 @@ import { shouldCast as shouldCastRavenousVoid } from '../spells/ravenous_void';
 import { shouldCast as shouldCastWeird } from '../spells/weird';
 import { shouldCast as shouldCastPowerWordStun } from '../spells/power_word_stun';
 import { shouldCast as shouldCastDominateMonster } from '../spells/dominate_monster';
+import { shouldCast as shouldCastPowerWordPain } from '../spells/power_word_pain';
+import { shouldCast as shouldCastWhirlwind } from '../spells/whirlwind';
+import { shouldCast as shouldCastReverseGravity } from '../spells/reverse_gravity';
+import { shouldCast as shouldCastEyebite } from '../spells/eyebite';
+import { shouldCast as shouldCastFleshToStone } from '../spells/flesh_to_stone';
+import { shouldCast as shouldCastMassSuggestion } from '../spells/mass_suggestion';
 
 // ── Session 19 — bulk-implementation generic dispatch (262 new spells) ────
 import { GENERIC_SPELL_LIST } from '../spells/_generic_registry';
@@ -3135,6 +3141,117 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
       };
       plan.targetId = dmTarget.id;
       plan.bonusAction = planBonusAction(self, dmTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12BJ. POWER WORD PAIN (HP-gate ≤60 → 4d8 psychic + restrained, L7) ---
+  // XGE p.163: 60 ft, NO save/attack — 4d8 psychic + restrained if HP ≤ 60.
+  // shouldCast returns single Combatant (highest-cur-HP enemy ≤ 60 in range).
+  if (!plan.action && self.actions.some(a => a.name === 'Power Word Pain')) {
+    const pwpTarget = shouldCastPowerWordPain(self, battlefield);
+    if (pwpTarget) {
+      plan.action = {
+        type: 'powerWordPain',
+        action: null,
+        targetId: pwpTarget.id,
+        description: `${self.name} casts Power Word Pain at ${pwpTarget.name}`,
+      };
+      plan.targetId = pwpTarget.id;
+      plan.bonusAction = planBonusAction(self, pwpTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12BK. WHIRLWIND (CON save or restrained, L7, 50-ft cone, concentration) ---
+  // PHB p.298: 50-ft cone, CON save or restrained, concentration (no damage v1).
+  // shouldCast returns Combatant[].
+  if (!plan.action && self.actions.some(a => a.name === 'Whirlwind')) {
+    const whTargets = shouldCastWhirlwind(self, battlefield);
+    if (whTargets) {
+      const names = whTargets.map(t => t.name).join(', ');
+      plan.action = {
+        type: 'whirlwind',
+        action: null,
+        targetId: whTargets[0].id,
+        description: `${self.name} casts Whirlwind, catching ${names}`,
+      };
+      plan.targetId = whTargets[0].id;
+      plan.bonusAction = planBonusAction(self, whTargets[0], battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12BL. REVERSE GRAVITY (DEX save or restrained, L7, 50-ft radius, conc) ---
+  // PHB p.277: 100 ft, 50-ft radius AoE, DEX save or restrained, concentration.
+  // shouldCast returns Combatant[].
+  if (!plan.action && self.actions.some(a => a.name === 'Reverse Gravity')) {
+    const rgTargets = shouldCastReverseGravity(self, battlefield);
+    if (rgTargets) {
+      const names = rgTargets.map(t => t.name).join(', ');
+      plan.action = {
+        type: 'reverseGravity',
+        action: null,
+        targetId: rgTargets[0].id,
+        description: `${self.name} casts Reverse Gravity, catching ${names}`,
+      };
+      plan.targetId = rgTargets[0].id;
+      plan.bonusAction = planBonusAction(self, rgTargets[0], battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12BM. EYEBITE (WIS save or sleeping, L6, concentration, one-shot) ---
+  // PHB p.238: 60 ft, WIS save or sleeping (Asleep option), concentration.
+  // shouldCast returns single Combatant.
+  if (!plan.action && self.actions.some(a => a.name === 'Eyebite')) {
+    const ebTarget = shouldCastEyebite(self, battlefield);
+    if (ebTarget) {
+      plan.action = {
+        type: 'eyebite',
+        action: null,
+        targetId: ebTarget.id,
+        description: `${self.name} casts Eyebite at ${ebTarget.name}`,
+      };
+      plan.targetId = ebTarget.id;
+      plan.bonusAction = planBonusAction(self, ebTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12BN. FLESH TO STONE (CON save or restrained, L6, concentration) ---
+  // PHB p.241: 60 ft, CON save or restrained, concentration (3-fail petrified simplified).
+  // shouldCast returns single Combatant.
+  if (!plan.action && self.actions.some(a => a.name === 'Flesh to Stone')) {
+    const ftsTarget = shouldCastFleshToStone(self, battlefield);
+    if (ftsTarget) {
+      plan.action = {
+        type: 'fleshToStone',
+        action: null,
+        targetId: ftsTarget.id,
+        description: `${self.name} casts Flesh to Stone at ${ftsTarget.name}`,
+      };
+      plan.targetId = ftsTarget.id;
+      plan.bonusAction = planBonusAction(self, ftsTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12BO. MASS SUGGESTION (WIS save or charmed, L6, up to 12, NO conc) ---
+  // PHB p.258: 60 ft, WIS save or charmed, up to 12 targets, NO concentration.
+  // shouldCast returns Combatant[] (up to 12).
+  if (!plan.action && self.actions.some(a => a.name === 'Mass Suggestion')) {
+    const msTargets = shouldCastMassSuggestion(self, battlefield);
+    if (msTargets) {
+      const names = msTargets.map(t => t.name).join(', ');
+      plan.action = {
+        type: 'massSuggestion',
+        action: null,
+        targetId: msTargets[0].id,
+        description: `${self.name} casts Mass Suggestion at ${names}`,
+      };
+      plan.targetId = msTargets[0].id;
+      plan.bonusAction = planBonusAction(self, msTargets[0], battlefield);
       return plan;
     }
   }

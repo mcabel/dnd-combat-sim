@@ -89,6 +89,14 @@ SPELLS = [
     # L8 (2)
     ('Power Word Stun', 'power_word_stun',  'PowerWordStun'),
     ('Dominate Monster','dominate_monster', 'DominateMonster'),
+    # L7 (3)
+    ('Power Word Pain', 'power_word_pain',  'PowerWordPain'),
+    ('Whirlwind',       'whirlwind',         'Whirlwind'),
+    ('Reverse Gravity', 'reverse_gravity',   'ReverseGravity'),
+    # L6 (3)
+    ('Eyebite',         'eyebite',           'Eyebite'),
+    ('Flesh to Stone',  'flesh_to_stone',    'FleshToStone'),
+    ('Mass Suggestion', 'mass_suggestion',   'MassSuggestion'),
 ]
 
 REGISTRY = Path('src/spells/_generic_registry.ts')

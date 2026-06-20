@@ -1202,22 +1202,10 @@ import {
 } from './elminsters_effulgent_spheres';
 
 import {
-  shouldCast as shouldCastEyebite,
-  execute as executeEyebite,
-  metadata as metadataEyebite,
-} from './eyebite';
-
-import {
   shouldCast as shouldCastFizbansPlatinumShield,
   execute as executeFizbansPlatinumShield,
   metadata as metadataFizbansPlatinumShield,
 } from './fizbans_platinum_shield';
-
-import {
-  shouldCast as shouldCastFleshToStone,
-  execute as executeFleshToStone,
-  metadata as metadataFleshToStone,
-} from './flesh_to_stone';
 
 import {
   shouldCast as shouldCastGlobeOfInvulnerability,
@@ -1254,12 +1242,6 @@ import {
   execute as executeInvestitureOfWind,
   metadata as metadataInvestitureOfWind,
 } from './investiture_of_wind';
-
-import {
-  shouldCast as shouldCastMassSuggestion,
-  execute as executeMassSuggestion,
-  metadata as metadataMassSuggestion,
-} from './mass_suggestion';
 
 import {
   shouldCast as shouldCastMoveEarth,
@@ -1358,12 +1340,6 @@ import {
 } from './mordenkainens_sword';
 
 import {
-  shouldCast as shouldCastPowerWordPain,
-  execute as executePowerWordPain,
-  metadata as metadataPowerWordPain,
-} from './power_word_pain';
-
-import {
   shouldCast as shouldCastPrismaticSpray,
   execute as executePrismaticSpray,
   metadata as metadataPrismaticSpray,
@@ -1382,12 +1358,6 @@ import {
 } from './regenerate';
 
 import {
-  shouldCast as shouldCastReverseGravity,
-  execute as executeReverseGravity,
-  metadata as metadataReverseGravity,
-} from './reverse_gravity';
-
-import {
   shouldCast as shouldCastSequester,
   execute as executeSequester,
   metadata as metadataSequester,
@@ -1404,12 +1374,6 @@ import {
   execute as executeTetherEssence,
   metadata as metadataTetherEssence,
 } from './tether_essence';
-
-import {
-  shouldCast as shouldCastWhirlwind,
-  execute as executeWhirlwind,
-  metadata as metadataWhirlwind,
-} from './whirlwind';
 
 import {
   shouldCast as shouldCastAbiDalzimsHorridWilting,
@@ -2728,23 +2692,11 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     shouldCast: shouldCastElminstersEffulgentSpheres,
     execute: executeElminstersEffulgentSpheres,
   },
-  'Eyebite': {
-    name: 'Eyebite',
-    level: metadataEyebite.level,
-    shouldCast: shouldCastEyebite,
-    execute: executeEyebite,
-  },
   "Fizban's Platinum Shield": {
     name: "Fizban's Platinum Shield",
     level: metadataFizbansPlatinumShield.level,
     shouldCast: shouldCastFizbansPlatinumShield,
     execute: executeFizbansPlatinumShield,
-  },
-  'Flesh to Stone': {
-    name: 'Flesh to Stone',
-    level: metadataFleshToStone.level,
-    shouldCast: shouldCastFleshToStone,
-    execute: executeFleshToStone,
   },
   'Globe of Invulnerability': {
     name: 'Globe of Invulnerability',
@@ -2781,12 +2733,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     level: metadataInvestitureOfWind.level,
     shouldCast: shouldCastInvestitureOfWind,
     execute: executeInvestitureOfWind,
-  },
-  'Mass Suggestion': {
-    name: 'Mass Suggestion',
-    level: metadataMassSuggestion.level,
-    shouldCast: shouldCastMassSuggestion,
-    execute: executeMassSuggestion,
   },
   'Move Earth': {
     name: 'Move Earth',
@@ -2884,12 +2830,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     shouldCast: shouldCastMordenkainensSword,
     execute: executeMordenkainensSword,
   },
-  'Power Word Pain': {
-    name: 'Power Word Pain',
-    level: metadataPowerWordPain.level,
-    shouldCast: shouldCastPowerWordPain,
-    execute: executePowerWordPain,
-  },
   'Prismatic Spray': {
     name: 'Prismatic Spray',
     level: metadataPrismaticSpray.level,
@@ -2908,12 +2848,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     shouldCast: shouldCastRegenerate,
     execute: executeRegenerate,
   },
-  'Reverse Gravity': {
-    name: 'Reverse Gravity',
-    level: metadataReverseGravity.level,
-    shouldCast: shouldCastReverseGravity,
-    execute: executeReverseGravity,
-  },
   'Sequester': {
     name: 'Sequester',
     level: metadataSequester.level,
@@ -2931,12 +2865,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     level: metadataTetherEssence.level,
     shouldCast: shouldCastTetherEssence,
     execute: executeTetherEssence,
-  },
-  'Whirlwind': {
-    name: 'Whirlwind',
-    level: metadataWhirlwind.level,
-    shouldCast: shouldCastWhirlwind,
-    execute: executeWhirlwind,
   },
   "Abi-Dalzim's Horrid Wilting": {
     name: "Abi-Dalzim's Horrid Wilting",

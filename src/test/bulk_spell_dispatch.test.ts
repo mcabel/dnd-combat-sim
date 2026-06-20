@@ -259,6 +259,10 @@ const MIGRATED_SPELLS_S25 = [
   'Weird',
   // L8 (2)
   'Power Word Stun', 'Dominate Monster',
+  // L7 (3)
+  'Power Word Pain', 'Whirlwind', 'Reverse Gravity',
+  // L6 (3)
+  'Eyebite', 'Flesh to Stone', 'Mass Suggestion',
 ];
 for (const migrated of MIGRATED_SPELLS_S25) {
   eq(`  ${migrated} is no longer in the registry (migrated to bespoke)`,
