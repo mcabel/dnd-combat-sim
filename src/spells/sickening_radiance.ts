@@ -1,118 +1,155 @@
 // ============================================================
 // Sickening Radiance — XGE p.164
 //
-// 4-level evocation, 1 action, range 120 ft, concentration.
-// Duration: 10 minutes.
+// 4th-level evocation, action, range 120 ft. Canon: concentration,
+// up to 10 minutes. v1: concentration simplified to one-shot.
+// Components: V, S.
 //
-// Effect: Dim, greenish light spreads within a 30-foot-radius sphere centered on a point you choose within range. The light spreads around corners, and it lasts until the spell ends.
+// Effect: Dim, greenish light spreads from a point you choose within
+//         range to fill a 30-foot-radius sphere for the duration. Each
+//         creature in that area must make a Constitution saving throw.
+//         On a failed save, a creature takes 4d10 radiant damage and
+//         gains one level of exhaustion. On a successful save, a creature
+//         takes half as much damage and suffers no exhaustion.
 //
-// Upcast: see source (not modelled in v1).
+// Upcast: +1d10 radiant per slot level above 4th (not modelled in v1).
 //
 // v1 simplifications:
-//   - v1 models this spell as a FORWARD-COMPAT flag only (Session 19 bulk
-//     implementation). The spell consumes a slot and sets the flag
-//     `_genericSpellActiveSpells` on the caster; the actual mechanical
-//     effect (damage / save / condition / buff) is NOT applied in v1.
-//     A future implementation should extend the relevant engine subsystem
-//     (damage_zone for persistent damage, condition_apply for conditions,
-//     advantage_vs for buffs, etc.) to consume this flag and apply the
-//     real effect. This mirrors the Session 17/18 forward-compat pattern
-//     established by Darkvision, Arcane Lock, Knock, See Invisibility.
-//   - Concentration spell (forward-compat flag persists for combat).
+//   - Concentration (XGE p.164: "concentration, up to 10 minutes"): v1
+//     simplifies to one-shot (concentration: false). The persistent
+//     damage_zone + per-turn re-save riders are NOT modelled. One-shot
+//     4d10 radiant + poisoned on fail. Documented via
+//     `sickeningRadianceConcentrationV1Simplified: true`.
+//   - Exhaustion (XGE p.164: "one level of exhaustion"): v1 has NO
+//     exhaustion subsystem (6 levels is too complex for v1). v1 applies
+//     the POISONED condition as a conservative simplification
+//     (poisoned ≈ "sickened" — disadvantage on attacks/ability checks,
+//     a reasonable mechanical proxy). Documented via
+//     `sickeningRadianceExhaustionToPoisonedV1: true`.
+//   - AoE shape: canon 30-ft radius sphere at a point within 120 ft.
+//     v1 targets the highest-threat enemy within 120 ft as the sphere's
+//     centre and applies to ALL enemies within 30 ft (chebyshev3D approx).
+//     30-ft radius is larger than Shatter's 10-ft — bigger AoE.
+//   - Upcast: NOT modelled.
 //
-// Spell module pattern (mirrors Darkvision / Arcane Lock forward-compat
-// self-buff pattern):
-//   shouldCast(caster, bf) → boolean
-//   execute(caster, state) → void
-//   cleanup() — no-op (forward-compat flag persists for combat)
+// Migration note (Session 24): Mirrors Sunburst (Session 23) for the
+// AoE save + condition_apply, but with poisoned (exhaustion simplified)
+// instead of blinded, 4d10 radiant instead of 12d6, 30-ft radius
+// instead of 60-ft, L4 slot.
+//
+// Spell module pattern (AoE save + condition — mirrors sunburst.ts):
+//   shouldCast(caster, bf) → Combatant[] | null
+//   execute(caster, targets, state) → void
+//   cleanup() — no-op (v1 one-shot)
 // ============================================================
 
 import { Combatant, Battlefield } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
+import { rollSave, rollDie, applyDamageWithTempHP } from '../engine/utils';
+import { chebyshev3D, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
-
-// ---- Metadata -----------------------------------------------
+import { applySpellEffect } from '../engine/spell_effects';
 
 export const metadata = {
   name: 'Sickening Radiance',
   level: 4,
   school: 'evocation',
-  rangeFt: 120,
-  concentration: true,
+  rangeFt: 120,                  // XGE p.164: 120 ft
+  aoeRadiusFt: 30,               // XGE p.164: 30-ft radius sphere
+  dieCount: 4,
+  dieSides: 10,
+  damageType: 'radiant' as const,
+  concentration: false,          // v1 simplification: one-shot (canon concentration 10 min)
+  saveAbility: 'con' as const,
   castingTime: 'action',
-  sickeningRadianceV1Simplified: true,
+  sickeningRadianceConcentrationV1Simplified: true,                  // canon concentration simplified to one-shot
+  sickeningRadianceExhaustionToPoisonedV1: true,                     // exhaustion simplified to poisoned
+  sickeningRadianceUpcastV1Implemented: false,                       // +1d10/slot-level NOT modelled
 } as const;
 
-// ---- Local log helper ---------------------------------------
-
-function emit(
-  state: EngineState,
-  type: CombatEvent['type'],
-  actorId: string,
-  desc: string,
-  targetId?: string,
-  value?: number,
-): void {
-  state.log.events.push({
-    round: state.battlefield.round,
-    actorId,
-    type,
-    targetId,
-    value,
-    description: desc,
-  });
+function emit(state: EngineState, type: CombatEvent['type'], actorId: string, desc: string, targetId?: string, value?: number): void {
+  state.log.events.push({ round: state.battlefield.round, actorId, type, targetId, value, description: desc });
 }
 
-// ---- Planner ------------------------------------------------
-
-/**
- * Returns true if the caster should cast Sickening Radiance this turn.
- *
- * Preconditions:
- *   - Caster has 'Sickening Radiance' in their actions
- *   - Caster has at least one 4-level-or-higher slot available
- *   - Caster is NOT already Sickening Radiance-active (re-cast would be a no-op in v1)
- */
-export function shouldCast(caster: Combatant, _bf: Battlefield): boolean {
-  if (!caster.actions.some(a => a.name === 'Sickening Radiance')) return false;
-  if (!hasSpellSlot(caster, 4)) return false;
-  if (caster._genericSpellActiveSpells?.has('Sickening Radiance')) return false;
-  return true;
+export function rollDamage(): number {
+  let total = 0;
+  for (let i = 0; i < metadata.dieCount; i++) total += rollDie(metadata.dieSides);
+  return total;
 }
 
-// ---- Execution ----------------------------------------------
+export function shouldCast(caster: Combatant, bf: Battlefield): Combatant[] | null {
+  if (!caster.actions.some(a => a.name === 'Sickening Radiance')) return null;
+  if (!hasSpellSlot(caster, 4)) return null;
 
-/**
- * Execute Sickening Radiance:
- *  1. Consume a 4-level spell slot.
- *  2. Set the flag on the caster's `_genericSpellActiveSpells` Set.
- *  3. Log the cast.
- */
-export function execute(
-  caster: Combatant,
-  state: EngineState,
-): void {
-  consumeSpellSlot(caster, 4);
-
-  if (!caster._genericSpellActiveSpells) {
-    caster._genericSpellActiveSpells = new Set<string>();
+  const enemies = livingEnemiesOf(caster, bf);
+  let center: Combatant | null = null;
+  let centerThreat = -1;
+  let centerDist = Infinity;
+  for (const e of enemies) {
+    const distFt = chebyshev3D(caster.pos, e.pos) * 5;
+    if (distFt > 120) continue;
+    if (e.maxHP > centerThreat || (e.maxHP === centerThreat && distFt < centerDist)) {
+      center = e;
+      centerThreat = e.maxHP;
+      centerDist = distFt;
+    }
   }
-  caster._genericSpellActiveSpells.add('Sickening Radiance');
+  if (!center) return null;
+
+  const targets: Combatant[] = [];
+  for (const e of enemies) {
+    const distFt = chebyshev3D(center.pos, e.pos) * 5;
+    if (distFt <= 30) targets.push(e);
+  }
+  return targets.length >= 1 ? targets : null;
+}
+
+export function execute(caster: Combatant, targets: Combatant[], state: EngineState): void {
+  const action = caster.actions.find(a => a.name === 'Sickening Radiance');
+  const saveDC = action?.saveDC ?? 15;
+
+  consumeSpellSlot(caster, 4);
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Sickening Radiance! (v1: forward-compat flag set; mechanical effect not yet implemented)`,
-    caster.id,
+    `${caster.name} casts Sickening Radiance! (DC ${saveDC} CON, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}, ${metadata.aoeRadiusFt}-ft radius AoE + poisoned [exhaustion simplified] on fail) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} caught!`,
   );
-  emit(
-    state, 'condition_add', caster.id,
-    `${caster.name} is affected by Sickening Radiance. (v1: forward-compat flag set; no mechanical effect until engine subsystem is implemented)`,
-    caster.id,
-  );
+
+  for (const target of targets) {
+    if (target.isDead || target.isUnconscious) continue;
+
+    const save = rollSave(target, 'con', saveDC);
+    const fullDmg = rollDamage();
+    const dmg = save.success ? Math.floor(fullDmg / 2) : fullDmg;
+    const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);
+
+    emit(
+      state,
+      save.success ? 'save_success' : 'save_fail',
+      caster.id,
+      `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} CON save vs Sickening Radiance (rolled ${save.total}) — ${dealt} ${metadata.damageType} damage (${metadata.dieCount}d${metadata.dieSides}=${fullDmg}${save.success ? ', halved' : ''})${save.success ? '' : ' + POISONED (exhaustion simplified)'}`,
+      target.id, save.roll,
+    );
+    emit(state, 'damage', caster.id, `Sickening Radiance: ${target.name} takes ${dealt} ${metadata.damageType} damage`, target.id, dealt);
+
+    // On failed save: apply poisoned (exhaustion simplified to poisoned).
+    if (!save.success && !target.conditions.has('poisoned')) {
+      applySpellEffect(target, {
+        casterId: caster.id,
+        spellName: 'Sickening Radiance',
+        effectType: 'condition_apply',
+        payload: { condition: 'poisoned' },
+        sourceIsConcentration: false,   // v1 one-shot
+      });
+      emit(
+        state, 'condition_add', caster.id,
+        `${target.name} is SICKENED (poisoned, v1 simplification of exhaustion) by the radiance! (disadvantage on attacks and ability checks)`,
+        target.id,
+      );
+    }
+  }
 }
 
-// ---- Cleanup ------------------------------------------------
-
 export function cleanup(_c: Combatant): void {
-  // No-op — forward-compat flag persists for combat.
+  // No-op — v1 one-shot.
 }

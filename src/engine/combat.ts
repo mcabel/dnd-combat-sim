@@ -358,6 +358,34 @@ import {
   shouldCast as shouldCastVampiricTouch,
   execute as executeVampiricTouch,
 } from '../spells/vampiric_touch';
+import {
+  shouldCast as shouldCastElementalBane,
+  execute as executeElementalBane,
+} from '../spells/elemental_bane';
+import {
+  shouldCast as shouldCastGravitySinkhole,
+  execute as executeGravitySinkhole,
+} from '../spells/gravity_sinkhole';
+import {
+  shouldCast as shouldCastIceStorm,
+  execute as executeIceStorm,
+} from '../spells/ice_storm';
+import {
+  shouldCast as shouldCastSickeningRadiance,
+  execute as executeSickeningRadiance,
+} from '../spells/sickening_radiance';
+import {
+  shouldCast as shouldCastSpellfireStorm,
+  execute as executeSpellfireStorm,
+} from '../spells/spellfire_storm';
+import {
+  shouldCast as shouldCastStormSphere,
+  execute as executeStormSphere,
+} from '../spells/storm_sphere';
+import {
+  shouldCast as shouldCastVitriolicSphere,
+  execute as executeVitriolicSphere,
+} from '../spells/vitriolic_sphere';
 
 // ── Session 19 — bulk-implementation generic dispatch (262 new spells) ────
 import {
@@ -2549,6 +2577,65 @@ function executePlannedAction(
         ? vtTarget
         : shouldCastVampiricTouch(actor, bf);
       if (liveTarget) executeVampiricTouch(actor, liveTarget, state);
+      break;
+    }
+
+    // ── Session 24 — L4 combat damage spells (7) ────────────────────
+
+    case 'elementalBane': {
+      // Elemental Bane — XGE p.154: 90 ft, WIS save 2d6 acid, single-target.
+      const ebTargetId = plan.targetId;
+      const ebTarget = ebTargetId ? bf.combatants.get(ebTargetId) ?? null : null;
+      const liveTarget = ebTarget && !ebTarget.isDead && !ebTarget.isUnconscious
+        ? ebTarget
+        : shouldCastElementalBane(actor, bf);
+      if (liveTarget) executeElementalBane(actor, liveTarget, state);
+      break;
+    }
+
+    case 'gravitySinkhole': {
+      // Gravity Sinkhole — EGtW p.162: 60 ft, CON save 5d10 force, 20-ft radius AoE.
+      const gsTargets = shouldCastGravitySinkhole(actor, bf);
+      if (gsTargets) executeGravitySinkhole(actor, gsTargets, state);
+      break;
+    }
+
+    case 'iceStorm': {
+      // Ice Storm — PHB p.254: 300 ft, DEX save 2d8 cold + 2d6 bludgeoning, 20-ft radius.
+      const isTargets = shouldCastIceStorm(actor, bf);
+      if (isTargets) executeIceStorm(actor, isTargets, state);
+      break;
+    }
+
+    case 'sickeningRadiance': {
+      // Sickening Radiance — XGE p.164: 120 ft, CON save 4d10 radiant + poisoned on fail, 30-ft radius.
+      const srTargets = shouldCastSickeningRadiance(actor, bf);
+      if (srTargets) executeSickeningRadiance(actor, srTargets, state);
+      break;
+    }
+
+    case 'spellfireStorm': {
+      // Spellfire Storm — SCAG p.150: 60 ft, AUTO-HIT 4d10 fire, single-target.
+      const sfTargetId = plan.targetId;
+      const sfTarget = sfTargetId ? bf.combatants.get(sfTargetId) ?? null : null;
+      const liveTarget = sfTarget && !sfTarget.isDead && !sfTarget.isUnconscious
+        ? sfTarget
+        : shouldCastSpellfireStorm(actor, bf);
+      if (liveTarget) executeSpellfireStorm(actor, liveTarget, state);
+      break;
+    }
+
+    case 'stormSphere': {
+      // Storm Sphere — XGE p.166: 150 ft, CON save 6d6 thunder, 20-ft radius.
+      const ssTargets = shouldCastStormSphere(actor, bf);
+      if (ssTargets) executeStormSphere(actor, ssTargets, state);
+      break;
+    }
+
+    case 'vitriolicSphere': {
+      // Vitriolic Sphere — XGE p.168: 150 ft, DEX save 10d4 acid, 20-ft radius.
+      const vsTargets = shouldCastVitriolicSphere(actor, bf);
+      if (vsTargets) executeVitriolicSphere(actor, vsTargets, state);
       break;
     }
 

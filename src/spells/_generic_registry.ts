@@ -824,12 +824,6 @@ import {
 } from './doomtide';
 
 import {
-  shouldCast as shouldCastElementalBane,
-  execute as executeElementalBane,
-  metadata as metadataElementalBane,
-} from './elemental_bane';
-
-import {
   shouldCast as shouldCastEvardsBlackTentacles,
   execute as executeEvardsBlackTentacles,
   metadata as metadataEvardsBlackTentacles,
@@ -878,12 +872,6 @@ import {
 } from './grasping_vine';
 
 import {
-  shouldCast as shouldCastGravitySinkhole,
-  execute as executeGravitySinkhole,
-  metadata as metadataGravitySinkhole,
-} from './gravity_sinkhole';
-
-import {
   shouldCast as shouldCastGuardianOfFaith,
   execute as executeGuardianOfFaith,
   metadata as metadataGuardianOfFaith,
@@ -900,12 +888,6 @@ import {
   execute as executeHallucinatoryTerrain,
   metadata as metadataHallucinatoryTerrain,
 } from './hallucinatory_terrain';
-
-import {
-  shouldCast as shouldCastIceStorm,
-  execute as executeIceStorm,
-  metadata as metadataIceStorm,
-} from './ice_storm';
 
 import {
   shouldCast as shouldCastMordenkainensFaithfulHound,
@@ -950,18 +932,6 @@ import {
 } from './shadow_of_moil';
 
 import {
-  shouldCast as shouldCastSickeningRadiance,
-  execute as executeSickeningRadiance,
-  metadata as metadataSickeningRadiance,
-} from './sickening_radiance';
-
-import {
-  shouldCast as shouldCastSpellfireStorm,
-  execute as executeSpellfireStorm,
-  metadata as metadataSpellfireStorm,
-} from './spellfire_storm';
-
-import {
   shouldCast as shouldCastSpiritOfDeath,
   execute as executeSpiritOfDeath,
   metadata as metadataSpiritOfDeath,
@@ -984,18 +954,6 @@ import {
   execute as executeStoneskin,
   metadata as metadataStoneskin,
 } from './stoneskin';
-
-import {
-  shouldCast as shouldCastStormSphere,
-  execute as executeStormSphere,
-  metadata as metadataStormSphere,
-} from './storm_sphere';
-
-import {
-  shouldCast as shouldCastVitriolicSphere,
-  execute as executeVitriolicSphere,
-  metadata as metadataVitriolicSphere,
-} from './vitriolic_sphere';
 
 import {
   shouldCast as shouldCastWaterySphere,
@@ -2542,12 +2500,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     shouldCast: shouldCastDoomtide,
     execute: executeDoomtide,
   },
-  'Elemental Bane': {
-    name: 'Elemental Bane',
-    level: metadataElementalBane.level,
-    shouldCast: shouldCastElementalBane,
-    execute: executeElementalBane,
-  },
   "Evard's Black Tentacles": {
     name: "Evard's Black Tentacles",
     level: metadataEvardsBlackTentacles.level,
@@ -2596,12 +2548,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     shouldCast: shouldCastGraspingVine,
     execute: executeGraspingVine,
   },
-  'Gravity Sinkhole': {
-    name: 'Gravity Sinkhole',
-    level: metadataGravitySinkhole.level,
-    shouldCast: shouldCastGravitySinkhole,
-    execute: executeGravitySinkhole,
-  },
   'Guardian of Faith': {
     name: 'Guardian of Faith',
     level: metadataGuardianOfFaith.level,
@@ -2619,12 +2565,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     level: metadataHallucinatoryTerrain.level,
     shouldCast: shouldCastHallucinatoryTerrain,
     execute: executeHallucinatoryTerrain,
-  },
-  'Ice Storm': {
-    name: 'Ice Storm',
-    level: metadataIceStorm.level,
-    shouldCast: shouldCastIceStorm,
-    execute: executeIceStorm,
   },
   "Mordenkainen's Faithful Hound": {
     name: "Mordenkainen's Faithful Hound",
@@ -2668,18 +2608,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     shouldCast: shouldCastShadowOfMoil,
     execute: executeShadowOfMoil,
   },
-  'Sickening Radiance': {
-    name: 'Sickening Radiance',
-    level: metadataSickeningRadiance.level,
-    shouldCast: shouldCastSickeningRadiance,
-    execute: executeSickeningRadiance,
-  },
-  'Spellfire Storm': {
-    name: 'Spellfire Storm',
-    level: metadataSpellfireStorm.level,
-    shouldCast: shouldCastSpellfireStorm,
-    execute: executeSpellfireStorm,
-  },
   'Spirit of Death': {
     name: 'Spirit of Death',
     level: metadataSpiritOfDeath.level,
@@ -2703,18 +2631,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     level: metadataStoneskin.level,
     shouldCast: shouldCastStoneskin,
     execute: executeStoneskin,
-  },
-  'Storm Sphere': {
-    name: 'Storm Sphere',
-    level: metadataStormSphere.level,
-    shouldCast: shouldCastStormSphere,
-    execute: executeStormSphere,
-  },
-  'Vitriolic Sphere': {
-    name: 'Vitriolic Sphere',
-    level: metadataVitriolicSphere.level,
-    shouldCast: shouldCastVitriolicSphere,
-    execute: executeVitriolicSphere,
   },
   'Watery Sphere': {
     name: 'Watery Sphere',

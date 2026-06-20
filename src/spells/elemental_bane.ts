@@ -1,118 +1,133 @@
 // ============================================================
-// Elemental Bane — XGE p.155
+// Elemental Bane — XGE p.154 (also EGtW p.158)
 //
-// 4-level transmutation, 1 action, range 90 ft, concentration.
-// Duration: 1 minute.
+// 4th-level transmutation, action, range 90 ft, CONCENTRATION (1 min).
+// v1: concentration simplified to one-shot (see simplifications).
+// Components: V, S.
 //
-// Effect: Choose one creature you can see within range, and choose one of the following damage types: acid, cold, fire, lightning, or thunder. The target must succeed on a Constitution saving throw or be affect
+// Effect: Choose one creature you can see within range, and choose acid,
+//         cold, fire, lightning, or poison damage. The target must make
+//         a Wisdom saving throw. On a failed save, the target takes 2d6
+//         acid damage (v1: always acid — see simplifications). For the
+//         duration, the target loses resistance to the chosen damage
+//         type, and the first time each turn you deal damage of the
+//         chosen type to the target, it takes an additional 2d6 damage.
 //
-// Upcast: see source (not modelled in v1).
+// Upcast: +1d6 damage per slot level above 4th (not modelled in v1).
 //
 // v1 simplifications:
-//   - v1 models this spell as a FORWARD-COMPAT flag only (Session 19 bulk
-//     implementation). The spell consumes a slot and sets the flag
-//     `_genericSpellActiveSpells` on the caster; the actual mechanical
-//     effect (damage / save / condition / buff) is NOT applied in v1.
-//     A future implementation should extend the relevant engine subsystem
-//     (damage_zone for persistent damage, condition_apply for conditions,
-//     advantage_vs for buffs, etc.) to consume this flag and apply the
-//     real effect. This mirrors the Session 17/18 forward-compat pattern
-//     established by Darkvision, Arcane Lock, Knock, See Invisibility.
-//   - Concentration spell (forward-compat flag persists for combat).
+//   - Concentration (XGE p.154: "concentration, up to 1 minute"): v1
+//     simplifies to one-shot (concentration: false). The "lose resistance
+//     to chosen element" + "first-time-each-turn +2d6" riders are NOT
+//     modelled — v1 has no per-turn damage-tracking subsystem. One-shot
+//     2d6 damage only. Documented via
+//     `elementalBaneConcentrationV1Simplified: true`.
+//   - Damage type choice (XGE p.154: caster chooses acid/cold/fire/
+//     lightning/poison): v1 ALWAYS uses acid (the simplest choice — no
+//     target-resistance picker needed). Documented via
+//     `elementalBaneAcidTypeV1Default: true`.
+//   - Vulnerability rider ("the target loses resistance to the chosen
+//     damage type"): NOT modelled — v1 has no vulnerability_add effect
+//     type. Documented via `elementalBaneVulnerabilityV1Simplified: true`.
+//   - Per-turn +2d6 rider: NOT modelled (no per-turn damage tracking).
+//   - Save ability: WIS (XGE p.154).
+//   - Upcast: +1d6/slot-level NOT modelled. Documented via
+//     `elementalBaneUpcastV1Implemented: false`.
 //
-// Spell module pattern (mirrors Darkvision / Arcane Lock forward-compat
-// self-buff pattern):
-//   shouldCast(caster, bf) → boolean
-//   execute(caster, state) → void
-//   cleanup() — no-op (forward-compat flag persists for combat)
+// Migration note (Session 24): Mirrors the Catapult bespoke pattern
+// (Session 21) but with WIS save, 2d6 acid, L4 slot, 90-ft range.
+//
+// Spell module pattern (single-target save — mirrors catapult.ts):
+//   shouldCast(caster, bf) → Combatant | null
+//   execute(caster, target, state) → void
+//   cleanup() — no-op (v1 one-shot)
 // ============================================================
 
 import { Combatant, Battlefield } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
+import { rollSave, rollDie, applyDamageWithTempHP } from '../engine/utils';
+import { chebyshev3D, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
-
-// ---- Metadata -----------------------------------------------
 
 export const metadata = {
   name: 'Elemental Bane',
   level: 4,
   school: 'transmutation',
-  rangeFt: 90,
-  concentration: true,
+  rangeFt: 90,                   // XGE p.154: 90 ft
+  dieCount: 2,
+  dieSides: 6,
+  damageType: 'acid' as const,   // v1 default (caster choice simplified)
+  concentration: false,          // v1 simplification: one-shot (canon concentration 1 min)
+  saveAbility: 'wis' as const,
   castingTime: 'action',
-  elementalBaneV1Simplified: true,
+  elementalBaneConcentrationV1Simplified: true,                       // canon concentration simplified to one-shot
+  elementalBaneAcidTypeV1Default: true,                               // caster choice simplified to acid
+  elementalBaneVulnerabilityV1Simplified: true,                       // vulnerability rider NOT modelled
+  elementalBaneUpcastV1Implemented: false,                             // +1d6/slot-level NOT modelled
 } as const;
 
-// ---- Local log helper ---------------------------------------
-
-function emit(
-  state: EngineState,
-  type: CombatEvent['type'],
-  actorId: string,
-  desc: string,
-  targetId?: string,
-  value?: number,
-): void {
-  state.log.events.push({
-    round: state.battlefield.round,
-    actorId,
-    type,
-    targetId,
-    value,
-    description: desc,
-  });
+function emit(state: EngineState, type: CombatEvent['type'], actorId: string, desc: string, targetId?: string, value?: number): void {
+  state.log.events.push({ round: state.battlefield.round, actorId, type, targetId, value, description: desc });
 }
 
-// ---- Planner ------------------------------------------------
-
-/**
- * Returns true if the caster should cast Elemental Bane this turn.
- *
- * Preconditions:
- *   - Caster has 'Elemental Bane' in their actions
- *   - Caster has at least one 4-level-or-higher slot available
- *   - Caster is NOT already Elemental Bane-active (re-cast would be a no-op in v1)
- */
-export function shouldCast(caster: Combatant, _bf: Battlefield): boolean {
-  if (!caster.actions.some(a => a.name === 'Elemental Bane')) return false;
-  if (!hasSpellSlot(caster, 4)) return false;
-  if (caster._genericSpellActiveSpells?.has('Elemental Bane')) return false;
-  return true;
+export function rollDamage(): number {
+  let total = 0;
+  for (let i = 0; i < metadata.dieCount; i++) total += rollDie(metadata.dieSides);
+  return total;
 }
 
-// ---- Execution ----------------------------------------------
+export function shouldCast(caster: Combatant, bf: Battlefield): Combatant | null {
+  if (!caster.actions.some(a => a.name === 'Elemental Bane')) return null;
+  if (!hasSpellSlot(caster, 4)) return null;
 
-/**
- * Execute Elemental Bane:
- *  1. Consume a 4-level spell slot.
- *  2. Set the flag on the caster's `_genericSpellActiveSpells` Set.
- *  3. Log the cast.
- */
-export function execute(
-  caster: Combatant,
-  state: EngineState,
-): void {
-  consumeSpellSlot(caster, 4);
-
-  if (!caster._genericSpellActiveSpells) {
-    caster._genericSpellActiveSpells = new Set<string>();
+  const enemies = livingEnemiesOf(caster, bf);
+  const candidates: Array<{ c: Combatant; threat: number; curHP: number; dist: number }> = [];
+  for (const e of enemies) {
+    const distFt = chebyshev3D(caster.pos, e.pos) * 5;
+    if (distFt > 90) continue;
+    candidates.push({ c: e, threat: e.maxHP, curHP: e.currentHP, dist: distFt });
   }
-  caster._genericSpellActiveSpells.add('Elemental Bane');
+  if (candidates.length === 0) return null;
+  candidates.sort((a, b) => {
+    if (a.threat !== b.threat) return b.threat - a.threat;
+    if (a.curHP !== b.curHP) return a.curHP - b.curHP;
+    return a.dist - b.dist;
+  });
+  return candidates[0].c;
+}
+
+export function execute(caster: Combatant, target: Combatant, state: EngineState): void {
+  const action = caster.actions.find(a => a.name === 'Elemental Bane');
+  const saveDC = action?.saveDC ?? 15;
+
+  consumeSpellSlot(caster, 4);
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Elemental Bane! (v1: forward-compat flag set; mechanical effect not yet implemented)`,
-    caster.id,
+    `${caster.name} casts Elemental Bane at ${target.name}! (DC ${saveDC} WIS, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}, half on save)`,
+    target.id,
   );
+
+  if (target.isDead || target.isUnconscious) {
+    emit(state, 'save_success', caster.id, `Elemental Bane: ${target.name} is already down — the bane finds no essence.`, target.id);
+    return;
+  }
+
+  const save = rollSave(target, 'wis', saveDC);
+  const fullDmg = rollDamage();
+  const dmg = save.success ? Math.floor(fullDmg / 2) : fullDmg;
+  const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);
+
   emit(
-    state, 'condition_add', caster.id,
-    `${caster.name} is affected by Elemental Bane. (v1: forward-compat flag set; no mechanical effect until engine subsystem is implemented)`,
+    state,
+    save.success ? 'save_success' : 'save_fail',
     caster.id,
+    `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} WIS save vs Elemental Bane (rolled ${save.total}) — ${dealt} ${metadata.damageType} damage (${metadata.dieCount}d${metadata.dieSides}=${fullDmg}${save.success ? ', halved' : ''})`,
+    target.id, save.roll,
   );
+  emit(state, 'damage', caster.id, `Elemental Bane: ${target.name} takes ${dealt} ${metadata.damageType} damage`, target.id, dealt);
 }
 
-// ---- Cleanup ------------------------------------------------
-
 export function cleanup(_c: Combatant): void {
-  // No-op — forward-compat flag persists for combat.
+  // No-op — v1 one-shot (canon concentration simplified away).
 }

@@ -1,117 +1,153 @@
 // ============================================================
-// Ice Storm — PHB p.252
+// Ice Storm — PHB p.254
 //
-// 4-level evocation, 1 action, range 300 ft.
-// Duration: Instantaneous.
+// 4th-level evocation, action, range 300 ft, NO concentration.
+// Components: V, S, M (a pinch of dust and a few drops of water).
 //
-// Effect: A hail of rock-hard ice pounds to the ground in a 20-foot-radius, 40-foot-high cylinder centered on a point within range. Each creature in the cylinder must make a Dexterity saving throw. A creature t
+// Effect: A hail of rock-hard ice pounds to the ground in a 20-foot-
+//         radius, 40-foot-high cylinder centered on a point within range.
+//         Each creature in the cylinder must make a Dexterity saving
+//         throw. A creature takes 2d8 cold damage + 2d6 bludgeoning
+//         damage on a failed save, or half as much on a successful one.
 //
-// Upcast: see source (not modelled in v1).
+//         Hailstones turn the storm's area of effect into difficult
+//         terrain until the end of your next turn.
+//
+// Upcast: +1d8 cold + 1d6 bludgeoning per slot level above 4th (not modelled).
 //
 // v1 simplifications:
-//   - v1 models this spell as a FORWARD-COMPAT flag only (Session 19 bulk
-//     implementation). The spell consumes a slot and sets the flag
-//     `_genericSpellActiveSpells` on the caster; the actual mechanical
-//     effect (damage / save / condition / buff) is NOT applied in v1.
-//     A future implementation should extend the relevant engine subsystem
-//     (damage_zone for persistent damage, condition_apply for conditions,
-//     advantage_vs for buffs, etc.) to consume this flag and apply the
-//     real effect. This mirrors the Session 17/18 forward-compat pattern
-//     established by Darkvision, Arcane Lock, Knock, See Invisibility.
+//   - AoE shape: canon 20-ft radius cylinder. v1 targets the highest-
+//     threat enemy within 300 ft as the cylinder's centre and applies
+//     damage to ALL enemies within 20 ft of that centre (chebyshev3D —
+//     square approx). Mirrors Shatter (Session 18).
+//   - Dual damage type: 2d8 cold + 2d6 bludgeoning. v1 rolls each
+//     separately and applies them as TWO damage applications (cold then
+//     bludgeoning) so per-type resistances apply correctly. The save
+//     halves BOTH (each rolled damage is halved independently on save
+//     success). Documented via `iceStormDualDamageV1Implemented: true`.
+//   - Difficult-terrain rider (PHB p.254): NOT modelled.
+//   - Upcast: NOT modelled.
+//   - NOT concentration (PHB p.254: instantaneous).
 //
-// Spell module pattern (mirrors Darkvision / Arcane Lock forward-compat
-// self-buff pattern):
-//   shouldCast(caster, bf) → boolean
-//   execute(caster, state) → void
-//   cleanup() — no-op (forward-compat flag persists for combat)
+// Migration note (Session 24): Mirrors Shatter but with DUAL damage
+// type (cold + bludgeoning), 20-ft radius, L4 slot, 300-ft range. The
+// dual-damage loop applies each damage type separately so resistances
+// work correctly.
+//
+// Spell module pattern (AoE save radius, dual damage — mirrors shatter.ts):
+//   shouldCast(caster, bf) → Combatant[] | null
+//   execute(caster, targets, state) → void
+//   cleanup() — no-op
 // ============================================================
 
 import { Combatant, Battlefield } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
+import { rollSave, rollDie, applyDamageWithTempHP } from '../engine/utils';
+import { chebyshev3D, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
-
-// ---- Metadata -----------------------------------------------
 
 export const metadata = {
   name: 'Ice Storm',
   level: 4,
   school: 'evocation',
-  rangeFt: 300,
+  rangeFt: 300,                  // PHB p.254: 300 ft
+  aoeRadiusFt: 20,               // PHB p.254: 20-ft radius cylinder
+  dieCount: 2,                   // cold dice count
+  dieSides: 8,                   // cold die sides
+  bludgeonDieCount: 2,           // bludgeoning dice count (PHB p.254: 2d6)
+  bludgeonDieSides: 6,
+  damageType: 'cold' as const,   // primary damage type (metadata)
   concentration: false,
+  saveAbility: 'dex' as const,
   castingTime: 'action',
-  iceStormV1Simplified: true,
+  iceStormDualDamageV1Implemented: true,                              // 2d8 cold + 2d6 bludgeoning, applied separately
+  iceStormDifficultTerrainV1Simplified: true,                        // difficult-terrain rider NOT modelled
+  iceStormUpcastV1Implemented: false,                                 // +1d8 cold + 1d6 bludgeoning NOT modelled
 } as const;
 
-// ---- Local log helper ---------------------------------------
-
-function emit(
-  state: EngineState,
-  type: CombatEvent['type'],
-  actorId: string,
-  desc: string,
-  targetId?: string,
-  value?: number,
-): void {
-  state.log.events.push({
-    round: state.battlefield.round,
-    actorId,
-    type,
-    targetId,
-    value,
-    description: desc,
-  });
+function emit(state: EngineState, type: CombatEvent['type'], actorId: string, desc: string, targetId?: string, value?: number): void {
+  state.log.events.push({ round: state.battlefield.round, actorId, type, targetId, value, description: desc });
 }
 
-// ---- Planner ------------------------------------------------
-
-/**
- * Returns true if the caster should cast Ice Storm this turn.
- *
- * Preconditions:
- *   - Caster has 'Ice Storm' in their actions
- *   - Caster has at least one 4-level-or-higher slot available
- *   - Caster is NOT already Ice Storm-active (re-cast would be a no-op in v1)
- */
-export function shouldCast(caster: Combatant, _bf: Battlefield): boolean {
-  if (!caster.actions.some(a => a.name === 'Ice Storm')) return false;
-  if (!hasSpellSlot(caster, 4)) return false;
-  if (caster._genericSpellActiveSpells?.has('Ice Storm')) return false;
-  return true;
+/** Roll 2d8 cold (primary). */
+export function rollDamageCold(): number {
+  let total = 0;
+  for (let i = 0; i < metadata.dieCount; i++) total += rollDie(metadata.dieSides);
+  return total;
 }
 
-// ---- Execution ----------------------------------------------
+/** Roll 2d6 bludgeoning (secondary). */
+export function rollDamageBludgeon(): number {
+  let total = 0;
+  for (let i = 0; i < metadata.bludgeonDieCount; i++) total += rollDie(metadata.bludgeonDieSides);
+  return total;
+}
 
-/**
- * Execute Ice Storm:
- *  1. Consume a 4-level spell slot.
- *  2. Set the flag on the caster's `_genericSpellActiveSpells` Set.
- *  3. Log the cast.
- */
-export function execute(
-  caster: Combatant,
-  state: EngineState,
-): void {
-  consumeSpellSlot(caster, 4);
+export function shouldCast(caster: Combatant, bf: Battlefield): Combatant[] | null {
+  if (!caster.actions.some(a => a.name === 'Ice Storm')) return null;
+  if (!hasSpellSlot(caster, 4)) return null;
 
-  if (!caster._genericSpellActiveSpells) {
-    caster._genericSpellActiveSpells = new Set<string>();
+  const enemies = livingEnemiesOf(caster, bf);
+  let center: Combatant | null = null;
+  let centerThreat = -1;
+  let centerDist = Infinity;
+  for (const e of enemies) {
+    const distFt = chebyshev3D(caster.pos, e.pos) * 5;
+    if (distFt > 300) continue;
+    if (e.maxHP > centerThreat || (e.maxHP === centerThreat && distFt < centerDist)) {
+      center = e;
+      centerThreat = e.maxHP;
+      centerDist = distFt;
+    }
   }
-  caster._genericSpellActiveSpells.add('Ice Storm');
+  if (!center) return null;
+
+  const targets: Combatant[] = [];
+  for (const e of enemies) {
+    const distFt = chebyshev3D(center.pos, e.pos) * 5;
+    if (distFt <= 20) targets.push(e);
+  }
+  return targets.length >= 1 ? targets : null;
+}
+
+export function execute(caster: Combatant, targets: Combatant[], state: EngineState): void {
+  const action = caster.actions.find(a => a.name === 'Ice Storm');
+  const saveDC = action?.saveDC ?? 15;
+
+  consumeSpellSlot(caster, 4);
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Ice Storm! (v1: forward-compat flag set; mechanical effect not yet implemented)`,
-    caster.id,
+    `${caster.name} casts Ice Storm! (DC ${saveDC} DEX, ${metadata.dieCount}d${metadata.dieSides} cold + ${metadata.bludgeonDieCount}d${metadata.bludgeonDieSides} bludgeoning, ${metadata.aoeRadiusFt}-ft radius AoE) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} caught!`,
   );
-  emit(
-    state, 'condition_add', caster.id,
-    `${caster.name} is affected by Ice Storm. (v1: forward-compat flag set; no mechanical effect until engine subsystem is implemented)`,
-    caster.id,
-  );
+
+  for (const target of targets) {
+    if (target.isDead || target.isUnconscious) continue;
+
+    const save = rollSave(target, 'dex', saveDC);
+
+    // Roll both damage types; halve each independently on save success.
+    const coldRaw = rollDamageCold();
+    const bludRaw = rollDamageBludgeon();
+    const cold = save.success ? Math.floor(coldRaw / 2) : coldRaw;
+    const blud = save.success ? Math.floor(bludRaw / 2) : bludRaw;
+
+    // Apply each damage type separately (so resistances apply per-type).
+    const coldDealt = applyDamageWithTempHP(target, cold, 'cold');
+    const bludDealt = applyDamageWithTempHP(target, blud, 'bludgeoning');
+    const totalDealt = coldDealt + bludDealt;
+
+    emit(
+      state,
+      save.success ? 'save_success' : 'save_fail',
+      caster.id,
+      `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} DEX save vs Ice Storm (rolled ${save.total}) — ${coldDealt} cold + ${bludDealt} bludgeoning = ${totalDealt} total damage (${save.success ? 'halved' : 'full'})`,
+      target.id, save.roll,
+    );
+    emit(state, 'damage', caster.id, `Ice Storm: ${target.name} takes ${totalDealt} damage (${coldDealt} cold + ${bludDealt} bludgeoning)`, target.id, totalDealt);
+  }
 }
 
-// ---- Cleanup ------------------------------------------------
-
 export function cleanup(_c: Combatant): void {
-  // No-op — forward-compat flag persists for combat.
+  // No-op — instantaneous.
 }

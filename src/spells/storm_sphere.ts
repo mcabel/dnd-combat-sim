@@ -1,118 +1,144 @@
 // ============================================================
 // Storm Sphere — XGE p.166
 //
-// 4-level evocation, 1 action, range 150 ft, concentration.
-// Duration: 1 minute.
+// 4th-level evocation, action, range 150 ft. Canon: concentration,
+// up to 1 minute. v1: concentration + riders simplified to one-shot.
+// Components: V, S.
 //
-// Effect: A 20-foot-radius sphere of whirling air springs into existence, centered on a point you choose within range. The sphere remains for the spell's duration. Each creature in the sphere when it appears or
+// Effect: A 20-foot-radius sphere of whirling air and 40-foot-high
+//         cylinder of wind (the "storm sphere") appears centered on a
+//         point within range. The area is difficult terrain. Each
+//         creature in the sphere makes a Constitution save. On a failed
+//         save, a creature takes 6d6 thunder damage. On a successful
+//         save, a creature takes half as much damage.
 //
-// Upcast: see source (not modelled in v1).
+//         Canon riders (NOT modelled in v1):
+//         - Each creature within 40 ft of the sphere (not just inside):
+//           no extra effect in canon (the sphere is 20-ft radius).
+//         - Bonus action: 1d8 lightning bolt at a creature within 60 ft
+//           of the sphere — v1 does NOT model this (no per-turn bonus-
+//           action rider subsystem).
+//         - Difficult terrain: NOT modelled.
+//
+// Upcast: +1d6 thunder per slot level above 4th (not modelled in v1).
 //
 // v1 simplifications:
-//   - v1 models this spell as a FORWARD-COMPAT flag only (Session 19 bulk
-//     implementation). The spell consumes a slot and sets the flag
-//     `_genericSpellActiveSpells` on the caster; the actual mechanical
-//     effect (damage / save / condition / buff) is NOT applied in v1.
-//     A future implementation should extend the relevant engine subsystem
-//     (damage_zone for persistent damage, condition_apply for conditions,
-//     advantage_vs for buffs, etc.) to consume this flag and apply the
-//     real effect. This mirrors the Session 17/18 forward-compat pattern
-//     established by Darkvision, Arcane Lock, Knock, See Invisibility.
-//   - Concentration spell (forward-compat flag persists for combat).
+//   - Concentration (XGE p.166: "concentration, up to 1 minute"): v1
+//     simplifies to one-shot (concentration: false). The persistent
+//     difficult-terrain + per-turn bonus-action lightning bolt are NOT
+//     modelled. One-shot 6d6 thunder AoE. Documented via
+//     `stormSphereConcentrationV1Simplified: true`.
+//   - AoE shape: canon 20-ft radius sphere (v1 follows XGE p.166, NOT
+//     the plan's "40-ft sphere" note — the plan mis-stated the radius).
+//     v1 targets the highest-threat enemy within 150 ft as the sphere's
+//     centre and applies to ALL enemies within 20 ft (chebyshev3D approx).
+//   - Plan deviation: the plan says "40-ft sphere"; XGE p.166 says
+//     20-ft radius. v1 follows canon (20-ft). Documented via
+//     `stormSphereRadius20ftCanonV1: true`.
+//   - Lightning-bolt bonus action (XGE p.166): NOT modelled.
+//   - Upcast: NOT modelled.
 //
-// Spell module pattern (mirrors Darkvision / Arcane Lock forward-compat
-// self-buff pattern):
-//   shouldCast(caster, bf) → boolean
-//   execute(caster, state) → void
-//   cleanup() — no-op (forward-compat flag persists for combat)
+// Migration note (Session 24): Mirrors Shatter (Session 18) but with
+// 6d6 thunder, 20-ft radius (canon; plan's 40-ft is wrong), L4 slot,
+// 150-ft range.
+//
+// Spell module pattern (AoE save radius — mirrors shatter.ts):
+//   shouldCast(caster, bf) → Combatant[] | null
+//   execute(caster, targets, state) → void
+//   cleanup() — no-op (v1 one-shot)
 // ============================================================
 
 import { Combatant, Battlefield } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
+import { rollSave, rollDie, applyDamageWithTempHP } from '../engine/utils';
+import { chebyshev3D, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
-
-// ---- Metadata -----------------------------------------------
 
 export const metadata = {
   name: 'Storm Sphere',
   level: 4,
   school: 'evocation',
-  rangeFt: 150,
-  concentration: true,
+  rangeFt: 150,                  // XGE p.166: 150 ft
+  aoeRadiusFt: 20,               // XGE p.166: 20-ft radius (canon; plan's 40-ft is wrong)
+  dieCount: 6,
+  dieSides: 6,
+  damageType: 'thunder' as const,
+  concentration: false,          // v1 simplification: one-shot (canon concentration 1 min)
+  saveAbility: 'con' as const,
   castingTime: 'action',
-  stormSphereV1Simplified: true,
+  stormSphereConcentrationV1Simplified: true,                         // canon concentration simplified to one-shot
+  stormSphereRadius20ftCanonV1: true,                                 // v1 uses canon 20-ft (plan's 40-ft is wrong)
+  stormSphereLightningRiderV1Simplified: true,                       // bonus-action lightning bolt NOT modelled
+  stormSphereUpcastV1Implemented: false,                              // +1d6/slot-level NOT modelled
 } as const;
 
-// ---- Local log helper ---------------------------------------
-
-function emit(
-  state: EngineState,
-  type: CombatEvent['type'],
-  actorId: string,
-  desc: string,
-  targetId?: string,
-  value?: number,
-): void {
-  state.log.events.push({
-    round: state.battlefield.round,
-    actorId,
-    type,
-    targetId,
-    value,
-    description: desc,
-  });
+function emit(state: EngineState, type: CombatEvent['type'], actorId: string, desc: string, targetId?: string, value?: number): void {
+  state.log.events.push({ round: state.battlefield.round, actorId, type, targetId, value, description: desc });
 }
 
-// ---- Planner ------------------------------------------------
-
-/**
- * Returns true if the caster should cast Storm Sphere this turn.
- *
- * Preconditions:
- *   - Caster has 'Storm Sphere' in their actions
- *   - Caster has at least one 4-level-or-higher slot available
- *   - Caster is NOT already Storm Sphere-active (re-cast would be a no-op in v1)
- */
-export function shouldCast(caster: Combatant, _bf: Battlefield): boolean {
-  if (!caster.actions.some(a => a.name === 'Storm Sphere')) return false;
-  if (!hasSpellSlot(caster, 4)) return false;
-  if (caster._genericSpellActiveSpells?.has('Storm Sphere')) return false;
-  return true;
+export function rollDamage(): number {
+  let total = 0;
+  for (let i = 0; i < metadata.dieCount; i++) total += rollDie(metadata.dieSides);
+  return total;
 }
 
-// ---- Execution ----------------------------------------------
+export function shouldCast(caster: Combatant, bf: Battlefield): Combatant[] | null {
+  if (!caster.actions.some(a => a.name === 'Storm Sphere')) return null;
+  if (!hasSpellSlot(caster, 4)) return null;
 
-/**
- * Execute Storm Sphere:
- *  1. Consume a 4-level spell slot.
- *  2. Set the flag on the caster's `_genericSpellActiveSpells` Set.
- *  3. Log the cast.
- */
-export function execute(
-  caster: Combatant,
-  state: EngineState,
-): void {
-  consumeSpellSlot(caster, 4);
-
-  if (!caster._genericSpellActiveSpells) {
-    caster._genericSpellActiveSpells = new Set<string>();
+  const enemies = livingEnemiesOf(caster, bf);
+  let center: Combatant | null = null;
+  let centerThreat = -1;
+  let centerDist = Infinity;
+  for (const e of enemies) {
+    const distFt = chebyshev3D(caster.pos, e.pos) * 5;
+    if (distFt > 150) continue;
+    if (e.maxHP > centerThreat || (e.maxHP === centerThreat && distFt < centerDist)) {
+      center = e;
+      centerThreat = e.maxHP;
+      centerDist = distFt;
+    }
   }
-  caster._genericSpellActiveSpells.add('Storm Sphere');
+  if (!center) return null;
+
+  const targets: Combatant[] = [];
+  for (const e of enemies) {
+    const distFt = chebyshev3D(center.pos, e.pos) * 5;
+    if (distFt <= 20) targets.push(e);
+  }
+  return targets.length >= 1 ? targets : null;
+}
+
+export function execute(caster: Combatant, targets: Combatant[], state: EngineState): void {
+  const action = caster.actions.find(a => a.name === 'Storm Sphere');
+  const saveDC = action?.saveDC ?? 15;
+
+  consumeSpellSlot(caster, 4);
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Storm Sphere! (v1: forward-compat flag set; mechanical effect not yet implemented)`,
-    caster.id,
+    `${caster.name} casts Storm Sphere! (DC ${saveDC} CON, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}, ${metadata.aoeRadiusFt}-ft radius AoE) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} caught!`,
   );
-  emit(
-    state, 'condition_add', caster.id,
-    `${caster.name} is affected by Storm Sphere. (v1: forward-compat flag set; no mechanical effect until engine subsystem is implemented)`,
-    caster.id,
-  );
+
+  for (const target of targets) {
+    if (target.isDead || target.isUnconscious) continue;
+
+    const save = rollSave(target, 'con', saveDC);
+    const fullDmg = rollDamage();
+    const dmg = save.success ? Math.floor(fullDmg / 2) : fullDmg;
+    const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);
+
+    emit(
+      state,
+      save.success ? 'save_success' : 'save_fail',
+      caster.id,
+      `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} CON save vs Storm Sphere (rolled ${save.total}) — ${dealt} ${metadata.damageType} damage (${metadata.dieCount}d${metadata.dieSides}=${fullDmg}${save.success ? ', halved' : ''})`,
+      target.id, save.roll,
+    );
+    emit(state, 'damage', caster.id, `Storm Sphere: ${target.name} takes ${dealt} ${metadata.damageType} damage`, target.id, dealt);
+  }
 }
 
-// ---- Cleanup ------------------------------------------------
-
 export function cleanup(_c: Combatant): void {
-  // No-op — forward-compat flag persists for combat.
+  // No-op — v1 one-shot.
 }

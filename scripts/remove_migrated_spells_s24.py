@@ -46,6 +46,14 @@ SPELLS = [
     ('Pulse Wave',      'pulse_wave',       'PulseWave'),
     ('Tidal Wave',      'tidal_wave',       'TidalWave'),
     ('Vampiric Touch',  'vampiric_touch',   'VampiricTouch'),
+    # L4 (7) — increment 4
+    ('Elemental Bane',  'elemental_bane',   'ElementalBane'),
+    ('Gravity Sinkhole', 'gravity_sinkhole', 'GravitySinkhole'),
+    ('Ice Storm',       'ice_storm',        'IceStorm'),
+    ('Sickening Radiance', 'sickening_radiance', 'SickeningRadiance'),
+    ('Spellfire Storm', 'spellfire_storm',  'SpellfireStorm'),
+    ('Storm Sphere',    'storm_sphere',     'StormSphere'),
+    ('Vitriolic Sphere', 'vitriolic_sphere', 'VitriolicSphere'),
 ]
 
 REGISTRY = Path('src/spells/_generic_registry.ts')

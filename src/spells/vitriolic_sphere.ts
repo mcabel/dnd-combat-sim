@@ -1,117 +1,128 @@
 // ============================================================
-// Vitriolic Sphere — XGE p.170
+// Vitriolic Sphere — XGE p.168 (also EGtW p.165)
 //
-// 4-level evocation, 1 action, range 150 ft.
-// Duration: Instantaneous.
+// 4th-level evocation, action, range 150 ft, NO concentration.
+// Components: V, S, M (a drop of giant slug bile).
 //
-// Effect: You point at a location within range, and a glowing 1-foot-diameter ball of emerald acid streaks there and explodes in a 20-foot-radius sphere. Each creature in that area must make a Dexterity saving
+// Effect: You point at a location within range, and a glowing green bead
+//         of acid streaks to that point and erupts in a 20-foot-radius
+//         sphere. Each creature in that area makes a Dexterity saving
+//         throw. On a failed save, a creature takes 10d4 acid damage and
+//         another 5d4 acid damage at the end of its next turn. On a
+//         successful save, a creature takes half the initial damage and
+//         none of the later damage.
 //
-// Upcast: see source (not modelled in v1).
+// Upcast: +2d4 acid (initial) per slot level above 4th (not modelled).
 //
 // v1 simplifications:
-//   - v1 models this spell as a FORWARD-COMPAT flag only (Session 19 bulk
-//     implementation). The spell consumes a slot and sets the flag
-//     `_genericSpellActiveSpells` on the caster; the actual mechanical
-//     effect (damage / save / condition / buff) is NOT applied in v1.
-//     A future implementation should extend the relevant engine subsystem
-//     (damage_zone for persistent damage, condition_apply for conditions,
-//     advantage_vs for buffs, etc.) to consume this flag and apply the
-//     real effect. This mirrors the Session 17/18 forward-compat pattern
-//     established by Darkvision, Arcane Lock, Knock, See Invisibility.
+//   - DoT (XGE p.168: "5d4 acid at the end of its next turn"): NOT
+//     modelled — v1 has no end-of-target-turn damage hook. One-shot
+//     10d4 acid only. Documented via `vitriolicSphereDoTV1Simplified: true`.
+//   - AoE shape: 20-ft radius sphere at a point within 150 ft. v1
+//     targets the highest-threat enemy within 150 ft as the sphere's
+//     centre and applies to ALL enemies within 20 ft (chebyshev3D approx).
+//     Mirrors Shatter (Session 18).
+//   - Upcast: NOT modelled.
+//   - NOT concentration (XGE p.168: instantaneous).
 //
-// Spell module pattern (mirrors Darkvision / Arcane Lock forward-compat
-// self-buff pattern):
-//   shouldCast(caster, bf) → boolean
-//   execute(caster, state) → void
-//   cleanup() — no-op (forward-compat flag persists for combat)
+// Migration note (Session 24): Mirrors Shatter but with 10d4 acid,
+// 20-ft radius, L4 slot, 150-ft range.
+//
+// Spell module pattern (AoE save radius — mirrors shatter.ts):
+//   shouldCast(caster, bf) → Combatant[] | null
+//   execute(caster, targets, state) → void
+//   cleanup() — no-op
 // ============================================================
 
 import { Combatant, Battlefield } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
+import { rollSave, rollDie, applyDamageWithTempHP } from '../engine/utils';
+import { chebyshev3D, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
-
-// ---- Metadata -----------------------------------------------
 
 export const metadata = {
   name: 'Vitriolic Sphere',
   level: 4,
   school: 'evocation',
-  rangeFt: 150,
+  rangeFt: 150,                  // XGE p.168: 150 ft
+  aoeRadiusFt: 20,               // XGE p.168: 20-ft radius
+  dieCount: 10,
+  dieSides: 4,
+  damageType: 'acid' as const,
   concentration: false,
+  saveAbility: 'dex' as const,
   castingTime: 'action',
-  vitriolicSphereV1Simplified: true,
+  vitriolicSphereDoTV1Simplified: true,                               // 5d4 end-of-next-turn DoT NOT modelled
+  vitriolicSphereUpcastV1Implemented: false,                           // +2d4/slot-level NOT modelled
 } as const;
 
-// ---- Local log helper ---------------------------------------
-
-function emit(
-  state: EngineState,
-  type: CombatEvent['type'],
-  actorId: string,
-  desc: string,
-  targetId?: string,
-  value?: number,
-): void {
-  state.log.events.push({
-    round: state.battlefield.round,
-    actorId,
-    type,
-    targetId,
-    value,
-    description: desc,
-  });
+function emit(state: EngineState, type: CombatEvent['type'], actorId: string, desc: string, targetId?: string, value?: number): void {
+  state.log.events.push({ round: state.battlefield.round, actorId, type, targetId, value, description: desc });
 }
 
-// ---- Planner ------------------------------------------------
-
-/**
- * Returns true if the caster should cast Vitriolic Sphere this turn.
- *
- * Preconditions:
- *   - Caster has 'Vitriolic Sphere' in their actions
- *   - Caster has at least one 4-level-or-higher slot available
- *   - Caster is NOT already Vitriolic Sphere-active (re-cast would be a no-op in v1)
- */
-export function shouldCast(caster: Combatant, _bf: Battlefield): boolean {
-  if (!caster.actions.some(a => a.name === 'Vitriolic Sphere')) return false;
-  if (!hasSpellSlot(caster, 4)) return false;
-  if (caster._genericSpellActiveSpells?.has('Vitriolic Sphere')) return false;
-  return true;
+export function rollDamage(): number {
+  let total = 0;
+  for (let i = 0; i < metadata.dieCount; i++) total += rollDie(metadata.dieSides);
+  return total;
 }
 
-// ---- Execution ----------------------------------------------
+export function shouldCast(caster: Combatant, bf: Battlefield): Combatant[] | null {
+  if (!caster.actions.some(a => a.name === 'Vitriolic Sphere')) return null;
+  if (!hasSpellSlot(caster, 4)) return null;
 
-/**
- * Execute Vitriolic Sphere:
- *  1. Consume a 4-level spell slot.
- *  2. Set the flag on the caster's `_genericSpellActiveSpells` Set.
- *  3. Log the cast.
- */
-export function execute(
-  caster: Combatant,
-  state: EngineState,
-): void {
-  consumeSpellSlot(caster, 4);
-
-  if (!caster._genericSpellActiveSpells) {
-    caster._genericSpellActiveSpells = new Set<string>();
+  const enemies = livingEnemiesOf(caster, bf);
+  let center: Combatant | null = null;
+  let centerThreat = -1;
+  let centerDist = Infinity;
+  for (const e of enemies) {
+    const distFt = chebyshev3D(caster.pos, e.pos) * 5;
+    if (distFt > 150) continue;
+    if (e.maxHP > centerThreat || (e.maxHP === centerThreat && distFt < centerDist)) {
+      center = e;
+      centerThreat = e.maxHP;
+      centerDist = distFt;
+    }
   }
-  caster._genericSpellActiveSpells.add('Vitriolic Sphere');
+  if (!center) return null;
+
+  const targets: Combatant[] = [];
+  for (const e of enemies) {
+    const distFt = chebyshev3D(center.pos, e.pos) * 5;
+    if (distFt <= 20) targets.push(e);
+  }
+  return targets.length >= 1 ? targets : null;
+}
+
+export function execute(caster: Combatant, targets: Combatant[], state: EngineState): void {
+  const action = caster.actions.find(a => a.name === 'Vitriolic Sphere');
+  const saveDC = action?.saveDC ?? 15;
+
+  consumeSpellSlot(caster, 4);
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Vitriolic Sphere! (v1: forward-compat flag set; mechanical effect not yet implemented)`,
-    caster.id,
+    `${caster.name} casts Vitriolic Sphere! (DC ${saveDC} DEX, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}, ${metadata.aoeRadiusFt}-ft radius AoE) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} caught!`,
   );
-  emit(
-    state, 'condition_add', caster.id,
-    `${caster.name} is affected by Vitriolic Sphere. (v1: forward-compat flag set; no mechanical effect until engine subsystem is implemented)`,
-    caster.id,
-  );
+
+  for (const target of targets) {
+    if (target.isDead || target.isUnconscious) continue;
+
+    const save = rollSave(target, 'dex', saveDC);
+    const fullDmg = rollDamage();
+    const dmg = save.success ? Math.floor(fullDmg / 2) : fullDmg;
+    const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);
+
+    emit(
+      state,
+      save.success ? 'save_success' : 'save_fail',
+      caster.id,
+      `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} DEX save vs Vitriolic Sphere (rolled ${save.total}) — ${dealt} ${metadata.damageType} damage (${metadata.dieCount}d${metadata.dieSides}=${fullDmg}${save.success ? ', halved' : ''})`,
+      target.id, save.roll,
+    );
+    emit(state, 'damage', caster.id, `Vitriolic Sphere: ${target.name} takes ${dealt} ${metadata.damageType} damage`, target.id, dealt);
+  }
 }
 
-// ---- Cleanup ------------------------------------------------
-
 export function cleanup(_c: Combatant): void {
-  // No-op — forward-compat flag persists for combat.
+  // No-op — instantaneous.
 }

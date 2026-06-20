@@ -122,6 +122,13 @@ import { shouldCast as shouldCastLifeTransference } from '../spells/life_transfe
 import { shouldCast as shouldCastPulseWave } from '../spells/pulse_wave';
 import { shouldCast as shouldCastTidalWave } from '../spells/tidal_wave';
 import { shouldCast as shouldCastVampiricTouch } from '../spells/vampiric_touch';
+import { shouldCast as shouldCastElementalBane } from '../spells/elemental_bane';
+import { shouldCast as shouldCastGravitySinkhole } from '../spells/gravity_sinkhole';
+import { shouldCast as shouldCastIceStorm } from '../spells/ice_storm';
+import { shouldCast as shouldCastSickeningRadiance } from '../spells/sickening_radiance';
+import { shouldCast as shouldCastSpellfireStorm } from '../spells/spellfire_storm';
+import { shouldCast as shouldCastStormSphere } from '../spells/storm_sphere';
+import { shouldCast as shouldCastVitriolicSphere } from '../spells/vitriolic_sphere';
 
 // ── Session 19 — bulk-implementation generic dispatch (262 new spells) ────
 import { GENERIC_SPELL_LIST } from '../spells/_generic_registry';
@@ -2480,6 +2487,140 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
       };
       plan.targetId = vtTarget.id;
       plan.bonusAction = planBonusAction(self, vtTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // ── Session 24 — L4 combat damage spells (12AD–12AJ) ────────────
+
+  // --- 12AD. ELEMENTAL BANE (WIS save 2d6 acid, L4, v1 one-shot) ---
+  // XGE p.154: 90 ft, WIS save 2d6 acid (half on save), single-target.
+  // v1 simplifies canon concentration + vulnerability rider. Avg 7 acid.
+  if (!plan.action && self.actions.some(a => a.name === 'Elemental Bane')) {
+    const ebTarget = shouldCastElementalBane(self, battlefield);
+    if (ebTarget) {
+      plan.action = {
+        type: 'elementalBane',
+        action: null,
+        targetId: ebTarget.id,
+        description: `${self.name} casts Elemental Bane at ${ebTarget.name}`,
+      };
+      plan.targetId = ebTarget.id;
+      plan.bonusAction = planBonusAction(self, ebTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12AE. GRAVITY SINKHOLE (CON save 5d10 force, L4, NO concentration) ---
+  // EGtW p.162: 60 ft, CON save 5d10 force (half on save), 20-ft radius AoE.
+  // shouldCast returns Combatant[] (enemies in the 20-ft sphere). Avg 27.5 force.
+  if (!plan.action && self.actions.some(a => a.name === 'Gravity Sinkhole')) {
+    const gsTargets = shouldCastGravitySinkhole(self, battlefield);
+    if (gsTargets) {
+      const names = gsTargets.map(t => t.name).join(', ');
+      plan.action = {
+        type: 'gravitySinkhole',
+        action: null,
+        targetId: gsTargets[0].id,
+        description: `${self.name} casts Gravity Sinkhole, catching ${names}`,
+      };
+      plan.targetId = gsTargets[0].id;
+      plan.bonusAction = planBonusAction(self, gsTargets[0], battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12AF. ICE STORM (DEX save 2d8 cold + 2d6 bludgeoning, L4, NO concentration) ---
+  // PHB p.254: 300 ft, DEX save 2d8 cold + 2d6 bludgeoning (half on save, dual damage),
+  // 20-ft radius AoE. shouldCast returns Combatant[]. Avg 17 cold+bludgeoning.
+  if (!plan.action && self.actions.some(a => a.name === 'Ice Storm')) {
+    const isTargets = shouldCastIceStorm(self, battlefield);
+    if (isTargets) {
+      const names = isTargets.map(t => t.name).join(', ');
+      plan.action = {
+        type: 'iceStorm',
+        action: null,
+        targetId: isTargets[0].id,
+        description: `${self.name} casts Ice Storm, catching ${names}`,
+      };
+      plan.targetId = isTargets[0].id;
+      plan.bonusAction = planBonusAction(self, isTargets[0], battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12AG. SICKENING RADIANCE (CON save 4d10 radiant + poisoned, L4, v1 one-shot) ---
+  // XGE p.164: 120 ft, CON save 4d10 radiant + poisoned on fail (exhaustion simplified),
+  // 30-ft radius AoE. v1 simplifies canon concentration. shouldCast returns Combatant[].
+  // Avg 22 radiant + poisoned.
+  if (!plan.action && self.actions.some(a => a.name === 'Sickening Radiance')) {
+    const srTargets = shouldCastSickeningRadiance(self, battlefield);
+    if (srTargets) {
+      const names = srTargets.map(t => t.name).join(', ');
+      plan.action = {
+        type: 'sickeningRadiance',
+        action: null,
+        targetId: srTargets[0].id,
+        description: `${self.name} casts Sickening Radiance, catching ${names}`,
+      };
+      plan.targetId = srTargets[0].id;
+      plan.bonusAction = planBonusAction(self, srTargets[0], battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12AH. SPELLFIRE STORM (AUTO-HIT 4d10 fire, L4, v1 one-shot) ---
+  // SCAG p.150: 60 ft, auto-hit (no save, no attack) 4d10 fire, single-target.
+  // v1 simplifies canon concentration + DoT. Avg 22 guaranteed fire.
+  if (!plan.action && self.actions.some(a => a.name === 'Spellfire Storm')) {
+    const sfTarget = shouldCastSpellfireStorm(self, battlefield);
+    if (sfTarget) {
+      plan.action = {
+        type: 'spellfireStorm',
+        action: null,
+        targetId: sfTarget.id,
+        description: `${self.name} casts Spellfire Storm at ${sfTarget.name} (auto-hit)`,
+      };
+      plan.targetId = sfTarget.id;
+      plan.bonusAction = planBonusAction(self, sfTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12AI. STORM SPHERE (CON save 6d6 thunder, L4, v1 one-shot) ---
+  // XGE p.166: 150 ft, CON save 6d6 thunder (half on save), 20-ft radius AoE (canon; plan's 40-ft is wrong).
+  // v1 simplifies canon concentration + lightning rider. shouldCast returns Combatant[]. Avg 21 thunder.
+  if (!plan.action && self.actions.some(a => a.name === 'Storm Sphere')) {
+    const ssTargets = shouldCastStormSphere(self, battlefield);
+    if (ssTargets) {
+      const names = ssTargets.map(t => t.name).join(', ');
+      plan.action = {
+        type: 'stormSphere',
+        action: null,
+        targetId: ssTargets[0].id,
+        description: `${self.name} casts Storm Sphere, catching ${names}`,
+      };
+      plan.targetId = ssTargets[0].id;
+      plan.bonusAction = planBonusAction(self, ssTargets[0], battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12AJ. VITRIOLIC SPHERE (DEX save 10d4 acid, L4, NO concentration) ---
+  // XGE p.168: 150 ft, DEX save 10d4 acid (half on save), 20-ft radius AoE.
+  // DoT simplified. shouldCast returns Combatant[]. Avg 25 acid.
+  if (!plan.action && self.actions.some(a => a.name === 'Vitriolic Sphere')) {
+    const vsTargets = shouldCastVitriolicSphere(self, battlefield);
+    if (vsTargets) {
+      const names = vsTargets.map(t => t.name).join(', ');
+      plan.action = {
+        type: 'vitriolicSphere',
+        action: null,
+        targetId: vsTargets[0].id,
+        description: `${self.name} casts Vitriolic Sphere, catching ${names}`,
+      };
+      plan.targetId = vsTargets[0].id;
+      plan.bonusAction = planBonusAction(self, vsTargets[0], battlefield);
       return plan;
     }
   }

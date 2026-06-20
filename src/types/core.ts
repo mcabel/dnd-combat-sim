@@ -1321,6 +1321,13 @@ export interface PlannedAction {
     | 'pulseWave'           // Pulse Wave — EGtW p.163: Self (30-ft cone), CON save 6d6 force (half on save), NO concentration (push simplified)
     | 'tidalWave'           // Tidal Wave — XGE p.168: 30-ft line, STR save 4d8 bludgeoning + prone on fail (half on save), NO concentration (v1 line per plan; canon single-target)
     | 'vampiricTouch'       // Vampiric Touch — PHB p.287: touch (5 ft), melee spell attack 3d6 necrotic + heal self half (crit doubles), v1 one-shot (canon concentration simplified)
+    | 'elementalBane'       // Elemental Bane — XGE p.154: 90 ft, WIS save 2d6 acid (half on save), single-target, v1 one-shot (canon concentration + vulnerability rider simplified)
+    | 'gravitySinkhole'     // Gravity Sinkhole — EGtW p.162: 60 ft, CON save 5d10 force (half on save), 20-ft radius AoE, NO concentration (pull simplified)
+    | 'iceStorm'            // Ice Storm — PHB p.254: 300 ft, DEX save 2d8 cold + 2d6 bludgeoning (half on save, dual damage), 20-ft radius AoE, NO concentration
+    | 'sickeningRadiance'   // Sickening Radiance — XGE p.164: 120 ft, CON save 4d10 radiant + poisoned on fail (exhaustion simplified), 30-ft radius AoE, v1 one-shot (canon concentration simplified)
+    | 'spellfireStorm'      // Spellfire Storm — SCAG p.150: 60 ft, AUTO-HIT 4d10 fire (no save, no attack), v1 one-shot (canon concentration + DoT simplified)
+    | 'stormSphere'         // Storm Sphere — XGE p.166: 150 ft, CON save 6d6 thunder (half on save), 20-ft radius AoE, v1 one-shot (canon concentration + lightning rider simplified)
+    | 'vitriolicSphere'     // Vitriolic Sphere — XGE p.168: 150 ft, DEX save 10d4 acid (half on save), 20-ft radius AoE, NO concentration (DoT simplified)
     // ── Session 19 — bulk-implementation generic dispatch (262 new spells L2-9) ──
     // All non-blocker in-scope spells from levels 2-9 that have not been
     // implemented as bespoke case branches are routed through 'genericSpell'.

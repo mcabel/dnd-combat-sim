@@ -1,117 +1,128 @@
 // ============================================================
-// Gravity Sinkhole — EGW p.187
+// Gravity Sinkhole — EGtW p.162
 //
-// 4-level evocation, 1 action, range 120 ft.
-// Duration: Instantaneous.
+// 4th-level evocation, action, range 60 ft, NO concentration.
+// Components: V, S, M (a chunk of magnetite).
 //
-// Effect: A 20-foot-radius sphere of crushing force forms at a point you can see within range and tugs at the creatures there. Each creature in the sphere must make a Constitution saving throw. On a failed save
+// Effect: A 20-foot-radius sphere of crushing gravity centered on a
+//         point within range forms in a void. Each creature in that
+//         area must make a Constitution saving throw. On a failed save,
+//         a creature takes 5d10 force damage and is pulled in a straight
+//         line toward the center of the sphere, ending in an unoccupied
+//         space as close to the center as possible. On a successful save,
+//         a creature takes half as much damage and isn't pulled.
 //
-// Upcast: see source (not modelled in v1).
+// Upcast: +1d10 force per slot level above 4th (not modelled in v1).
 //
 // v1 simplifications:
-//   - v1 models this spell as a FORWARD-COMPAT flag only (Session 19 bulk
-//     implementation). The spell consumes a slot and sets the flag
-//     `_genericSpellActiveSpells` on the caster; the actual mechanical
-//     effect (damage / save / condition / buff) is NOT applied in v1.
-//     A future implementation should extend the relevant engine subsystem
-//     (damage_zone for persistent damage, condition_apply for conditions,
-//     advantage_vs for buffs, etc.) to consume this flag and apply the
-//     real effect. This mirrors the Session 17/18 forward-compat pattern
-//     established by Darkvision, Arcane Lock, Knock, See Invisibility.
+//   - AoE shape: 20-ft radius sphere at a point within 60 ft. v1 targets
+//     the highest-threat enemy within 60 ft as the sphere's centre, and
+//     applies the damage to ALL enemies within 20 ft of that centre
+//     (chebyshev3D — square approx). Mirrors Shatter (Session 18).
+//   - Pull toward centre (EGtW p.162): NOT modelled — v1 has no
+//     forced-movement subsystem. Documented via
+//     `gravitySinkholePullV1Simplified: true`.
+//   - Upcast: +1d10/slot-level NOT modelled.
+//   - NOT concentration (EGtW p.162: instantaneous).
 //
-// Spell module pattern (mirrors Darkvision / Arcane Lock forward-compat
-// self-buff pattern):
-//   shouldCast(caster, bf) → boolean
-//   execute(caster, state) → void
-//   cleanup() — no-op (forward-compat flag persists for combat)
+// Migration note (Session 24): Mirrors Shatter but 5d10 force, 20-ft
+// radius, L4 slot.
+//
+// Spell module pattern (AoE save radius — mirrors shatter.ts):
+//   shouldCast(caster, bf) → Combatant[] | null
+//   execute(caster, targets, state) → void
+//   cleanup() — no-op
 // ============================================================
 
 import { Combatant, Battlefield } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
+import { rollSave, rollDie, applyDamageWithTempHP } from '../engine/utils';
+import { chebyshev3D, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
-
-// ---- Metadata -----------------------------------------------
 
 export const metadata = {
   name: 'Gravity Sinkhole',
   level: 4,
   school: 'evocation',
-  rangeFt: 120,
+  rangeFt: 60,                   // EGtW p.162: 60 ft
+  aoeRadiusFt: 20,               // EGtW p.162: 20-ft radius
+  dieCount: 5,
+  dieSides: 10,
+  damageType: 'force' as const,
   concentration: false,
+  saveAbility: 'con' as const,
   castingTime: 'action',
-  gravitySinkholeV1Simplified: true,
+  gravitySinkholePullV1Simplified: true,                             // forced movement NOT modelled
+  gravitySinkholeUpcastV1Implemented: false,                          // +1d10/slot-level NOT modelled
 } as const;
 
-// ---- Local log helper ---------------------------------------
-
-function emit(
-  state: EngineState,
-  type: CombatEvent['type'],
-  actorId: string,
-  desc: string,
-  targetId?: string,
-  value?: number,
-): void {
-  state.log.events.push({
-    round: state.battlefield.round,
-    actorId,
-    type,
-    targetId,
-    value,
-    description: desc,
-  });
+function emit(state: EngineState, type: CombatEvent['type'], actorId: string, desc: string, targetId?: string, value?: number): void {
+  state.log.events.push({ round: state.battlefield.round, actorId, type, targetId, value, description: desc });
 }
 
-// ---- Planner ------------------------------------------------
-
-/**
- * Returns true if the caster should cast Gravity Sinkhole this turn.
- *
- * Preconditions:
- *   - Caster has 'Gravity Sinkhole' in their actions
- *   - Caster has at least one 4-level-or-higher slot available
- *   - Caster is NOT already Gravity Sinkhole-active (re-cast would be a no-op in v1)
- */
-export function shouldCast(caster: Combatant, _bf: Battlefield): boolean {
-  if (!caster.actions.some(a => a.name === 'Gravity Sinkhole')) return false;
-  if (!hasSpellSlot(caster, 4)) return false;
-  if (caster._genericSpellActiveSpells?.has('Gravity Sinkhole')) return false;
-  return true;
+export function rollDamage(): number {
+  let total = 0;
+  for (let i = 0; i < metadata.dieCount; i++) total += rollDie(metadata.dieSides);
+  return total;
 }
 
-// ---- Execution ----------------------------------------------
+export function shouldCast(caster: Combatant, bf: Battlefield): Combatant[] | null {
+  if (!caster.actions.some(a => a.name === 'Gravity Sinkhole')) return null;
+  if (!hasSpellSlot(caster, 4)) return null;
 
-/**
- * Execute Gravity Sinkhole:
- *  1. Consume a 4-level spell slot.
- *  2. Set the flag on the caster's `_genericSpellActiveSpells` Set.
- *  3. Log the cast.
- */
-export function execute(
-  caster: Combatant,
-  state: EngineState,
-): void {
-  consumeSpellSlot(caster, 4);
-
-  if (!caster._genericSpellActiveSpells) {
-    caster._genericSpellActiveSpells = new Set<string>();
+  const enemies = livingEnemiesOf(caster, bf);
+  let center: Combatant | null = null;
+  let centerThreat = -1;
+  let centerDist = Infinity;
+  for (const e of enemies) {
+    const distFt = chebyshev3D(caster.pos, e.pos) * 5;
+    if (distFt > 60) continue;
+    if (e.maxHP > centerThreat || (e.maxHP === centerThreat && distFt < centerDist)) {
+      center = e;
+      centerThreat = e.maxHP;
+      centerDist = distFt;
+    }
   }
-  caster._genericSpellActiveSpells.add('Gravity Sinkhole');
+  if (!center) return null;
+
+  const targets: Combatant[] = [];
+  for (const e of enemies) {
+    const distFt = chebyshev3D(center.pos, e.pos) * 5;
+    if (distFt <= 20) targets.push(e);
+  }
+  return targets.length >= 1 ? targets : null;
+}
+
+export function execute(caster: Combatant, targets: Combatant[], state: EngineState): void {
+  const action = caster.actions.find(a => a.name === 'Gravity Sinkhole');
+  const saveDC = action?.saveDC ?? 15;
+
+  consumeSpellSlot(caster, 4);
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Gravity Sinkhole! (v1: forward-compat flag set; mechanical effect not yet implemented)`,
-    caster.id,
+    `${caster.name} casts Gravity Sinkhole! (DC ${saveDC} CON, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}, ${metadata.aoeRadiusFt}-ft radius AoE) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} caught!`,
   );
-  emit(
-    state, 'condition_add', caster.id,
-    `${caster.name} is affected by Gravity Sinkhole. (v1: forward-compat flag set; no mechanical effect until engine subsystem is implemented)`,
-    caster.id,
-  );
+
+  for (const target of targets) {
+    if (target.isDead || target.isUnconscious) continue;
+
+    const save = rollSave(target, 'con', saveDC);
+    const fullDmg = rollDamage();
+    const dmg = save.success ? Math.floor(fullDmg / 2) : fullDmg;
+    const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);
+
+    emit(
+      state,
+      save.success ? 'save_success' : 'save_fail',
+      caster.id,
+      `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} CON save vs Gravity Sinkhole (rolled ${save.total}) — ${dealt} ${metadata.damageType} damage (${metadata.dieCount}d${metadata.dieSides}=${fullDmg}${save.success ? ', halved' : ''})`,
+      target.id, save.roll,
+    );
+    emit(state, 'damage', caster.id, `Gravity Sinkhole: ${target.name} takes ${dealt} ${metadata.damageType} damage`, target.id, dealt);
+  }
 }
 
-// ---- Cleanup ------------------------------------------------
-
 export function cleanup(_c: Combatant): void {
-  // No-op — forward-compat flag persists for combat.
+  // No-op — instantaneous.
 }
