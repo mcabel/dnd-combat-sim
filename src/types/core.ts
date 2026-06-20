@@ -1336,6 +1336,20 @@ export interface PlannedAction {
     | 'negativeEnergyFlood' // Negative Energy Flood — XGE p.162: 60 ft, CON save 5d12 necrotic (half on save), single-target, NO concentration (undead-boost simplified)
     | 'steelWindStrike'     // Steel Wind Strike — XGE p.166: 30 ft, 5 melee spell attacks 6d10 force (crit doubles), multi-target, NO concentration (teleport simplified)
     | 'synapticStatic'      // Synaptic Static — XGE p.167: 120 ft, INT save 8d6 psychic + incapacitated on fail (-1d6 simplified), 20-ft radius AoE, NO concentration
+    | 'chainLightning'      // Chain Lightning — PHB p.221: 150 ft, AUTO-HIT 10d8 lightning to 1 primary + 3 arcs (4 targets max), NO concentration (v1 auto-hit per plan)
+    | 'circleOfDeath'       // Circle of Death — PHB p.221: 60 ft, CON save 8d6 necrotic (half on save), 60-ft radius AoE, NO concentration
+    | 'gravityFissure'      // Gravity Fissure — EGtW p.162: 100-ft line, CON save 8d8 force (half on save), NO concentration (secondary AoE + pull simplified)
+    | 'mentalPrison'        // Mental Prison — XGE p.161: 60 ft, INT save 5d10 psychic (half on save), single-target, v1 one-shot (canon concentration + movement-trigger simplified)
+    | 'sunbeam'             // Sunbeam — PHB p.279: 60-ft line, CON save 6d8 radiant + blinded on fail, v1 one-shot (canon concentration + repeat-action simplified)
+    | 'crownOfStars'        // Crown of Stars — XGE p.152: 120 ft, ranged spell attack 4d12 radiant (crit doubles), single-target, v1 one-shot (7-mote storage simplified)
+    | 'fireStorm'           // Fire Storm — PHB p.242: 150 ft, DEX save 7d10 fire (half on save), 40-ft radius AoE (canon ten-10ft-cubes simplified), NO concentration
+    | 'darkStar'            // Dark Star — XGE p.153: 150 ft, CON save 8d8 necrotic + blinded on fail, 40-ft radius AoE, v1 one-shot (canon concentration + magical darkness simplified)
+    | 'earthquake'          // Earthquake — PHB p.234: Self (50-ft radius per plan), AUTO-HIT 5d6 bludgeoning (no save per plan), v1 one-shot (canon concentration + multi-effect simplified)
+    | 'feeblemind'          // Feeblemind — PHB p.239: 60 ft, INT save 4d6 psychic (always dealt) + incapacitated on fail (INT/CHA→1 simplified), single-target, NO concentration
+    | 'incendiaryCloud'     // Incendiary Cloud — PHB p.253: 150 ft, DEX save 10d8 fire (half on save), 20-ft radius AoE, NO concentration (moving-cloud simplified)
+    | 'maddeningDarkness'   // Maddening Darkness — XGE p.158: 120 ft, WIS save 8d8 psychic (half on save), 60-ft radius AoE, v1 one-shot (canon concentration + darkness rider simplified)
+    | 'psychicScream'       // Psychic Scream — XGE p.163: 90 ft, INT save 14d6 psychic + stunned on fail, up to 10 targets (point-targeted), NO concentration
+    | 'ravenousVoid'        // Ravenous Void — XGE p.159: 1000 ft, AUTO-HIT 5d10 force (no save per plan), 60-ft radius AoE, v1 one-shot (canon concentration + pull/restrained simplified)
     // ── Session 19 — bulk-implementation generic dispatch (262 new spells L2-9) ──
     // All non-blocker in-scope spells from levels 2-9 that have not been
     // implemented as bespoke case branches are routed through 'genericSpell'.

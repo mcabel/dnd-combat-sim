@@ -63,6 +63,24 @@ SPELLS = [
     ('Negative Energy Flood', 'negative_energy_flood', 'NegativeEnergyFlood'),
     ('Steel Wind Strike', 'steel_wind_strike', 'SteelWindStrike'),
     ('Synaptic Static', 'synaptic_static',  'SynapticStatic'),
+    # L6 (5) — increment 6
+    ('Chain Lightning', 'chain_lightning',  'ChainLightning'),
+    ('Circle of Death', 'circle_of_death',  'CircleOfDeath'),
+    ('Gravity Fissure', 'gravity_fissure',  'GravityFissure'),
+    ('Mental Prison',   'mental_prison',    'MentalPrison'),
+    ('Sunbeam',         'sunbeam',          'Sunbeam'),
+    # L7 (2) — increment 6
+    ('Crown of Stars',  'crown_of_stars',   'CrownOfStars'),
+    ('Fire Storm',      'fire_storm',       'FireStorm'),
+    # L8 (5) — increment 6
+    ('Dark Star',       'dark_star',        'DarkStar'),
+    ('Earthquake',      'earthquake',       'Earthquake'),
+    ('Feeblemind',      'feeblemind',       'Feeblemind'),
+    ('Incendiary Cloud', 'incendiary_cloud', 'IncendiaryCloud'),
+    ('Maddening Darkness', 'maddening_darkness', 'MaddeningDarkness'),
+    # L9 (2) — increment 6
+    ('Psychic Scream',  'psychic_scream',   'PsychicScream'),
+    ('Ravenous Void',   'ravenous_void',    'RavenousVoid'),
 ]
 
 REGISTRY = Path('src/spells/_generic_registry.ts')

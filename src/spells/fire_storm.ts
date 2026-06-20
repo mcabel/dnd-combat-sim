@@ -1,117 +1,117 @@
 // ============================================================
 // Fire Storm — PHB p.242
+// 7th-level evocation, action, range 150 ft, NO concentration.
+// Components: V, S.
 //
-// 7-level evocation, 1 action, range 150 ft.
-// Duration: Instantaneous.
-//
-// Effect: A storm made up of sheets of roaring flame appears in a location you choose within range. The area of the storm consists of up to ten 10-foot cubes, which you can arrange as you wish. Each cube must h
-//
-// Upcast: see source (not modelled in v1).
+// Effect: A storm made of roaring flame appears in a 20-foot-radius
+//         cylinder centered on a point you choose within range. (PHB p.242
+//         actually lets you shape up to ten 10-ft cubes — v1 simplifies
+//         to a single 40-ft radius sphere.) Each creature in the area
+//         makes a Dexterity saving throw. On a failed save, a creature
+//         takes 7d10 fire damage; on a successful save, it takes half
+//         as much.
 //
 // v1 simplifications:
-//   - v1 models this spell as a FORWARD-COMPAT flag only (Session 19 bulk
-//     implementation). The spell consumes a slot and sets the flag
-//     `_genericSpellActiveSpells` on the caster; the actual mechanical
-//     effect (damage / save / condition / buff) is NOT applied in v1.
-//     A future implementation should extend the relevant engine subsystem
-//     (damage_zone for persistent damage, condition_apply for conditions,
-//     advantage_vs for buffs, etc.) to consume this flag and apply the
-//     real effect. This mirrors the Session 17/18 forward-compat pattern
-//     established by Darkvision, Arcane Lock, Knock, See Invisibility.
+//   - Shape: canon "ten 10-ft cubes" (PHB p.242). v1 simplifies to a single
+//     40-ft radius sphere at a point within 150 ft (per plan). Documented
+//     via `fireStormShapeV1Simplified: true`.
+//   - Flammable-object ignition rider: NOT modelled.
+//   - Upcast: +1d10/slot-level above 7th NOT modelled.
+//   - NOT concentration (PHB p.242: instantaneous).
 //
-// Spell module pattern (mirrors Darkvision / Arcane Lock forward-compat
-// self-buff pattern):
-//   shouldCast(caster, bf) → boolean
-//   execute(caster, state) → void
-//   cleanup() — no-op (forward-compat flag persists for combat)
+// Migration note (Session 24): Mirrors Shatter (Session 18) but 7d10 fire,
+// 40-ft radius, L7 slot, 150-ft range.
 // ============================================================
 
 import { Combatant, Battlefield } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
+import { rollSave, rollDie, applyDamageWithTempHP } from '../engine/utils';
+import { chebyshev3D, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
-
-// ---- Metadata -----------------------------------------------
 
 export const metadata = {
   name: 'Fire Storm',
   level: 7,
   school: 'evocation',
-  rangeFt: 150,
+  rangeFt: 150,                  // PHB p.242: 150 ft
+  aoeRadiusFt: 40,               // v1: 40-ft radius (canon: ten 10-ft cubes)
+  dieCount: 7,
+  dieSides: 10,
+  damageType: 'fire' as const,
   concentration: false,
+  saveAbility: 'dex' as const,
   castingTime: 'action',
-  fireStormV1Simplified: true,
+  fireStormShapeV1Simplified: true,                                   // canon ten-10ft-cubes → v1 40-ft radius
+  fireStormUpcastV1Implemented: false,                                 // +1d10/slot-level NOT modelled
 } as const;
 
-// ---- Local log helper ---------------------------------------
-
-function emit(
-  state: EngineState,
-  type: CombatEvent['type'],
-  actorId: string,
-  desc: string,
-  targetId?: string,
-  value?: number,
-): void {
-  state.log.events.push({
-    round: state.battlefield.round,
-    actorId,
-    type,
-    targetId,
-    value,
-    description: desc,
-  });
+function emit(state: EngineState, type: CombatEvent['type'], actorId: string, desc: string, targetId?: string, value?: number): void {
+  state.log.events.push({ round: state.battlefield.round, actorId, type, targetId, value, description: desc });
 }
 
-// ---- Planner ------------------------------------------------
-
-/**
- * Returns true if the caster should cast Fire Storm this turn.
- *
- * Preconditions:
- *   - Caster has 'Fire Storm' in their actions
- *   - Caster has at least one 7-level-or-higher slot available
- *   - Caster is NOT already Fire Storm-active (re-cast would be a no-op in v1)
- */
-export function shouldCast(caster: Combatant, _bf: Battlefield): boolean {
-  if (!caster.actions.some(a => a.name === 'Fire Storm')) return false;
-  if (!hasSpellSlot(caster, 7)) return false;
-  if (caster._genericSpellActiveSpells?.has('Fire Storm')) return false;
-  return true;
+export function rollDamage(): number {
+  let total = 0;
+  for (let i = 0; i < metadata.dieCount; i++) total += rollDie(metadata.dieSides);
+  return total;
 }
 
-// ---- Execution ----------------------------------------------
+export function shouldCast(caster: Combatant, bf: Battlefield): Combatant[] | null {
+  if (!caster.actions.some(a => a.name === 'Fire Storm')) return null;
+  if (!hasSpellSlot(caster, 7)) return null;
 
-/**
- * Execute Fire Storm:
- *  1. Consume a 7-level spell slot.
- *  2. Set the flag on the caster's `_genericSpellActiveSpells` Set.
- *  3. Log the cast.
- */
-export function execute(
-  caster: Combatant,
-  state: EngineState,
-): void {
-  consumeSpellSlot(caster, 7);
-
-  if (!caster._genericSpellActiveSpells) {
-    caster._genericSpellActiveSpells = new Set<string>();
+  const enemies = livingEnemiesOf(caster, bf);
+  let center: Combatant | null = null;
+  let centerThreat = -1;
+  let centerDist = Infinity;
+  for (const e of enemies) {
+    const distFt = chebyshev3D(caster.pos, e.pos) * 5;
+    if (distFt > 150) continue;
+    if (e.maxHP > centerThreat || (e.maxHP === centerThreat && distFt < centerDist)) {
+      center = e;
+      centerThreat = e.maxHP;
+      centerDist = distFt;
+    }
   }
-  caster._genericSpellActiveSpells.add('Fire Storm');
+  if (!center) return null;
+
+  const targets: Combatant[] = [];
+  for (const e of enemies) {
+    const distFt = chebyshev3D(center.pos, e.pos) * 5;
+    if (distFt <= 40) targets.push(e);
+  }
+  return targets.length >= 1 ? targets : null;
+}
+
+export function execute(caster: Combatant, targets: Combatant[], state: EngineState): void {
+  const action = caster.actions.find(a => a.name === 'Fire Storm');
+  const saveDC = action?.saveDC ?? 15;
+
+  consumeSpellSlot(caster, 7);
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Fire Storm! (v1: forward-compat flag set; mechanical effect not yet implemented)`,
-    caster.id,
+    `${caster.name} casts Fire Storm! (DC ${saveDC} DEX, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}, ${metadata.aoeRadiusFt}-ft radius AoE) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} caught!`,
   );
-  emit(
-    state, 'condition_add', caster.id,
-    `${caster.name} is affected by Fire Storm. (v1: forward-compat flag set; no mechanical effect until engine subsystem is implemented)`,
-    caster.id,
-  );
+
+  for (const target of targets) {
+    if (target.isDead || target.isUnconscious) continue;
+
+    const save = rollSave(target, 'dex', saveDC);
+    const fullDmg = rollDamage();
+    const dmg = save.success ? Math.floor(fullDmg / 2) : fullDmg;
+    const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);
+
+    emit(
+      state,
+      save.success ? 'save_success' : 'save_fail',
+      caster.id,
+      `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} DEX save vs Fire Storm (rolled ${save.total}) — ${dealt} ${metadata.damageType} damage (${metadata.dieCount}d${metadata.dieSides}=${fullDmg}${save.success ? ', halved' : ''})`,
+      target.id, save.roll,
+    );
+    emit(state, 'damage', caster.id, `Fire Storm: ${target.name} takes ${dealt} ${metadata.damageType} damage`, target.id, dealt);
+  }
 }
 
-// ---- Cleanup ------------------------------------------------
-
 export function cleanup(_c: Combatant): void {
-  // No-op — forward-compat flag persists for combat.
+  // No-op — instantaneous.
 }

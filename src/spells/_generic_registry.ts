@@ -1178,18 +1178,6 @@ import {
 } from './bones_of_the_earth';
 
 import {
-  shouldCast as shouldCastChainLightning,
-  execute as executeChainLightning,
-  metadata as metadataChainLightning,
-} from './chain_lightning';
-
-import {
-  shouldCast as shouldCastCircleOfDeath,
-  execute as executeCircleOfDeath,
-  metadata as metadataCircleOfDeath,
-} from './circle_of_death';
-
-import {
   shouldCast as shouldCastCreateHomunculus,
   execute as executeCreateHomunculus,
   metadata as metadataCreateHomunculus,
@@ -1238,12 +1226,6 @@ import {
 } from './globe_of_invulnerability';
 
 import {
-  shouldCast as shouldCastGravityFissure,
-  execute as executeGravityFissure,
-  metadata as metadataGravityFissure,
-} from './gravity_fissure';
-
-import {
   shouldCast as shouldCastHeal,
   execute as executeHeal,
   metadata as metadataHeal,
@@ -1278,12 +1260,6 @@ import {
   execute as executeMassSuggestion,
   metadata as metadataMassSuggestion,
 } from './mass_suggestion';
-
-import {
-  shouldCast as shouldCastMentalPrison,
-  execute as executeMentalPrison,
-  metadata as metadataMentalPrison,
-} from './mental_prison';
 
 import {
   shouldCast as shouldCastMoveEarth,
@@ -1322,12 +1298,6 @@ import {
 } from './soul_cage';
 
 import {
-  shouldCast as shouldCastSunbeam,
-  execute as executeSunbeam,
-  metadata as metadataSunbeam,
-} from './sunbeam';
-
-import {
   shouldCast as shouldCastTashasOtherworldlyGuise,
   execute as executeTashasOtherworldlyGuise,
   metadata as metadataTashasOtherworldlyGuise,
@@ -1346,12 +1316,6 @@ import {
 } from './transport_via_plants';
 
 import {
-  shouldCast as shouldCastCrownOfStars,
-  execute as executeCrownOfStars,
-  metadata as metadataCrownOfStars,
-} from './crown_of_stars';
-
-import {
   shouldCast as shouldCastDelayedBlastFireball,
   execute as executeDelayedBlastFireball,
   metadata as metadataDelayedBlastFireball,
@@ -1368,12 +1332,6 @@ import {
   execute as executeDraconicTransformation,
   metadata as metadataDraconicTransformation,
 } from './draconic_transformation';
-
-import {
-  shouldCast as shouldCastFireStorm,
-  execute as executeFireStorm,
-  metadata as metadataFireStorm,
-} from './fire_storm';
 
 import {
   shouldCast as shouldCastForcecage,
@@ -1478,28 +1436,10 @@ import {
 } from './control_weather';
 
 import {
-  shouldCast as shouldCastDarkStar,
-  execute as executeDarkStar,
-  metadata as metadataDarkStar,
-} from './dark_star';
-
-import {
   shouldCast as shouldCastDominateMonster,
   execute as executeDominateMonster,
   metadata as metadataDominateMonster,
 } from './dominate_monster';
-
-import {
-  shouldCast as shouldCastEarthquake,
-  execute as executeEarthquake,
-  metadata as metadataEarthquake,
-} from './earthquake';
-
-import {
-  shouldCast as shouldCastFeeblemind,
-  execute as executeFeeblemind,
-  metadata as metadataFeeblemind,
-} from './feeblemind';
 
 import {
   shouldCast as shouldCastGlibness,
@@ -1524,18 +1464,6 @@ import {
   execute as executeIllusoryDragon,
   metadata as metadataIllusoryDragon,
 } from './illusory_dragon';
-
-import {
-  shouldCast as shouldCastIncendiaryCloud,
-  execute as executeIncendiaryCloud,
-  metadata as metadataIncendiaryCloud,
-} from './incendiary_cloud';
-
-import {
-  shouldCast as shouldCastMaddeningDarkness,
-  execute as executeMaddeningDarkness,
-  metadata as metadataMaddeningDarkness,
-} from './maddening_darkness';
 
 import {
   shouldCast as shouldCastPowerWordStun,
@@ -1596,18 +1524,6 @@ import {
   execute as executePowerWordHeal,
   metadata as metadataPowerWordHeal,
 } from './power_word_heal';
-
-import {
-  shouldCast as shouldCastPsychicScream,
-  execute as executePsychicScream,
-  metadata as metadataPsychicScream,
-} from './psychic_scream';
-
-import {
-  shouldCast as shouldCastRavenousVoid,
-  execute as executeRavenousVoid,
-  metadata as metadataRavenousVoid,
-} from './ravenous_void';
 
 import {
   shouldCast as shouldCastStormOfVengeance,
@@ -2806,18 +2722,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     shouldCast: shouldCastBonesOfTheEarth,
     execute: executeBonesOfTheEarth,
   },
-  'Chain Lightning': {
-    name: 'Chain Lightning',
-    level: metadataChainLightning.level,
-    shouldCast: shouldCastChainLightning,
-    execute: executeChainLightning,
-  },
-  'Circle of Death': {
-    name: 'Circle of Death',
-    level: metadataCircleOfDeath.level,
-    shouldCast: shouldCastCircleOfDeath,
-    execute: executeCircleOfDeath,
-  },
   'Create Homunculus': {
     name: 'Create Homunculus',
     level: metadataCreateHomunculus.level,
@@ -2866,12 +2770,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     shouldCast: shouldCastGlobeOfInvulnerability,
     execute: executeGlobeOfInvulnerability,
   },
-  'Gravity Fissure': {
-    name: 'Gravity Fissure',
-    level: metadataGravityFissure.level,
-    shouldCast: shouldCastGravityFissure,
-    execute: executeGravityFissure,
-  },
   'Heal': {
     name: 'Heal',
     level: metadataHeal.level,
@@ -2907,12 +2805,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     level: metadataMassSuggestion.level,
     shouldCast: shouldCastMassSuggestion,
     execute: executeMassSuggestion,
-  },
-  'Mental Prison': {
-    name: 'Mental Prison',
-    level: metadataMentalPrison.level,
-    shouldCast: shouldCastMentalPrison,
-    execute: executeMentalPrison,
   },
   'Move Earth': {
     name: 'Move Earth',
@@ -2950,12 +2842,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     shouldCast: shouldCastSoulCage,
     execute: executeSoulCage,
   },
-  'Sunbeam': {
-    name: 'Sunbeam',
-    level: metadataSunbeam.level,
-    shouldCast: shouldCastSunbeam,
-    execute: executeSunbeam,
-  },
   "Tasha's Otherworldly Guise": {
     name: "Tasha's Otherworldly Guise",
     level: metadataTashasOtherworldlyGuise.level,
@@ -2974,12 +2860,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     shouldCast: shouldCastTransportViaPlants,
     execute: executeTransportViaPlants,
   },
-  'Crown of Stars': {
-    name: 'Crown of Stars',
-    level: metadataCrownOfStars.level,
-    shouldCast: shouldCastCrownOfStars,
-    execute: executeCrownOfStars,
-  },
   'Delayed Blast Fireball': {
     name: 'Delayed Blast Fireball',
     level: metadataDelayedBlastFireball.level,
@@ -2997,12 +2877,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     level: metadataDraconicTransformation.level,
     shouldCast: shouldCastDraconicTransformation,
     execute: executeDraconicTransformation,
-  },
-  'Fire Storm': {
-    name: 'Fire Storm',
-    level: metadataFireStorm.level,
-    shouldCast: shouldCastFireStorm,
-    execute: executeFireStorm,
   },
   'Forcecage': {
     name: 'Forcecage',
@@ -3106,29 +2980,11 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     shouldCast: shouldCastControlWeather,
     execute: executeControlWeather,
   },
-  'Dark Star': {
-    name: 'Dark Star',
-    level: metadataDarkStar.level,
-    shouldCast: shouldCastDarkStar,
-    execute: executeDarkStar,
-  },
   'Dominate Monster': {
     name: 'Dominate Monster',
     level: metadataDominateMonster.level,
     shouldCast: shouldCastDominateMonster,
     execute: executeDominateMonster,
-  },
-  'Earthquake': {
-    name: 'Earthquake',
-    level: metadataEarthquake.level,
-    shouldCast: shouldCastEarthquake,
-    execute: executeEarthquake,
-  },
-  'Feeblemind': {
-    name: 'Feeblemind',
-    level: metadataFeeblemind.level,
-    shouldCast: shouldCastFeeblemind,
-    execute: executeFeeblemind,
   },
   'Glibness': {
     name: 'Glibness',
@@ -3153,18 +3009,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     level: metadataIllusoryDragon.level,
     shouldCast: shouldCastIllusoryDragon,
     execute: executeIllusoryDragon,
-  },
-  'Incendiary Cloud': {
-    name: 'Incendiary Cloud',
-    level: metadataIncendiaryCloud.level,
-    shouldCast: shouldCastIncendiaryCloud,
-    execute: executeIncendiaryCloud,
-  },
-  'Maddening Darkness': {
-    name: 'Maddening Darkness',
-    level: metadataMaddeningDarkness.level,
-    shouldCast: shouldCastMaddeningDarkness,
-    execute: executeMaddeningDarkness,
   },
   'Power Word Stun': {
     name: 'Power Word Stun',
@@ -3225,18 +3069,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     level: metadataPowerWordHeal.level,
     shouldCast: shouldCastPowerWordHeal,
     execute: executePowerWordHeal,
-  },
-  'Psychic Scream': {
-    name: 'Psychic Scream',
-    level: metadataPsychicScream.level,
-    shouldCast: shouldCastPsychicScream,
-    execute: executePsychicScream,
-  },
-  'Ravenous Void': {
-    name: 'Ravenous Void',
-    level: metadataRavenousVoid.level,
-    shouldCast: shouldCastRavenousVoid,
-    execute: executeRavenousVoid,
   },
   'Storm of Vengeance': {
     name: 'Storm of Vengeance',

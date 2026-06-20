@@ -1,117 +1,112 @@
 // ============================================================
 // Circle of Death — PHB p.221
+// 6th-level necromancy, action, range 60 ft, NO concentration.
+// Components: V, S, M (the powder of a crushed black pearl worth 500 gp).
 //
-// 6-level necromancy, 1 action, range 150 ft.
-// Duration: Instantaneous.
-//
-// Effect: A sphere of negative energy ripples out in a 60-foot-radius sphere from a point within range. Each creature in that area must make a Constitution saving throw. A target takes  necrotic da
-//
-// Upcast: see source (not modelled in v1).
+// Effect: A sphere of negative energy ripples out in a 60-foot-radius
+//         sphere from a point within range. Each creature in that area
+//         makes a Constitution saving throw. A creature takes 8d6 necrotic
+//         damage on a failed save, or half as much on a successful one.
 //
 // v1 simplifications:
-//   - v1 models this spell as a FORWARD-COMPAT flag only (Session 19 bulk
-//     implementation). The spell consumes a slot and sets the flag
-//     `_genericSpellActiveSpells` on the caster; the actual mechanical
-//     effect (damage / save / condition / buff) is NOT applied in v1.
-//     A future implementation should extend the relevant engine subsystem
-//     (damage_zone for persistent damage, condition_apply for conditions,
-//     advantage_vs for buffs, etc.) to consume this flag and apply the
-//     real effect. This mirrors the Session 17/18 forward-compat pattern
-//     established by Darkvision, Arcane Lock, Knock, See Invisibility.
+//   - AoE: 60-ft radius sphere at a point within 60 ft. v1 targets the
+//     highest-threat enemy within 60 ft as the centre and applies to ALL
+//     enemies within 60 ft (chebyshev3D approx — large AoE).
+//   - Upcast: +2d6/slot-level above 6th NOT modelled.
+//   - NOT concentration (PHB p.221: instantaneous).
 //
-// Spell module pattern (mirrors Darkvision / Arcane Lock forward-compat
-// self-buff pattern):
-//   shouldCast(caster, bf) → boolean
-//   execute(caster, state) → void
-//   cleanup() — no-op (forward-compat flag persists for combat)
+// Migration note (Session 24): Mirrors Sunburst (Session 23) AoE pattern
+// but no condition, 8d6 necrotic, L6 slot.
 // ============================================================
 
 import { Combatant, Battlefield } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
+import { rollSave, rollDie, applyDamageWithTempHP } from '../engine/utils';
+import { chebyshev3D, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
-
-// ---- Metadata -----------------------------------------------
 
 export const metadata = {
   name: 'Circle of Death',
   level: 6,
   school: 'necromancy',
-  rangeFt: 150,
+  rangeFt: 60,                   // PHB p.221: 60 ft
+  aoeRadiusFt: 60,               // PHB p.221: 60-ft radius
+  dieCount: 8,
+  dieSides: 6,
+  damageType: 'necrotic' as const,
   concentration: false,
+  saveAbility: 'con' as const,
   castingTime: 'action',
-  circleOfDeathV1Simplified: true,
+  circleOfDeathUpcastV1Implemented: false,                            // +2d6/slot-level NOT modelled
 } as const;
 
-// ---- Local log helper ---------------------------------------
-
-function emit(
-  state: EngineState,
-  type: CombatEvent['type'],
-  actorId: string,
-  desc: string,
-  targetId?: string,
-  value?: number,
-): void {
-  state.log.events.push({
-    round: state.battlefield.round,
-    actorId,
-    type,
-    targetId,
-    value,
-    description: desc,
-  });
+function emit(state: EngineState, type: CombatEvent['type'], actorId: string, desc: string, targetId?: string, value?: number): void {
+  state.log.events.push({ round: state.battlefield.round, actorId, type, targetId, value, description: desc });
 }
 
-// ---- Planner ------------------------------------------------
-
-/**
- * Returns true if the caster should cast Circle of Death this turn.
- *
- * Preconditions:
- *   - Caster has 'Circle of Death' in their actions
- *   - Caster has at least one 6-level-or-higher slot available
- *   - Caster is NOT already Circle of Death-active (re-cast would be a no-op in v1)
- */
-export function shouldCast(caster: Combatant, _bf: Battlefield): boolean {
-  if (!caster.actions.some(a => a.name === 'Circle of Death')) return false;
-  if (!hasSpellSlot(caster, 6)) return false;
-  if (caster._genericSpellActiveSpells?.has('Circle of Death')) return false;
-  return true;
+export function rollDamage(): number {
+  let total = 0;
+  for (let i = 0; i < metadata.dieCount; i++) total += rollDie(metadata.dieSides);
+  return total;
 }
 
-// ---- Execution ----------------------------------------------
+export function shouldCast(caster: Combatant, bf: Battlefield): Combatant[] | null {
+  if (!caster.actions.some(a => a.name === 'Circle of Death')) return null;
+  if (!hasSpellSlot(caster, 6)) return null;
 
-/**
- * Execute Circle of Death:
- *  1. Consume a 6-level spell slot.
- *  2. Set the flag on the caster's `_genericSpellActiveSpells` Set.
- *  3. Log the cast.
- */
-export function execute(
-  caster: Combatant,
-  state: EngineState,
-): void {
-  consumeSpellSlot(caster, 6);
-
-  if (!caster._genericSpellActiveSpells) {
-    caster._genericSpellActiveSpells = new Set<string>();
+  const enemies = livingEnemiesOf(caster, bf);
+  let center: Combatant | null = null;
+  let centerThreat = -1;
+  let centerDist = Infinity;
+  for (const e of enemies) {
+    const distFt = chebyshev3D(caster.pos, e.pos) * 5;
+    if (distFt > 60) continue;
+    if (e.maxHP > centerThreat || (e.maxHP === centerThreat && distFt < centerDist)) {
+      center = e;
+      centerThreat = e.maxHP;
+      centerDist = distFt;
+    }
   }
-  caster._genericSpellActiveSpells.add('Circle of Death');
+  if (!center) return null;
+
+  const targets: Combatant[] = [];
+  for (const e of enemies) {
+    const distFt = chebyshev3D(center.pos, e.pos) * 5;
+    if (distFt <= 60) targets.push(e);
+  }
+  return targets.length >= 1 ? targets : null;
+}
+
+export function execute(caster: Combatant, targets: Combatant[], state: EngineState): void {
+  const action = caster.actions.find(a => a.name === 'Circle of Death');
+  const saveDC = action?.saveDC ?? 15;
+
+  consumeSpellSlot(caster, 6);
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Circle of Death! (v1: forward-compat flag set; mechanical effect not yet implemented)`,
-    caster.id,
+    `${caster.name} casts Circle of Death! (DC ${saveDC} CON, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}, ${metadata.aoeRadiusFt}-ft radius AoE) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} caught!`,
   );
-  emit(
-    state, 'condition_add', caster.id,
-    `${caster.name} is affected by Circle of Death. (v1: forward-compat flag set; no mechanical effect until engine subsystem is implemented)`,
-    caster.id,
-  );
+
+  for (const target of targets) {
+    if (target.isDead || target.isUnconscious) continue;
+
+    const save = rollSave(target, 'con', saveDC);
+    const fullDmg = rollDamage();
+    const dmg = save.success ? Math.floor(fullDmg / 2) : fullDmg;
+    const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);
+
+    emit(
+      state,
+      save.success ? 'save_success' : 'save_fail',
+      caster.id,
+      `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} CON save vs Circle of Death (rolled ${save.total}) — ${dealt} ${metadata.damageType} damage (${metadata.dieCount}d${metadata.dieSides}=${fullDmg}${save.success ? ', halved' : ''})`,
+      target.id, save.roll,
+    );
+    emit(state, 'damage', caster.id, `Circle of Death: ${target.name} takes ${dealt} ${metadata.damageType} damage`, target.id, dealt);
+  }
 }
 
-// ---- Cleanup ------------------------------------------------
-
 export function cleanup(_c: Combatant): void {
-  // No-op — forward-compat flag persists for combat.
+  // No-op — instantaneous.
 }

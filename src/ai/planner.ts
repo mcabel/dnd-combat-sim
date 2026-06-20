@@ -137,6 +137,20 @@ import { shouldCast as shouldCastMaelstrom } from '../spells/maelstrom';
 import { shouldCast as shouldCastNegativeEnergyFlood } from '../spells/negative_energy_flood';
 import { shouldCast as shouldCastSteelWindStrike } from '../spells/steel_wind_strike';
 import { shouldCast as shouldCastSynapticStatic } from '../spells/synaptic_static';
+import { shouldCast as shouldCastChainLightning } from '../spells/chain_lightning';
+import { shouldCast as shouldCastCircleOfDeath } from '../spells/circle_of_death';
+import { shouldCast as shouldCastGravityFissure } from '../spells/gravity_fissure';
+import { shouldCast as shouldCastMentalPrison } from '../spells/mental_prison';
+import { shouldCast as shouldCastSunbeam } from '../spells/sunbeam';
+import { shouldCast as shouldCastCrownOfStars } from '../spells/crown_of_stars';
+import { shouldCast as shouldCastFireStorm } from '../spells/fire_storm';
+import { shouldCast as shouldCastDarkStar } from '../spells/dark_star';
+import { shouldCast as shouldCastEarthquake } from '../spells/earthquake';
+import { shouldCast as shouldCastFeeblemind } from '../spells/feeblemind';
+import { shouldCast as shouldCastIncendiaryCloud } from '../spells/incendiary_cloud';
+import { shouldCast as shouldCastMaddeningDarkness } from '../spells/maddening_darkness';
+import { shouldCast as shouldCastPsychicScream } from '../spells/psychic_scream';
+import { shouldCast as shouldCastRavenousVoid } from '../spells/ravenous_void';
 
 // ── Session 19 — bulk-implementation generic dispatch (262 new spells) ────
 import { GENERIC_SPELL_LIST } from '../spells/_generic_registry';
@@ -2781,6 +2795,277 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
       };
       plan.targetId = ssTargets[0].id;
       plan.bonusAction = planBonusAction(self, ssTargets[0], battlefield);
+      return plan;
+    }
+  }
+
+  // ── Session 24 — L6 combat damage spells (12AS–12AW) ────────────
+
+  // --- 12AS. CHAIN LIGHTNING (auto-hit 10d8 lightning multi-target, L6, NO concentration) ---
+  // PHB p.221: 150 ft, AUTO-HIT 10d8 lightning to 1 primary + 3 arcs (4 targets max).
+  // v1 auto-hit per plan. shouldCast returns Combatant[] (up to 4). Avg 45 lightning per target.
+  if (!plan.action && self.actions.some(a => a.name === 'Chain Lightning')) {
+    const clTargets = shouldCastChainLightning(self, battlefield);
+    if (clTargets) {
+      const names = clTargets.map(t => t.name).join(', ');
+      plan.action = {
+        type: 'chainLightning',
+        action: null,
+        targetId: clTargets[0].id,
+        description: `${self.name} casts Chain Lightning at ${names} (auto-hit)`,
+      };
+      plan.targetId = clTargets[0].id;
+      plan.bonusAction = planBonusAction(self, clTargets[0], battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12AT. CIRCLE OF DEATH (CON save 8d6 necrotic, L6, NO concentration) ---
+  // PHB p.221: 60 ft, CON save 8d6 necrotic (half on save), 60-ft radius AoE.
+  // shouldCast returns Combatant[]. Avg 28 necrotic.
+  if (!plan.action && self.actions.some(a => a.name === 'Circle of Death')) {
+    const codTargets = shouldCastCircleOfDeath(self, battlefield);
+    if (codTargets) {
+      const names = codTargets.map(t => t.name).join(', ');
+      plan.action = {
+        type: 'circleOfDeath',
+        action: null,
+        targetId: codTargets[0].id,
+        description: `${self.name} casts Circle of Death, catching ${names}`,
+      };
+      plan.targetId = codTargets[0].id;
+      plan.bonusAction = planBonusAction(self, codTargets[0], battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12AU. GRAVITY FISSURE (CON save 8d8 force line, L6, NO concentration) ---
+  // EGtW p.162: 100-ft line, CON save 8d8 force (half on save). Secondary AoE + pull simplified.
+  // shouldCast returns Combatant[]. Avg 36 force.
+  if (!plan.action && self.actions.some(a => a.name === 'Gravity Fissure')) {
+    const gfTargets = shouldCastGravityFissure(self, battlefield);
+    if (gfTargets) {
+      const names = gfTargets.map(t => t.name).join(', ');
+      plan.action = {
+        type: 'gravityFissure',
+        action: null,
+        targetId: gfTargets[0].id,
+        description: `${self.name} casts Gravity Fissure, catching ${names}`,
+      };
+      plan.targetId = gfTargets[0].id;
+      plan.bonusAction = planBonusAction(self, gfTargets[0], battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12AV. MENTAL PRISON (INT save 5d10 psychic, L6, v1 one-shot) ---
+  // XGE p.161: 60 ft, INT save 5d10 psychic (half on save), single-target. v1 one-shot.
+  // shouldCast returns a single enemy. Avg 27.5 psychic.
+  if (!plan.action && self.actions.some(a => a.name === 'Mental Prison')) {
+    const mpTarget = shouldCastMentalPrison(self, battlefield);
+    if (mpTarget) {
+      plan.action = {
+        type: 'mentalPrison',
+        action: null,
+        targetId: mpTarget.id,
+        description: `${self.name} casts Mental Prison at ${mpTarget.name}`,
+      };
+      plan.targetId = mpTarget.id;
+      plan.bonusAction = planBonusAction(self, mpTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12AW. SUNBEAM (CON save 6d8 radiant + blinded line, L6, v1 one-shot) ---
+  // PHB p.279: 60-ft line, CON save 6d8 radiant + blinded on fail. v1 one-shot (canon concentration + repeat-action).
+  // shouldCast returns Combatant[]. Avg 27 radiant + blinded.
+  if (!plan.action && self.actions.some(a => a.name === 'Sunbeam')) {
+    const sbTargets = shouldCastSunbeam(self, battlefield);
+    if (sbTargets) {
+      const names = sbTargets.map(t => t.name).join(', ');
+      plan.action = {
+        type: 'sunbeam',
+        action: null,
+        targetId: sbTargets[0].id,
+        description: `${self.name} casts Sunbeam, catching ${names}`,
+      };
+      plan.targetId = sbTargets[0].id;
+      plan.bonusAction = planBonusAction(self, sbTargets[0], battlefield);
+      return plan;
+    }
+  }
+
+  // ── Session 24 — L7 combat damage spells (12AX–12AY) ────────────
+
+  // --- 12AX. CROWN OF STARS (ranged spell attack 4d12 radiant, L7, v1 one-shot) ---
+  // XGE p.152: 120 ft, ranged spell attack 4d12 radiant (crit doubles), single-target.
+  // v1 one-shot (7-mote storage simplified). shouldCast returns a single enemy. Avg 26 radiant.
+  if (!plan.action && self.actions.some(a => a.name === 'Crown of Stars')) {
+    const cosTarget = shouldCastCrownOfStars(self, battlefield);
+    if (cosTarget) {
+      plan.action = {
+        type: 'crownOfStars',
+        action: null,
+        targetId: cosTarget.id,
+        description: `${self.name} casts Crown of Stars at ${cosTarget.name}`,
+      };
+      plan.targetId = cosTarget.id;
+      plan.bonusAction = planBonusAction(self, cosTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12AY. FIRE STORM (DEX save 7d10 fire, L7, NO concentration) ---
+  // PHB p.242: 150 ft, DEX save 7d10 fire (half on save), 40-ft radius AoE (canon ten-10ft-cubes simplified).
+  // shouldCast returns Combatant[]. Avg 38.5 fire.
+  if (!plan.action && self.actions.some(a => a.name === 'Fire Storm')) {
+    const fsTargets = shouldCastFireStorm(self, battlefield);
+    if (fsTargets) {
+      const names = fsTargets.map(t => t.name).join(', ');
+      plan.action = {
+        type: 'fireStorm',
+        action: null,
+        targetId: fsTargets[0].id,
+        description: `${self.name} casts Fire Storm, catching ${names}`,
+      };
+      plan.targetId = fsTargets[0].id;
+      plan.bonusAction = planBonusAction(self, fsTargets[0], battlefield);
+      return plan;
+    }
+  }
+
+  // ── Session 24 — L8 combat damage spells (12AZ–12BD) ────────────
+
+  // --- 12AZ. DARK STAR (CON save 8d8 necrotic + blinded, L8, v1 one-shot) ---
+  // XGE p.153: 150 ft, CON save 8d8 necrotic + blinded on fail, 40-ft radius. v1 one-shot.
+  // shouldCast returns Combatant[]. Avg 36 necrotic + blinded.
+  if (!plan.action && self.actions.some(a => a.name === 'Dark Star')) {
+    const dsTargets = shouldCastDarkStar(self, battlefield);
+    if (dsTargets) {
+      const names = dsTargets.map(t => t.name).join(', ');
+      plan.action = {
+        type: 'darkStar',
+        action: null,
+        targetId: dsTargets[0].id,
+        description: `${self.name} casts Dark Star, catching ${names}`,
+      };
+      plan.targetId = dsTargets[0].id;
+      plan.bonusAction = planBonusAction(self, dsTargets[0], battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12BA. EARTHQUAKE (AUTO-HIT 5d6 bludgeoning, L8, v1 one-shot) ---
+  // PHB p.234: Self (50-ft radius per plan), AUTO-HIT 5d6 bludgeoning (no save per plan). v1 one-shot.
+  // shouldCast returns Combatant[]. Avg 17.5 bludgeoning.
+  if (!plan.action && self.actions.some(a => a.name === 'Earthquake')) {
+    const eqTargets = shouldCastEarthquake(self, battlefield);
+    if (eqTargets) {
+      const names = eqTargets.map(t => t.name).join(', ');
+      plan.action = {
+        type: 'earthquake',
+        action: null,
+        targetId: eqTargets[0].id,
+        description: `${self.name} casts Earthquake, catching ${names}`,
+      };
+      plan.targetId = eqTargets[0].id;
+      plan.bonusAction = planBonusAction(self, eqTargets[0], battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12BB. FEEBLEMIND (INT save 4d6 psychic + incapacitated, L8, NO concentration) ---
+  // PHB p.239: 60 ft, INT save 4d6 psychic (always dealt) + incapacitated on fail (INT/CHA→1 simplified).
+  // shouldCast returns a single enemy. Avg 14 psychic + incapacitated.
+  if (!plan.action && self.actions.some(a => a.name === 'Feeblemind')) {
+    const fmTarget = shouldCastFeeblemind(self, battlefield);
+    if (fmTarget) {
+      plan.action = {
+        type: 'feeblemind',
+        action: null,
+        targetId: fmTarget.id,
+        description: `${self.name} casts Feeblemind at ${fmTarget.name}`,
+      };
+      plan.targetId = fmTarget.id;
+      plan.bonusAction = planBonusAction(self, fmTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12BC. INCENDIARY CLOUD (DEX save 10d8 fire, L8, NO concentration) ---
+  // PHB p.253: 150 ft, DEX save 10d8 fire (half on save), 20-ft radius. Moving-cloud simplified.
+  // shouldCast returns Combatant[]. Avg 45 fire.
+  if (!plan.action && self.actions.some(a => a.name === 'Incendiary Cloud')) {
+    const icTargets = shouldCastIncendiaryCloud(self, battlefield);
+    if (icTargets) {
+      const names = icTargets.map(t => t.name).join(', ');
+      plan.action = {
+        type: 'incendiaryCloud',
+        action: null,
+        targetId: icTargets[0].id,
+        description: `${self.name} casts Incendiary Cloud, catching ${names}`,
+      };
+      plan.targetId = icTargets[0].id;
+      plan.bonusAction = planBonusAction(self, icTargets[0], battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12BD. MADDENING DARKNESS (WIS save 8d8 psychic, L8, v1 one-shot) ---
+  // XGE p.158: 120 ft, WIS save 8d8 psychic (half on save), 60-ft radius. Darkness rider simplified. v1 one-shot.
+  // shouldCast returns Combatant[]. Avg 36 psychic.
+  if (!plan.action && self.actions.some(a => a.name === 'Maddening Darkness')) {
+    const mdTargets = shouldCastMaddeningDarkness(self, battlefield);
+    if (mdTargets) {
+      const names = mdTargets.map(t => t.name).join(', ');
+      plan.action = {
+        type: 'maddeningDarkness',
+        action: null,
+        targetId: mdTargets[0].id,
+        description: `${self.name} casts Maddening Darkness, catching ${names}`,
+      };
+      plan.targetId = mdTargets[0].id;
+      plan.bonusAction = planBonusAction(self, mdTargets[0], battlefield);
+      return plan;
+    }
+  }
+
+  // ── Session 24 — L9 combat damage spells (12BE–12BF) ────────────
+
+  // --- 12BE. PSYCHIC SCREAM (INT save 14d6 psychic + stunned, L9, NO concentration) ---
+  // XGE p.163: 90 ft, INT save 14d6 psychic + stunned on fail, up to 10 targets (point-targeted).
+  // shouldCast returns Combatant[] (up to 10). Avg 49 psychic + stunned per target.
+  if (!plan.action && self.actions.some(a => a.name === 'Psychic Scream')) {
+    const psTargets = shouldCastPsychicScream(self, battlefield);
+    if (psTargets) {
+      const names = psTargets.map(t => t.name).join(', ');
+      plan.action = {
+        type: 'psychicScream',
+        action: null,
+        targetId: psTargets[0].id,
+        description: `${self.name} casts Psychic Scream at ${names}`,
+      };
+      plan.targetId = psTargets[0].id;
+      plan.bonusAction = planBonusAction(self, psTargets[0], battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12BF. RAVENOUS VOID (AUTO-HIT 5d10 force, L9, v1 one-shot) ---
+  // XGE p.159: 1000 ft, AUTO-HIT 5d10 force (no save per plan), 60-ft radius. v1 one-shot.
+  // shouldCast returns Combatant[]. Avg 27.5 force per target.
+  if (!plan.action && self.actions.some(a => a.name === 'Ravenous Void')) {
+    const rvTargets = shouldCastRavenousVoid(self, battlefield);
+    if (rvTargets) {
+      const names = rvTargets.map(t => t.name).join(', ');
+      plan.action = {
+        type: 'ravenousVoid',
+        action: null,
+        targetId: rvTargets[0].id,
+        description: `${self.name} casts Ravenous Void, catching ${names}`,
+      };
+      plan.targetId = rvTargets[0].id;
+      plan.bonusAction = planBonusAction(self, rvTargets[0], battlefield);
       return plan;
     }
   }

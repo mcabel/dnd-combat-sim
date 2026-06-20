@@ -1,117 +1,143 @@
 // ============================================================
 // Psychic Scream — XGE p.163
+// 9th-level enchantment, action, range 90 ft, NO concentration.
+// Components: S.
 //
-// 9-level enchantment, 1 action, range 90 ft.
-// Duration: Instantaneous.
+// Effect: You unleash the power of your mind to blast the intellect of up
+//         to ten creatures of your choice that you can see within range.
+//         Each target must make an Intelligence saving throw. On a failed
+//         save, a target takes 14d6 psychic damage and is stunned. On a
+//         successful save, a creature takes half as much damage and isn't
+//         stunned. A stunned target can make an Intelligence saving throw
+//         at the end of each of its turns. On a successful save, the
+//         stunning effect ends.
 //
-// Effect: You unleash the power of your mind to blast the intellect of up to ten creatures of your choice that you can see within range. Creatures that have an Intelligence score of 2 or lower are unaffected.
-//
-// Upcast: see source (not modelled in v1).
+//         Canon rider: if a target's brain "explodes" (rolled 1 on the
+//         die), it dies — NOT modelled in v1.
 //
 // v1 simplifications:
-//   - v1 models this spell as a FORWARD-COMPAT flag only (Session 19 bulk
-//     implementation). The spell consumes a slot and sets the flag
-//     `_genericSpellActiveSpells` on the caster; the actual mechanical
-//     effect (damage / save / condition / buff) is NOT applied in v1.
-//     A future implementation should extend the relevant engine subsystem
-//     (damage_zone for persistent damage, condition_apply for conditions,
-//     advantage_vs for buffs, etc.) to consume this flag and apply the
-//     real effect. This mirrors the Session 17/18 forward-compat pattern
-//     established by Darkvision, Arcane Lock, Knock, See Invisibility.
+//   - 10-target cap (XGE p.163: "up to ten creatures"): v1 picks the 10
+//     highest-threat enemies within 90 ft. If fewer than 10 exist, returns
+//     all of them. Documented via `psychicScream10TargetCapV1: true`.
+//   - Stunned on failed save (XGE p.163): v1 applies stunned via
+//     condition_apply (mirror Sunburst's blinded). The end-of-turn INT
+//     save to end the stun is NOT modelled (same gap as Sunburst).
+//     Documented via `psychicScreamStunnedDurationV1Simplified: true`.
+//   - "Head explodes on nat 1" rider: NOT modelled (v1 has no nat-1-
+//     on-save instakill subsystem). Documented via
+//     `psychicScreamHeadExplodeV1Simplified: true`.
+//   - Upcast: none (9th-level only).
+//   - NOT concentration (XGE p.163: instantaneous — the stun rider is a
+//     non-concentration persistent effect).
 //
-// Spell module pattern (mirrors Darkvision / Arcane Lock forward-compat
-// self-buff pattern):
-//   shouldCast(caster, bf) → boolean
-//   execute(caster, state) → void
-//   cleanup() — no-op (forward-compat flag persists for combat)
+// Migration note (Session 24): Mirrors Sunburst (Session 23) but with a
+// 10-TARGET cap (vs unlimited AoE), INT save (vs CON), 14d6 psychic (vs
+// 12d6 radiant), stunned (vs blinded), 90-ft range (vs 150-ft), no AoE
+// radius (point-targeted, up to 10 creatures).
 // ============================================================
 
 import { Combatant, Battlefield } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
+import { rollSave, rollDie, applyDamageWithTempHP } from '../engine/utils';
+import { chebyshev3D, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
-
-// ---- Metadata -----------------------------------------------
+import { applySpellEffect } from '../engine/spell_effects';
 
 export const metadata = {
   name: 'Psychic Scream',
   level: 9,
   school: 'enchantment',
-  rangeFt: 90,
+  rangeFt: 90,                   // XGE p.163: 90 ft
+  maxTargets: 10,                // XGE p.163: up to 10 creatures
+  dieCount: 14,
+  dieSides: 6,
+  damageType: 'psychic' as const,
   concentration: false,
+  saveAbility: 'int' as const,
   castingTime: 'action',
-  psychicScreamV1Simplified: true,
+  psychicScream10TargetCapV1: true,                                   // v1: 10-target cap
+  psychicScreamStunnedDurationV1Simplified: true,                     // end-of-turn INT save NOT modelled
+  psychicScreamHeadExplodeV1Simplified: true,                         // nat-1 instakill NOT modelled
 } as const;
 
-// ---- Local log helper ---------------------------------------
-
-function emit(
-  state: EngineState,
-  type: CombatEvent['type'],
-  actorId: string,
-  desc: string,
-  targetId?: string,
-  value?: number,
-): void {
-  state.log.events.push({
-    round: state.battlefield.round,
-    actorId,
-    type,
-    targetId,
-    value,
-    description: desc,
-  });
+function emit(state: EngineState, type: CombatEvent['type'], actorId: string, desc: string, targetId?: string, value?: number): void {
+  state.log.events.push({ round: state.battlefield.round, actorId, type, targetId, value, description: desc });
 }
 
-// ---- Planner ------------------------------------------------
-
-/**
- * Returns true if the caster should cast Psychic Scream this turn.
- *
- * Preconditions:
- *   - Caster has 'Psychic Scream' in their actions
- *   - Caster has at least one 9-level-or-higher slot available
- *   - Caster is NOT already Psychic Scream-active (re-cast would be a no-op in v1)
- */
-export function shouldCast(caster: Combatant, _bf: Battlefield): boolean {
-  if (!caster.actions.some(a => a.name === 'Psychic Scream')) return false;
-  if (!hasSpellSlot(caster, 9)) return false;
-  if (caster._genericSpellActiveSpells?.has('Psychic Scream')) return false;
-  return true;
+export function rollDamage(): number {
+  let total = 0;
+  for (let i = 0; i < metadata.dieCount; i++) total += rollDie(metadata.dieSides);
+  return total;
 }
 
-// ---- Execution ----------------------------------------------
-
 /**
- * Execute Psychic Scream:
- *  1. Consume a 9-level spell slot.
- *  2. Set the flag on the caster's `_genericSpellActiveSpells` Set.
- *  3. Log the cast.
+ * Returns up to 10 highest-threat enemies within 90 ft (point-targeted,
+ * NOT an AoE — the caster picks the targets). Returns null if no enemies
+ * in range.
  */
-export function execute(
-  caster: Combatant,
-  state: EngineState,
-): void {
-  consumeSpellSlot(caster, 9);
+export function shouldCast(caster: Combatant, bf: Battlefield): Combatant[] | null {
+  if (!caster.actions.some(a => a.name === 'Psychic Scream')) return null;
+  if (!hasSpellSlot(caster, 9)) return null;
 
-  if (!caster._genericSpellActiveSpells) {
-    caster._genericSpellActiveSpells = new Set<string>();
+  const enemies = livingEnemiesOf(caster, bf);
+  const candidates: Array<{ c: Combatant; threat: number; dist: number }> = [];
+  for (const e of enemies) {
+    const distFt = chebyshev3D(caster.pos, e.pos) * 5;
+    if (distFt > 90) continue;
+    candidates.push({ c: e, threat: e.maxHP, dist: distFt });
   }
-  caster._genericSpellActiveSpells.add('Psychic Scream');
+  if (candidates.length === 0) return null;
+
+  // Sort: highest threat first, then closest. Take up to 10.
+  candidates.sort((a, b) => {
+    if (a.threat !== b.threat) return b.threat - a.threat;
+    return a.dist - b.dist;
+  });
+
+  return candidates.slice(0, metadata.maxTargets).map(x => x.c);
+}
+
+export function execute(caster: Combatant, targets: Combatant[], state: EngineState): void {
+  const action = caster.actions.find(a => a.name === 'Psychic Scream');
+  const saveDC = action?.saveDC ?? 15;
+
+  consumeSpellSlot(caster, 9);
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Psychic Scream! (v1: forward-compat flag set; mechanical effect not yet implemented)`,
-    caster.id,
+    `${caster.name} casts Psychic Scream! (DC ${saveDC} INT, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}, up to ${metadata.maxTargets} targets + stunned on fail) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} targeted!`,
   );
-  emit(
-    state, 'condition_add', caster.id,
-    `${caster.name} is affected by Psychic Scream. (v1: forward-compat flag set; no mechanical effect until engine subsystem is implemented)`,
-    caster.id,
-  );
+
+  for (const target of targets) {
+    if (target.isDead || target.isUnconscious) continue;
+
+    const save = rollSave(target, 'int', saveDC);
+    const fullDmg = rollDamage();
+    const dmg = save.success ? Math.floor(fullDmg / 2) : fullDmg;
+    const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);
+
+    emit(
+      state,
+      save.success ? 'save_success' : 'save_fail',
+      caster.id,
+      `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} INT save vs Psychic Scream (rolled ${save.total}) — ${dealt} ${metadata.damageType} damage (${metadata.dieCount}d${metadata.dieSides}=${fullDmg}${save.success ? ', halved' : ''})${save.success ? '' : ' + STUNNED'}`,
+      target.id, save.roll,
+    );
+    emit(state, 'damage', caster.id, `Psychic Scream: ${target.name} takes ${dealt} ${metadata.damageType} damage`, target.id, dealt);
+
+    if (!save.success && !target.conditions.has('stunned')) {
+      applySpellEffect(target, {
+        casterId: caster.id,
+        spellName: 'Psychic Scream',
+        effectType: 'condition_apply',
+        payload: { condition: 'stunned' },
+        sourceIsConcentration: false,
+      });
+      emit(state, 'condition_add', caster.id, `${target.name} is STUNNED by the psychic scream! (can't take actions; attacks vs them have advantage)`, target.id);
+    }
+  }
 }
 
-// ---- Cleanup ------------------------------------------------
-
 export function cleanup(_c: Combatant): void {
-  // No-op — forward-compat flag persists for combat.
+  // No-op — NOT concentration; stunned persists for v1 combat.
 }

@@ -1,118 +1,114 @@
 // ============================================================
 // Mental Prison — XGE p.161
+// 6th-level illusion, action, range 60 ft. Canon: concentration, up to
+// 1 minute. v1: concentration + movement-trigger simplified to one-shot.
+// Components: S.
 //
-// 6-level illusion, 1 action, range 60 ft, concentration.
-// Duration: 1 minute.
+// Effect: You make a grasping motion toward a creature within range. The
+//         target must make an Intelligence saving throw. On a failed save,
+//         the target takes 5d10 psychic damage and is restrained by the
+//         illusion. The target can use its action to make an Intelligence
+//         check against your spell save DC. If it succeeds, the spell ends.
+//         On a successful save, the target takes half as much damage and
+//         the spell has no other effect.
 //
-// Effect: You attempt to bind a creature within an illusory cell that only it perceives. One creature you can see within range must make an Intelligence saving throw. The target succeeds automatically if it is
-//
-// Upcast: see source (not modelled in v1).
+//         Canon rider: if the target moves (willingly or unwillingly) before
+//         the spell ends, it takes 3d10 psychic damage and the spell ends.
 //
 // v1 simplifications:
-//   - v1 models this spell as a FORWARD-COMPAT flag only (Session 19 bulk
-//     implementation). The spell consumes a slot and sets the flag
-//     `_genericSpellActiveSpells` on the caster; the actual mechanical
-//     effect (damage / save / condition / buff) is NOT applied in v1.
-//     A future implementation should extend the relevant engine subsystem
-//     (damage_zone for persistent damage, condition_apply for conditions,
-//     advantage_vs for buffs, etc.) to consume this flag and apply the
-//     real effect. This mirrors the Session 17/18 forward-compat pattern
-//     established by Darkvision, Arcane Lock, Knock, See Invisibility.
-//   - Concentration spell (forward-compat flag persists for combat).
+//   - Concentration + movement-trigger (XGE p.161): v1 simplifies to one-shot
+//     (concentration: false). The per-turn Int-check escape + movement-trigger
+//     3d10 are NOT modelled. One-shot 5d10 psychic on failed save, half on
+//     success. Documented via `mentalPrisonConcentrationV1Simplified: true`.
+//   - Upcast: +1d10/slot-level above 6th NOT modelled.
 //
-// Spell module pattern (mirrors Darkvision / Arcane Lock forward-compat
-// self-buff pattern):
-//   shouldCast(caster, bf) → boolean
-//   execute(caster, state) → void
-//   cleanup() — no-op (forward-compat flag persists for combat)
+// Migration note (Session 24): Mirrors Catapult (Session 21) but INT save,
+// 5d10 psychic, L6 slot, 60-ft range.
 // ============================================================
 
 import { Combatant, Battlefield } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
+import { rollSave, rollDie, applyDamageWithTempHP } from '../engine/utils';
+import { chebyshev3D, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
-
-// ---- Metadata -----------------------------------------------
 
 export const metadata = {
   name: 'Mental Prison',
   level: 6,
   school: 'illusion',
-  rangeFt: 60,
-  concentration: true,
+  rangeFt: 60,                   // XGE p.161: 60 ft
+  dieCount: 5,
+  dieSides: 10,
+  damageType: 'psychic' as const,
+  concentration: false,          // v1 simplification: one-shot (canon concentration + movement-trigger)
+  saveAbility: 'int' as const,
   castingTime: 'action',
-  mentalPrisonV1Simplified: true,
+  mentalPrisonConcentrationV1Simplified: true,                         // canon concentration + movement-trigger simplified to one-shot
+  mentalPrisonUpcastV1Implemented: false,                               // +1d10/slot-level NOT modelled
 } as const;
 
-// ---- Local log helper ---------------------------------------
-
-function emit(
-  state: EngineState,
-  type: CombatEvent['type'],
-  actorId: string,
-  desc: string,
-  targetId?: string,
-  value?: number,
-): void {
-  state.log.events.push({
-    round: state.battlefield.round,
-    actorId,
-    type,
-    targetId,
-    value,
-    description: desc,
-  });
+function emit(state: EngineState, type: CombatEvent['type'], actorId: string, desc: string, targetId?: string, value?: number): void {
+  state.log.events.push({ round: state.battlefield.round, actorId, type, targetId, value, description: desc });
 }
 
-// ---- Planner ------------------------------------------------
-
-/**
- * Returns true if the caster should cast Mental Prison this turn.
- *
- * Preconditions:
- *   - Caster has 'Mental Prison' in their actions
- *   - Caster has at least one 6-level-or-higher slot available
- *   - Caster is NOT already Mental Prison-active (re-cast would be a no-op in v1)
- */
-export function shouldCast(caster: Combatant, _bf: Battlefield): boolean {
-  if (!caster.actions.some(a => a.name === 'Mental Prison')) return false;
-  if (!hasSpellSlot(caster, 6)) return false;
-  if (caster._genericSpellActiveSpells?.has('Mental Prison')) return false;
-  return true;
+export function rollDamage(): number {
+  let total = 0;
+  for (let i = 0; i < metadata.dieCount; i++) total += rollDie(metadata.dieSides);
+  return total;
 }
 
-// ---- Execution ----------------------------------------------
+export function shouldCast(caster: Combatant, bf: Battlefield): Combatant | null {
+  if (!caster.actions.some(a => a.name === 'Mental Prison')) return null;
+  if (!hasSpellSlot(caster, 6)) return null;
 
-/**
- * Execute Mental Prison:
- *  1. Consume a 6-level spell slot.
- *  2. Set the flag on the caster's `_genericSpellActiveSpells` Set.
- *  3. Log the cast.
- */
-export function execute(
-  caster: Combatant,
-  state: EngineState,
-): void {
-  consumeSpellSlot(caster, 6);
-
-  if (!caster._genericSpellActiveSpells) {
-    caster._genericSpellActiveSpells = new Set<string>();
+  const enemies = livingEnemiesOf(caster, bf);
+  const candidates: Array<{ c: Combatant; threat: number; curHP: number; dist: number }> = [];
+  for (const e of enemies) {
+    const distFt = chebyshev3D(caster.pos, e.pos) * 5;
+    if (distFt > 60) continue;
+    candidates.push({ c: e, threat: e.maxHP, curHP: e.currentHP, dist: distFt });
   }
-  caster._genericSpellActiveSpells.add('Mental Prison');
+  if (candidates.length === 0) return null;
+  candidates.sort((a, b) => {
+    if (a.threat !== b.threat) return b.threat - a.threat;
+    if (a.curHP !== b.curHP) return a.curHP - b.curHP;
+    return a.dist - b.dist;
+  });
+  return candidates[0].c;
+}
+
+export function execute(caster: Combatant, target: Combatant, state: EngineState): void {
+  const action = caster.actions.find(a => a.name === 'Mental Prison');
+  const saveDC = action?.saveDC ?? 15;
+
+  consumeSpellSlot(caster, 6);
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Mental Prison! (v1: forward-compat flag set; mechanical effect not yet implemented)`,
-    caster.id,
+    `${caster.name} casts Mental Prison at ${target.name}! (DC ${saveDC} INT, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}, half on save)`,
+    target.id,
   );
+
+  if (target.isDead || target.isUnconscious) {
+    emit(state, 'save_success', caster.id, `Mental Prison: ${target.name} is already down — the illusion finds no mind.`, target.id);
+    return;
+  }
+
+  const save = rollSave(target, 'int', saveDC);
+  const fullDmg = rollDamage();
+  const dmg = save.success ? Math.floor(fullDmg / 2) : fullDmg;
+  const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);
+
   emit(
-    state, 'condition_add', caster.id,
-    `${caster.name} is affected by Mental Prison. (v1: forward-compat flag set; no mechanical effect until engine subsystem is implemented)`,
+    state,
+    save.success ? 'save_success' : 'save_fail',
     caster.id,
+    `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} INT save vs Mental Prison (rolled ${save.total}) — ${dealt} ${metadata.damageType} damage (${metadata.dieCount}d${metadata.dieSides}=${fullDmg}${save.success ? ', halved' : ''})`,
+    target.id, save.roll,
   );
+  emit(state, 'damage', caster.id, `Mental Prison: ${target.name} takes ${dealt} ${metadata.damageType} damage`, target.id, dealt);
 }
 
-// ---- Cleanup ------------------------------------------------
-
 export function cleanup(_c: Combatant): void {
-  // No-op — forward-compat flag persists for combat.
+  // No-op — v1 one-shot.
 }

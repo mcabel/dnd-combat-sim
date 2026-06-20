@@ -1,117 +1,133 @@
 // ============================================================
 // Crown of Stars — XGE p.152
+// 7th-level evocation, action, range Self. Canon: no concentration, 1 hour
+// (7 motes; 1 mote = bonus-action ranged spell attack 4d12 radiant).
+// v1: 7-mote storage simplified to a single one-shot attack.
+// Components: V, S.
 //
-// 7-level evocation, 1 action, range Self.
-// Duration: 1 hour.
-//
-// Effect: Seven star-like motes of light appear and orbit your head until the spell ends. You can use a bonus action to send one of the motes streaking toward one creature or object within 120 feet of you. When
-//
-// Upcast: see source (not modelled in v1).
+// Effect: Seven star-like points of light appear and orbit your head. You
+//         can use your action (or bonus action) to send one of them
+//         streaking toward a target within 120 feet. Make a ranged spell
+//         attack. On a hit, the target takes 4d12 radiant damage. Whether
+//         you hit or miss, the mote is expended. The spell ends when all
+//         seven motes are expended or the spell ends.
 //
 // v1 simplifications:
-//   - v1 models this spell as a FORWARD-COMPAT flag only (Session 19 bulk
-//     implementation). The spell consumes a slot and sets the flag
-//     `_genericSpellActiveSpells` on the caster; the actual mechanical
-//     effect (damage / save / condition / buff) is NOT applied in v1.
-//     A future implementation should extend the relevant engine subsystem
-//     (damage_zone for persistent damage, condition_apply for conditions,
-//     advantage_vs for buffs, etc.) to consume this flag and apply the
-//     real effect. This mirrors the Session 17/18 forward-compat pattern
-//     established by Darkvision, Arcane Lock, Knock, See Invisibility.
+//   - 7-mote storage (XGE p.152: "seven motes"; 1 mote per action/bonus
+//     action for up to 7 turns): v1 simplifies to a single one-shot
+//     attack (4d12 radiant). The per-turn mote expenditure is NOT modelled
+//     (same gap as Witch Bolt's per-turn DoT, but Crown of Stars is a
+//     RESOURCE pool, not a concentration DoT — v1 has no per-turn resource
+//     tracking for it). Documented via `crownOfStars7MoteStorageV1Simplified: true`.
+//   - Range: canon 120 ft (XGE p.152). v1 uses 120 ft.
+//   - Hit bonus: v1 falls back to the action's hitBonus. If null, falls
+//     back to abilityMod(caster.int) (Wizard primary — Crown of Stars is
+//     a Wizard/Sorcerer spell, XGE p.152). Mirrors Scorching Ray.
+//   - Crit DOES double the dice (standard PHB p.196 crit rule for spell
+//     attacks). Documented via `crownOfStarsCritDoublesV1: true`.
+//   - NOT concentration (XGE p.152: "no concentration, 1 hour" — the 1-hr
+//     duration is the mote storage, which v1 simplifies away).
 //
-// Spell module pattern (mirrors Darkvision / Arcane Lock forward-compat
-// self-buff pattern):
-//   shouldCast(caster, bf) → boolean
-//   execute(caster, state) → void
-//   cleanup() — no-op (forward-compat flag persists for combat)
+// Migration note (Session 24): Mirrors Chromatic Orb (Session 21) for the
+// single-target ranged spell attack pattern, but 4d12 radiant, L7 slot,
+// 120-ft range.
 // ============================================================
 
 import { Combatant, Battlefield } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
+import { rollAttack, rollDie, applyDamageWithTempHP, abilityMod } from '../engine/utils';
+import { chebyshev3D, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
-
-// ---- Metadata -----------------------------------------------
 
 export const metadata = {
   name: 'Crown of Stars',
   level: 7,
   school: 'evocation',
-  rangeFt: 0,
+  rangeFt: 120,                  // XGE p.152: 120 ft
+  dieCount: 4,
+  dieSides: 12,
+  damageType: 'radiant' as const,
   concentration: false,
   castingTime: 'action',
-  crownOfStarsV1Simplified: true,
+  crownOfStars7MoteStorageV1Simplified: true,                          // 7-mote storage simplified to single one-shot attack
+  crownOfStarsCritDoublesV1: true,                                    // crit doubles the 4d12 (PHB p.196)
 } as const;
 
-// ---- Local log helper ---------------------------------------
-
-function emit(
-  state: EngineState,
-  type: CombatEvent['type'],
-  actorId: string,
-  desc: string,
-  targetId?: string,
-  value?: number,
-): void {
-  state.log.events.push({
-    round: state.battlefield.round,
-    actorId,
-    type,
-    targetId,
-    value,
-    description: desc,
-  });
+function emit(state: EngineState, type: CombatEvent['type'], actorId: string, desc: string, targetId?: string, value?: number): void {
+  state.log.events.push({ round: state.battlefield.round, actorId, type, targetId, value, description: desc });
 }
 
-// ---- Planner ------------------------------------------------
-
-/**
- * Returns true if the caster should cast Crown of Stars this turn.
- *
- * Preconditions:
- *   - Caster has 'Crown of Stars' in their actions
- *   - Caster has at least one 7-level-or-higher slot available
- *   - Caster is NOT already Crown of Stars-active (re-cast would be a no-op in v1)
- */
-export function shouldCast(caster: Combatant, _bf: Battlefield): boolean {
-  if (!caster.actions.some(a => a.name === 'Crown of Stars')) return false;
-  if (!hasSpellSlot(caster, 7)) return false;
-  if (caster._genericSpellActiveSpells?.has('Crown of Stars')) return false;
-  return true;
+export function rollDamage(isCrit = false): number {
+  let total = 0;
+  const rolls = isCrit ? metadata.dieCount * 2 : metadata.dieCount;
+  for (let i = 0; i < rolls; i++) total += rollDie(metadata.dieSides);
+  return total;
 }
 
-// ---- Execution ----------------------------------------------
+export function shouldCast(caster: Combatant, bf: Battlefield): Combatant | null {
+  if (!caster.actions.some(a => a.name === 'Crown of Stars')) return null;
+  if (!hasSpellSlot(caster, 7)) return null;
 
-/**
- * Execute Crown of Stars:
- *  1. Consume a 7-level spell slot.
- *  2. Set the flag on the caster's `_genericSpellActiveSpells` Set.
- *  3. Log the cast.
- */
-export function execute(
-  caster: Combatant,
-  state: EngineState,
-): void {
-  consumeSpellSlot(caster, 7);
-
-  if (!caster._genericSpellActiveSpells) {
-    caster._genericSpellActiveSpells = new Set<string>();
+  const enemies = livingEnemiesOf(caster, bf);
+  const candidates: Array<{ c: Combatant; threat: number; curHP: number; dist: number }> = [];
+  for (const e of enemies) {
+    const distFt = chebyshev3D(caster.pos, e.pos) * 5;
+    if (distFt > 120) continue;
+    candidates.push({ c: e, threat: e.maxHP, curHP: e.currentHP, dist: distFt });
   }
-  caster._genericSpellActiveSpells.add('Crown of Stars');
+  if (candidates.length === 0) return null;
+  candidates.sort((a, b) => {
+    if (a.threat !== b.threat) return b.threat - a.threat;
+    if (a.curHP !== b.curHP) return a.curHP - b.curHP;
+    return a.dist - b.dist;
+  });
+  return candidates[0].c;
+}
+
+export function execute(caster: Combatant, target: Combatant, state: EngineState): void {
+  const action = caster.actions.find(a => a.name === 'Crown of Stars');
+  const hitBonus = action?.hitBonus ?? abilityMod(caster.int);
+
+  consumeSpellSlot(caster, 7);
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Crown of Stars! (v1: forward-compat flag set; mechanical effect not yet implemented)`,
-    caster.id,
+    `${caster.name} casts Crown of Stars! (ranged spell attack, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType} on hit [1 mote, v1: 7-mote storage simplified], crit doubles dice)`,
+    target.id,
   );
+
+  if (target.isDead || target.isUnconscious) {
+    emit(state, 'attack_miss', caster.id, `Crown of Stars: ${target.name} is already down — the mote streaks past.`, target.id);
+    return;
+  }
+
+  const result = rollAttack(hitBonus, false, false);
+  const effectiveAC = target.ac;
+
+  if (result.total < effectiveAC && !result.isCrit) {
+    emit(
+      state, 'attack_miss', caster.id,
+      `${caster.name} misses ${target.name} with Crown of Stars mote (rolled ${result.roll}+${hitBonus}=${result.total} vs AC ${effectiveAC}) — no radiant damage!`,
+      target.id, result.roll,
+    );
+    return;
+  }
+
   emit(
-    state, 'condition_add', caster.id,
-    `${caster.name} is affected by Crown of Stars. (v1: forward-compat flag set; no mechanical effect until engine subsystem is implemented)`,
-    caster.id,
+    state, result.isCrit ? 'attack_crit' : 'attack_hit', caster.id,
+    `${caster.name} ${result.isCrit ? 'CRITS' : 'hits'} ${target.name} with a Crown of Stars mote (${result.total} vs AC ${effectiveAC})`,
+    target.id, result.roll,
+  );
+
+  const dmg = rollDamage(result.isCrit);
+  const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);
+  emit(
+    state, 'damage', caster.id,
+    `Crown of Stars: ${target.name} takes ${dealt} ${metadata.damageType} damage (${metadata.dieCount}d${metadata.dieSides}=${dmg}${result.isCrit ? ', CRIT doubled' : ''})`,
+    target.id, dealt,
   );
 }
 
-// ---- Cleanup ------------------------------------------------
-
 export function cleanup(_c: Combatant): void {
-  // No-op — forward-compat flag persists for combat.
+  // No-op — v1 one-shot.
 }

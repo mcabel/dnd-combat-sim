@@ -1,117 +1,126 @@
 // ============================================================
 // Chain Lightning — PHB p.221
+// 6th-level evocation, action, range 150 ft, NO concentration.
+// Components: V, S, M (a bit of fur; a piece of amber, glass, or crystal).
 //
-// 6-level evocation, 1 action, range 150 ft.
-// Duration: Instantaneous.
-//
-// Effect: You create a bolt of lightning that arcs toward a target of your choice that you can see within range. Three bolts then leap from that target to as many as three other targets, each of which must be w
-//
-// Upcast: see source (not modelled in v1).
+// Effect: You create a bolt of lightning that arcs toward a target of your
+//         choice that you can see within range. Three bolts then leap from
+//         that target to as many as three other targets, each of which must
+//         be within 30 feet of the first target. A target can be a creature
+//         or an object and can be targeted by only one of the bolts.
+//         A target must make a Dexterity saving throw. The target takes 10d8
+//         lightning damage on a failed save, or half as much on a successful
+//         one.
 //
 // v1 simplifications:
-//   - v1 models this spell as a FORWARD-COMPAT flag only (Session 19 bulk
-//     implementation). The spell consumes a slot and sets the flag
-//     `_genericSpellActiveSpells` on the caster; the actual mechanical
-//     effect (damage / save / condition / buff) is NOT applied in v1.
-//     A future implementation should extend the relevant engine subsystem
-//     (damage_zone for persistent damage, condition_apply for conditions,
-//     advantage_vs for buffs, etc.) to consume this flag and apply the
-//     real effect. This mirrors the Session 17/18 forward-compat pattern
-//     established by Darkvision, Arcane Lock, Knock, See Invisibility.
+//   - AUTO-HIT (no save, no attack): per the plan spec, v1 treats this as
+//     auto-hit 10d8 lightning to up to 4 targets (1 primary + 3 arcs within
+//     30 ft of primary). PHB p.221 actually has a DEX save — v1 follows the
+//     plan's "AUTO_HIT_DAMAGE multi-target" interpretation. Documented via
+//     `chainLightningAutoHitV1PerPlan: true`.
+//   - Upcast: +2d8/slot-level above 6th NOT modelled.
+//   - NOT concentration (PHB p.221: instantaneous).
 //
-// Spell module pattern (mirrors Darkvision / Arcane Lock forward-compat
-// self-buff pattern):
-//   shouldCast(caster, bf) → boolean
-//   execute(caster, state) → void
-//   cleanup() — no-op (forward-compat flag persists for combat)
+// Migration note (Session 24): NEW auto-hit multi-target pattern (mirrors
+// magic_missile's auto-hit + fireball's multi-target). shouldCast returns
+// up to 4 Combatants (1 primary + 3 nearest enemies within 30 ft of primary).
 // ============================================================
 
 import { Combatant, Battlefield } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
+import { rollDie, applyDamageWithTempHP } from '../engine/utils';
+import { chebyshev3D, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
-
-// ---- Metadata -----------------------------------------------
 
 export const metadata = {
   name: 'Chain Lightning',
   level: 6,
   school: 'evocation',
-  rangeFt: 150,
+  rangeFt: 150,                  // PHB p.221: 150 ft
+  maxTargets: 4,                 // 1 primary + 3 arcs
+  arcRangeFt: 30,                // PHB p.221: arcs within 30 ft of primary
+  dieCount: 10,
+  dieSides: 8,
+  damageType: 'lightning' as const,
   concentration: false,
   castingTime: 'action',
-  chainLightningV1Simplified: true,
+  chainLightningAutoHitV1PerPlan: true,                               // v1: auto-hit (plan reclassified from canon DEX save)
+  chainLightningUpcastV1Implemented: false,                            // +2d8/slot-level NOT modelled
 } as const;
 
-// ---- Local log helper ---------------------------------------
-
-function emit(
-  state: EngineState,
-  type: CombatEvent['type'],
-  actorId: string,
-  desc: string,
-  targetId?: string,
-  value?: number,
-): void {
-  state.log.events.push({
-    round: state.battlefield.round,
-    actorId,
-    type,
-    targetId,
-    value,
-    description: desc,
-  });
+function emit(state: EngineState, type: CombatEvent['type'], actorId: string, desc: string, targetId?: string, value?: number): void {
+  state.log.events.push({ round: state.battlefield.round, actorId, type, targetId, value, description: desc });
 }
 
-// ---- Planner ------------------------------------------------
-
-/**
- * Returns true if the caster should cast Chain Lightning this turn.
- *
- * Preconditions:
- *   - Caster has 'Chain Lightning' in their actions
- *   - Caster has at least one 6-level-or-higher slot available
- *   - Caster is NOT already Chain Lightning-active (re-cast would be a no-op in v1)
- */
-export function shouldCast(caster: Combatant, _bf: Battlefield): boolean {
-  if (!caster.actions.some(a => a.name === 'Chain Lightning')) return false;
-  if (!hasSpellSlot(caster, 6)) return false;
-  if (caster._genericSpellActiveSpells?.has('Chain Lightning')) return false;
-  return true;
+export function rollDamage(): number {
+  let total = 0;
+  for (let i = 0; i < metadata.dieCount; i++) total += rollDie(metadata.dieSides);
+  return total;
 }
 
-// ---- Execution ----------------------------------------------
-
 /**
- * Execute Chain Lightning:
- *  1. Consume a 6-level spell slot.
- *  2. Set the flag on the caster's `_genericSpellActiveSpells` Set.
- *  3. Log the cast.
+ * Returns up to 4 targets: the primary (highest-threat enemy within 150 ft)
+ * + up to 3 nearest enemies within 30 ft of the primary. Returns null if no
+ * primary target exists.
  */
-export function execute(
-  caster: Combatant,
-  state: EngineState,
-): void {
+export function shouldCast(caster: Combatant, bf: Battlefield): Combatant[] | null {
+  if (!caster.actions.some(a => a.name === 'Chain Lightning')) return null;
+  if (!hasSpellSlot(caster, 6)) return null;
+
+  const enemies = livingEnemiesOf(caster, bf);
+
+  // Primary: highest-threat enemy within 150 ft of caster.
+  let primary: Combatant | null = null;
+  let primaryThreat = -1;
+  let primaryDist = Infinity;
+  for (const e of enemies) {
+    const distFt = chebyshev3D(caster.pos, e.pos) * 5;
+    if (distFt > 150) continue;
+    if (e.maxHP > primaryThreat || (e.maxHP === primaryThreat && distFt < primaryDist)) {
+      primary = e;
+      primaryThreat = e.maxHP;
+      primaryDist = distFt;
+    }
+  }
+  if (!primary) return null;
+
+  // Arcs: up to 3 nearest enemies within 30 ft of the primary (excluding primary).
+  const arcs: Array<{ c: Combatant; dist: number }> = [];
+  for (const e of enemies) {
+    if (e.id === primary.id) continue;
+    const distFt = chebyshev3D(primary.pos, e.pos) * 5;
+    if (distFt <= 30) arcs.push({ c: e, dist: distFt });
+  }
+  arcs.sort((a, b) => a.dist - b.dist);
+  const arcTargets = arcs.slice(0, 3).map(a => a.c);
+
+  return [primary, ...arcTargets];
+}
+
+export function execute(caster: Combatant, targets: Combatant[], state: EngineState): void {
   consumeSpellSlot(caster, 6);
 
-  if (!caster._genericSpellActiveSpells) {
-    caster._genericSpellActiveSpells = new Set<string>();
-  }
-  caster._genericSpellActiveSpells.add('Chain Lightning');
-
+  const primary = targets[0];
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Chain Lightning! (v1: forward-compat flag set; mechanical effect not yet implemented)`,
-    caster.id,
+    `${caster.name} casts Chain Lightning at ${primary?.name ?? 'nothing'}! (AUTO-HIT — ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType} to ${targets.length} target${targets.length !== 1 ? 's' : ''})`,
   );
-  emit(
-    state, 'condition_add', caster.id,
-    `${caster.name} is affected by Chain Lightning. (v1: forward-compat flag set; no mechanical effect until engine subsystem is implemented)`,
-    caster.id,
-  );
+
+  for (let i = 0; i < targets.length; i++) {
+    const target = targets[i];
+    if (!target || target.isDead || target.isUnconscious) continue;
+
+    const dmg = rollDamage();
+    const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);
+    const label = i === 0 ? 'Primary bolt' : `Arc ${i}`;
+    emit(
+      state, 'damage', caster.id,
+      `${label}: ${target.name} takes ${dealt} ${metadata.damageType} damage (${metadata.dieCount}d${metadata.dieSides}=${dmg}, auto-hit)`,
+      target.id, dealt,
+    );
+  }
 }
 
-// ---- Cleanup ------------------------------------------------
-
 export function cleanup(_c: Combatant): void {
-  // No-op — forward-compat flag persists for combat.
+  // No-op — instantaneous.
 }

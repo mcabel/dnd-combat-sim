@@ -418,6 +418,62 @@ import {
   shouldCast as shouldCastSynapticStatic,
   execute as executeSynapticStatic,
 } from '../spells/synaptic_static';
+import {
+  shouldCast as shouldCastChainLightning,
+  execute as executeChainLightning,
+} from '../spells/chain_lightning';
+import {
+  shouldCast as shouldCastCircleOfDeath,
+  execute as executeCircleOfDeath,
+} from '../spells/circle_of_death';
+import {
+  shouldCast as shouldCastGravityFissure,
+  execute as executeGravityFissure,
+} from '../spells/gravity_fissure';
+import {
+  shouldCast as shouldCastMentalPrison,
+  execute as executeMentalPrison,
+} from '../spells/mental_prison';
+import {
+  shouldCast as shouldCastSunbeam,
+  execute as executeSunbeam,
+} from '../spells/sunbeam';
+import {
+  shouldCast as shouldCastCrownOfStars,
+  execute as executeCrownOfStars,
+} from '../spells/crown_of_stars';
+import {
+  shouldCast as shouldCastFireStorm,
+  execute as executeFireStorm,
+} from '../spells/fire_storm';
+import {
+  shouldCast as shouldCastDarkStar,
+  execute as executeDarkStar,
+} from '../spells/dark_star';
+import {
+  shouldCast as shouldCastEarthquake,
+  execute as executeEarthquake,
+} from '../spells/earthquake';
+import {
+  shouldCast as shouldCastFeeblemind,
+  execute as executeFeeblemind,
+} from '../spells/feeblemind';
+import {
+  shouldCast as shouldCastIncendiaryCloud,
+  execute as executeIncendiaryCloud,
+} from '../spells/incendiary_cloud';
+import {
+  shouldCast as shouldCastMaddeningDarkness,
+  execute as executeMaddeningDarkness,
+} from '../spells/maddening_darkness';
+import {
+  shouldCast as shouldCastPsychicScream,
+  execute as executePsychicScream,
+} from '../spells/psychic_scream';
+import {
+  shouldCast as shouldCastRavenousVoid,
+  execute as executeRavenousVoid,
+} from '../spells/ravenous_void';
 
 // ── Session 19 — bulk-implementation generic dispatch (262 new spells) ────
 import {
@@ -2738,6 +2794,124 @@ function executePlannedAction(
       // Synaptic Static — XGE p.167: 120 ft, INT save 8d6 psychic + incapacitated, 20-ft radius.
       const ssTargets = shouldCastSynapticStatic(actor, bf);
       if (ssTargets) executeSynapticStatic(actor, ssTargets, state);
+      break;
+    }
+
+    // ── Session 24 — L6 combat damage spells (5) ────────────────────
+
+    case 'chainLightning': {
+      // Chain Lightning — PHB p.221: 150 ft, AUTO-HIT 10d8 lightning to 1 primary + 3 arcs.
+      const clTargets = shouldCastChainLightning(actor, bf);
+      if (clTargets) executeChainLightning(actor, clTargets, state);
+      break;
+    }
+
+    case 'circleOfDeath': {
+      // Circle of Death — PHB p.221: 60 ft, CON save 8d6 necrotic, 60-ft radius.
+      const codTargets = shouldCastCircleOfDeath(actor, bf);
+      if (codTargets) executeCircleOfDeath(actor, codTargets, state);
+      break;
+    }
+
+    case 'gravityFissure': {
+      // Gravity Fissure — EGtW p.162: 100-ft line, CON save 8d8 force.
+      const gfTargets = shouldCastGravityFissure(actor, bf);
+      if (gfTargets) executeGravityFissure(actor, gfTargets, state);
+      break;
+    }
+
+    case 'mentalPrison': {
+      // Mental Prison — XGE p.161: 60 ft, INT save 5d10 psychic, single-target.
+      const mpTargetId = plan.targetId;
+      const mpTarget = mpTargetId ? bf.combatants.get(mpTargetId) ?? null : null;
+      const liveTarget = mpTarget && !mpTarget.isDead && !mpTarget.isUnconscious
+        ? mpTarget
+        : shouldCastMentalPrison(actor, bf);
+      if (liveTarget) executeMentalPrison(actor, liveTarget, state);
+      break;
+    }
+
+    case 'sunbeam': {
+      // Sunbeam — PHB p.279: 60-ft line, CON save 6d8 radiant + blinded.
+      const sbTargets = shouldCastSunbeam(actor, bf);
+      if (sbTargets) executeSunbeam(actor, sbTargets, state);
+      break;
+    }
+
+    // ── Session 24 — L7 combat damage spells (2) ────────────────────
+
+    case 'crownOfStars': {
+      // Crown of Stars — XGE p.152: 120 ft, ranged spell attack 4d12 radiant, single-target.
+      const cosTargetId = plan.targetId;
+      const cosTarget = cosTargetId ? bf.combatants.get(cosTargetId) ?? null : null;
+      const liveTarget = cosTarget && !cosTarget.isDead && !cosTarget.isUnconscious
+        ? cosTarget
+        : shouldCastCrownOfStars(actor, bf);
+      if (liveTarget) executeCrownOfStars(actor, liveTarget, state);
+      break;
+    }
+
+    case 'fireStorm': {
+      // Fire Storm — PHB p.242: 150 ft, DEX save 7d10 fire, 40-ft radius.
+      const fsTargets = shouldCastFireStorm(actor, bf);
+      if (fsTargets) executeFireStorm(actor, fsTargets, state);
+      break;
+    }
+
+    // ── Session 24 — L8 combat damage spells (5) ────────────────────
+
+    case 'darkStar': {
+      // Dark Star — XGE p.153: 150 ft, CON save 8d8 necrotic + blinded, 40-ft radius.
+      const dsTargets = shouldCastDarkStar(actor, bf);
+      if (dsTargets) executeDarkStar(actor, dsTargets, state);
+      break;
+    }
+
+    case 'earthquake': {
+      // Earthquake — PHB p.234: Self (50-ft radius), AUTO-HIT 5d6 bludgeoning.
+      const eqTargets = shouldCastEarthquake(actor, bf);
+      if (eqTargets) executeEarthquake(actor, eqTargets, state);
+      break;
+    }
+
+    case 'feeblemind': {
+      // Feeblemind — PHB p.239: 60 ft, INT save 4d6 psychic + incapacitated on fail, single-target.
+      const fmTargetId = plan.targetId;
+      const fmTarget = fmTargetId ? bf.combatants.get(fmTargetId) ?? null : null;
+      const liveTarget = fmTarget && !fmTarget.isDead && !fmTarget.isUnconscious
+        ? fmTarget
+        : shouldCastFeeblemind(actor, bf);
+      if (liveTarget) executeFeeblemind(actor, liveTarget, state);
+      break;
+    }
+
+    case 'incendiaryCloud': {
+      // Incendiary Cloud — PHB p.253: 150 ft, DEX save 10d8 fire, 20-ft radius.
+      const icTargets = shouldCastIncendiaryCloud(actor, bf);
+      if (icTargets) executeIncendiaryCloud(actor, icTargets, state);
+      break;
+    }
+
+    case 'maddeningDarkness': {
+      // Maddening Darkness — XGE p.158: 120 ft, WIS save 8d8 psychic, 60-ft radius.
+      const mdTargets = shouldCastMaddeningDarkness(actor, bf);
+      if (mdTargets) executeMaddeningDarkness(actor, mdTargets, state);
+      break;
+    }
+
+    // ── Session 24 — L9 combat damage spells (2) ────────────────────
+
+    case 'psychicScream': {
+      // Psychic Scream — XGE p.163: 90 ft, INT save 14d6 psychic + stunned, up to 10 targets.
+      const psTargets = shouldCastPsychicScream(actor, bf);
+      if (psTargets) executePsychicScream(actor, psTargets, state);
+      break;
+    }
+
+    case 'ravenousVoid': {
+      // Ravenous Void — XGE p.159: 1000 ft, AUTO-HIT 5d10 force, 60-ft radius.
+      const rvTargets = shouldCastRavenousVoid(actor, bf);
+      if (rvTargets) executeRavenousVoid(actor, rvTargets, state);
       break;
     }
 

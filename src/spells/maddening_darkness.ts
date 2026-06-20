@@ -1,118 +1,126 @@
 // ============================================================
-// Maddening Darkness — XGE p.160
+// Maddening Darkness — XGE p.158
+// 8th-level evocation, action, range 120 ft. Canon: concentration, up to
+// 10 minutes. v1: concentration + darkness simplified to one-shot.
+// Components: V, S, M (a pinch of soot).
 //
-// 8-level evocation, 1 action, range 150 ft, concentration.
-// Duration: 10 minutes.
+// Effect: Magical darkness spreads from a point you choose within range
+//         to fill a 60-foot-radius sphere for the duration. Each creature
+//         in that area when the spell is cast must make a Wisdom saving
+//         throw. On a failed save, a creature takes 8d8 psychic damage
+//         and is affected by the darkness (heavily obscured — can't see).
 //
-// Effect: Magical darkness spreads from a point you choose within range to fill a 60-foot-radius sphere until the spell ends. The darkness spreads around corners. A creature with  can't see t
-//
-// Upcast: see source (not modelled in v1).
+//         NOTE: XGE p.158 does NOT apply a condition — it's 8d8 psychic +
+//         magical darkness (heavily obscured). v1 has no LOS/darkness
+//         subsystem (TG-010 pending), so the darkness rider is simplified
+//         away (no condition applied). Per the plan: "darkness rider
+//         simplified — no condition applied, just 8d8 psychic".
 //
 // v1 simplifications:
-//   - v1 models this spell as a FORWARD-COMPAT flag only (Session 19 bulk
-//     implementation). The spell consumes a slot and sets the flag
-//     `_genericSpellActiveSpells` on the caster; the actual mechanical
-//     effect (damage / save / condition / buff) is NOT applied in v1.
-//     A future implementation should extend the relevant engine subsystem
-//     (damage_zone for persistent damage, condition_apply for conditions,
-//     advantage_vs for buffs, etc.) to consume this flag and apply the
-//     real effect. This mirrors the Session 17/18 forward-compat pattern
-//     established by Darkvision, Arcane Lock, Knock, See Invisibility.
-//   - Concentration spell (forward-compat flag persists for combat).
+//   - Concentration (XGE p.158: "concentration, up to 10 minutes"): v1
+//     simplifies to one-shot (concentration: false). The persistent
+//     magical darkness is NOT modelled (TG-010 pending). One-shot 8d8
+//     psychic. Documented via `maddeningDarknessConcentrationV1Simplified: true`.
+//   - Magical darkness rider (heavily obscured): NOT modelled (TG-010).
+//     Documented via `maddeningDarknessDarknessRiderV1Simplified: true`.
+//   - AoE: 60-ft radius sphere at a point within 120 ft.
+//   - Upcast: none (8th-level only).
 //
-// Spell module pattern (mirrors Darkvision / Arcane Lock forward-compat
-// self-buff pattern):
-//   shouldCast(caster, bf) → boolean
-//   execute(caster, state) → void
-//   cleanup() — no-op (forward-compat flag persists for combat)
+// Migration note (Session 24): Mirrors Sunburst (Session 23) AoE shape
+// but NO condition (the plan reclassifies from AoE+condition to pure AoE
+// save). 8d8 psychic, WIS save (per XGE p.158), 60-ft radius, L8 slot,
+// 120-ft range.
 // ============================================================
 
 import { Combatant, Battlefield } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
+import { rollSave, rollDie, applyDamageWithTempHP } from '../engine/utils';
+import { chebyshev3D, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
-
-// ---- Metadata -----------------------------------------------
 
 export const metadata = {
   name: 'Maddening Darkness',
   level: 8,
   school: 'evocation',
-  rangeFt: 150,
-  concentration: true,
+  rangeFt: 120,                  // XGE p.158: 120 ft
+  aoeRadiusFt: 60,               // XGE p.158: 60-ft radius
+  dieCount: 8,
+  dieSides: 8,
+  damageType: 'psychic' as const,
+  concentration: false,          // v1 simplification: one-shot (canon concentration 10 min)
+  saveAbility: 'wis' as const,   // XGE p.158: WIS save (confirmed)
   castingTime: 'action',
-  maddeningDarknessV1Simplified: true,
+  maddeningDarknessConcentrationV1Simplified: true,                   // canon concentration simplified to one-shot
+  maddeningDarknessDarknessRiderV1Simplified: true,                   // TG-010 LOS subsystem pending
 } as const;
 
-// ---- Local log helper ---------------------------------------
-
-function emit(
-  state: EngineState,
-  type: CombatEvent['type'],
-  actorId: string,
-  desc: string,
-  targetId?: string,
-  value?: number,
-): void {
-  state.log.events.push({
-    round: state.battlefield.round,
-    actorId,
-    type,
-    targetId,
-    value,
-    description: desc,
-  });
+function emit(state: EngineState, type: CombatEvent['type'], actorId: string, desc: string, targetId?: string, value?: number): void {
+  state.log.events.push({ round: state.battlefield.round, actorId, type, targetId, value, description: desc });
 }
 
-// ---- Planner ------------------------------------------------
-
-/**
- * Returns true if the caster should cast Maddening Darkness this turn.
- *
- * Preconditions:
- *   - Caster has 'Maddening Darkness' in their actions
- *   - Caster has at least one 8-level-or-higher slot available
- *   - Caster is NOT already Maddening Darkness-active (re-cast would be a no-op in v1)
- */
-export function shouldCast(caster: Combatant, _bf: Battlefield): boolean {
-  if (!caster.actions.some(a => a.name === 'Maddening Darkness')) return false;
-  if (!hasSpellSlot(caster, 8)) return false;
-  if (caster._genericSpellActiveSpells?.has('Maddening Darkness')) return false;
-  return true;
+export function rollDamage(): number {
+  let total = 0;
+  for (let i = 0; i < metadata.dieCount; i++) total += rollDie(metadata.dieSides);
+  return total;
 }
 
-// ---- Execution ----------------------------------------------
+export function shouldCast(caster: Combatant, bf: Battlefield): Combatant[] | null {
+  if (!caster.actions.some(a => a.name === 'Maddening Darkness')) return null;
+  if (!hasSpellSlot(caster, 8)) return null;
 
-/**
- * Execute Maddening Darkness:
- *  1. Consume a 8-level spell slot.
- *  2. Set the flag on the caster's `_genericSpellActiveSpells` Set.
- *  3. Log the cast.
- */
-export function execute(
-  caster: Combatant,
-  state: EngineState,
-): void {
-  consumeSpellSlot(caster, 8);
-
-  if (!caster._genericSpellActiveSpells) {
-    caster._genericSpellActiveSpells = new Set<string>();
+  const enemies = livingEnemiesOf(caster, bf);
+  let center: Combatant | null = null;
+  let centerThreat = -1;
+  let centerDist = Infinity;
+  for (const e of enemies) {
+    const distFt = chebyshev3D(caster.pos, e.pos) * 5;
+    if (distFt > 120) continue;
+    if (e.maxHP > centerThreat || (e.maxHP === centerThreat && distFt < centerDist)) {
+      center = e;
+      centerThreat = e.maxHP;
+      centerDist = distFt;
+    }
   }
-  caster._genericSpellActiveSpells.add('Maddening Darkness');
+  if (!center) return null;
+
+  const targets: Combatant[] = [];
+  for (const e of enemies) {
+    const distFt = chebyshev3D(center.pos, e.pos) * 5;
+    if (distFt <= 60) targets.push(e);
+  }
+  return targets.length >= 1 ? targets : null;
+}
+
+export function execute(caster: Combatant, targets: Combatant[], state: EngineState): void {
+  const action = caster.actions.find(a => a.name === 'Maddening Darkness');
+  const saveDC = action?.saveDC ?? 15;
+
+  consumeSpellSlot(caster, 8);
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Maddening Darkness! (v1: forward-compat flag set; mechanical effect not yet implemented)`,
-    caster.id,
+    `${caster.name} casts Maddening Darkness! (DC ${saveDC} WIS, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}, ${metadata.aoeRadiusFt}-ft radius AoE — darkness rider simplified) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} caught!`,
   );
-  emit(
-    state, 'condition_add', caster.id,
-    `${caster.name} is affected by Maddening Darkness. (v1: forward-compat flag set; no mechanical effect until engine subsystem is implemented)`,
-    caster.id,
-  );
+
+  for (const target of targets) {
+    if (target.isDead || target.isUnconscious) continue;
+
+    const save = rollSave(target, 'wis', saveDC);
+    const fullDmg = rollDamage();
+    const dmg = save.success ? Math.floor(fullDmg / 2) : fullDmg;
+    const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);
+
+    emit(
+      state,
+      save.success ? 'save_success' : 'save_fail',
+      caster.id,
+      `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} WIS save vs Maddening Darkness (rolled ${save.total}) — ${dealt} ${metadata.damageType} damage (${metadata.dieCount}d${metadata.dieSides}=${fullDmg}${save.success ? ', halved' : ''})`,
+      target.id, save.roll,
+    );
+    emit(state, 'damage', caster.id, `Maddening Darkness: ${target.name} takes ${dealt} ${metadata.damageType} damage`, target.id, dealt);
+  }
 }
 
-// ---- Cleanup ------------------------------------------------
-
 export function cleanup(_c: Combatant): void {
-  // No-op — forward-compat flag persists for combat.
+  // No-op — v1 one-shot.
 }

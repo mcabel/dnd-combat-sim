@@ -1,118 +1,107 @@
 // ============================================================
-// Earthquake — PHB p.236
+// Earthquake — PHB p.234
+// 8th-level evocation, action, range Self (100-ft radius — v1 uses 50-ft
+// per plan). Canon: concentration, up to 1 minute. v1: concentration +
+// multi-effect simplified to one-shot auto-hit AoE.
+// Components: V, S, M (a pinch of dirt, a piece of rock, and a lump of clay).
 //
-// 8-level evocation, 1 action, range 500 ft, concentration.
-// Duration: 1 minute.
+// Effect: You create a seismic disturbance at a point on the ground that
+//         you can see within range. For the duration, an intense tremor
+//         rips through the ground in a 100-foot-radius circle centered on
+//         that point. (v1 uses 50-ft radius per plan.) Each creature on
+//         the ground other than you in that area must make a Constitution
+//         saving throw. On a failed save, a creature takes 5d6 bludgeoning
+//         damage and is knocked prone. On a successful save, the creature
+//         takes half as much damage and isn't knocked prone.
 //
-// Effect: You create a seismic disturbance at a point on the ground that you can see within range. For the duration, an intense tremor rips through the ground in a 100-foot-radius circle centered on that point
-//
-// Upcast: see source (not modelled in v1).
+//         Canon riders (NOT modelled in v1): difficult terrain, fissures,
+//         structure collapse, per-turn re-save.
 //
 // v1 simplifications:
-//   - v1 models this spell as a FORWARD-COMPAT flag only (Session 19 bulk
-//     implementation). The spell consumes a slot and sets the flag
-//     `_genericSpellActiveSpells` on the caster; the actual mechanical
-//     effect (damage / save / condition / buff) is NOT applied in v1.
-//     A future implementation should extend the relevant engine subsystem
-//     (damage_zone for persistent damage, condition_apply for conditions,
-//     advantage_vs for buffs, etc.) to consume this flag and apply the
-//     real effect. This mirrors the Session 17/18 forward-compat pattern
-//     established by Darkvision, Arcane Lock, Knock, See Invisibility.
-//   - Concentration spell (forward-compat flag persists for combat).
+//   - Per plan: v1 reclassifies as AUTO-HIT AoE (no save — just 5d6
+//     bludgeoning to all enemies in range). The plan explicitly says
+//     "no save — auto-hit AoE". This deviates from canon (which has a
+//     CON save + prone). Documented via `earthquakeAutoHitV1PerPlan: true`.
+//   - Concentration + multi-effect (PHB p.234: "concentration, up to 1
+//     minute"; fissures + difficult terrain + per-turn re-save): v1
+//     simplifies to one-shot auto-hit (concentration: false). All riders
+//     NOT modelled. Documented via `earthquakeConcentrationV1Simplified: true`.
+//   - Radius: canon 100-ft. v1 uses 50-ft per plan. Documented via
+//     `earthquakeRadius50ftV1PerPlan: true`.
+//   - Upcast: none (8th-level only).
 //
-// Spell module pattern (mirrors Darkvision / Arcane Lock forward-compat
-// self-buff pattern):
-//   shouldCast(caster, bf) → boolean
-//   execute(caster, state) → void
-//   cleanup() — no-op (forward-compat flag persists for combat)
+// Migration note (Session 24): NEW auto-hit AoE pattern (mirrors
+// spellfire_flare's auto-hit + shatter's AoE shape). shouldCast returns
+// Combatant[] (all enemies within 50 ft of the caster — Self range).
 // ============================================================
 
 import { Combatant, Battlefield } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
+import { rollDie, applyDamageWithTempHP } from '../engine/utils';
+import { chebyshev3D, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
-
-// ---- Metadata -----------------------------------------------
 
 export const metadata = {
   name: 'Earthquake',
   level: 8,
   school: 'evocation',
-  rangeFt: 500,
-  concentration: true,
+  rangeFt: 0,                    // v1: Self (50-ft radius per plan)
+  aoeRadiusFt: 50,               // v1: 50-ft radius (canon 100-ft)
+  dieCount: 5,
+  dieSides: 6,
+  damageType: 'bludgeoning' as const,
+  concentration: false,          // v1 simplification: one-shot (canon concentration 1 min + multi-effect)
   castingTime: 'action',
-  earthquakeV1Simplified: true,
+  earthquakeAutoHitV1PerPlan: true,                                   // v1: auto-hit (canon has CON save + prone)
+  earthquakeConcentrationV1Simplified: true,                           // canon concentration + multi-effect simplified
+  earthquakeRadius50ftV1PerPlan: true,                                 // v1: 50-ft radius (canon 100-ft)
 } as const;
 
-// ---- Local log helper ---------------------------------------
-
-function emit(
-  state: EngineState,
-  type: CombatEvent['type'],
-  actorId: string,
-  desc: string,
-  targetId?: string,
-  value?: number,
-): void {
-  state.log.events.push({
-    round: state.battlefield.round,
-    actorId,
-    type,
-    targetId,
-    value,
-    description: desc,
-  });
+function emit(state: EngineState, type: CombatEvent['type'], actorId: string, desc: string, targetId?: string, value?: number): void {
+  state.log.events.push({ round: state.battlefield.round, actorId, type, targetId, value, description: desc });
 }
 
-// ---- Planner ------------------------------------------------
-
-/**
- * Returns true if the caster should cast Earthquake this turn.
- *
- * Preconditions:
- *   - Caster has 'Earthquake' in their actions
- *   - Caster has at least one 8-level-or-higher slot available
- *   - Caster is NOT already Earthquake-active (re-cast would be a no-op in v1)
- */
-export function shouldCast(caster: Combatant, _bf: Battlefield): boolean {
-  if (!caster.actions.some(a => a.name === 'Earthquake')) return false;
-  if (!hasSpellSlot(caster, 8)) return false;
-  if (caster._genericSpellActiveSpells?.has('Earthquake')) return false;
-  return true;
+export function rollDamage(): number {
+  let total = 0;
+  for (let i = 0; i < metadata.dieCount; i++) total += rollDie(metadata.dieSides);
+  return total;
 }
 
-// ---- Execution ----------------------------------------------
+export function shouldCast(caster: Combatant, bf: Battlefield): Combatant[] | null {
+  if (!caster.actions.some(a => a.name === 'Earthquake')) return null;
+  if (!hasSpellSlot(caster, 8)) return null;
 
-/**
- * Execute Earthquake:
- *  1. Consume a 8-level spell slot.
- *  2. Set the flag on the caster's `_genericSpellActiveSpells` Set.
- *  3. Log the cast.
- */
-export function execute(
-  caster: Combatant,
-  state: EngineState,
-): void {
-  consumeSpellSlot(caster, 8);
-
-  if (!caster._genericSpellActiveSpells) {
-    caster._genericSpellActiveSpells = new Set<string>();
+  const enemies = livingEnemiesOf(caster, bf);
+  const targets: Combatant[] = [];
+  for (const e of enemies) {
+    const distFt = chebyshev3D(caster.pos, e.pos) * 5;
+    if (distFt <= 50) targets.push(e);
   }
-  caster._genericSpellActiveSpells.add('Earthquake');
+  return targets.length >= 1 ? targets : null;
+}
+
+export function execute(caster: Combatant, targets: Combatant[], state: EngineState): void {
+  consumeSpellSlot(caster, 8);
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Earthquake! (v1: forward-compat flag set; mechanical effect not yet implemented)`,
-    caster.id,
+    `${caster.name} casts Earthquake! (AUTO-HIT — no save; ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}, ${metadata.aoeRadiusFt}-ft radius self-centred AoE) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} caught!`,
   );
-  emit(
-    state, 'condition_add', caster.id,
-    `${caster.name} is affected by Earthquake. (v1: forward-compat flag set; no mechanical effect until engine subsystem is implemented)`,
-    caster.id,
-  );
+
+  for (const target of targets) {
+    if (target.isDead || target.isUnconscious) continue;
+
+    // Auto-hit: no save, just apply 5d6 bludgeoning.
+    const dmg = rollDamage();
+    const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);
+    emit(
+      state, 'damage', caster.id,
+      `Earthquake: ${target.name} takes ${dealt} ${metadata.damageType} damage (${metadata.dieCount}d${metadata.dieSides}=${dmg}, auto-hit)`,
+      target.id, dealt,
+    );
+  }
 }
 
-// ---- Cleanup ------------------------------------------------
-
 export function cleanup(_c: Combatant): void {
-  // No-op — forward-compat flag persists for combat.
+  // No-op — v1 one-shot.
 }

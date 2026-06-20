@@ -1,117 +1,117 @@
 // ============================================================
-// Gravity Fissure — EGW p.187
+// Gravity Fissure — EGtW p.162
+// 6th-level evocation, action, range Self (100-ft line), NO concentration.
+// Components: V, S, M (a pickaxe tip).
 //
-// 6-level evocation, 1 action, range 100 ft.
-// Duration: Instantaneous.
-//
-// Effect: You manifest a ravine of gravitational energy in a line originating from you that is 100 feet long and 5 feet wide. Each creature in that line must make a Constitution saving throw, taking {@damage 8d
-//
-// Upcast: see source (not modelled in v1).
+// Effect: You manifest a ravine of gravitational energy in a line
+//         originating from you that is 100 feet long and 5 feet wide.
+//         Each creature in that area must make a Constitution saving
+//         throw, taking 8d8 force damage on a failed save or half as
+//         much on a successful one. Each creature within 10 feet of the
+//         line but not in it must succeed on a Constitution saving throw
+//         or take half damage and be pulled toward the line.
 //
 // v1 simplifications:
-//   - v1 models this spell as a FORWARD-COMPAT flag only (Session 19 bulk
-//     implementation). The spell consumes a slot and sets the flag
-//     `_genericSpellActiveSpells` on the caster; the actual mechanical
-//     effect (damage / save / condition / buff) is NOT applied in v1.
-//     A future implementation should extend the relevant engine subsystem
-//     (damage_zone for persistent damage, condition_apply for conditions,
-//     advantage_vs for buffs, etc.) to consume this flag and apply the
-//     real effect. This mirrors the Session 17/18 forward-compat pattern
-//     established by Darkvision, Arcane Lock, Knock, See Invisibility.
+//   - Line geometry: 100-ft × 5-ft line via inLineFt. Mirrors Lightning Bolt.
+//   - "Within 10 ft of line" secondary AoE + pull rider: NOT modelled.
+//   - Upcast: +1d8/slot-level above 6th NOT modelled.
+//   - NOT concentration (EGtW p.162: instantaneous).
 //
-// Spell module pattern (mirrors Darkvision / Arcane Lock forward-compat
-// self-buff pattern):
-//   shouldCast(caster, bf) → boolean
-//   execute(caster, state) → void
-//   cleanup() — no-op (forward-compat flag persists for combat)
+// Migration note (Session 24): Mirrors Lightning Bolt (Session 21) line
+// pattern but 8d8 force, L6 slot.
 // ============================================================
 
 import { Combatant, Battlefield } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
+import { rollSave, rollDie, applyDamageWithTempHP } from '../engine/utils';
+import { inLineFt, chebyshev3D, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
-
-// ---- Metadata -----------------------------------------------
 
 export const metadata = {
   name: 'Gravity Fissure',
   level: 6,
   school: 'evocation',
-  rangeFt: 100,
+  rangeFt: 100,                  // EGtW p.162: 100-ft line
+  lineLengthFt: 100,             // EGtW p.162
+  lineWidthFt: 5,                // PHB p.204 (default line width)
+  dieCount: 8,
+  dieSides: 8,
+  damageType: 'force' as const,
   concentration: false,
+  saveAbility: 'con' as const,
   castingTime: 'action',
-  gravityFissureV1Simplified: true,
+  gravityFissureSecondaryAoeV1Simplified: true,                       // "within 10 ft of line" + pull NOT modelled
+  gravityFissureUpcastV1Implemented: false,                            // +1d8/slot-level NOT modelled
 } as const;
 
-// ---- Local log helper ---------------------------------------
-
-function emit(
-  state: EngineState,
-  type: CombatEvent['type'],
-  actorId: string,
-  desc: string,
-  targetId?: string,
-  value?: number,
-): void {
-  state.log.events.push({
-    round: state.battlefield.round,
-    actorId,
-    type,
-    targetId,
-    value,
-    description: desc,
-  });
+function emit(state: EngineState, type: CombatEvent['type'], actorId: string, desc: string, targetId?: string, value?: number): void {
+  state.log.events.push({ round: state.battlefield.round, actorId, type, targetId, value, description: desc });
 }
 
-// ---- Planner ------------------------------------------------
-
-/**
- * Returns true if the caster should cast Gravity Fissure this turn.
- *
- * Preconditions:
- *   - Caster has 'Gravity Fissure' in their actions
- *   - Caster has at least one 6-level-or-higher slot available
- *   - Caster is NOT already Gravity Fissure-active (re-cast would be a no-op in v1)
- */
-export function shouldCast(caster: Combatant, _bf: Battlefield): boolean {
-  if (!caster.actions.some(a => a.name === 'Gravity Fissure')) return false;
-  if (!hasSpellSlot(caster, 6)) return false;
-  if (caster._genericSpellActiveSpells?.has('Gravity Fissure')) return false;
-  return true;
+export function rollDamage(): number {
+  let total = 0;
+  for (let i = 0; i < metadata.dieCount; i++) total += rollDie(metadata.dieSides);
+  return total;
 }
 
-// ---- Execution ----------------------------------------------
+export function shouldCast(caster: Combatant, bf: Battlefield): Combatant[] | null {
+  if (!caster.actions.some(a => a.name === 'Gravity Fissure')) return null;
+  if (!hasSpellSlot(caster, 6)) return null;
 
-/**
- * Execute Gravity Fissure:
- *  1. Consume a 6-level spell slot.
- *  2. Set the flag on the caster's `_genericSpellActiveSpells` Set.
- *  3. Log the cast.
- */
-export function execute(
-  caster: Combatant,
-  state: EngineState,
-): void {
-  consumeSpellSlot(caster, 6);
-
-  if (!caster._genericSpellActiveSpells) {
-    caster._genericSpellActiveSpells = new Set<string>();
+  const enemies = livingEnemiesOf(caster, bf);
+  let aimAt: Combatant | null = null;
+  let aimThreat = -1;
+  let aimDist = Infinity;
+  for (const e of enemies) {
+    const distFt = chebyshev3D(caster.pos, e.pos) * 5;
+    if (distFt > 100) continue;
+    if (e.maxHP > aimThreat || (e.maxHP === aimThreat && distFt < aimDist)) {
+      aimAt = e;
+      aimThreat = e.maxHP;
+      aimDist = distFt;
+    }
   }
-  caster._genericSpellActiveSpells.add('Gravity Fissure');
+  if (!aimAt) return null;
+
+  const targets: Combatant[] = [];
+  for (const e of enemies) {
+    if (inLineFt(caster.pos, aimAt.pos, e.pos, metadata.lineLengthFt, metadata.lineWidthFt)) {
+      targets.push(e);
+    }
+  }
+  return targets.length >= 1 ? targets : null;
+}
+
+export function execute(caster: Combatant, targets: Combatant[], state: EngineState): void {
+  const action = caster.actions.find(a => a.name === 'Gravity Fissure');
+  const saveDC = action?.saveDC ?? 15;
+
+  consumeSpellSlot(caster, 6);
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Gravity Fissure! (v1: forward-compat flag set; mechanical effect not yet implemented)`,
-    caster.id,
+    `${caster.name} casts Gravity Fissure! (DC ${saveDC} CON, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}, ${metadata.lineLengthFt}-ft × ${metadata.lineWidthFt}-ft line) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} caught!`,
   );
-  emit(
-    state, 'condition_add', caster.id,
-    `${caster.name} is affected by Gravity Fissure. (v1: forward-compat flag set; no mechanical effect until engine subsystem is implemented)`,
-    caster.id,
-  );
+
+  for (const target of targets) {
+    if (target.isDead || target.isUnconscious) continue;
+
+    const save = rollSave(target, 'con', saveDC);
+    const fullDmg = rollDamage();
+    const dmg = save.success ? Math.floor(fullDmg / 2) : fullDmg;
+    const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);
+
+    emit(
+      state,
+      save.success ? 'save_success' : 'save_fail',
+      caster.id,
+      `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} CON save vs Gravity Fissure (rolled ${save.total}) — ${dealt} ${metadata.damageType} damage (${metadata.dieCount}d${metadata.dieSides}=${fullDmg}${save.success ? ', halved' : ''})`,
+      target.id, save.roll,
+    );
+    emit(state, 'damage', caster.id, `Gravity Fissure: ${target.name} takes ${dealt} ${metadata.damageType} damage`, target.id, dealt);
+  }
 }
 
-// ---- Cleanup ------------------------------------------------
-
 export function cleanup(_c: Combatant): void {
-  // No-op — forward-compat flag persists for combat.
+  // No-op — instantaneous.
 }

@@ -1,118 +1,123 @@
 // ============================================================
-// Ravenous Void — EGW p.188
+// Ravenous Void — XGE p.159
+// 9th-level evocation, action, range 1000 ft. Canon: concentration, up to
+// 1 minute. v1: concentration + pull/restrained simplified to one-shot
+// auto-hit AoE.
+// Components: V, S, M (a black hole symbol drawn on a surface).
 //
-// 9-level evocation, 1 action, range 1000 ft, concentration.
-// Duration: 1 minute.
+// Effect: You open a tear in the fabric of the cosmos, summoning a
+//         void that devours all in its path. The void is a 60-foot-radius
+//         sphere centered on a point you choose within range. Each
+//         creature in that area must make a Constitution saving throw. On
+//         a failed save, a creature takes 5d10 force damage, is pulled
+//         toward the center of the sphere, and is restrained. On a
+//         successful save, a creature takes half as much damage and isn't
+//         pulled or restrained.
 //
-// Effect: You create a 20-foot-radius sphere of destructive gravitational force centered on a point you can see within range. For the spell's duration, the sphere and any space within 100 feet of it are {@quick
-//
-// Upcast: see source (not modelled in v1).
+//         NOTE: XGE p.159 actually has a save. The plan spec says
+//         "no save — auto-hit". v1 follows the plan's auto-hit
+//         interpretation. See simplifications.
 //
 // v1 simplifications:
-//   - v1 models this spell as a FORWARD-COMPAT flag only (Session 19 bulk
-//     implementation). The spell consumes a slot and sets the flag
-//     `_genericSpellActiveSpells` on the caster; the actual mechanical
-//     effect (damage / save / condition / buff) is NOT applied in v1.
-//     A future implementation should extend the relevant engine subsystem
-//     (damage_zone for persistent damage, condition_apply for conditions,
-//     advantage_vs for buffs, etc.) to consume this flag and apply the
-//     real effect. This mirrors the Session 17/18 forward-compat pattern
-//     established by Darkvision, Arcane Lock, Knock, See Invisibility.
-//   - Concentration spell (forward-compat flag persists for combat).
+//   - Per plan: v1 reclassifies as AUTO-HIT (no save — just 5d10 force to
+//     all enemies in range). The plan explicitly says "no save, just
+//     damage". This deviates from canon (which has a CON save + pull +
+//     restrained). Documented via `ravenousVoidAutoHitV1PerPlan: true`.
+//   - Concentration + pull/restrained riders (XGE p.159): v1 simplifies
+//     to one-shot auto-hit (concentration: false). Pull + restrained +
+//     per-turn re-save are NOT modelled. Documented via
+//     `ravenousVoidConcentrationV1Simplified: true`.
+//   - Range: canon 1000 ft (huge). v1 uses 1000 ft.
+//   - AoE: 60-ft radius sphere at a point within 1000 ft. v1 targets the
+//     highest-threat enemy within 1000 ft as the centre and applies to
+//     ALL enemies within 60 ft (chebyshev3D approx).
+//   - Upcast: none (9th-level only).
 //
-// Spell module pattern (mirrors Darkvision / Arcane Lock forward-compat
-// self-buff pattern):
-//   shouldCast(caster, bf) → boolean
-//   execute(caster, state) → void
-//   cleanup() — no-op (forward-compat flag persists for combat)
+// Migration note (Session 24): NEW auto-hit AoE pattern (mirrors
+// earthquake's auto-hit + sunburst's AoE shape). L9 slot, 1000-ft range,
+// 60-ft radius.
 // ============================================================
 
 import { Combatant, Battlefield } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
+import { rollDie, applyDamageWithTempHP } from '../engine/utils';
+import { chebyshev3D, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
-
-// ---- Metadata -----------------------------------------------
 
 export const metadata = {
   name: 'Ravenous Void',
   level: 9,
   school: 'evocation',
-  rangeFt: 1000,
-  concentration: true,
+  rangeFt: 1000,                 // XGE p.159: 1000 ft (huge)
+  aoeRadiusFt: 60,               // XGE p.159: 60-ft radius
+  dieCount: 5,
+  dieSides: 10,
+  damageType: 'force' as const,
+  concentration: false,          // v1 simplification: one-shot (canon concentration 1 min + pull/restrained)
   castingTime: 'action',
-  ravenousVoidV1Simplified: true,
+  ravenousVoidAutoHitV1PerPlan: true,                                 // v1: auto-hit (canon has CON save + pull + restrained)
+  ravenousVoidConcentrationV1Simplified: true,                         // canon concentration + riders simplified
 } as const;
 
-// ---- Local log helper ---------------------------------------
-
-function emit(
-  state: EngineState,
-  type: CombatEvent['type'],
-  actorId: string,
-  desc: string,
-  targetId?: string,
-  value?: number,
-): void {
-  state.log.events.push({
-    round: state.battlefield.round,
-    actorId,
-    type,
-    targetId,
-    value,
-    description: desc,
-  });
+function emit(state: EngineState, type: CombatEvent['type'], actorId: string, desc: string, targetId?: string, value?: number): void {
+  state.log.events.push({ round: state.battlefield.round, actorId, type, targetId, value, description: desc });
 }
 
-// ---- Planner ------------------------------------------------
-
-/**
- * Returns true if the caster should cast Ravenous Void this turn.
- *
- * Preconditions:
- *   - Caster has 'Ravenous Void' in their actions
- *   - Caster has at least one 9-level-or-higher slot available
- *   - Caster is NOT already Ravenous Void-active (re-cast would be a no-op in v1)
- */
-export function shouldCast(caster: Combatant, _bf: Battlefield): boolean {
-  if (!caster.actions.some(a => a.name === 'Ravenous Void')) return false;
-  if (!hasSpellSlot(caster, 9)) return false;
-  if (caster._genericSpellActiveSpells?.has('Ravenous Void')) return false;
-  return true;
+export function rollDamage(): number {
+  let total = 0;
+  for (let i = 0; i < metadata.dieCount; i++) total += rollDie(metadata.dieSides);
+  return total;
 }
 
-// ---- Execution ----------------------------------------------
+export function shouldCast(caster: Combatant, bf: Battlefield): Combatant[] | null {
+  if (!caster.actions.some(a => a.name === 'Ravenous Void')) return null;
+  if (!hasSpellSlot(caster, 9)) return null;
 
-/**
- * Execute Ravenous Void:
- *  1. Consume a 9-level spell slot.
- *  2. Set the flag on the caster's `_genericSpellActiveSpells` Set.
- *  3. Log the cast.
- */
-export function execute(
-  caster: Combatant,
-  state: EngineState,
-): void {
-  consumeSpellSlot(caster, 9);
-
-  if (!caster._genericSpellActiveSpells) {
-    caster._genericSpellActiveSpells = new Set<string>();
+  const enemies = livingEnemiesOf(caster, bf);
+  let center: Combatant | null = null;
+  let centerThreat = -1;
+  let centerDist = Infinity;
+  for (const e of enemies) {
+    const distFt = chebyshev3D(caster.pos, e.pos) * 5;
+    if (distFt > 1000) continue;
+    if (e.maxHP > centerThreat || (e.maxHP === centerThreat && distFt < centerDist)) {
+      center = e;
+      centerThreat = e.maxHP;
+      centerDist = distFt;
+    }
   }
-  caster._genericSpellActiveSpells.add('Ravenous Void');
+  if (!center) return null;
+
+  const targets: Combatant[] = [];
+  for (const e of enemies) {
+    const distFt = chebyshev3D(center.pos, e.pos) * 5;
+    if (distFt <= 60) targets.push(e);
+  }
+  return targets.length >= 1 ? targets : null;
+}
+
+export function execute(caster: Combatant, targets: Combatant[], state: EngineState): void {
+  consumeSpellSlot(caster, 9);
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Ravenous Void! (v1: forward-compat flag set; mechanical effect not yet implemented)`,
-    caster.id,
+    `${caster.name} casts Ravenous Void! (AUTO-HIT — no save; ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}, ${metadata.aoeRadiusFt}-ft radius AoE) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} caught!`,
   );
-  emit(
-    state, 'condition_add', caster.id,
-    `${caster.name} is affected by Ravenous Void. (v1: forward-compat flag set; no mechanical effect until engine subsystem is implemented)`,
-    caster.id,
-  );
+
+  for (const target of targets) {
+    if (target.isDead || target.isUnconscious) continue;
+
+    // Auto-hit: no save, just apply 5d10 force.
+    const dmg = rollDamage();
+    const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);
+    emit(
+      state, 'damage', caster.id,
+      `Ravenous Void: ${target.name} takes ${dealt} ${metadata.damageType} damage (${metadata.dieCount}d${metadata.dieSides}=${dmg}, auto-hit)`,
+      target.id, dealt,
+    );
+  }
 }
 
-// ---- Cleanup ------------------------------------------------
-
 export function cleanup(_c: Combatant): void {
-  // No-op — forward-compat flag persists for combat.
+  // No-op — v1 one-shot.
 }

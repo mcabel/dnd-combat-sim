@@ -1,118 +1,135 @@
 // ============================================================
-// Dark Star — EGW p.186
+// Dark Star — XGE p.153
+// 8th-level evocation, action, range 150 ft. Canon: concentration, up to
+// 1 minute. v1: concentration simplified to one-shot.
+// Components: V, S, M (a shard of onyx).
 //
-// 8-level evocation, 1 action, range 150 ft, concentration.
-// Duration: 1 minute.
-//
-// Effect: This spell creates a sphere centered on a point you choose within range. The sphere can have a radius of up to 40 feet. The area within this sphere is filled with magical darkness and crushing gravita
-//
-// Upcast: see source (not modelled in v1).
+// Effect: You conjure a globe of darkness in a 40-foot-radius sphere
+//         centered on a point you choose within range. The globe spreads
+//         around corners. The area within the globe is heavily obscured
+//         (magical darkness). Each creature in the area when the globe
+//         appears must make a Constitution saving throw. On a failed save,
+//         a creature takes 8d8 necrotic damage and is blinded for the
+//         duration. On a successful save, a creature takes half as much
+//         damage and isn't blinded.
 //
 // v1 simplifications:
-//   - v1 models this spell as a FORWARD-COMPAT flag only (Session 19 bulk
-//     implementation). The spell consumes a slot and sets the flag
-//     `_genericSpellActiveSpells` on the caster; the actual mechanical
-//     effect (damage / save / condition / buff) is NOT applied in v1.
-//     A future implementation should extend the relevant engine subsystem
-//     (damage_zone for persistent damage, condition_apply for conditions,
-//     advantage_vs for buffs, etc.) to consume this flag and apply the
-//     real effect. This mirrors the Session 17/18 forward-compat pattern
-//     established by Darkvision, Arcane Lock, Knock, See Invisibility.
-//   - Concentration spell (forward-compat flag persists for combat).
+//   - Concentration (XGE p.153: "concentration, up to 1 minute"): v1
+//     simplifies to one-shot (concentration: false). The persistent
+//     magical darkness + per-turn re-save are NOT modelled (TG-010 LOS
+//     subsystem pending). One-shot 8d8 necrotic + blinded on fail.
+//   - Magical darkness rider (heavily obscured): NOT modelled (TG-010).
+//   - AoE: 40-ft radius sphere at a point within 150 ft.
+//   - Blinded persists for v1 combat (no end-of-turn save).
+//   - Upcast: none (8th-level only).
 //
-// Spell module pattern (mirrors Darkvision / Arcane Lock forward-compat
-// self-buff pattern):
-//   shouldCast(caster, bf) → boolean
-//   execute(caster, state) → void
-//   cleanup() — no-op (forward-compat flag persists for combat)
+// Migration note (Session 24): Mirrors Sunburst (Session 23) but 8d8
+// necrotic (vs 12d6 radiant), 40-ft radius (vs 60-ft), L8 slot, 150-ft
+// range.
 // ============================================================
 
 import { Combatant, Battlefield } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
+import { rollSave, rollDie, applyDamageWithTempHP } from '../engine/utils';
+import { chebyshev3D, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
-
-// ---- Metadata -----------------------------------------------
+import { applySpellEffect } from '../engine/spell_effects';
 
 export const metadata = {
   name: 'Dark Star',
   level: 8,
   school: 'evocation',
-  rangeFt: 150,
-  concentration: true,
+  rangeFt: 150,                  // XGE p.153: 150 ft
+  aoeRadiusFt: 40,               // XGE p.153: 40-ft radius
+  dieCount: 8,
+  dieSides: 8,
+  damageType: 'necrotic' as const,
+  concentration: false,          // v1 simplification: one-shot (canon concentration + magical darkness)
+  saveAbility: 'con' as const,
   castingTime: 'action',
-  darkStarV1Simplified: true,
+  darkStarConcentrationV1Simplified: true,                             // canon concentration simplified to one-shot
+  darkStarMagicalDarknessV1Simplified: true,                           // TG-010 LOS subsystem pending
+  darkStarBlindedDurationV1Simplified: true,                           // persists for v1 combat
 } as const;
 
-// ---- Local log helper ---------------------------------------
-
-function emit(
-  state: EngineState,
-  type: CombatEvent['type'],
-  actorId: string,
-  desc: string,
-  targetId?: string,
-  value?: number,
-): void {
-  state.log.events.push({
-    round: state.battlefield.round,
-    actorId,
-    type,
-    targetId,
-    value,
-    description: desc,
-  });
+function emit(state: EngineState, type: CombatEvent['type'], actorId: string, desc: string, targetId?: string, value?: number): void {
+  state.log.events.push({ round: state.battlefield.round, actorId, type, targetId, value, description: desc });
 }
 
-// ---- Planner ------------------------------------------------
-
-/**
- * Returns true if the caster should cast Dark Star this turn.
- *
- * Preconditions:
- *   - Caster has 'Dark Star' in their actions
- *   - Caster has at least one 8-level-or-higher slot available
- *   - Caster is NOT already Dark Star-active (re-cast would be a no-op in v1)
- */
-export function shouldCast(caster: Combatant, _bf: Battlefield): boolean {
-  if (!caster.actions.some(a => a.name === 'Dark Star')) return false;
-  if (!hasSpellSlot(caster, 8)) return false;
-  if (caster._genericSpellActiveSpells?.has('Dark Star')) return false;
-  return true;
+export function rollDamage(): number {
+  let total = 0;
+  for (let i = 0; i < metadata.dieCount; i++) total += rollDie(metadata.dieSides);
+  return total;
 }
 
-// ---- Execution ----------------------------------------------
+export function shouldCast(caster: Combatant, bf: Battlefield): Combatant[] | null {
+  if (!caster.actions.some(a => a.name === 'Dark Star')) return null;
+  if (!hasSpellSlot(caster, 8)) return null;
 
-/**
- * Execute Dark Star:
- *  1. Consume a 8-level spell slot.
- *  2. Set the flag on the caster's `_genericSpellActiveSpells` Set.
- *  3. Log the cast.
- */
-export function execute(
-  caster: Combatant,
-  state: EngineState,
-): void {
-  consumeSpellSlot(caster, 8);
-
-  if (!caster._genericSpellActiveSpells) {
-    caster._genericSpellActiveSpells = new Set<string>();
+  const enemies = livingEnemiesOf(caster, bf);
+  let center: Combatant | null = null;
+  let centerThreat = -1;
+  let centerDist = Infinity;
+  for (const e of enemies) {
+    const distFt = chebyshev3D(caster.pos, e.pos) * 5;
+    if (distFt > 150) continue;
+    if (e.maxHP > centerThreat || (e.maxHP === centerThreat && distFt < centerDist)) {
+      center = e;
+      centerThreat = e.maxHP;
+      centerDist = distFt;
+    }
   }
-  caster._genericSpellActiveSpells.add('Dark Star');
+  if (!center) return null;
+
+  const targets: Combatant[] = [];
+  for (const e of enemies) {
+    const distFt = chebyshev3D(center.pos, e.pos) * 5;
+    if (distFt <= 40) targets.push(e);
+  }
+  return targets.length >= 1 ? targets : null;
+}
+
+export function execute(caster: Combatant, targets: Combatant[], state: EngineState): void {
+  const action = caster.actions.find(a => a.name === 'Dark Star');
+  const saveDC = action?.saveDC ?? 15;
+
+  consumeSpellSlot(caster, 8);
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Dark Star! (v1: forward-compat flag set; mechanical effect not yet implemented)`,
-    caster.id,
+    `${caster.name} casts Dark Star! (DC ${saveDC} CON, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}, ${metadata.aoeRadiusFt}-ft radius AoE + blinded on fail) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} caught!`,
   );
-  emit(
-    state, 'condition_add', caster.id,
-    `${caster.name} is affected by Dark Star. (v1: forward-compat flag set; no mechanical effect until engine subsystem is implemented)`,
-    caster.id,
-  );
+
+  for (const target of targets) {
+    if (target.isDead || target.isUnconscious) continue;
+
+    const save = rollSave(target, 'con', saveDC);
+    const fullDmg = rollDamage();
+    const dmg = save.success ? Math.floor(fullDmg / 2) : fullDmg;
+    const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);
+
+    emit(
+      state,
+      save.success ? 'save_success' : 'save_fail',
+      caster.id,
+      `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} CON save vs Dark Star (rolled ${save.total}) — ${dealt} ${metadata.damageType} damage (${metadata.dieCount}d${metadata.dieSides}=${fullDmg}${save.success ? ', halved' : ''})${save.success ? '' : ' + BLINDED'}`,
+      target.id, save.roll,
+    );
+    emit(state, 'damage', caster.id, `Dark Star: ${target.name} takes ${dealt} ${metadata.damageType} damage`, target.id, dealt);
+
+    if (!save.success && !target.conditions.has('blinded')) {
+      applySpellEffect(target, {
+        casterId: caster.id,
+        spellName: 'Dark Star',
+        effectType: 'condition_apply',
+        payload: { condition: 'blinded' },
+        sourceIsConcentration: false,
+      });
+      emit(state, 'condition_add', caster.id, `${target.name} is BLINDED by the dark star!`, target.id);
+    }
+  }
 }
 
-// ---- Cleanup ------------------------------------------------
-
 export function cleanup(_c: Combatant): void {
-  // No-op — forward-compat flag persists for combat.
+  // No-op — v1 one-shot.
 }
