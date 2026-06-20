@@ -782,12 +782,6 @@ import {
 } from './backlash';
 
 import {
-  shouldCast as shouldCastCharmMonster,
-  execute as executeCharmMonster,
-  metadata as metadataCharmMonster,
-} from './charm_monster';
-
-import {
   shouldCast as shouldCastCompulsion,
   execute as executeCompulsion,
   metadata as metadataCompulsion,
@@ -810,12 +804,6 @@ import {
   execute as executeDeathWard,
   metadata as metadataDeathWard,
 } from './death_ward';
-
-import {
-  shouldCast as shouldCastDominateBeast,
-  execute as executeDominateBeast,
-  metadata as metadataDominateBeast,
-} from './dominate_beast';
 
 import {
   shouldCast as shouldCastDoomtide,
@@ -908,12 +896,6 @@ import {
 } from './otilukes_resilient_sphere';
 
 import {
-  shouldCast as shouldCastPhantasmalKiller,
-  execute as executePhantasmalKiller,
-  metadata as metadataPhantasmalKiller,
-} from './phantasmal_killer';
-
-import {
   shouldCast as shouldCastPolymorph,
   execute as executePolymorph,
   metadata as metadataPolymorph,
@@ -954,12 +936,6 @@ import {
   execute as executeStoneskin,
   metadata as metadataStoneskin,
 } from './stoneskin';
-
-import {
-  shouldCast as shouldCastWaterySphere,
-  execute as executeWaterySphere,
-  metadata as metadataWaterySphere,
-} from './watery_sphere';
 
 import {
   shouldCast as shouldCastAlustrielsMooncloak,
@@ -1004,12 +980,6 @@ import {
 } from './commune_with_nature';
 
 import {
-  shouldCast as shouldCastContagion,
-  execute as executeContagion,
-  metadata as metadataContagion,
-} from './contagion';
-
-import {
   shouldCast as shouldCastControlWinds,
   execute as executeControlWinds,
   metadata as metadataControlWinds,
@@ -1040,28 +1010,10 @@ import {
 } from './dawn';
 
 import {
-  shouldCast as shouldCastDominatePerson,
-  execute as executeDominatePerson,
-  metadata as metadataDominatePerson,
-} from './dominate_person';
-
-import {
-  shouldCast as shouldCastGeas,
-  execute as executeGeas,
-  metadata as metadataGeas,
-} from './geas';
-
-import {
   shouldCast as shouldCastGreaterRestoration,
   execute as executeGreaterRestoration,
   metadata as metadataGreaterRestoration,
 } from './greater_restoration';
-
-import {
-  shouldCast as shouldCastHoldMonster,
-  execute as executeHoldMonster,
-  metadata as metadataHoldMonster,
-} from './hold_monster';
 
 import {
   shouldCast as shouldCastHolyWeapon,
@@ -2272,12 +2224,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     shouldCast: shouldCastBacklash,
     execute: executeBacklash,
   },
-  'Charm Monster': {
-    name: 'Charm Monster',
-    level: metadataCharmMonster.level,
-    shouldCast: shouldCastCharmMonster,
-    execute: executeCharmMonster,
-  },
   'Compulsion': {
     name: 'Compulsion',
     level: metadataCompulsion.level,
@@ -2301,12 +2247,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     level: metadataDeathWard.level,
     shouldCast: shouldCastDeathWard,
     execute: executeDeathWard,
-  },
-  'Dominate Beast': {
-    name: 'Dominate Beast',
-    level: metadataDominateBeast.level,
-    shouldCast: shouldCastDominateBeast,
-    execute: executeDominateBeast,
   },
   'Doomtide': {
     name: 'Doomtide',
@@ -2398,12 +2338,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     shouldCast: shouldCastOtilukesResilientSphere,
     execute: executeOtilukesResilientSphere,
   },
-  'Phantasmal Killer': {
-    name: 'Phantasmal Killer',
-    level: metadataPhantasmalKiller.level,
-    shouldCast: shouldCastPhantasmalKiller,
-    execute: executePhantasmalKiller,
-  },
   'Polymorph': {
     name: 'Polymorph',
     level: metadataPolymorph.level,
@@ -2445,12 +2379,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     level: metadataStoneskin.level,
     shouldCast: shouldCastStoneskin,
     execute: executeStoneskin,
-  },
-  'Watery Sphere': {
-    name: 'Watery Sphere',
-    level: metadataWaterySphere.level,
-    shouldCast: shouldCastWaterySphere,
-    execute: executeWaterySphere,
   },
   "Alustriel's Mooncloak": {
     name: "Alustriel's Mooncloak",
@@ -2494,12 +2422,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     shouldCast: shouldCastCommuneWithNature,
     execute: executeCommuneWithNature,
   },
-  'Contagion': {
-    name: 'Contagion',
-    level: metadataContagion.level,
-    shouldCast: shouldCastContagion,
-    execute: executeContagion,
-  },
   'Control Winds': {
     name: 'Control Winds',
     level: metadataControlWinds.level,
@@ -2530,29 +2452,11 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     shouldCast: shouldCastDawn,
     execute: executeDawn,
   },
-  'Dominate Person': {
-    name: 'Dominate Person',
-    level: metadataDominatePerson.level,
-    shouldCast: shouldCastDominatePerson,
-    execute: executeDominatePerson,
-  },
-  'Geas': {
-    name: 'Geas',
-    level: metadataGeas.level,
-    shouldCast: shouldCastGeas,
-    execute: executeGeas,
-  },
   'Greater Restoration': {
     name: 'Greater Restoration',
     level: metadataGreaterRestoration.level,
     shouldCast: shouldCastGreaterRestoration,
     execute: executeGreaterRestoration,
-  },
-  'Hold Monster': {
-    name: 'Hold Monster',
-    level: metadataHoldMonster.level,
-    shouldCast: shouldCastHoldMonster,
-    execute: executeHoldMonster,
   },
   'Holy Weapon': {
     name: 'Holy Weapon',

@@ -159,7 +159,7 @@ const SAMPLE_SPELLS = [
   { name: 'Continual Flame', level: 2 },
   { name: 'Fear', level: 3 },
   { name: 'Polymorph', level: 4 },
-  { name: 'Hold Monster', level: 5 },         // Session 23: was 'Cloudkill' (migrated)
+  { name: 'Animate Objects', level: 5 },     // Session 25: was 'Hold Monster' (migrated to bespoke)
   { name: 'Globe of Invulnerability', level: 6 }, // Session 23: was 'Disintegrate' (migrated)
   { name: 'Forcecage', level: 7 },            // Session 23: was 'Finger of Death' (migrated)
   { name: 'Feeblemind', level: 8 },
@@ -263,6 +263,10 @@ const MIGRATED_SPELLS_S25 = [
   'Power Word Pain', 'Whirlwind', 'Reverse Gravity',
   // L6 (3)
   'Eyebite', 'Flesh to Stone', 'Mass Suggestion',
+  // L5 (4)
+  'Hold Monster', 'Contagion', 'Dominate Person', 'Geas',
+  // L4 (4)
+  'Phantasmal Killer', 'Watery Sphere', 'Dominate Beast', 'Charm Monster',
 ];
 for (const migrated of MIGRATED_SPELLS_S25) {
   eq(`  ${migrated} is no longer in the registry (migrated to bespoke)`,

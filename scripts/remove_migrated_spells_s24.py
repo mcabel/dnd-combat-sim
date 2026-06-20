@@ -97,6 +97,16 @@ SPELLS = [
     ('Eyebite',         'eyebite',           'Eyebite'),
     ('Flesh to Stone',  'flesh_to_stone',    'FleshToStone'),
     ('Mass Suggestion', 'mass_suggestion',   'MassSuggestion'),
+    # L5 (4)
+    ('Hold Monster',    'hold_monster',      'HoldMonster'),
+    ('Contagion',       'contagion',         'Contagion'),
+    ('Dominate Person', 'dominate_person',   'DominatePerson'),
+    ('Geas',            'geas',              'Geas'),
+    # L4 (4)
+    ('Phantasmal Killer','phantasmal_killer','PhantasmalKiller'),
+    ('Watery Sphere',   'watery_sphere',     'WaterySphere'),
+    ('Dominate Beast',  'dominate_beast',    'DominateBeast'),
+    ('Charm Monster',   'charm_monster',     'CharmMonster'),
 ]
 
 REGISTRY = Path('src/spells/_generic_registry.ts')

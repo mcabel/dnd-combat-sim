@@ -512,6 +512,38 @@ import {
   shouldCast as shouldCastMassSuggestion,
   execute as executeMassSuggestion,
 } from '../spells/mass_suggestion';
+import {
+  shouldCast as shouldCastHoldMonster,
+  execute as executeHoldMonster,
+} from '../spells/hold_monster';
+import {
+  shouldCast as shouldCastContagion,
+  execute as executeContagion,
+} from '../spells/contagion';
+import {
+  shouldCast as shouldCastDominatePerson,
+  execute as executeDominatePerson,
+} from '../spells/dominate_person';
+import {
+  shouldCast as shouldCastGeas,
+  execute as executeGeas,
+} from '../spells/geas';
+import {
+  shouldCast as shouldCastPhantasmalKiller,
+  execute as executePhantasmalKiller,
+} from '../spells/phantasmal_killer';
+import {
+  shouldCast as shouldCastWaterySphere,
+  execute as executeWaterySphere,
+} from '../spells/watery_sphere';
+import {
+  shouldCast as shouldCastDominateBeast,
+  execute as executeDominateBeast,
+} from '../spells/dominate_beast';
+import {
+  shouldCast as shouldCastCharmMonster,
+  execute as executeCharmMonster,
+} from '../spells/charm_monster';
 
 // ── Session 19 — bulk-implementation generic dispatch (262 new spells) ────
 import {
@@ -3048,6 +3080,76 @@ function executePlannedAction(
       // targets, NO concentration. shouldCast → Combatant[].
       const msTargets = shouldCastMassSuggestion(actor, bf);
       if (msTargets) executeMassSuggestion(actor, msTargets, state);
+      break;
+    }
+
+    case 'holdMonster': {
+      // Hold Monster — PHB p.251: 60 ft, WIS save or paralyzed, conc, any creature.
+      const hmTargetId = plan.targetId;
+      const hmTarget = hmTargetId ? bf.combatants.get(hmTargetId) ?? null : null;
+      const hmLive = hmTarget && !hmTarget.isDead && !hmTarget.isUnconscious ? hmTarget : shouldCastHoldMonster(actor, bf);
+      if (hmLive) executeHoldMonster(actor, hmLive, state);
+      break;
+    }
+
+    case 'contagion': {
+      // Contagion — PHB p.227: touch (5 ft), melee spell attack + poisoned, NO conc.
+      const ctgTargetId = plan.targetId;
+      const ctgTarget = ctgTargetId ? bf.combatants.get(ctgTargetId) ?? null : null;
+      const ctgLive = ctgTarget && !ctgTarget.isDead && !ctgTarget.isUnconscious ? ctgTarget : shouldCastContagion(actor, bf);
+      if (ctgLive) executeContagion(actor, ctgLive, state);
+      break;
+    }
+
+    case 'dominatePerson': {
+      // Dominate Person — PHB p.235: 60 ft, WIS save or charmed, conc, humanoid.
+      const dpTargetId = plan.targetId;
+      const dpTarget = dpTargetId ? bf.combatants.get(dpTargetId) ?? null : null;
+      const dpLive = dpTarget && !dpTarget.isDead && !dpTarget.isUnconscious ? dpTarget : shouldCastDominatePerson(actor, bf);
+      if (dpLive) executeDominatePerson(actor, dpLive, state);
+      break;
+    }
+
+    case 'geas': {
+      // Geas — PHB p.245: 60 ft, WIS save or 5d10 psychic + charmed, NO conc.
+      const geasTargetId = plan.targetId;
+      const geasTarget = geasTargetId ? bf.combatants.get(geasTargetId) ?? null : null;
+      const geasLive = geasTarget && !geasTarget.isDead && !geasTarget.isUnconscious ? geasTarget : shouldCastGeas(actor, bf);
+      if (geasLive) executeGeas(actor, geasLive, state);
+      break;
+    }
+
+    case 'phantasmalKiller': {
+      // Phantasmal Killer — PHB p.265: 120 ft, WIS save or frightened + 4d10, conc.
+      const pkTargetId = plan.targetId;
+      const pkTarget = pkTargetId ? bf.combatants.get(pkTargetId) ?? null : null;
+      const pkLive = pkTarget && !pkTarget.isDead && !pkTarget.isUnconscious ? pkTarget : shouldCastPhantasmalKiller(actor, bf);
+      if (pkLive) executePhantasmalKiller(actor, pkLive, state);
+      break;
+    }
+
+    case 'waterySphere': {
+      // Watery Sphere — XGE p.170: 90 ft, 5-ft radius AoE, STR save or restrained, conc.
+      const wsTargets = shouldCastWaterySphere(actor, bf);
+      if (wsTargets) executeWaterySphere(actor, wsTargets, state);
+      break;
+    }
+
+    case 'dominateBeast': {
+      // Dominate Beast — PHB p.235: 60 ft, WIS save or charmed, conc, beast.
+      const dbTargetId = plan.targetId;
+      const dbTarget = dbTargetId ? bf.combatants.get(dbTargetId) ?? null : null;
+      const dbLive = dbTarget && !dbTarget.isDead && !dbTarget.isUnconscious ? dbTarget : shouldCastDominateBeast(actor, bf);
+      if (dbLive) executeDominateBeast(actor, dbLive, state);
+      break;
+    }
+
+    case 'charmMonster': {
+      // Charm Monster — PHB p.221: 30 ft, WIS save or charmed, NO conc, any creature.
+      const cmTargetId = plan.targetId;
+      const cmTarget = cmTargetId ? bf.combatants.get(cmTargetId) ?? null : null;
+      const cmLive = cmTarget && !cmTarget.isDead && !cmTarget.isUnconscious ? cmTarget : shouldCastCharmMonster(actor, bf);
+      if (cmLive) executeCharmMonster(actor, cmLive, state);
       break;
     }
 

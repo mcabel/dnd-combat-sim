@@ -1,34 +1,48 @@
 // ============================================================
 // Watery Sphere — XGE p.170
 //
-// 4-level conjuration, 1 action, range 90 ft, concentration.
-// Duration: 1 minute.
+// 4th-level conjuration, action, range 90 ft, concentration (1 min).
+// Components: V, S, M (a droplet of water).
 //
-// Effect: You conjure up a sphere of water with a 5-foot radius at a point you can see within range. The sphere can hover but no more than 10 feet off the ground. The sphere remains for the spell's duration.
+// Effect: You conjure up a sphere of water with a 5-foot radius on a
+//         point you can see within range. The sphere can hover in the
+//         air... Any creature in the sphere's space must make a Strength
+//         save. On a successful save, the creature is ejected from the
+//         sphere to the nearest unoccupied space. A Huge or larger
+//         creature succeeds on the save automatically. On a failed save,
+//         the creature is restrained by the sphere.
 //
-// Upcast: see source (not modelled in v1).
+// Upcast: none (4th-level spell — no upcast).
 //
 // v1 simplifications:
-//   - v1 models this spell as a FORWARD-COMPAT flag only (Session 19 bulk
-//     implementation). The spell consumes a slot and sets the flag
-//     `_genericSpellActiveSpells` on the caster; the actual mechanical
-//     effect (damage / save / condition / buff) is NOT applied in v1.
-//     A future implementation should extend the relevant engine subsystem
-//     (damage_zone for persistent damage, condition_apply for conditions,
-//     advantage_vs for buffs, etc.) to consume this flag and apply the
-//     real effect. This mirrors the Session 17/18 forward-compat pattern
-//     established by Darkvision, Arcane Lock, Knock, See Invisibility.
-//   - Concentration spell (forward-compat flag persists for combat).
+//   - Shape: canon 5-ft-radius sphere centered on a point within 90 ft.
+//     v1 centers the sphere on the highest-threat enemy within 90 ft
+//     (mirrors Sunburst) and collects all enemies within 5 ft (chebyshev).
+//   - Movement rider (PHB p.170: the sphere moves 30 ft/turn, carrying
+//     restrained creatures): NOT modelled. v1 applies restrained only.
+//   - Size-based auto-success (Huge+): NOT enforced (no creature-size tag).
+//   - Concentration: canon 1 min. v1 starts concentration; not enforced
+//     on damage (TG-002). restrained is sourceIsConcentration: true.
+//   - Eject-on-save (canon: success ejects to nearest space): v1 simply
+//     applies no condition on success (position unchanged).
 //
-// Spell module pattern (mirrors Darkvision / Arcane Lock forward-compat
-// self-buff pattern):
-//   shouldCast(caster, bf) → boolean
-//   execute(caster, state) → void
-//   cleanup() — no-op (forward-compat flag persists for combat)
+// Migration note (Session 25 / Batch 2): migrated from the generic
+// forward-compat flag to a bespoke STR-save-or-restrained AoE (conc).
+// Removed from `_generic_registry.ts`; routed via `case 'waterySphere':`
+// in combat.ts and a planner branch in planner.ts. Mirrors Sunburst
+// (radius AoE save + condition) + Hold Person (concentration), tiny radius.
+//
+// Spell module pattern (radius AoE save + condition, concentration):
+//   shouldCast(caster, bf) → Combatant[] | null
+//   execute(caster, targets, state) → void
+//   cleanup() — no-op (concentration break handles cleanup)
 // ============================================================
 
 import { Combatant, Battlefield } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
+import { applySpellEffect, removeEffectsFromCaster } from '../engine/spell_effects';
+import { startConcentration, rollSave } from '../engine/utils';
+import { chebyshev3D, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 
 // ---- Metadata -----------------------------------------------
@@ -37,10 +51,13 @@ export const metadata = {
   name: 'Watery Sphere',
   level: 4,
   school: 'conjuration',
-  rangeFt: 90,
+  rangeFt: 90,                   // XGE p.170: 90 ft
+  aoeRadiusFt: 5,                // XGE p.170: 5-ft radius sphere
   concentration: true,
+  saveAbility: 'str' as const,
   castingTime: 'action',
-  waterySphereV1Simplified: true,
+  waterySphereMovementRiderV1Simplified: true,              // moving-sphere NOT modelled
+  waterySphereSizeAutoSuccessV1Simplified: true,            // Huge+ auto-success NOT enforced
 } as const;
 
 // ---- Local log helper ---------------------------------------
@@ -53,66 +70,73 @@ function emit(
   targetId?: string,
   value?: number,
 ): void {
-  state.log.events.push({
-    round: state.battlefield.round,
-    actorId,
-    type,
-    targetId,
-    value,
-    description: desc,
-  });
+  state.log.events.push({ round: state.battlefield.round, actorId, type, targetId, value, description: desc });
 }
 
 // ---- Planner ------------------------------------------------
 
 /**
- * Returns true if the caster should cast Watery Sphere this turn.
- *
- * Preconditions:
- *   - Caster has 'Watery Sphere' in their actions
- *   - Caster has at least one 4-level-or-higher slot available
- *   - Caster is NOT already Watery Sphere-active (re-cast would be a no-op in v1)
+ * Returns the list of enemies caught in a Watery Sphere 5-ft-radius sphere
+ * centered on the highest-threat enemy within 90 ft, or null when the
+ * spell should not be cast. (The tiny radius usually catches 1-2 enemies.)
  */
-export function shouldCast(caster: Combatant, _bf: Battlefield): boolean {
-  if (!caster.actions.some(a => a.name === 'Watery Sphere')) return false;
-  if (!hasSpellSlot(caster, 4)) return false;
-  if (caster._genericSpellActiveSpells?.has('Watery Sphere')) return false;
-  return true;
+export function shouldCast(caster: Combatant, bf: Battlefield): Combatant[] | null {
+  if (caster.concentration?.active) return null;
+  if (!caster.actions.some(a => a.name === 'Watery Sphere')) return null;
+  if (!hasSpellSlot(caster, 4)) return null;
+
+  const enemies = livingEnemiesOf(caster, bf);
+  let center: Combatant | null = null;
+  let centerThreat = -1;
+  let centerDist = Infinity;
+  for (const e of enemies) {
+    const distFt = chebyshev3D(caster.pos, e.pos) * 5;
+    if (distFt > 90) continue;
+    if (e.maxHP > centerThreat || (e.maxHP === centerThreat && distFt < centerDist)) {
+      center = e; centerThreat = e.maxHP; centerDist = distFt;
+    }
+  }
+  if (!center) return null;
+
+  const targets: Combatant[] = [];
+  for (const e of enemies) {
+    const distFt = chebyshev3D(center.pos, e.pos) * 5;
+    if (distFt <= 5) targets.push(e);
+  }
+  return targets.length >= 1 ? targets : null;
 }
 
 // ---- Execution ----------------------------------------------
 
-/**
- * Execute Watery Sphere:
- *  1. Consume a 4-level spell slot.
- *  2. Set the flag on the caster's `_genericSpellActiveSpells` Set.
- *  3. Log the cast.
- */
-export function execute(
-  caster: Combatant,
-  state: EngineState,
-): void {
+export function execute(caster: Combatant, targets: Combatant[], state: EngineState): void {
+  const action = caster.actions.find(a => a.name === 'Watery Sphere');
+  const saveDC = action?.saveDC ?? 13;
+
   consumeSpellSlot(caster, 4);
+  if (caster.concentration?.active) removeEffectsFromCaster(caster.id, state.battlefield);
+  startConcentration(caster, 'Watery Sphere');
 
-  if (!caster._genericSpellActiveSpells) {
-    caster._genericSpellActiveSpells = new Set<string>();
+  emit(state, 'action', caster.id,
+    `${caster.name} casts Watery Sphere! (DC ${saveDC} STR, restrained on fail, ${metadata.aoeRadiusFt}-ft radius) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} caught!`);
+
+  for (const target of targets) {
+    if (target.isDead || target.isUnconscious) continue;
+    const save = rollSave(target, 'str', saveDC);
+    emit(state, save.success ? 'save_success' : 'save_fail', caster.id,
+      `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} STR save vs Watery Sphere (rolled ${save.total})${save.success ? '' : ' + RESTRAINED'}`, target.id, save.roll);
+
+    if (!save.success && !target.conditions.has('restrained')) {
+      applySpellEffect(target, {
+        casterId: caster.id, spellName: 'Watery Sphere',
+        effectType: 'condition_apply', payload: { condition: 'restrained' },
+        sourceIsConcentration: true,
+      });
+      emit(state, 'condition_add', caster.id,
+        `${target.name} is RESTRAINED in the watery sphere! (speed 0, disadv on attacks/DEX)`, target.id);
+    }
   }
-  caster._genericSpellActiveSpells.add('Watery Sphere');
-
-  emit(
-    state, 'action', caster.id,
-    `${caster.name} casts Watery Sphere! (v1: forward-compat flag set; mechanical effect not yet implemented)`,
-    caster.id,
-  );
-  emit(
-    state, 'condition_add', caster.id,
-    `${caster.name} is affected by Watery Sphere. (v1: forward-compat flag set; no mechanical effect until engine subsystem is implemented)`,
-    caster.id,
-  );
 }
 
 // ---- Cleanup ------------------------------------------------
 
-export function cleanup(_c: Combatant): void {
-  // No-op — forward-compat flag persists for combat.
-}
+export function cleanup(_c: Combatant): void { /* no-op — concentration break handles cleanup */ }

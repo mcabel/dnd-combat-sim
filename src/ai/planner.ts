@@ -162,6 +162,14 @@ import { shouldCast as shouldCastReverseGravity } from '../spells/reverse_gravit
 import { shouldCast as shouldCastEyebite } from '../spells/eyebite';
 import { shouldCast as shouldCastFleshToStone } from '../spells/flesh_to_stone';
 import { shouldCast as shouldCastMassSuggestion } from '../spells/mass_suggestion';
+import { shouldCast as shouldCastHoldMonster } from '../spells/hold_monster';
+import { shouldCast as shouldCastContagion } from '../spells/contagion';
+import { shouldCast as shouldCastDominatePerson } from '../spells/dominate_person';
+import { shouldCast as shouldCastGeas } from '../spells/geas';
+import { shouldCast as shouldCastPhantasmalKiller } from '../spells/phantasmal_killer';
+import { shouldCast as shouldCastWaterySphere } from '../spells/watery_sphere';
+import { shouldCast as shouldCastDominateBeast } from '../spells/dominate_beast';
+import { shouldCast as shouldCastCharmMonster } from '../spells/charm_monster';
 
 // ── Session 19 — bulk-implementation generic dispatch (262 new spells) ────
 import { GENERIC_SPELL_LIST } from '../spells/_generic_registry';
@@ -3252,6 +3260,111 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
       };
       plan.targetId = msTargets[0].id;
       plan.bonusAction = planBonusAction(self, msTargets[0], battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12BP. HOLD MONSTER (WIS save or paralyzed, L5, concentration) ---
+  // PHB p.251: 60 ft, WIS save or paralyzed, concentration, any creature.
+  // shouldCast returns single Combatant.
+  if (!plan.action && self.actions.some(a => a.name === 'Hold Monster')) {
+    const hmTarget = shouldCastHoldMonster(self, battlefield);
+    if (hmTarget) {
+      plan.action = { type: 'holdMonster', action: null, targetId: hmTarget.id, description: `${self.name} casts Hold Monster at ${hmTarget.name}` };
+      plan.targetId = hmTarget.id;
+      plan.bonusAction = planBonusAction(self, hmTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12BQ. CONTAGION (melee spell attack + poisoned, L5, NO concentration) ---
+  // PHB p.227: touch (5 ft), melee spell attack + poisoned on hit, NO concentration.
+  // shouldCast returns single Combatant (highest-threat adjacent enemy).
+  if (!plan.action && self.actions.some(a => a.name === 'Contagion')) {
+    const ctgTarget = shouldCastContagion(self, battlefield);
+    if (ctgTarget) {
+      plan.action = { type: 'contagion', action: null, targetId: ctgTarget.id, description: `${self.name} casts Contagion at ${ctgTarget.name}` };
+      plan.targetId = ctgTarget.id;
+      plan.bonusAction = planBonusAction(self, ctgTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12BR. DOMINATE PERSON (WIS save or charmed, L5, concentration) ---
+  // PHB p.235: 60 ft, WIS save or charmed (control simplified), concentration, humanoid.
+  // shouldCast returns single Combatant.
+  if (!plan.action && self.actions.some(a => a.name === 'Dominate Person')) {
+    const dpTarget = shouldCastDominatePerson(self, battlefield);
+    if (dpTarget) {
+      plan.action = { type: 'dominatePerson', action: null, targetId: dpTarget.id, description: `${self.name} casts Dominate Person at ${dpTarget.name}` };
+      plan.targetId = dpTarget.id;
+      plan.bonusAction = planBonusAction(self, dpTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12BS. GEAS (WIS save or 5d10 psychic + charmed, L5, NO conc) ---
+  // PHB p.245: 60 ft, WIS save or 5d10 psychic + charmed, NO concentration (30-day).
+  // shouldCast returns single Combatant.
+  if (!plan.action && self.actions.some(a => a.name === 'Geas')) {
+    const geasTarget = shouldCastGeas(self, battlefield);
+    if (geasTarget) {
+      plan.action = { type: 'geas', action: null, targetId: geasTarget.id, description: `${self.name} casts Geas at ${geasTarget.name}` };
+      plan.targetId = geasTarget.id;
+      plan.bonusAction = planBonusAction(self, geasTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12BT. PHANTASMAL KILLER (WIS save or frightened + 4d10, L4, conc) ---
+  // PHB p.265: 120 ft, WIS save or frightened + 4d10 psychic, concentration (DoT one-shot).
+  // shouldCast returns single Combatant.
+  if (!plan.action && self.actions.some(a => a.name === 'Phantasmal Killer')) {
+    const pkTarget = shouldCastPhantasmalKiller(self, battlefield);
+    if (pkTarget) {
+      plan.action = { type: 'phantasmalKiller', action: null, targetId: pkTarget.id, description: `${self.name} casts Phantasmal Killer at ${pkTarget.name}` };
+      plan.targetId = pkTarget.id;
+      plan.bonusAction = planBonusAction(self, pkTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12BU. WATERY SPHERE (STR save or restrained, L4, 5-ft radius, conc) ---
+  // XGE p.170: 90 ft, 5-ft radius AoE, STR save or restrained, concentration.
+  // shouldCast returns Combatant[].
+  if (!plan.action && self.actions.some(a => a.name === 'Watery Sphere')) {
+    const wsTargets = shouldCastWaterySphere(self, battlefield);
+    if (wsTargets) {
+      const names = wsTargets.map(t => t.name).join(', ');
+      plan.action = { type: 'waterySphere', action: null, targetId: wsTargets[0].id, description: `${self.name} casts Watery Sphere, catching ${names}` };
+      plan.targetId = wsTargets[0].id;
+      plan.bonusAction = planBonusAction(self, wsTargets[0], battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12BV. DOMINATE BEAST (WIS save or charmed, L4, concentration) ---
+  // PHB p.235: 60 ft, WIS save or charmed (control simplified), concentration, beast.
+  // shouldCast returns single Combatant.
+  if (!plan.action && self.actions.some(a => a.name === 'Dominate Beast')) {
+    const dbTarget = shouldCastDominateBeast(self, battlefield);
+    if (dbTarget) {
+      plan.action = { type: 'dominateBeast', action: null, targetId: dbTarget.id, description: `${self.name} casts Dominate Beast at ${dbTarget.name}` };
+      plan.targetId = dbTarget.id;
+      plan.bonusAction = planBonusAction(self, dbTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12BW. CHARM MONSTER (WIS save or charmed, L4, NO concentration) ---
+  // PHB p.221: 30 ft, WIS save or charmed, NO concentration (1 hr), any creature.
+  // shouldCast returns single Combatant.
+  if (!plan.action && self.actions.some(a => a.name === 'Charm Monster')) {
+    const cmTarget = shouldCastCharmMonster(self, battlefield);
+    if (cmTarget) {
+      plan.action = { type: 'charmMonster', action: null, targetId: cmTarget.id, description: `${self.name} casts Charm Monster at ${cmTarget.name}` };
+      plan.targetId = cmTarget.id;
+      plan.bonusAction = planBonusAction(self, cmTarget, battlefield);
       return plan;
     }
   }

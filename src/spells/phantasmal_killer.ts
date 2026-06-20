@@ -1,34 +1,50 @@
 // ============================================================
 // Phantasmal Killer — PHB p.265
 //
-// 4-level illusion, 1 action, range 120 ft, concentration.
-// Duration: 1 minute.
+// 4th-level illusion, action, range 120 ft, concentration (1 min).
+// Components: V, S.
 //
-// Effect: You tap into the nightmares of a creature you can see within range and create an illusory manifestation of its deepest fears, visible only to that creature. The target must make a Wisdom saving throw.
+// Effect: You tap into the nightmares of a creature you can see within
+//         range and create an illusory manifestation of its deepest
+//         fears. The target must make a Wisdom saving throw. On a failed
+//         save, the target becomes frightened for the duration. At the
+//         start of each of the target's turns, the target takes 4d10
+//         psychic damage.
 //
-// Upcast: see source (not modelled in v1).
+// Upcast: +1d10/slot-level above 4th (not modelled in v1).
 //
 // v1 simplifications:
-//   - v1 models this spell as a FORWARD-COMPAT flag only (Session 19 bulk
-//     implementation). The spell consumes a slot and sets the flag
-//     `_genericSpellActiveSpells` on the caster; the actual mechanical
-//     effect (damage / save / condition / buff) is NOT applied in v1.
-//     A future implementation should extend the relevant engine subsystem
-//     (damage_zone for persistent damage, condition_apply for conditions,
-//     advantage_vs for buffs, etc.) to consume this flag and apply the
-//     real effect. This mirrors the Session 17/18 forward-compat pattern
-//     established by Darkvision, Arcane Lock, Knock, See Invisibility.
-//   - Concentration spell (forward-compat flag persists for combat).
+//   - Per-turn DoT (PHB p.265: "4d10 psychic damage at the start of each
+//     of the target's turns"): v1 simplifies to ONE-SHOT 4d10 psychic on
+//     the cast (no per-turn tick). Documented via
+//     `phantasmalKillerPerTurnDotV1Simplified`.
+//   - On success: NO damage (canon: save negates entirely). v1 deals
+//     damage ONLY on a failed save.
+//   - End-of-turn save to end frightened (PHB p.265): NOT modelled (no
+//     end-of-turn save hook). frightened persists for combat (or until
+//     concentration breaks).
+//   - Concentration: canon 1 min. v1 starts concentration; not enforced
+//     on damage (TG-002). frightened is sourceIsConcentration: true.
+//   - Upcast: +1d10/slot-level NOT modelled — v1 always rolls 4d10.
 //
-// Spell module pattern (mirrors Darkvision / Arcane Lock forward-compat
-// self-buff pattern):
-//   shouldCast(caster, bf) → boolean
-//   execute(caster, state) → void
-//   cleanup() — no-op (forward-compat flag persists for combat)
+// Migration note (Session 25 / Batch 2): migrated from the generic
+// forward-compat flag to a bespoke WIS-save-or-frightened + 4d10 psychic
+// (concentration). Removed from `_generic_registry.ts`; routed via
+// `case 'phantasmalKiller':` in combat.ts and a planner branch in
+// planner.ts. Mirrors Hold Person (single-target conc save-or-condition)
+// + one-shot damage.
+//
+// Spell module pattern (single-target save + damage + condition, conc):
+//   shouldCast(caster, bf) → Combatant | null
+//   execute(caster, target, state) → void
+//   cleanup() — no-op (concentration break handles cleanup)
 // ============================================================
 
 import { Combatant, Battlefield } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
+import { applySpellEffect, removeEffectsFromCaster } from '../engine/spell_effects';
+import { startConcentration, rollSave, rollDie, applyDamageWithTempHP } from '../engine/utils';
+import { chebyshev3D } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 
 // ---- Metadata -----------------------------------------------
@@ -37,10 +53,16 @@ export const metadata = {
   name: 'Phantasmal Killer',
   level: 4,
   school: 'illusion',
-  rangeFt: 120,
+  rangeFt: 120,                  // PHB p.265: 120 ft
+  dieCount: 4,
+  dieSides: 10,
+  damageType: 'psychic' as const,
   concentration: true,
+  saveAbility: 'wis' as const,
   castingTime: 'action',
-  phantasmalKillerV1Simplified: true,
+  phantasmalKillerPerTurnDotV1Simplified: true,             // one-shot 4d10 (canon per-turn DoT simplified)
+  phantasmalKillerEndOfTurnSaveV1Implemented: false,       // end-of-turn save skipped
+  phantasmalKillerUpcastV1Implemented: false,              // +1d10/slot-level NOT modelled
 } as const;
 
 // ---- Local log helper ---------------------------------------
@@ -53,66 +75,85 @@ function emit(
   targetId?: string,
   value?: number,
 ): void {
-  state.log.events.push({
-    round: state.battlefield.round,
-    actorId,
-    type,
-    targetId,
-    value,
-    description: desc,
-  });
+  state.log.events.push({ round: state.battlefield.round, actorId, type, targetId, value, description: desc });
+}
+
+// ---- Dice helper --------------------------------------------
+
+export function rollDamage(): number {
+  let total = 0;
+  for (let i = 0; i < metadata.dieCount; i++) total += rollDie(metadata.dieSides);
+  return total;
 }
 
 // ---- Planner ------------------------------------------------
 
 /**
- * Returns true if the caster should cast Phantasmal Killer this turn.
- *
- * Preconditions:
- *   - Caster has 'Phantasmal Killer' in their actions
- *   - Caster has at least one 4-level-or-higher slot available
- *   - Caster is NOT already Phantasmal Killer-active (re-cast would be a no-op in v1)
+ * Returns the single best target for Phantasmal Killer (a living enemy
+ * within 120 ft, not already frightened), or null when the spell should
+ * not be cast. Target priority: highest-threat, then closest.
  */
-export function shouldCast(caster: Combatant, _bf: Battlefield): boolean {
-  if (!caster.actions.some(a => a.name === 'Phantasmal Killer')) return false;
-  if (!hasSpellSlot(caster, 4)) return false;
-  if (caster._genericSpellActiveSpells?.has('Phantasmal Killer')) return false;
-  return true;
+export function shouldCast(caster: Combatant, bf: Battlefield): Combatant | null {
+  if (caster.concentration?.active) return null;
+  if (!caster.actions.some(a => a.name === 'Phantasmal Killer')) return null;
+  if (!hasSpellSlot(caster, 4)) return null;
+
+  const candidates: Array<{ c: Combatant; threat: number; dist: number }> = [];
+  for (const c of bf.combatants.values()) {
+    if (c.id === caster.id) continue;
+    if (c.faction === caster.faction) continue;
+    if (c.isDead || c.isUnconscious) continue;
+    const distFt = chebyshev3D(caster.pos, c.pos) * 5;
+    if (distFt > 120) continue;
+    if (c.conditions.has('frightened') || c.conditions.has('incapacitated')) continue;
+    if (c.activeEffects.some(e => e.casterId === caster.id && e.spellName === 'Phantasmal Killer')) continue;
+    candidates.push({ c, threat: c.maxHP, dist: distFt });
+  }
+  if (candidates.length === 0) return null;
+  candidates.sort((a, b) => a.threat !== b.threat ? b.threat - a.threat : a.dist - b.dist);
+  return candidates[0].c;
 }
 
 // ---- Execution ----------------------------------------------
 
-/**
- * Execute Phantasmal Killer:
- *  1. Consume a 4-level spell slot.
- *  2. Set the flag on the caster's `_genericSpellActiveSpells` Set.
- *  3. Log the cast.
- */
-export function execute(
-  caster: Combatant,
-  state: EngineState,
-): void {
+export function execute(caster: Combatant, target: Combatant, state: EngineState): void {
+  const action = caster.actions.find(a => a.name === 'Phantasmal Killer');
+  const saveDC = action?.saveDC ?? 13;
+
   consumeSpellSlot(caster, 4);
+  if (caster.concentration?.active) removeEffectsFromCaster(caster.id, state.battlefield);
+  startConcentration(caster, 'Phantasmal Killer');
 
-  if (!caster._genericSpellActiveSpells) {
-    caster._genericSpellActiveSpells = new Set<string>();
+  emit(state, 'action', caster.id,
+    `${caster.name} casts Phantasmal Killer at ${target.name}! (DC ${saveDC} WIS — 4d10 ${metadata.damageType} + frightened on fail)`, target.id);
+  if (target.isDead || target.isUnconscious) return;
+
+  const save = rollSave(target, 'wis', saveDC);
+  emit(state, save.success ? 'save_success' : 'save_fail', caster.id,
+    `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} WIS save vs Phantasmal Killer (rolled ${save.total})`, target.id, save.roll);
+
+  if (save.success) {
+    emit(state, 'action', caster.id, `${target.name} resists Phantasmal Killer — no effect!`, target.id);
+    return;
   }
-  caster._genericSpellActiveSpells.add('Phantasmal Killer');
 
-  emit(
-    state, 'action', caster.id,
-    `${caster.name} casts Phantasmal Killer! (v1: forward-compat flag set; mechanical effect not yet implemented)`,
-    caster.id,
-  );
-  emit(
-    state, 'condition_add', caster.id,
-    `${caster.name} is affected by Phantasmal Killer. (v1: forward-compat flag set; no mechanical effect until engine subsystem is implemented)`,
-    caster.id,
-  );
+  // On fail: deal 4d10 psychic (one-shot) + frightened (concentration-sourced).
+  const dmg = rollDamage();
+  const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);
+  emit(state, 'damage', caster.id,
+    `Phantasmal Killer: ${target.name} takes ${dealt} ${metadata.damageType} damage (${metadata.dieCount}d${metadata.dieSides}=${dmg})`, target.id, dealt);
+
+  if (!target.conditions.has('frightened')) {
+    applySpellEffect(target, {
+      casterId: caster.id, spellName: 'Phantasmal Killer',
+      effectType: 'condition_apply', payload: { condition: 'frightened' },
+      sourceIsConcentration: true,
+    });
+    emit(state, 'condition_add', caster.id,
+      `${target.name} is FRIGHTENED by Phantasmal Killer! (disadvantage on attacks/ability checks while caster is visible)`, target.id);
+  }
 }
 
 // ---- Cleanup ------------------------------------------------
 
-export function cleanup(_c: Combatant): void {
-  // No-op — forward-compat flag persists for combat.
-}
+export function cleanup(_c: Combatant): void { /* no-op — concentration break handles cleanup */ }

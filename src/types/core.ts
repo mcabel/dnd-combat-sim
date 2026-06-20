@@ -1371,6 +1371,14 @@ export interface PlannedAction {
     | 'eyebite'            // Eyebite — PHB p.238: 60 ft, WIS save or sleeping (Asleep option), concentration, one-shot (per-turn re-target simplified)
     | 'fleshToStone'       // Flesh to Stone — PHB p.241: 60 ft, CON save or restrained, concentration (3-fail petrified simplified)
     | 'massSuggestion'     // Mass Suggestion — PHB p.258: 60 ft, WIS save or charmed, up to 12 targets, NO concentration (24-hr not tracked)
+    | 'holdMonster'        // Hold Monster — PHB p.251: 60 ft, WIS save or paralyzed, concentration, any creature (mirror Hold Person L5)
+    | 'contagion'          // Contagion — PHB p.227: touch (5 ft), melee spell attack + poisoned on hit, NO concentration (3-fail disease simplified; no damage)
+    | 'dominatePerson'     // Dominate Person — PHB p.235: 60 ft, WIS save or charmed (control simplified), concentration, humanoid
+    | 'geas'               // Geas — PHB p.245: 60 ft, WIS save or 5d10 psychic + charmed, NO concentration (30-day; damage-on-disobey one-shot)
+    | 'phantasmalKiller'   // Phantasmal Killer — PHB p.265: 120 ft, WIS save or frightened + 4d10 psychic, concentration (per-turn DoT one-shot)
+    | 'waterySphere'       // Watery Sphere — XGE p.170: 90 ft, 5-ft radius AoE, STR save or restrained, concentration (movement rider simplified)
+    | 'dominateBeast'      // Dominate Beast — PHB p.235: 60 ft, WIS save or charmed (control simplified), concentration, beast
+    | 'charmMonster'       // Charm Monster — PHB p.221: 30 ft, WIS save or charmed, NO concentration (1 hr), any creature
     // ── Session 19 — bulk-implementation generic dispatch (262 new spells L2-9) ──
     // All non-blocker in-scope spells from levels 2-9 that have not been
     // implemented as bespoke case branches are routed through 'genericSpell'.
