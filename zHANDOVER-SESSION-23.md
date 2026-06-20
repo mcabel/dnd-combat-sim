@@ -150,6 +150,30 @@ Each migrated spell:
 
 ## IMMEDIATE NEXT ACTION
 
+> **🔴 MEGABATCH HANDOFF (Session 23 post-session work):** A comprehensive megabatch
+> migration plan has been produced for the overnight long-running task feature. Two files
+> were committed in Session 23's post-session work:
+> - **`MEGABATCH-MIGRATION-PLAN.md`** — the full 4-batch spec (124 spells, ~31 hrs total)
+> - **`MEGABATCH-ANALYSIS.json`** — the 255-spell feasibility analysis (124 migratable, 131 blocked)
+>
+> The megabatch migrates ALL 124 remaining migratable spells across 4 sequential overnight
+> runs (Cantrip-24 through Cantrip-27):
+> - **Batch 1 (Cantrip-24):** 44 combat damage spells (mirror Catapult/Shatter/Fireball/Sunburst/Scorching Ray/Power Word Kill)
+> - **Batch 2 (Cantrip-25):** 35 save-or-condition spells (mirror Blindness/Deafness/Hold Person/Sunburst condition loop)
+> - **Batch 3 (Cantrip-26):** 23 concentration buffs (mirror Hex/Bless/Magic Weapon/Faerie Fire)
+> - **Batch 4 (Cantrip-27):** 22 persistent zones + healing + temp HP (mirror Moonbeam/Cloud of Daggers/Healing Word)
+>
+> After all 4 batches: spell cache 420 → 544/557 implemented (97.7%). The remaining 13
+> are TG-006..011 blockers (summons, walls, reactions, antimagic, LOS, complex mechanics).
+>
+> **To run the megabatch:** Launch a long-running task agent with the prompt:
+> *"Read `/home/z/my-project/dnd-combat-sim/MEGABATCH-MIGRATION-PLAN.md` and execute
+> Batch 1 (44 combat damage spells). Follow the 7-step migration recipe for each spell.
+> Commit as Cantrip-24, push, then write zHANDOVER-SESSION-24.md."* — then repeat for
+> Batches 2-4 in subsequent overnight runs.
+
+### Manual next-action (if NOT running the megabatch)
+
 1. `git pull && npm install && npm run spell-cache:build` (confirm 420/557 spells implemented).
 2. Verify Session 23's work landed:
    - `grep -c "  '" src/spells/_generic_registry.ts` (count of registry entries — should be ~299, was 306).
@@ -159,6 +183,7 @@ Each migrated spell:
    - `npx ts-node --transpile-only src/test/bulk_spell_dispatch.test.ts | tail -3` (should print `Results: 98 passed, 0 failed`).
    - `for t in blight cloudkill disintegrate harm finger_of_death sunburst power_word_kill; do npx ts-node --transpile-only src/test/${t}.test.ts | tail -2; done` (all 7 should print `Results: N passed, 0 failed`).
 3. **DECISION POINT for Session 24:**
+   - **(0) 🔴 RECOMMENDED: Run the megabatch** — see `MEGABATCH-MIGRATION-PLAN.md` (committed in this session's post-session work). The megabatch covers all 124 migratable spells across 4 batches (Cantrip-24 through Cantrip-27). Each batch is one overnight long-running task run. The per-spell specs in the plan supersede the ad-hoc recommendations below.
    - (a) **Continue real-mechanics migration with batch 3** — give more Session 19/20 bulk-implemented spells REAL mechanical effects. Recommended next batch (high-damage AoE / multi-target):
      - **Chain Lightning** (L6) — DEX save 10d8 lightning, multi-target (4 targets). NEW multi-target single-save pattern (each target makes its own save, but all are explicit targets — not an AoE).
      - **Otiluke's Freezing Sphere** (L6) — DEX save 10d6 cold 60-ft radius AoE. Mirrors Fireball (radius AoE save) with cold damage.
