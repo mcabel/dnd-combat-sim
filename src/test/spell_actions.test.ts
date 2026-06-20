@@ -131,14 +131,14 @@ console.log('\n=== 2. Parser — spell actions parsed ===\n');
   assert('Druid has Entangle action',      names.includes('Entangle'));
   assert('Druid has Faerie Fire action',   names.includes('Faerie Fire'));
   assert('Druid has Healing Word action',  names.includes('Healing Word'));
-  assert('Druid skips Goodberry (not in DB)', !names.includes('Goodberry'));
+  assert('Druid has Goodberry action (in DB)', names.includes('Goodberry'));
 }
 {
   const bard = spawnClass('Bard');
   const names = bard.actions.filter(a => a.slotLevel && a.slotLevel >= 1).map(a => a.name);
   assert('Bard has Dissonant Whispers',   names.includes('Dissonant Whispers'));
   assert('Bard has Cure Wounds action',   names.includes('Cure Wounds'));
-  assert('Bard skips Charm Person (not in DB)', !names.includes('Charm Person'));
+  assert('Bard has Charm Person action (in DB)', names.includes('Charm Person'));
 }
 {
   const wizard = spawnClass('Wizard');
@@ -241,13 +241,16 @@ console.log('\n=== 6. Leveled spell selected over weaker weapon ===\n');
   // Sorcerer at range — Chromatic Orb (3d8=avg13.5) > any weapon.
   // Sleep has higher priority for Sorcerer when enemies are in range; remove it here
   // to test that Chromatic Orb is correctly selected as the best damage action.
+  // NOTE: Chromatic Orb was migrated to a bespoke planner branch in Session 21,
+  // so plan.action.type === 'chromaticOrb' (not plan.action.action.name — bespoke
+  // branches set action: null). Mirrors the Dissonant Whispers assertion above.
   const sorc  = spawnClass('Sorcerer', { x: 0, y: 0, z: 0 });
   sorc.actions = sorc.actions.filter(a => a.name !== 'Sleep'); // isolate Chromatic Orb behaviour
   const enemy = makeEnemy('e1', { x: 10, y: 0, z: 0 }); // 50ft, in Chromatic Orb range (90ft)
   const plan  = planTurn(sorc, makeBF([sorc], [enemy]));
 
   eq('Sorcerer: picks Chromatic Orb at range',
-    plan.action?.action?.name, 'Chromatic Orb');
+    plan.action?.type, 'chromaticOrb');
 }
 
 // ============================================================
