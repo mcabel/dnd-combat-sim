@@ -872,12 +872,6 @@ import {
 } from './backlash';
 
 import {
-  shouldCast as shouldCastBlight,
-  execute as executeBlight,
-  metadata as metadataBlight,
-} from './blight';
-
-import {
   shouldCast as shouldCastCharmMonster,
   execute as executeCharmMonster,
   metadata as metadataCharmMonster,
@@ -1136,12 +1130,6 @@ import {
 } from './circle_of_power';
 
 import {
-  shouldCast as shouldCastCloudkill,
-  execute as executeCloudkill,
-  metadata as metadataCloudkill,
-} from './cloudkill';
-
-import {
   shouldCast as shouldCastCommuneWithNature,
   execute as executeCommuneWithNature,
   metadata as metadataCommuneWithNature,
@@ -1394,12 +1382,6 @@ import {
 } from './dirge';
 
 import {
-  shouldCast as shouldCastDisintegrate,
-  execute as executeDisintegrate,
-  metadata as metadataDisintegrate,
-} from './disintegrate';
-
-import {
   shouldCast as shouldCastDruidGrove,
   execute as executeDruidGrove,
   metadata as metadataDruidGrove,
@@ -1440,12 +1422,6 @@ import {
   execute as executeGravityFissure,
   metadata as metadataGravityFissure,
 } from './gravity_fissure';
-
-import {
-  shouldCast as shouldCastHarm,
-  execute as executeHarm,
-  metadata as metadataHarm,
-} from './harm';
 
 import {
   shouldCast as shouldCastHeal,
@@ -1572,12 +1548,6 @@ import {
   execute as executeDraconicTransformation,
   metadata as metadataDraconicTransformation,
 } from './draconic_transformation';
-
-import {
-  shouldCast as shouldCastFingerOfDeath,
-  execute as executeFingerOfDeath,
-  metadata as metadataFingerOfDeath,
-} from './finger_of_death';
 
 import {
   shouldCast as shouldCastFireStorm,
@@ -1760,12 +1730,6 @@ import {
 } from './reality_break';
 
 import {
-  shouldCast as shouldCastSunburst,
-  execute as executeSunburst,
-  metadata as metadataSunburst,
-} from './sunburst';
-
-import {
   shouldCast as shouldCastTsunami,
   execute as executeTsunami,
   metadata as metadataTsunami,
@@ -1812,12 +1776,6 @@ import {
   execute as executePowerWordHeal,
   metadata as metadataPowerWordHeal,
 } from './power_word_heal';
-
-import {
-  shouldCast as shouldCastPowerWordKill,
-  execute as executePowerWordKill,
-  metadata as metadataPowerWordKill,
-} from './power_word_kill';
 
 import {
   shouldCast as shouldCastPsychicScream,
@@ -2722,12 +2680,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     shouldCast: shouldCastBacklash,
     execute: executeBacklash,
   },
-  'Blight': {
-    name: 'Blight',
-    level: metadataBlight.level,
-    shouldCast: shouldCastBlight,
-    execute: executeBlight,
-  },
   'Charm Monster': {
     name: 'Charm Monster',
     level: metadataCharmMonster.level,
@@ -2986,12 +2938,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     shouldCast: shouldCastCircleOfPower,
     execute: executeCircleOfPower,
   },
-  'Cloudkill': {
-    name: 'Cloudkill',
-    level: metadataCloudkill.level,
-    shouldCast: shouldCastCloudkill,
-    execute: executeCloudkill,
-  },
   'Commune with Nature': {
     name: 'Commune with Nature',
     level: metadataCommuneWithNature.level,
@@ -3244,12 +3190,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     shouldCast: shouldCastDirge,
     execute: executeDirge,
   },
-  'Disintegrate': {
-    name: 'Disintegrate',
-    level: metadataDisintegrate.level,
-    shouldCast: shouldCastDisintegrate,
-    execute: executeDisintegrate,
-  },
   'Druid Grove': {
     name: 'Druid Grove',
     level: metadataDruidGrove.level,
@@ -3291,12 +3231,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     level: metadataGravityFissure.level,
     shouldCast: shouldCastGravityFissure,
     execute: executeGravityFissure,
-  },
-  'Harm': {
-    name: 'Harm',
-    level: metadataHarm.level,
-    shouldCast: shouldCastHarm,
-    execute: executeHarm,
   },
   'Heal': {
     name: 'Heal',
@@ -3423,12 +3357,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     level: metadataDraconicTransformation.level,
     shouldCast: shouldCastDraconicTransformation,
     execute: executeDraconicTransformation,
-  },
-  'Finger of Death': {
-    name: 'Finger of Death',
-    level: metadataFingerOfDeath.level,
-    shouldCast: shouldCastFingerOfDeath,
-    execute: executeFingerOfDeath,
   },
   'Fire Storm': {
     name: 'Fire Storm',
@@ -3610,12 +3538,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     shouldCast: shouldCastRealityBreak,
     execute: executeRealityBreak,
   },
-  'Sunburst': {
-    name: 'Sunburst',
-    level: metadataSunburst.level,
-    shouldCast: shouldCastSunburst,
-    execute: executeSunburst,
-  },
   'Tsunami': {
     name: 'Tsunami',
     level: metadataTsunami.level,
@@ -3663,12 +3585,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     level: metadataPowerWordHeal.level,
     shouldCast: shouldCastPowerWordHeal,
     execute: executePowerWordHeal,
-  },
-  'Power Word Kill': {
-    name: 'Power Word Kill',
-    level: metadataPowerWordKill.level,
-    shouldCast: shouldCastPowerWordKill,
-    execute: executePowerWordKill,
   },
   'Psychic Scream': {
     name: 'Psychic Scream',

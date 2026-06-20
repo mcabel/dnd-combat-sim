@@ -247,6 +247,46 @@ import {
   execute as executeIceKnife,
 } from '../spells/ice_knife';
 
+// ── Session 23 — Real-mechanics migration batch 2 (7 high-damage spells L4-9) ─
+// Migrated from the Session 19/20 generic dispatch registry to bespoke
+// implementations with real mechanical effects (CON/DEX saves, HP-check
+// instakill, AoE damage + blindness). Mirrors the Session 22 bespoke
+// patterns (Catapult for single-target saves, Shatter/Fireball for AoE
+// saves, plus a NEW HP-check instakill pattern for Power Word Kill).
+// Each migrated spell:
+//   - Removed from _generic_registry.ts (no longer dispatched via 'genericSpell')
+//   - Has its own case branch in executePlannedAction (below)
+//   - Has its own planner branch in planner.ts (sets plan.action.type)
+//   - Has its own test file in src/test/<spell>.test.ts
+import {
+  shouldCast as shouldCastBlight,
+  execute as executeBlight,
+} from '../spells/blight';
+import {
+  shouldCast as shouldCastCloudkill,
+  execute as executeCloudkill,
+} from '../spells/cloudkill';
+import {
+  shouldCast as shouldCastDisintegrate,
+  execute as executeDisintegrate,
+} from '../spells/disintegrate';
+import {
+  shouldCast as shouldCastHarm,
+  execute as executeHarm,
+} from '../spells/harm';
+import {
+  shouldCast as shouldCastFingerOfDeath,
+  execute as executeFingerOfDeath,
+} from '../spells/finger_of_death';
+import {
+  shouldCast as shouldCastSunburst,
+  execute as executeSunburst,
+} from '../spells/sunburst';
+import {
+  shouldCast as shouldCastPowerWordKill,
+  execute as executePowerWordKill,
+} from '../spells/power_word_kill';
+
 // ── Session 19 — bulk-implementation generic dispatch (262 new spells) ────
 import {
   lookupGenericSpell,
@@ -2161,6 +2201,100 @@ function executePlannedAction(
       // attack-roll + AoE-save spell — first of its kind in v1).
       const ikPlan = shouldCastIceKnife(actor, bf);
       if (ikPlan) executeIceKnife(actor, ikPlan, state);
+      break;
+    }
+
+    // ── Session 23 — Real-mechanics migration batch 2 (7 high-damage spells L4-9) ─
+    // These spells were bulk-implemented in Session 19 as forward-compat
+    // flags (no mechanical effect). Session 23 migrated them to bespoke
+    // implementations with REAL mechanical effects. Each case branch
+    // mirrors the Session 22 bespoke pattern (Catapult / Shatter / Fireball).
+
+    case 'blight': {
+      // Blight — PHB p.219: action, 30 ft, CON save 8d8 necrotic (half on
+      // save), single-target. NO concentration.
+      // shouldCast returns a single Combatant (highest-threat enemy in range).
+      const blightTargetId = plan.targetId;
+      const blightTarget = blightTargetId ? bf.combatants.get(blightTargetId) ?? null : null;
+      const liveTarget = blightTarget && !blightTarget.isDead && !blightTarget.isUnconscious
+        ? blightTarget
+        : shouldCastBlight(actor, bf);
+      if (liveTarget) executeBlight(actor, liveTarget, state);
+      break;
+    }
+
+    case 'cloudkill': {
+      // Cloudkill — PHB p.222: action, 120 ft, CON save 5d8 poison (half on
+      // save), 20-ft radius AoE. v1: one-shot (moving-AoE + concentration
+      // rider simplified away). NO concentration (v1).
+      // shouldCast returns Combatant[] (all enemies in 20 ft of primary).
+      const ckTargets = shouldCastCloudkill(actor, bf);
+      if (ckTargets) executeCloudkill(actor, ckTargets, state);
+      break;
+    }
+
+    case 'disintegrate': {
+      // Disintegrate — PHB p.233: action, 60 ft, DEX save 10d6+40 force (half
+      // on save), single-target + disintegrate-on-0-HP (simplified). NO
+      // concentration.
+      // shouldCast returns a single Combatant (lowest-current-HP enemy in range).
+      const disTargetId = plan.targetId;
+      const disTarget = disTargetId ? bf.combatants.get(disTargetId) ?? null : null;
+      const liveTarget = disTarget && !disTarget.isDead && !disTarget.isUnconscious
+        ? disTarget
+        : shouldCastDisintegrate(actor, bf);
+      if (liveTarget) executeDisintegrate(actor, liveTarget, state);
+      break;
+    }
+
+    case 'harm': {
+      // Harm — PHB p.249: action, 60 ft, CON save 14d6 necrotic (half on
+      // save), single-target + max-HP-reduction (simplified). NO concentration.
+      // shouldCast returns a single Combatant (highest-threat enemy in range).
+      const harmTargetId = plan.targetId;
+      const harmTarget = harmTargetId ? bf.combatants.get(harmTargetId) ?? null : null;
+      const liveTarget = harmTarget && !harmTarget.isDead && !harmTarget.isUnconscious
+        ? harmTarget
+        : shouldCastHarm(actor, bf);
+      if (liveTarget) executeHarm(actor, liveTarget, state);
+      break;
+    }
+
+    case 'fingerOfDeath': {
+      // Finger of Death — PHB p.241: action, 60 ft, CON save 7d8+30 necrotic
+      // (half on save), single-target + zombie-raise-on-kill (simplified,
+      // TG-006 pending). NO concentration.
+      // shouldCast returns a single Combatant (highest-threat enemy in range).
+      const fodTargetId = plan.targetId;
+      const fodTarget = fodTargetId ? bf.combatants.get(fodTargetId) ?? null : null;
+      const liveTarget = fodTarget && !fodTarget.isDead && !fodTarget.isUnconscious
+        ? fodTarget
+        : shouldCastFingerOfDeath(actor, bf);
+      if (liveTarget) executeFingerOfDeath(actor, liveTarget, state);
+      break;
+    }
+
+    case 'sunburst': {
+      // Sunburst — PHB p.284: action, 150 ft, CON save 12d6 radiant (half on
+      // save), 60-ft radius AoE + blinded on failed save. NO concentration.
+      // shouldCast returns Combatant[] (all enemies in 60 ft of primary).
+      const sbTargets = shouldCastSunburst(actor, bf);
+      if (sbTargets) executeSunburst(actor, sbTargets, state);
+      break;
+    }
+
+    case 'powerWordKill': {
+      // Power Word Kill — PHB p.266: action, 60 ft, NO save, NO attack —
+      // instakill if currentHP ≤ 100. NO concentration.
+      // shouldCast returns a single Combatant (highest-current-HP enemy ≤ 100
+      // in range). This is the FIRST spell in v1 with no save AND no attack
+      // roll — the effect is purely an HP check.
+      const pwkTargetId = plan.targetId;
+      const pwkTarget = pwkTargetId ? bf.combatants.get(pwkTargetId) ?? null : null;
+      const liveTarget = pwkTarget && !pwkTarget.isDead && !pwkTarget.isUnconscious
+        ? pwkTarget
+        : shouldCastPowerWordKill(actor, bf);
+      if (liveTarget) executePowerWordKill(actor, liveTarget, state);
       break;
     }
 

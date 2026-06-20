@@ -134,43 +134,69 @@ const SPELL_NAMES = Object.keys(GENERIC_SPELLS);
 const SPELL_COUNT = SPELL_NAMES.length;
 
 assert('Registry is non-empty', SPELL_COUNT > 0);
-// Session 21: lowered from 300 to 290 after migrating 7 combat damage
+// Session 22: lowered from 300 to 290 after migrating 7 combat damage
 // spells (Fireball, Lightning Bolt, Cone of Cold, Inflict Wounds,
 // Chromatic Orb, Catapult, Ice Knife) from generic dispatch to bespoke
-// implementations. The registry now has 306 spells (313 − 7).
-assert(`Registry has at least 290 spells (got ${SPELL_COUNT})`, SPELL_COUNT >= 290);
+// implementations. The registry then had 306 spells (313 − 7).
+// Session 23: lowered from 290 to 280 after migrating 7 more high-damage
+// spells (Blight, Cloudkill, Disintegrate, Harm, Finger of Death,
+// Sunburst, Power Word Kill). The registry now has 299 spells (306 − 7).
+assert(`Registry has at least 280 spells (got ${SPELL_COUNT})`, SPELL_COUNT >= 280);
 console.log(`  📊 Total bulk-implemented spells: ${SPELL_COUNT}`);
 
-// Sample spells — one per level 1-9. Updated in Session 21 to avoid the
-// 7 migrated bespoke spells (Fireball L3, Cone of Cold L5 — both moved
-// out of the generic registry into bespoke case branches).
+// Sample spells — one per level 1-9. Updated in Session 23 to avoid the
+// 7 Session 22 migrated bespoke spells (Fireball L3, Cone of Cold L5) AND
+// the 7 Session 23 migrated bespoke spells (Blight L4, Cloudkill L5,
+// Disintegrate L6, Harm L6, Finger of Death L7, Sunburst L8, Power Word
+// Kill L9 — all moved out of the generic registry into bespoke case
+// branches).
 const SAMPLE_SPELLS = [
   { name: 'Alarm', level: 1 },
   { name: 'Continual Flame', level: 2 },
   { name: 'Fear', level: 3 },
   { name: 'Polymorph', level: 4 },
-  { name: 'Cloudkill', level: 5 },
-  { name: 'Disintegrate', level: 6 },
-  { name: 'Finger of Death', level: 7 },
+  { name: 'Hold Monster', level: 5 },         // Session 23: was 'Cloudkill' (migrated)
+  { name: 'Globe of Invulnerability', level: 6 }, // Session 23: was 'Disintegrate' (migrated)
+  { name: 'Forcecage', level: 7 },            // Session 23: was 'Finger of Death' (migrated)
   { name: 'Feeblemind', level: 8 },
-  { name: 'Power Word Kill', level: 9 },
+  { name: 'Time Stop', level: 9 },            // Session 23: was 'Power Word Kill' (migrated)
 ];
 
 // ============================================================
-// 1b. Session 21 — migrated spells are NO LONGER in the registry
+// 1b. Session 22 — migrated spells are NO LONGER in the registry
 // ============================================================
-// The 7 combat damage spells migrated in Session 21 to bespoke
+// The 7 combat damage spells migrated in Session 22 to bespoke
 // implementations must NOT appear in the generic registry. Their
 // bespoke modules at src/spells/<snake>.ts have a different execute
 // signature (some take Combatant[] targets, some take a single target,
 // some take an IceKnifePlan) that doesn't fit the generic dispatch
 // shape (caster, state) → void.
-console.log('\n=== 1b. Session 21 — migrated spells removed from registry ===\n');
-const MIGRATED_SPELLS = [
+console.log('\n=== 1b. Session 22 — migrated spells removed from registry ===\n');
+const MIGRATED_SPELLS_S22 = [
   'Fireball', 'Lightning Bolt', 'Cone of Cold',
   'Inflict Wounds', 'Chromatic Orb', 'Catapult', 'Ice Knife',
 ];
-for (const migrated of MIGRATED_SPELLS) {
+for (const migrated of MIGRATED_SPELLS_S22) {
+  eq(`  ${migrated} is no longer in the registry (migrated to bespoke)`,
+    lookupGenericSpell(migrated), null);
+}
+
+// ============================================================
+// 1c. Session 23 — migrated spells are NO LONGER in the registry
+// ============================================================
+// The 7 high-damage spells migrated in Session 23 to bespoke
+// implementations must NOT appear in the generic registry. Their
+// bespoke modules at src/spells/<snake>.ts have a different execute
+// signature (some take Combatant[] targets, some take a single target)
+// that doesn't fit the generic dispatch shape (caster, state) → void.
+// Additionally, Power Word Kill has NO save and NO attack roll — a new
+// pattern that the generic dispatch cannot express.
+console.log('\n=== 1c. Session 23 — migrated spells removed from registry ===\n');
+const MIGRATED_SPELLS_S23 = [
+  'Blight', 'Cloudkill', 'Disintegrate', 'Harm',
+  'Finger of Death', 'Sunburst', 'Power Word Kill',
+];
+for (const migrated of MIGRATED_SPELLS_S23) {
   eq(`  ${migrated} is no longer in the registry (migrated to bespoke)`,
     lookupGenericSpell(migrated), null);
 }
@@ -354,18 +380,21 @@ console.log('\n=== 8. PlannedAction.spellName field works ===\n');
 
 console.log('\n=== 9. Multi-level slot gating ===\n');
 
-// Updated in Session 21: 'Fireball' (L3) → 'Fear', 'Cone of Cold' (L5) →
+// Updated in Session 22: 'Fireball' (L3) → 'Fear', 'Cone of Cold' (L5) →
 // 'Cloudkill' — both migrated to bespoke implementations.
+// Updated in Session 23: 'Cloudkill' (L5) → 'Hold Monster', 'Disintegrate'
+// (L6) → 'Globe of Invulnerability', 'Finger of Death' (L7) → 'Forcecage',
+// 'Power Word Kill' (L9) → 'Time Stop' — all 4 migrated to bespoke.
 const SAMPLE_BY_LEVEL: Record<number, string | null> = {
   1: 'Alarm',
   2: 'Continual Flame',
   3: 'Fear',
   4: 'Polymorph',
-  5: 'Cloudkill',
-  6: 'Disintegrate',
-  7: 'Finger of Death',
+  5: 'Hold Monster',
+  6: 'Globe of Invulnerability',
+  7: 'Forcecage',
   8: 'Feeblemind',
-  9: 'Power Word Kill',
+  9: 'Time Stop',
 };
 
 for (const levelStr of Object.keys(SAMPLE_BY_LEVEL)) {

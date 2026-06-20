@@ -88,6 +88,20 @@ import { shouldCast as shouldCastChromaticOrb } from '../spells/chromatic_orb';
 import { shouldCast as shouldCastCatapult } from '../spells/catapult';
 import { shouldCast as shouldCastIceKnife } from '../spells/ice_knife';
 
+// ── Session 23 — Real-mechanics migration batch 2 (7 high-damage spells L4-9) ─
+// Migrated from the Session 19/20 generic dispatch registry to bespoke
+// implementations with real mechanical effects (CON/DEX saves, HP-check
+// instakill, AoE damage + blindness). Each planner branch mirrors the
+// Session 22 bespoke pattern (Catapult / Shatter / Fireball), plus a NEW
+// HP-check instakill pattern for Power Word Kill.
+import { shouldCast as shouldCastBlight } from '../spells/blight';
+import { shouldCast as shouldCastCloudkill } from '../spells/cloudkill';
+import { shouldCast as shouldCastDisintegrate } from '../spells/disintegrate';
+import { shouldCast as shouldCastHarm } from '../spells/harm';
+import { shouldCast as shouldCastFingerOfDeath } from '../spells/finger_of_death';
+import { shouldCast as shouldCastSunburst } from '../spells/sunburst';
+import { shouldCast as shouldCastPowerWordKill } from '../spells/power_word_kill';
+
 // ── Session 19 — bulk-implementation generic dispatch (262 new spells) ────
 import { GENERIC_SPELL_LIST } from '../spells/_generic_registry';
 import { selectAction, selfPreserveDecision, selectLegendaryAction } from './actions';
@@ -1976,6 +1990,167 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
       };
       plan.targetId = catTarget.id;
       plan.bonusAction = planBonusAction(self, catTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // === SESSION 23 — REAL-MECHANICS MIGRATION BATCH 2 (7 high-damage spells L4-9) ===
+  // Migrated from the Session 19 generic dispatch registry to bespoke
+  // implementations with real mechanical effects (CON/DEX saves, HP-check
+  // instakill, AoE damage + blindness). Each branch sits ABOVE the generic
+  // spell loop so the migrated spell wins over its generic-registry shadow
+  // (the migrated spell's module file OVERRIDES the generic-registry
+  // entry — but the generic registry still has a stale entry that we
+  // also remove in this session).
+  //
+  // Tactical priority order (highest first):
+  //   12H. Power Word Kill (L9, instakill if HP ≤ 100 — premier kill-shot)
+  //   12I. Sunburst (L8, 12d6 radiant 60-ft AoE + blindness — highest AoE damage)
+  //   12J. Finger of Death (L7, 7d8+30 necrotic single-target — avg 61.5)
+  //   12K. Disintegrate (L6, 10d6+40 force single-target — avg 75, kill-shot bias)
+  //   12L. Harm (L6, 14d6 necrotic single-target — avg 49)
+  //   12M. Cloudkill (L5, 5d8 poison 20-ft AoE — avg 22.5 per target)
+  //   12N. Blight (L4, 8d8 necrotic single-target — avg 36)
+  // L9 first (instakill), then L8 (biggest AoE), then L7, then L6 by kill-shot
+  // bias (Disintegrate before Harm), then L5 (AoE), then L4 (single-target).
+
+  // --- 12H. POWER WORD KILL (NO save, NO attack — instakill if HP ≤ 100, L9, NO concentration) ---
+  // PHB p.266: action, 60 ft, no save, no attack — if target's currentHP ≤ 100,
+  // it dies instantly. The premier kill-shot spell in D&D — a 9th-level slot
+  // that bypasses all defences (no save, no AC) for any creature under 100 HP.
+  // shouldCast gates on the target's currentHP (FIRST spell in v1 to do so).
+  if (!plan.action && self.actions.some(a => a.name === 'Power Word Kill')) {
+    const pwkTarget = shouldCastPowerWordKill(self, battlefield);
+    if (pwkTarget) {
+      plan.action = {
+        type: 'powerWordKill',
+        action: null,
+        targetId: pwkTarget.id,
+        description: `${self.name} casts Power Word Kill at ${pwkTarget.name} (HP ${pwkTarget.currentHP} ≤ 100)`,
+      };
+      plan.targetId = pwkTarget.id;
+      plan.bonusAction = planBonusAction(self, pwkTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12I. SUNBURST (CON save 12d6 radiant 60-ft AoE + blinded on fail, L8, NO concentration) ---
+  // PHB p.284: action, 150 ft, CON save 12d6 radiant (half on save), 60-ft radius
+  // AoE + blinded on failed save. Highest single-cast AoE damage in v1
+  // (avg 42 per target) + a potent rider (blinded = disadv on attacks, adv vs them).
+  if (!plan.action && self.actions.some(a => a.name === 'Sunburst')) {
+    const sbTargets = shouldCastSunburst(self, battlefield);
+    if (sbTargets) {
+      const names = sbTargets.map(t => t.name).join(', ');
+      plan.action = {
+        type: 'sunburst',
+        action: null,
+        targetId: sbTargets[0].id,
+        description: `${self.name} casts Sunburst on ${names}`,
+      };
+      plan.targetId = sbTargets[0].id;
+      plan.bonusAction = planBonusAction(self, sbTargets[0], battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12J. FINGER OF DEATH (CON save 7d8+30 necrotic single-target, L7, NO concentration) ---
+  // PHB p.241: action, 60 ft, CON save 7d8+30 necrotic (half on save), single-target.
+  // Zombie-raise-on-kill rider simplified away (TG-006 summon subsystem pending).
+  // Avg 61.5 damage on fail — premier single-target L7 damage.
+  if (!plan.action && self.actions.some(a => a.name === 'Finger of Death')) {
+    const fodTarget = shouldCastFingerOfDeath(self, battlefield);
+    if (fodTarget) {
+      plan.action = {
+        type: 'fingerOfDeath',
+        action: null,
+        targetId: fodTarget.id,
+        description: `${self.name} casts Finger of Death at ${fodTarget.name}`,
+      };
+      plan.targetId = fodTarget.id;
+      plan.bonusAction = planBonusAction(self, fodTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12K. DISINTEGRATE (DEX save 10d6+40 force single-target, L6, NO concentration) ---
+  // PHB p.233: action, 60 ft, DEX save 10d6+40 force (half on save), single-target.
+  // Disintegrate-on-0-HP rider simplified away (no "disintegrated" death-state).
+  // Avg 75 damage on fail — highest single-target L6 damage. shouldCast prioritises
+  // lowest-current-HP targets (kill-shot bias — the disintegrate-on-0-HP rider
+  // would fire on a kill, though it's simplified away in v1).
+  if (!plan.action && self.actions.some(a => a.name === 'Disintegrate')) {
+    const disTarget = shouldCastDisintegrate(self, battlefield);
+    if (disTarget) {
+      plan.action = {
+        type: 'disintegrate',
+        action: null,
+        targetId: disTarget.id,
+        description: `${self.name} casts Disintegrate at ${disTarget.name}`,
+      };
+      plan.targetId = disTarget.id;
+      plan.bonusAction = planBonusAction(self, disTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12L. HARM (CON save 14d6 necrotic single-target, L6, NO concentration) ---
+  // PHB p.249: action, 60 ft, CON save 14d6 necrotic (half on save), single-target.
+  // Max-HP-reduction rider simplified away (no maxHP-reduction field in v1).
+  // Avg 49 damage on fail — solid L6 single-target damage (CON is a common
+  // strong save, so effective damage is lower than Disintegrate's DEX-targeting).
+  if (!plan.action && self.actions.some(a => a.name === 'Harm')) {
+    const harmTarget = shouldCastHarm(self, battlefield);
+    if (harmTarget) {
+      plan.action = {
+        type: 'harm',
+        action: null,
+        targetId: harmTarget.id,
+        description: `${self.name} casts Harm at ${harmTarget.name}`,
+      };
+      plan.targetId = harmTarget.id;
+      plan.bonusAction = planBonusAction(self, harmTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12M. CLOUDKILL (CON save 5d8 poison 20-ft AoE, L5, NO concentration in v1) ---
+  // PHB p.222: action, 120 ft, CON save 5d8 poison (half on save), 20-ft radius AoE.
+  // v1: one-shot (moving-AoE + concentration rider simplified away). Avg 22.5
+  // poison damage per target on fail — solid L5 AoE (poison is a commonly
+  // resisted type, but v1 doesn't model immunity checks in shouldCast).
+  if (!plan.action && self.actions.some(a => a.name === 'Cloudkill')) {
+    const ckTargets = shouldCastCloudkill(self, battlefield);
+    if (ckTargets) {
+      const names = ckTargets.map(t => t.name).join(', ');
+      plan.action = {
+        type: 'cloudkill',
+        action: null,
+        targetId: ckTargets[0].id,
+        description: `${self.name} casts Cloudkill on ${names}`,
+      };
+      plan.targetId = ckTargets[0].id;
+      plan.bonusAction = planBonusAction(self, ckTargets[0], battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12N. BLIGHT (CON save 8d8 necrotic single-target, L4, NO concentration) ---
+  // PHB p.219: action, 30 ft, CON save 8d8 necrotic (half on save), single-target.
+  // Plant-creature disadvantage + undead/construct immunity simplified away
+  // (no creature-type tag in v1). Avg 36 damage on fail — solid L4 single-target
+  // (short 30-ft range limits its use to casters near the front line).
+  if (!plan.action && self.actions.some(a => a.name === 'Blight')) {
+    const blightTarget = shouldCastBlight(self, battlefield);
+    if (blightTarget) {
+      plan.action = {
+        type: 'blight',
+        action: null,
+        targetId: blightTarget.id,
+        description: `${self.name} casts Blight at ${blightTarget.name}`,
+      };
+      plan.targetId = blightTarget.id;
+      plan.bonusAction = planBonusAction(self, blightTarget, battlefield);
       return plan;
     }
   }

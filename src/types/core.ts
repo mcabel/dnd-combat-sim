@@ -1269,6 +1269,24 @@ export interface PlannedAction {
     | 'chromaticOrb'        // Chromatic Orb — PHB p.221: 90 ft, ranged spell attack 3d8 chosen-elemental (picker avoids resistances, crit doubles), NO concentration
     | 'catapult'            // Catapult — XGE p.15: 60 ft, DEX save 3d8 bludgeoning (half on save), single-target, NO concentration
     | 'iceKnife'            // Ice Knife — XGE p.157: 60 ft, ranged spell attack 1d10 piercing + 2d6 cold DEX save 5-ft radius AoE (explodes on hit or miss), NO concentration
+    // ── Session 23 — Real-mechanics migration batch 2 (7 high-damage spells L4-9) ──
+    // Migrated from the Session 19 generic dispatch registry to bespoke
+    // implementations with real mechanical effects (CON/DEX saves, HP-check
+    // instakill, AoE damage + blindness). Mirrors the Session 22 bespoke
+    // patterns (Catapult for single-target saves, Shatter/Fireball for AoE
+    // saves, plus a NEW HP-check instakill pattern for Power Word Kill).
+    // Each migrated spell:
+    //   - Removed from _generic_registry.ts
+    //   - Has its own case branch in combat.ts executePlannedAction
+    //   - Has its own planner branch in planner.ts
+    //   - Has its own test file in src/test/<spell>.test.ts
+    | 'blight'             // Blight — PHB p.219: 30 ft, CON save 8d8 necrotic (half on save), single-target, NO concentration
+    | 'cloudkill'          // Cloudkill — PHB p.222: 120 ft, CON save 5d8 poison (half on save), 20-ft radius AoE (v1: one-shot — moving-AoE simplified), NO concentration
+    | 'disintegrate'       // Disintegrate — PHB p.233: 60 ft, DEX save 10d6+40 force (half on save), single-target + disintegrate-on-0-HP (simplified), NO concentration
+    | 'harm'               // Harm — PHB p.249: 60 ft, CON save 14d6 necrotic (half on save), single-target + max-HP-reduction (simplified), NO concentration
+    | 'fingerOfDeath'      // Finger of Death — PHB p.241: 60 ft, CON save 7d8+30 necrotic (half on save), single-target + zombie-raise-on-kill (simplified, TG-006 pending), NO concentration
+    | 'sunburst'           // Sunburst — PHB p.284: 150 ft, CON save 12d6 radiant (half on save), 60-ft radius AoE + blinded on failed save, NO concentration
+    | 'powerWordKill'      // Power Word Kill — PHB p.266: 60 ft, NO save, NO attack — instakill if currentHP ≤ 100, NO concentration
     // ── Session 19 — bulk-implementation generic dispatch (262 new spells L2-9) ──
     // All non-blocker in-scope spells from levels 2-9 that have not been
     // implemented as bespoke case branches are routed through 'genericSpell'.
