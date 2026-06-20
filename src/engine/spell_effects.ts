@@ -23,7 +23,7 @@
 // defer until the first ActiveEffect-using concentration spell is implemented.
 // ============================================================
 
-import { ActiveEffect, Combatant, Battlefield, SpellEffectType } from '../types/core';
+import { ActiveEffect, Combatant, Battlefield, SpellEffectType, DamageType } from '../types/core';
 import { grantVulnerability, removeBySource } from './adv_system';
 
 // ---- ID generator -------------------------------------------
@@ -77,6 +77,7 @@ export function applySpellEffect(
     case 'ac_bonus':
     case 'ac_floor':
     case 'bless_die':
+    case 'bane_die':
     case 'damage_zone':
     case 'weapon_enchant':
     case 'enlarge_reduce':
@@ -152,6 +153,7 @@ function _undoEffect(target: Combatant, effect: ActiveEffect): void {
     case 'ac_bonus':
     case 'ac_floor':
     case 'bless_die':
+    case 'bane_die':
     case 'weapon_enchant':
     case 'enlarge_reduce':
       // Read-only at resolution — nothing to undo structurally.
@@ -248,6 +250,18 @@ export function getActiveBlessDie(c: Combatant): number {
     .reduce((max, e) => Math.max(max, e.payload.dieSides ?? 0), 0);
 }
 
+/**
+ * Returns the largest bane_die sides active on a combatant, or 0 if none.
+ * Bane (PHB p.219): -1d4 to attack rolls & saving throws. The value is
+ * SUBTRACTED at resolution time (mirror getActiveBlessDie but inverse).
+ * Session 27 Batch 3.
+ */
+export function getActiveBaneDie(c: Combatant): number {
+  return c.activeEffects
+    .filter(e => e.effectType === 'bane_die')
+    .reduce((max, e) => Math.max(max, e.payload.dieSides ?? 0), 0);
+}
+
 // ---- Hex damage query (used by combat.ts) -------------------
 
 /**
@@ -301,15 +315,24 @@ export function getActiveDamageZones(c: Combatant): ActiveEffect[] {
  * effects on the same target don't stack" usually applies, but v1 allows
  * stacking for simplicity).
  */
-export function getActiveWeaponEnchant(c: Combatant): { attackBonus: number; damageBonus: number } {
+export function getActiveWeaponEnchant(c: Combatant): { attackBonus: number; damageBonus: number; damageDie: number; damageDieCount: number; damageDieType?: DamageType } {
   let attackBonus = 0;
   let damageBonus = 0;
+  let damageDie = 0;
+  let damageDieCount = 0;
+  let damageDieType: DamageType | undefined;
   for (const e of c.activeEffects) {
     if (e.effectType !== 'weapon_enchant') continue;
     attackBonus += e.payload.attackBonus ?? 0;
     damageBonus  += e.payload.damageBonus  ?? 0;
+    // Session 27 Batch 3: extra damage die (Divine Favor, Holy Weapon, etc.)
+    if (damageDie === 0 && (e.payload.damageDie ?? 0) > 0) {
+      damageDie = e.payload.damageDie ?? 0;
+      damageDieCount = e.payload.damageDieCount ?? 1;
+      damageDieType = e.payload.damageDieType;
+    }
   }
-  return { attackBonus, damageBonus };
+  return { attackBonus, damageBonus, damageDie, damageDieCount, damageDieType };
 }
 
 // ---- Enlarge/Reduce query (Session 17 — Enlarge/Reduce PHB p.237) ---

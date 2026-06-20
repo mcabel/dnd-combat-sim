@@ -5,7 +5,7 @@
 
 import { Combatant, Action, DiceExpression, Condition, ActionBudget, Battlefield, CreatureSize, DamageType } from '../types/core';
 import { querySelf, queryVulnerability } from './adv_system';
-import { getActiveBlessDie, getActiveEnlargeReduce } from './spell_effects';
+import { getActiveBlessDie, getActiveBaneDie, getActiveEnlargeReduce } from './spell_effects';
 import { cleanup as cleanupShield } from '../spells/shield';
 import { cleanup as cleanupRayOfFrost } from '../spells/ray_of_frost';
 import { cleanup as cleanupChillTouch } from '../spells/chill_touch';
@@ -154,6 +154,10 @@ export function rollSave(
   const blessSides = getActiveBlessDie(combatant);
   const blessBonus = blessSides > 0 ? rollDie(blessSides) : 0;
 
+  // Bane die — -1d4 to saving throws when baned (PHB p.219) — Session 27 Batch 3
+  const baneSides = getActiveBaneDie(combatant);
+  const banePenalty = baneSides > 0 ? rollDie(baneSides) : 0;
+
   // Warding Bond: +1 to all saving throws while bonded (PHB p.287)
   const wbBonus = combatant.wardingBond ? 1 : 0;
 
@@ -191,7 +195,7 @@ export function rollSave(
     delete combatant._resistanceDieBonusNextSave;
   }
 
-  const total = roll + mod + prof + biBonus + blessBonus + wbBonus - mindSliverPenalty + resistanceBonus;
+  const total = roll + mod + prof + biBonus + blessBonus - banePenalty + wbBonus - mindSliverPenalty + resistanceBonus;
   return { roll, total, success: total >= dc };
 }
 

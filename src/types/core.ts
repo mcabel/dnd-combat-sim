@@ -91,12 +91,18 @@ export type SpellEffectType =
   | 'ac_bonus'          // flat AC bonus to this creature (e.g. Shield of Faith +2)
   | 'ac_floor'          // AC minimum / floor (e.g. Barkskin sets AC ≥ 16 — PHB p.217)
   | 'bless_die'         // add a bonus die to this creature's attack rolls & saves (Bless 1d4)
+  | 'bane_die'          // subtract a die from this creature's attack rolls & saves (Bane -1d4) — Session 27 Batch 3
   | 'condition_apply'   // apply a condition to this creature (e.g. Entangle → restrained)
   | 'hex_damage'        // +1d6 necrotic on each hit by the caster (Hex PHB p.251)
   | 'damage_zone'       // persistent damage aura on this creature (e.g. Cloud of Daggers 4d4 slashing)
   // ── Session 17 — level-2 batch 3 new effect types ───────────────────
   | 'weapon_enchant'    // flat +N to attack rolls AND damage rolls with weapons (Magic Weapon PHB p.257)
-  | 'enlarge_reduce';   // enlarge/reduce weapon-damage mod + STR check adv/disadv (Enlarge/Reduce PHB p.237)
+  | 'enlarge_reduce'    // enlarge/reduce weapon-damage mod + STR check adv/disadv (Enlarge/Reduce PHB p.237)
+  // ── Session 27 — Batch 3 concentration buffs ────────────────────────
+  // bane_die: inverse of bless_die (Bane PHB p.219: -1d4 to attacks/saves).
+  // weapon_enchant extended with damageDie/damageDieCount/damageDieType
+  // for spells that add extra DAMAGE DICE on weapon attacks (Divine Favor
+  // +1d4 radiant, Holy Weapon +5d8 radiant, etc.) — Session 27 Batch 3.
 
 export interface ActiveEffect {
   id: string;               // unique per instance, e.g. 'eff_1'
@@ -112,7 +118,10 @@ export interface ActiveEffect {
     // ac_floor
     acFloor?:  number;                // e.g. 16 for Barkskin (PHB p.217)
     // bless_die
-    dieSides?: number;                // e.g. 4 for a d4
+    dieSides?: number;                // e.g. 4 for a d4 (also used by bane_die — subtracted)
+    // bane_die (Session 27 Batch 3): inverse of bless_die. dieSides is the
+    // die to SUBTRACT from attack rolls & saves (e.g. 4 for Bane's -1d4).
+    // Read by getActiveBaneDie(); subtracted in resolveAttack + rollSave.
     // condition_apply
     condition?: Condition;
     // hex_damage
@@ -147,6 +156,15 @@ export interface ActiveEffect {
     // (adds to attack total) and damage branch (adds to weapon damage).
     attackBonus?: number;             // e.g. 1 for Magic Weapon (v1: no upcast)
     damageBonus?: number;             // e.g. 1 for Magic Weapon (v1: no upcast)
+    // ── Session 27 Batch 3 — weapon_enchant damage DICE ────────────────
+    // For spells that add extra DAMAGE DICE (not flat bonus) on weapon
+    // attacks: Divine Favor (+1d4 radiant), Elemental Weapon (+1d4 fire),
+    // Flame Arrows (+1d6 fire), Holy Weapon (+5d8 radiant), Shadow Blade
+    // (+2d8 psychic). Read by getActiveWeaponEnchant; rolled in resolveAttack's
+    // damage branch (crit doubles the dice — PHB p.196).
+    damageDie?: number;               // e.g. 4 for +1d4, 8 for +1d8
+    damageDieCount?: number;          // e.g. 5 for 5d8 (Holy Weapon); default 1
+    damageDieType?: DamageType;       // e.g. 'radiant' for Divine Favor/Holy Weapon
     // ── enlarge_reduce (Session 17 — Enlarge/Reduce PHB p.237) ─────────
     // 'enlarge': +1d8 weapon damage, advantage on STR checks/saves.
     // 'reduce': half weapon damage, disadvantage on STR checks/saves.
@@ -865,6 +883,29 @@ export interface Combatant {
   //   Shillelagh:     _shillelaghActive     = true  [melee-only, persistent, +1d8 radiant]
   //   Branding Smite: _brandingSmiteActive  = true  [weapon-only, one-shot, +2d6 radiant]
   _brandingSmiteActive?: boolean;
+
+  // ---- Session 27 — Batch 3 smite spells (next-hit rider) ----
+  // Generic one-shot rider for the 11 Batch 3 smite spells (Ensnaring Strike,
+  // Hail of Thorns, Searing Smite, Thunderous Smite, Wrathful Smite, Zephyr
+  // Strike, Blinding Smite, Lightning Arrow, Spirit Shroud, Staggering Smite,
+  // Banishing Smite). Set by execute() on cast; consumed by resolveAttack's
+  // damage branch on the caster's next weapon hit (melee/ranged, NOT spell).
+  //
+  // On consumption: rolls `count`d`dieSides` of `damageType` (crit doubles the
+  // dice — PHB p.196), adds to damage, and — if `condition` is set — applies
+  // that condition to the target hit (sourceIsConcentration: true so it ends
+  // if the smite's concentration breaks). Then sets `_nextHitRider = null`
+  // (one-shot — PHB: "the next time you hit a creature with a weapon attack").
+  //
+  // Each smite's cleanup() clears this if `spellName` matches (concentration
+  // broke before the next hit → rider is wasted, no condition applied).
+  _nextHitRider?: {
+    spellName: string;
+    dieSides: number;
+    count: number;
+    damageType: DamageType;
+    condition?: Condition;     // optional: applied to the target hit (conc-sourced)
+  } | null;
 
   // ---- Mirror Image (PHB p.260) scratch field ----
   // Set on the CASTER when it casts Mirror Image (2nd-level illusion,

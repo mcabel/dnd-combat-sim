@@ -33,7 +33,7 @@ import { tickAdvantages, grantSelf, grantVulnerability } from './adv_system';
 import { getSummonEntry }                           from '../summons/registry';
 import { rollGrappleContest, rollShoveContest, canGrappleOrShoveTarget } from './utils';
 import { computeLOS } from './los';
-import { removeEffectsFromCaster, removeEffectById, getActiveAcBonus, getActiveAcFloor, getActiveBlessDie, getActiveHexDie, getActiveDamageZones, getActiveWeaponEnchant, getActiveEnlargeReduce } from './spell_effects';
+import { removeEffectsFromCaster, removeEffectById, getActiveAcBonus, getActiveAcFloor, getActiveBlessDie, getActiveBaneDie, getActiveHexDie, getActiveDamageZones, getActiveWeaponEnchant, getActiveEnlargeReduce, applySpellEffect } from './spell_effects';
 import { applyCantripEffect, getCantripAttackAdvantage, resolveCantripAction, resolveCantripAoE, resolveCantripTouchEffect } from './cantrip_effects';
 import { execute as executeHex } from '../spells/hex';
 import { execute as executeMagicMissile } from '../spells/magic_missile';
@@ -988,6 +988,15 @@ export function resolveAttack(
       `${attacker.name} rolls Bless die (+${blessBonus})!`, target.id, blessBonus);
   }
 
+  // Bane die — -1d4 to attack rolls when baned (PHB p.219) — Session 27 Batch 3
+  const baneSides = getActiveBaneDie(attacker);
+  if (baneSides > 0) {
+    const banePenalty = rollDie(baneSides);
+    result.total -= banePenalty;
+    log(state, 'action', attacker.id,
+      `${attacker.name} rolls Bane die (-${banePenalty})!`, target.id, -banePenalty);
+  }
+
   // Magic Weapon (PHB p.257) — Session 17: +N to attack rolls with weapon
   // attacks (melee/ranged, NOT spell). The damage bonus is applied in the
   // damage branch below. Crit doesn't affect flat bonuses (PHB p.196).
@@ -1155,6 +1164,37 @@ export function resolveAttack(
       attacker._brandingSmiteActive = false;
     }
 
+    // ── Session 27 — Batch 3 smite spells (generic next-hit rider) ──────
+    // One-shot bonus damage (+ optional condition) on the caster's next
+    // weapon hit. Set by each smite's execute(); consumed here. Crit doubles
+    // the dice (PHB p.196). If `condition` is set, it's applied to the target
+    // hit (sourceIsConcentration: true — ends if the smite's conc breaks).
+    // Guard: if concentration broke (caster cast another conc spell), the
+    // rider is stale — clear without applying.
+    if (attacker._nextHitRider && (action.attackType === 'melee' || action.attackType === 'ranged')) {
+      const rider = attacker._nextHitRider;
+      if (!attacker.concentration?.active || attacker.concentration.spellName !== rider.spellName) {
+        attacker._nextHitRider = null;   // stale — concentration broke
+      } else {
+        let dice = isCrit ? rider.count * 2 : rider.count;
+        let riderBonus = 0;
+        for (let i = 0; i < dice; i++) riderBonus += rollDie(rider.dieSides);
+        dmg += riderBonus;
+        log(state, 'action', attacker.id,
+          `${attacker.name} adds ${rider.spellName} bonus (+${riderBonus} ${rider.damageType}${isCrit ? ' CRIT' : ''})!`, target.id, riderBonus);
+        if (rider.condition && !target.conditions.has(rider.condition)) {
+          applySpellEffect(target, {
+            casterId: attacker.id, spellName: rider.spellName,
+            effectType: 'condition_apply', payload: { condition: rider.condition },
+            sourceIsConcentration: true,
+          });
+          log(state, 'condition_add', attacker.id,
+            `${target.name} is ${rider.condition.toUpperCase()} by ${rider.spellName}!`, target.id);
+        }
+        attacker._nextHitRider = null;   // one-shot consumed
+      }
+    }
+
     // Hex damage: +1d6 necrotic when the warlock who hexed the target hits it (PHB p.251)
     const hexDie = getActiveHexDie(target, attacker.id);
     if (hexDie > 0) {
@@ -1207,6 +1247,19 @@ export function resolveAttack(
       dmg += weaponEnchant.damageBonus;
       log(state, 'action', attacker.id,
         `${attacker.name} adds Magic Weapon bonus (+${weaponEnchant.damageBonus} damage)!`, target.id, weaponEnchant.damageBonus);
+    }
+
+    // ── Session 27 — weapon_enchant damage DICE (Batch 3) ───────────────
+    // Extra damage die on weapon attacks (Divine Favor +1d4 radiant, Holy
+    // Weapon +5d8 radiant, Elemental Weapon +1d4 fire, Flame Arrows +1d6 fire,
+    // Shadow Blade +2d8 psychic). Crit doubles the dice (PHB p.196).
+    if (weaponEnchant.damageDie > 0 && weaponEnchant.damageDieCount > 0 && (action.attackType === 'melee' || action.attackType === 'ranged')) {
+      let dice = isCrit ? weaponEnchant.damageDieCount * 2 : weaponEnchant.damageDieCount;
+      let dieBonus = 0;
+      for (let i = 0; i < dice; i++) dieBonus += rollDie(weaponEnchant.damageDie);
+      dmg += dieBonus;
+      log(state, 'action', attacker.id,
+        `${attacker.name} adds weapon enchant die (+${dieBonus} ${weaponEnchant.damageDieType ?? ''}${isCrit ? ' CRIT' : ''})!`, target.id, dieBonus);
     }
 
     // Flame Blade (PHB p.242): while the self-buff is active, MELEE weapon
