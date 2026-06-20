@@ -1316,6 +1316,11 @@ export interface PlannedAction {
     | 'witchBolt'           // Witch Bolt — PHB p.289: 30 ft, ranged spell attack 1d12 lightning + concentration per-turn action DoT (auto-hit 1d12), crit doubles initial
     | 'mindSpike'           // Mind Spike — XGE p.162: 60 ft, WIS save 3d8 psychic (half on save), single-target, v1 one-shot (canon concentration simplified)
     | 'sprayOfCards'        // Spray of Cards — BMT p.50: Self (15-ft cone), DEX save 2d10 slashing + blinded on fail, NO concentration
+    | 'eruptingEarth'       // Erupting Earth — XGE p.155: 60 ft, DEX save 3d12 bludgeoning (half on save), 20-ft radius AoE, NO concentration (difficult terrain simplified)
+    | 'lifeTransference'    // Life Transference — XGE p.160: 60 ft, self-damage 4d8 necrotic + heal ally 2× (canon), NO concentration, NO save
+    | 'pulseWave'           // Pulse Wave — EGtW p.163: Self (30-ft cone), CON save 6d6 force (half on save), NO concentration (push simplified)
+    | 'tidalWave'           // Tidal Wave — XGE p.168: 30-ft line, STR save 4d8 bludgeoning + prone on fail (half on save), NO concentration (v1 line per plan; canon single-target)
+    | 'vampiricTouch'       // Vampiric Touch — PHB p.287: touch (5 ft), melee spell attack 3d6 necrotic + heal self half (crit doubles), v1 one-shot (canon concentration simplified)
     // ── Session 19 — bulk-implementation generic dispatch (262 new spells L2-9) ──
     // All non-blocker in-scope spells from levels 2-9 that have not been
     // implemented as bespoke case branches are routed through 'genericSpell'.

@@ -560,12 +560,6 @@ import {
 } from './enemies_abound';
 
 import {
-  shouldCast as shouldCastEruptingEarth,
-  execute as executeEruptingEarth,
-  metadata as metadataEruptingEarth,
-} from './erupting_earth';
-
-import {
   shouldCast as shouldCastFastFriends,
   execute as executeFastFriends,
   metadata as metadataFastFriends,
@@ -650,12 +644,6 @@ import {
 } from './leomunds_tiny_hut';
 
 import {
-  shouldCast as shouldCastLifeTransference,
-  execute as executeLifeTransference,
-  metadata as metadataLifeTransference,
-} from './life_transference';
-
-import {
   shouldCast as shouldCastLightningArrow,
   execute as executeLightningArrow,
   metadata as metadataLightningArrow,
@@ -716,12 +704,6 @@ import {
 } from './plant_growth';
 
 import {
-  shouldCast as shouldCastPulseWave,
-  execute as executePulseWave,
-  metadata as metadataPulseWave,
-} from './pulse_wave';
-
-import {
   shouldCast as shouldCastRemoveCurse,
   execute as executeRemoveCurse,
   metadata as metadataRemoveCurse,
@@ -776,22 +758,10 @@ import {
 } from './sylunés_viper';
 
 import {
-  shouldCast as shouldCastTidalWave,
-  execute as executeTidalWave,
-  metadata as metadataTidalWave,
-} from './tidal_wave';
-
-import {
   shouldCast as shouldCastTinyServant,
   execute as executeTinyServant,
   metadata as metadataTinyServant,
 } from './tiny_servant';
-
-import {
-  shouldCast as shouldCastVampiricTouch,
-  execute as executeVampiricTouch,
-  metadata as metadataVampiricTouch,
-} from './vampiric_touch';
 
 import {
   shouldCast as shouldCastAuraOfLife,
@@ -2308,12 +2278,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     shouldCast: shouldCastEnemiesAbound,
     execute: executeEnemiesAbound,
   },
-  'Erupting Earth': {
-    name: 'Erupting Earth',
-    level: metadataEruptingEarth.level,
-    shouldCast: shouldCastEruptingEarth,
-    execute: executeEruptingEarth,
-  },
   'Fast Friends': {
     name: 'Fast Friends',
     level: metadataFastFriends.level,
@@ -2398,12 +2362,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     shouldCast: shouldCastLeomundsTinyHut,
     execute: executeLeomundsTinyHut,
   },
-  'Life Transference': {
-    name: 'Life Transference',
-    level: metadataLifeTransference.level,
-    shouldCast: shouldCastLifeTransference,
-    execute: executeLifeTransference,
-  },
   'Lightning Arrow': {
     name: 'Lightning Arrow',
     level: metadataLightningArrow.level,
@@ -2464,12 +2422,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     shouldCast: shouldCastPlantGrowth,
     execute: executePlantGrowth,
   },
-  'Pulse Wave': {
-    name: 'Pulse Wave',
-    level: metadataPulseWave.level,
-    shouldCast: shouldCastPulseWave,
-    execute: executePulseWave,
-  },
   'Remove Curse': {
     name: 'Remove Curse',
     level: metadataRemoveCurse.level,
@@ -2524,23 +2476,11 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     shouldCast: shouldCastSylunésViper,
     execute: executeSylunésViper,
   },
-  'Tidal Wave': {
-    name: 'Tidal Wave',
-    level: metadataTidalWave.level,
-    shouldCast: shouldCastTidalWave,
-    execute: executeTidalWave,
-  },
   'Tiny Servant': {
     name: 'Tiny Servant',
     level: metadataTinyServant.level,
     shouldCast: shouldCastTinyServant,
     execute: executeTinyServant,
-  },
-  'Vampiric Touch': {
-    name: 'Vampiric Touch',
-    level: metadataVampiricTouch.level,
-    shouldCast: shouldCastVampiricTouch,
-    execute: executeVampiricTouch,
   },
   'Aura of Life': {
     name: 'Aura of Life',

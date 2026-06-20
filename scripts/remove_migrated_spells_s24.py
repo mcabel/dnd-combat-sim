@@ -40,6 +40,12 @@ SPELLS = [
     # L2 (2) — increment 2
     ('Mind Spike',      'mind_spike',       'MindSpike'),
     ('Spray of Cards',  'spray_of_cards',   'SprayOfCards'),
+    # L3 (5) — increment 3
+    ('Erupting Earth',  'erupting_earth',   'EruptingEarth'),
+    ('Life Transference', 'life_transference', 'LifeTransference'),
+    ('Pulse Wave',      'pulse_wave',       'PulseWave'),
+    ('Tidal Wave',      'tidal_wave',       'TidalWave'),
+    ('Vampiric Touch',  'vampiric_touch',   'VampiricTouch'),
 ]
 
 REGISTRY = Path('src/spells/_generic_registry.ts')

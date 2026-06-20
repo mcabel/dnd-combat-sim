@@ -117,6 +117,11 @@ import { shouldCast as shouldCastWardaway } from '../spells/wardaway';
 import { shouldCast as shouldCastWitchBolt } from '../spells/witch_bolt';
 import { shouldCast as shouldCastMindSpike } from '../spells/mind_spike';
 import { shouldCast as shouldCastSprayOfCards } from '../spells/spray_of_cards';
+import { shouldCast as shouldCastEruptingEarth } from '../spells/erupting_earth';
+import { shouldCast as shouldCastLifeTransference } from '../spells/life_transference';
+import { shouldCast as shouldCastPulseWave } from '../spells/pulse_wave';
+import { shouldCast as shouldCastTidalWave } from '../spells/tidal_wave';
+import { shouldCast as shouldCastVampiricTouch } from '../spells/vampiric_touch';
 
 // ── Session 19 — bulk-implementation generic dispatch (262 new spells) ────
 import { GENERIC_SPELL_LIST } from '../spells/_generic_registry';
@@ -2373,6 +2378,108 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
       };
       plan.targetId = socTargets[0].id;
       plan.bonusAction = planBonusAction(self, socTargets[0], battlefield);
+      return plan;
+    }
+  }
+
+  // ── Session 24 — L3 combat damage spells (12Y–12AC) ────────────
+  // NOTE on priority: L3 spells are appended after L1+L2 for numbering
+  // continuity. See the L2 caveat above — reorder (place higher-level
+  // branches ABOVE L1) once enough L3+ spells exist to justify it.
+
+  // --- 12Y. ERUPTING EARTH (DEX save 3d12 bludgeoning, L3, NO concentration) ---
+  // XGE p.155: 60 ft, DEX save 3d12 bludgeoning (half on save), 20-ft radius AoE.
+  // shouldCast returns Combatant[] (enemies in the 20-ft cube). Avg 19.5 bludgeoning.
+  if (!plan.action && self.actions.some(a => a.name === 'Erupting Earth')) {
+    const eeTargets = shouldCastEruptingEarth(self, battlefield);
+    if (eeTargets) {
+      const names = eeTargets.map(t => t.name).join(', ');
+      plan.action = {
+        type: 'eruptingEarth',
+        action: null,
+        targetId: eeTargets[0].id,
+        description: `${self.name} casts Erupting Earth, catching ${names}`,
+      };
+      plan.targetId = eeTargets[0].id;
+      plan.bonusAction = planBonusAction(self, eeTargets[0], battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12Z. LIFE TRANSFERENCE (self-damage 4d8 necrotic + heal ally 2×, L3, NO concentration) ---
+  // XGE p.160 canon: caster takes 4d8 necrotic (no save), target ALLY heals 2× the
+  // necrotic taken. shouldCast returns a single ALLY Combatant (lowest-HP injured
+  // ally within 60 ft). This is a HEAL spell, not a damage spell — branches below
+  // the damage-dealing bespoke branches are fine (heal spells don't compete with
+  // damage spells for the same priority slot).
+  if (!plan.action && self.actions.some(a => a.name === 'Life Transference')) {
+    const ltAlly = shouldCastLifeTransference(self, battlefield);
+    if (ltAlly) {
+      plan.action = {
+        type: 'lifeTransference',
+        action: null,
+        targetId: ltAlly.id,
+        description: `${self.name} casts Life Transference to heal ${ltAlly.name}`,
+      };
+      plan.targetId = ltAlly.id;
+      plan.bonusAction = planBonusAction(self, ltAlly, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12AA. PULSE WAVE (CON save 6d6 force cone, L3, NO concentration) ---
+  // EGtW p.163: Self (30-ft cone), CON save 6d6 force (half on save). AoE —
+  // shouldCast returns Combatant[] (enemies in the cone). Avg 21 force.
+  if (!plan.action && self.actions.some(a => a.name === 'Pulse Wave')) {
+    const pwTargets = shouldCastPulseWave(self, battlefield);
+    if (pwTargets) {
+      const names = pwTargets.map(t => t.name).join(', ');
+      plan.action = {
+        type: 'pulseWave',
+        action: null,
+        targetId: pwTargets[0].id,
+        description: `${self.name} casts Pulse Wave, catching ${names}`,
+      };
+      plan.targetId = pwTargets[0].id;
+      plan.bonusAction = planBonusAction(self, pwTargets[0], battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12AB. TIDAL WAVE (STR save 4d8 bludgeoning + prone line, L3, NO concentration) ---
+  // XGE p.168: 30-ft line (v1 per plan; canon single-target), STR save 4d8 bludgeoning
+  // + prone on fail. AoE — shouldCast returns Combatant[] (enemies in the line). Avg 18 + prone.
+  if (!plan.action && self.actions.some(a => a.name === 'Tidal Wave')) {
+    const twTargets = shouldCastTidalWave(self, battlefield);
+    if (twTargets) {
+      const names = twTargets.map(t => t.name).join(', ');
+      plan.action = {
+        type: 'tidalWave',
+        action: null,
+        targetId: twTargets[0].id,
+        description: `${self.name} casts Tidal Wave, catching ${names}`,
+      };
+      plan.targetId = twTargets[0].id;
+      plan.bonusAction = planBonusAction(self, twTargets[0], battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12AC. VAMPIRIC TOUCH (melee spell attack 3d6 necrotic + heal self half, L3, v1 one-shot) ---
+  // PHB p.287: touch (5 ft), melee spell attack 3d6 necrotic + heal caster half the
+  // necrotic dealt (crit doubles dice). v1 simplifies canon concentration to one-shot.
+  // shouldCast returns a single adjacent enemy. Avg 10.5 necrotic + ~5 self-heal.
+  if (!plan.action && self.actions.some(a => a.name === 'Vampiric Touch')) {
+    const vtTarget = shouldCastVampiricTouch(self, battlefield);
+    if (vtTarget) {
+      plan.action = {
+        type: 'vampiricTouch',
+        action: null,
+        targetId: vtTarget.id,
+        description: `${self.name} casts Vampiric Touch on ${vtTarget.name}`,
+      };
+      plan.targetId = vtTarget.id;
+      plan.bonusAction = planBonusAction(self, vtTarget, battlefield);
       return plan;
     }
   }

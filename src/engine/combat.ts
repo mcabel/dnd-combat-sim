@@ -338,6 +338,26 @@ import {
   shouldCast as shouldCastSprayOfCards,
   execute as executeSprayOfCards,
 } from '../spells/spray_of_cards';
+import {
+  shouldCast as shouldCastEruptingEarth,
+  execute as executeEruptingEarth,
+} from '../spells/erupting_earth';
+import {
+  shouldCast as shouldCastLifeTransference,
+  execute as executeLifeTransference,
+} from '../spells/life_transference';
+import {
+  shouldCast as shouldCastPulseWave,
+  execute as executePulseWave,
+} from '../spells/pulse_wave';
+import {
+  shouldCast as shouldCastTidalWave,
+  execute as executeTidalWave,
+} from '../spells/tidal_wave';
+import {
+  shouldCast as shouldCastVampiricTouch,
+  execute as executeVampiricTouch,
+} from '../spells/vampiric_touch';
 
 // ── Session 19 — bulk-implementation generic dispatch (262 new spells) ────
 import {
@@ -2481,6 +2501,54 @@ function executePlannedAction(
       // slashing + blinded on fail. shouldCast → Combatant[].
       const socTargets = shouldCastSprayOfCards(actor, bf);
       if (socTargets) executeSprayOfCards(actor, socTargets, state);
+      break;
+    }
+
+    case 'eruptingEarth': {
+      // Erupting Earth — XGE p.155: 60 ft, DEX save 3d12 bludgeoning,
+      // 20-ft radius AoE. shouldCast → Combatant[].
+      const eeTargets = shouldCastEruptingEarth(actor, bf);
+      if (eeTargets) executeEruptingEarth(actor, eeTargets, state);
+      break;
+    }
+
+    case 'lifeTransference': {
+      // Life Transference — XGE p.160: 60 ft, self-damage 4d8 necrotic +
+      // heal ALLY 2× (canon). shouldCast → single ALLY Combatant (NOT enemy).
+      const ltAllyId = plan.targetId;
+      const ltAlly = ltAllyId ? bf.combatants.get(ltAllyId) ?? null : null;
+      const liveAlly = ltAlly && !ltAlly.isDead && !ltAlly.isUnconscious
+        ? ltAlly
+        : shouldCastLifeTransference(actor, bf);
+      if (liveAlly) executeLifeTransference(actor, liveAlly, state);
+      break;
+    }
+
+    case 'pulseWave': {
+      // Pulse Wave — EGtW p.163: Self (30-ft cone), CON save 6d6 force.
+      // shouldCast → Combatant[].
+      const pwTargets = shouldCastPulseWave(actor, bf);
+      if (pwTargets) executePulseWave(actor, pwTargets, state);
+      break;
+    }
+
+    case 'tidalWave': {
+      // Tidal Wave — XGE p.168: 30-ft line, STR save 4d8 bludgeoning +
+      // prone on fail. shouldCast → Combatant[].
+      const twTargets = shouldCastTidalWave(actor, bf);
+      if (twTargets) executeTidalWave(actor, twTargets, state);
+      break;
+    }
+
+    case 'vampiricTouch': {
+      // Vampiric Touch — PHB p.287: touch (5 ft), melee spell attack 3d6
+      // necrotic + heal self half. shouldCast → single Combatant.
+      const vtTargetId = plan.targetId;
+      const vtTarget = vtTargetId ? bf.combatants.get(vtTargetId) ?? null : null;
+      const liveTarget = vtTarget && !vtTarget.isDead && !vtTarget.isUnconscious
+        ? vtTarget
+        : shouldCastVampiricTouch(actor, bf);
+      if (liveTarget) executeVampiricTouch(actor, liveTarget, state);
       break;
     }
 
