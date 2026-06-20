@@ -11,6 +11,7 @@ import {
   computeStandardSlots,
   FULL_CASTER_SLOTS,
   HALF_CASTER_SLOTS,
+  ARTIFICER_SLOTS,
   WARLOCK_PACT_SLOTS,
 } from '../characters/leveler';
 import { CharacterSheet, totalLevel } from '../characters/types';
@@ -329,6 +330,52 @@ function makeRanger(overrides: Partial<CharacterSheet> = {}): CharacterSheet {
     level1Features: [{ name: 'Favored Enemy', description: 'Choose a favored enemy type.', source: 'class' }],
     allFeatures:    [{ name: 'Favored Enemy', description: 'Choose a favored enemy type.', source: 'class' }],
     feats: [], backgroundFeature: 'Wanderer', exhaustionLevel: 0, levelHistory: [],
+  };
+  return { ...base, ...overrides };
+}
+
+/** Artificer level-1 sheet (INT 17, CON 14). Spellcasting starts at lv1 (TCE p.16), unlike Paladin/Ranger. */
+function makeArtificer(overrides: Partial<CharacterSheet> = {}): CharacterSheet {
+  const base: CharacterSheet = {
+    id: randomUUID(), version: 1,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    name: 'Cogsworth', race: 'Rock Gnome', background: 'Guild Artisan',
+    alignment: 'Lawful Neutral',
+    firstClass: 'Artificer',
+    classLevels: [{ className: 'Artificer', level: 1 }],
+    subclassChoices: {},
+    experiencePoints: 0,
+    baseStats: { str: 8, dex: 14, con: 14, int: 17, wis: 12, cha: 10 },
+    stats:     { str: 8, dex: 14, con: 14, int: 17, wis: 12, cha: 10 },
+    maxHP: 9, currentHP: 9, temporaryHP: 0,
+    armorClass: 14, acFormula: 'Scale Mail + DEX', speed: 25,
+    hitDice: [{ className: 'Artificer', dieSides: 8, total: 1, remaining: 1 }],
+    proficiencies: {
+      armor: ['light','medium','shield'], weapons: ['simple-melee','simple-ranged'],
+      tools: ["Thieves' Tools", "Tinker's Tools"], savingThrows: ['con','int'],
+      skills: ['Investigation','Arcana'], expertise: [],
+    },
+    languages: ['Common', 'Gnomish'],
+    resources: {},
+    spellcasting: {
+      ability: 'int', spellAttackBonus: 5, saveDC: 13,
+      slots: { '1': 2 }, slotsUsed: {},
+      cantrips: ['Mending', 'Guidance'],
+      knownSpells: [],
+      preparedSpells: ['Cure Wounds', 'Faerie Fire'],
+    },
+    equipment: [{ name: 'Light Crossbow', quantity: 1, equipped: true, category: 'weapon' }],
+    gold: 12,
+    level1Features: [
+      { name: 'Magical Tinkering', description: 'Imbue a Tiny object with a minor magical property.', source: 'class' },
+      { name: 'Spellcasting',      description: 'Cast artificer spells using INT.', source: 'class' },
+    ],
+    allFeatures: [
+      { name: 'Magical Tinkering', description: 'Imbue a Tiny object with a minor magical property.', source: 'class' },
+      { name: 'Spellcasting',      description: 'Cast artificer spells using INT.', source: 'class' },
+    ],
+    feats: [], backgroundFeature: 'Guild Membership', exhaustionLevel: 0, levelHistory: [],
   };
   return { ...base, ...overrides };
 }
@@ -1008,6 +1055,18 @@ console.log('\n=== 16. Slot Table Integrity ===\n');
 }
 
 {
+  // Artificer table (TCE p.17): spellcasting starts at lv1, unlike Paladin/Ranger
+  eq('ARTIFICER_SLOTS has 21 entries', ARTIFICER_SLOTS.length, 21);
+  eq('Artificer 1: 2 first-level slots', ARTIFICER_SLOTS[1][0], 2);
+  eq('Artificer 4: still 3 first-level slots, no 2nd yet', ARTIFICER_SLOTS[4].length, 1);
+  eq('Artificer 5: 4+2 slots', ARTIFICER_SLOTS[5][0], 4);
+  eq('Artificer 5: 2nd-level slots', ARTIFICER_SLOTS[5][1], 2);
+  eq('Artificer 17: reaches 5th-level slots', ARTIFICER_SLOTS[17].length, 5);
+  eq('Artificer 17: 1 fifth-level slot', ARTIFICER_SLOTS[17][4], 1);
+  eq('Artificer 20: 4,3,3,3,2', JSON.stringify(ARTIFICER_SLOTS[20]), JSON.stringify([4,3,3,3,2]));
+}
+
+{
   // computeStandardSlots: full caster
   const slotsWiz1 = computeStandardSlots([{ className: 'Wizard', level: 1 }]);
   eq('computeStandardSlots Wizard 1: 1st=2', slotsWiz1['1'], 2);
@@ -1036,6 +1095,39 @@ console.log('\n=== 16. Slot Table Integrity ===\n');
   ]);
   eq('computeStandardSlots Wizard2+Paladin4: 1st=4', slotsMix['1'], 4);
   eq('computeStandardSlots Wizard2+Paladin4: 2nd=3', slotsMix['2'], 3);
+
+  // Single-class Artificer uses the dedicated table, not the combined formula
+  const slotsArt1 = computeStandardSlots([{ className: 'Artificer', level: 1 }]);
+  eq('computeStandardSlots Artificer 1: 1st=2', slotsArt1['1'], 2);
+
+  const slotsArt5 = computeStandardSlots([{ className: 'Artificer', level: 5 }]);
+  eq('computeStandardSlots Artificer 5: 1st=4', slotsArt5['1'], 4);
+  eq('computeStandardSlots Artificer 5: 2nd=2', slotsArt5['2'], 2);
+
+  // Artificer alongside a non-caster (Fighter): still uses the dedicated table
+  const slotsArtFtr = computeStandardSlots([
+    { className: 'Artificer', level: 3 },
+    { className: 'Fighter', level: 2 },
+  ]);
+  eq('computeStandardSlots Artificer3+Fighter2: 1st=3', slotsArtFtr['1'], 3);
+
+  // Artificer multiclassing: TCE p.11 — Artificer levels round UP (ceil),
+  // unlike Paladin/Ranger which round down. Artificer 1 + Wizard 1:
+  // combined = ceil(1/2) + 1 = 1 + 1 = 2 → FULL_CASTER_SLOTS[2] = [3]
+  const slotsArtWiz = computeStandardSlots([
+    { className: 'Artificer', level: 1 },
+    { className: 'Wizard', level: 1 },
+  ]);
+  eq('computeStandardSlots Artificer1+Wizard1: 1st=3 (ceil rounding)', slotsArtWiz['1'], 3);
+
+  // Artificer + Paladin (both half-casters, different rounding):
+  // combined = ceil(3/2) + floor(2/2) = 2 + 1 = 3 → FULL_CASTER_SLOTS[3] = [4,2]
+  const slotsArtPal = computeStandardSlots([
+    { className: 'Artificer', level: 3 },
+    { className: 'Paladin', level: 2 },
+  ]);
+  eq('computeStandardSlots Artificer3+Paladin2: 1st=4', slotsArtPal['1'], 4);
+  eq('computeStandardSlots Artificer3+Paladin2: 2nd=2', slotsArtPal['2'], 2);
 }
 
 // =============================================================
@@ -1509,6 +1601,67 @@ console.log('\n=== 22. Subclass prompts (Sorcerer / Druid / Ranger) ===\n');
   const lv0chosen = { ...makeWarlock(), classLevels: [{ className: 'Warlock' as const, level: 0 }], subclassChoices: { Warlock: 'The Fiend' } };
   const { subclassPrompt } = applyLevelUp(lv0chosen as CharacterSheet, 'Warlock');
   assert('Warlock lv1 already chosen: no prompt', subclassPrompt === undefined);
+}
+
+// =============================================================
+// 23. Artificer — spellcasting from lv1, ASI, subclass prompt, prereq
+// =============================================================
+
+console.log('\n=== 23. Artificer ===\n');
+
+{
+  // --- 23a. Artificer lv0→1: spellcasting is already active at level 1 (TCE p.16) ---
+  const a0 = { ...makeArtificer(), classLevels: [{ className: 'Artificer' as const, level: 0 }], spellcasting: undefined };
+  const { sheet } = applyLevelUp(a0 as CharacterSheet, 'Artificer');
+  eq('Artificer lv1: 1st-level slots = 2', sheet.spellcasting?.slots['1'], 2);
+  eq('Artificer lv1: spellcasting ability = int', sheet.spellcasting?.ability, 'int');
+}
+
+{
+  // --- 23b. Artificer hit die is d8 ---
+  const a0 = { ...makeArtificer(), classLevels: [{ className: 'Artificer' as const, level: 0 }], hitDice: [{ className: 'Artificer' as const, dieSides: 8, total: 0, remaining: 0 }] };
+  const { sheet } = applyLevelUp(a0 as CharacterSheet, 'Artificer');
+  const hd = sheet.hitDice.find(h => h.className === 'Artificer');
+  eq('Artificer hit die sides = 8', hd?.dieSides, 8);
+}
+
+{
+  // --- 23c. Artificer lv2→3: subclass prompt fires (TCE p.16 — Artificer Specialist) ---
+  const a2 = levelTo(makeArtificer(), 2, 'Artificer');
+  const { subclassPrompt } = applyLevelUp(a2, 'Artificer');
+  eq('Artificer lv3: subclass prompt = Artificer', subclassPrompt, 'Artificer');
+}
+
+{
+  // --- 23d. Artificer lv1→2: no subclass prompt yet ---
+  const { subclassPrompt } = applyLevelUp(makeArtificer(), 'Artificer');
+  assert('Artificer lv2: no subclass prompt', subclassPrompt === undefined);
+}
+
+{
+  // --- 23e. Artificer lv3→4: ASI prompt (TCE p.16 — standard 4/8/12/16/19) ---
+  const a3 = levelTo(makeArtificer(), 3, 'Artificer');
+  const { abilityScoreImprovement } = applyLevelUp(a3, 'Artificer');
+  assert('Artificer lv4: ASI available', abilityScoreImprovement === true);
+}
+
+{
+  // --- 23f. Artificer 5: reaches 2nd-level spell slots ---
+  const a5 = levelTo(makeArtificer(), 5, 'Artificer');
+  eq('Artificer lv5: 1st-level slots = 4', a5.spellcasting?.slots['1'], 4);
+  eq('Artificer lv5: 2nd-level slots = 2', a5.spellcasting?.slots['2'], 2);
+}
+
+{
+  // --- 23g. Multiclass prereq: Artificer requires INT 13 (TCE p.10) ---
+  let threw = false;
+  try { applyLevelUp(makeFighter(), 'Artificer'); } catch { threw = true; }
+  assert('Throws on multiclass prereq failure (INT 8 < 13 for Artificer)', threw);
+
+  const fHighInt = makeFighter({ stats: { str: 17, dex: 10, con: 16, int: 14, wis: 12, cha: 13 } });
+  let noThrow = false;
+  try { applyLevelUp(fHighInt, 'Artificer'); noThrow = true; } catch {}
+  assert('Multiclass into Artificer succeeds with INT 14', noThrow);
 }
 
 // ---- Results ------------------------------------------------

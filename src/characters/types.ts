@@ -28,8 +28,10 @@ export type SkillName =
   | 'Animal Handling' | 'Insight' | 'Medicine' | 'Perception' | 'Survival'
   | 'Deception' | 'Intimidation' | 'Performance' | 'Persuasion';
 
-// All 12 PHB 2014 classes
+// The 12 PHB 2014 classes, plus Artificer (TCE 2020 / Eberron: Rising from
+// the Last War 2019 — both pre-2024, in-scope sourcebooks).
 export type ClassName =
+  | 'Artificer'
   | 'Barbarian' | 'Bard' | 'Cleric' | 'Druid'
   | 'Fighter' | 'Monk' | 'Paladin' | 'Ranger'
   | 'Rogue' | 'Sorcerer' | 'Warlock' | 'Wizard';
@@ -39,6 +41,7 @@ export const CLASS_HIT_DICE: Record<ClassName, number> = {
   Fighter:   10,
   Paladin:   10,
   Ranger:    10,
+  Artificer:  8,
   Bard:       8,
   Cleric:     8,
   Druid:      8,
@@ -105,6 +108,7 @@ export const XP_THRESHOLDS: number[] = [
 // Multiclass ability score prerequisites (PHB p.163)
 // Each entry is a list of { ability, minimum } — ALL must be met
 export const MULTICLASS_PREREQS: Record<ClassName, { ability: AbilityScore; min: number }[]> = {
+  Artificer: [{ ability: 'int', min: 13 }],
   Barbarian: [{ ability: 'str', min: 13 }],
   Bard:      [{ ability: 'cha', min: 13 }],
   Cleric:    [{ ability: 'wis', min: 13 }],
@@ -160,7 +164,7 @@ export interface SpellcastingInfo {
   };
   cantrips: string[];
   knownSpells: string[];           // for known-casters (Bard, Sorcerer, Warlock, Ranger)
-  preparedSpells: string[];        // for prepared-casters (Cleric, Druid, Paladin, Wizard)
+  preparedSpells: string[];        // for prepared-casters (Artificer, Cleric, Druid, Paladin, Wizard)
   spellbook?: string[];            // Wizard: full list including unprepared spells
 }
 

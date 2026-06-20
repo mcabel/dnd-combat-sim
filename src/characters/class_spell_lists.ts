@@ -511,6 +511,9 @@ export const CLASS_SPELL_LISTS: Record<SpellcastingClassName, string[][]> = {
 export const CLASS_SPELL_LIST_ALIASES: Record<string, SpellcastingClassName> = {
   'Eldritch Knight': 'Wizard',
   'Arcane Trickster': 'Wizard',
+  // Artificer (TCE) has its own spell list; aliased to Wizard's as a stand-in
+  // until a dedicated Artificer list is built (tracked for a future session).
+  'Artificer': 'Wizard',
 };
 
 /** Spellcasting class names as a string array for validation. */

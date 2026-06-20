@@ -27,6 +27,7 @@ export const STANDARD_ARRAY: readonly number[] = [15, 14, 13, 12, 10, 8];
 // from most important to least important. Based on PHB 2014 class
 // mechanics. Melee-default is assumed for ambiguous classes.
 //
+// Artificer: INT (spellcasting + tool checks), CON (concentration + survivability), DEX (AC + initiative)
 // Barbarian: STR (attack), CON (survivability + Unarmored Defense), DEX (AC bonus)
 // Bard:      CHA (spellcasting), DEX (light armor), CON (concentration)
 // Cleric:    WIS (spellcasting), CON (survivability), STR (melee default)
@@ -40,6 +41,7 @@ export const STANDARD_ARRAY: readonly number[] = [15, 14, 13, 12, 10, 8];
 // Warlock:   CHA (spellcasting), CON (concentration + survivability), DEX (light armor)
 // Wizard:    INT (spellcasting), CON (concentration + survivability), DEX (light armor + Initiative)
 export const CLASS_STAT_PRIORITY: Record<ClassName, AbilityKey[]> = {
+  Artificer: ['int', 'con', 'dex', 'wis', 'cha', 'str'],
   Barbarian: ['str', 'con', 'dex', 'wis', 'cha', 'int'],
   Bard:      ['cha', 'dex', 'con', 'wis', 'int', 'str'],
   Cleric:    ['wis', 'con', 'str', 'dex', 'cha', 'int'],

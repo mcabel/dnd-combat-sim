@@ -56,7 +56,7 @@ export interface LevelUpResult {
 // ---- Constants ----------------------------------------------
 
 const VALID_CLASSES = new Set<ClassName>([
-  'Barbarian','Bard','Cleric','Druid','Fighter','Monk',
+  'Artificer','Barbarian','Bard','Cleric','Druid','Fighter','Monk',
   'Paladin','Ranger','Rogue','Sorcerer','Warlock','Wizard',
 ]);
 
@@ -118,6 +118,37 @@ const HALF_CASTER_SLOTS: number[][] = [
 ];
 
 /**
+ * Half-caster slot table for single-class Artificer (TCE p.17).
+ * Index = artificer level (1–20). Unlike Paladin/Ranger, the Artificer
+ * gains spellcasting at 1st level instead of 2nd — this table is the
+ * Paladin/Ranger progression shifted one level earlier, capped at the
+ * same 5th-level-spell ceiling.
+ */
+const ARTIFICER_SLOTS: number[][] = [
+  /* 0  */ [],
+  /* 1  */ [2],
+  /* 2  */ [2],
+  /* 3  */ [3],
+  /* 4  */ [3],
+  /* 5  */ [4,2],
+  /* 6  */ [4,2],
+  /* 7  */ [4,3],
+  /* 8  */ [4,3],
+  /* 9  */ [4,3,2],
+  /* 10 */ [4,3,2],
+  /* 11 */ [4,3,3],
+  /* 12 */ [4,3,3],
+  /* 13 */ [4,3,3,1],
+  /* 14 */ [4,3,3,1],
+  /* 15 */ [4,3,3,2],
+  /* 16 */ [4,3,3,2],
+  /* 17 */ [4,3,3,3,1],
+  /* 18 */ [4,3,3,3,1],
+  /* 19 */ [4,3,3,3,2],
+  /* 20 */ [4,3,3,3,2],
+];
+
+/**
  * Warlock Pact Magic table (PHB p.108).
  * Index = warlock level (1–20). Value = [total slots, slot level].
  */
@@ -150,13 +181,14 @@ const FULL_CASTERS = new Set<ClassName>(['Bard','Cleric','Druid','Sorcerer','Wiz
 /** Classes that contribute half their levels (rounded down) to combined caster level. */
 const HALF_CASTERS = new Set<ClassName>(['Paladin','Ranger']);
 
-/** Level at which each class gains its subclass (PHB). */
+/** Level at which each class gains its subclass (PHB; TCE for Artificer). */
 const SUBCLASS_LEVELS: Record<ClassName, number> = {
   Cleric:    1,
   Sorcerer:  1,
   Warlock:   1,
   Druid:     2,
   Wizard:    2,
+  Artificer: 3,
   Bard:      3,
   Barbarian: 3,
   Fighter:   3,
@@ -166,8 +198,9 @@ const SUBCLASS_LEVELS: Record<ClassName, number> = {
   Rogue:     3,
 };
 
-/** Levels at which each class grants an ASI (PHB). */
+/** Levels at which each class grants an ASI (PHB; TCE for Artificer). */
 const ASI_LEVELS: Record<ClassName, ReadonlySet<number>> = {
+  Artificer: new Set([4,8,12,16,19]),
   Barbarian: new Set([4,8,12,16,19]),
   Bard:      new Set([4,8,12,16,19]),
   Cleric:    new Set([4,8,12,16,19]),
@@ -184,6 +217,7 @@ const ASI_LEVELS: Record<ClassName, ReadonlySet<number>> = {
 
 /** Spellcasting ability by class. */
 const CASTING_ABILITY: Partial<Record<ClassName, AbilityScore>> = {
+  Artificer: 'int',
   Bard:     'cha',
   Cleric:   'wis',
   Druid:    'wis',
@@ -203,6 +237,20 @@ type RawFeature = { name: string; description: string; source: 'class' | 'subcla
 type FeatureTable = Partial<Record<ClassName, Record<number, RawFeature[]>>>;
 
 const CLASS_FEATURES: FeatureTable = {
+  Artificer: {
+    1:  [{ name: 'Magical Tinkering', source: 'class',    description: 'Imbue a Tiny nonmagical object you touch with one of several minor magical properties (light, message recording, sensory illusion, or odor/sound).' },
+         { name: 'Spellcasting',      source: 'class',    description: 'Cast artificer spells using INT; gain spell slots.' }],
+    2:  [{ name: 'Infuse Item',       source: 'class',    description: 'Learn infusions and imbue up to your maximum number of nonmagical objects with magical properties after a long rest.' }],
+    3:  [{ name: 'Artificer Specialist', source: 'subclass', description: 'Choose your Artificer Specialist and gain its first feature.' },
+         { name: 'The Right Tool for the Job', source: 'class', description: 'Use tinker\'s tools to magically create one set of artisan\'s tools in your hand (1 hour casting time).' }],
+    6:  [{ name: 'Tool Expertise',    source: 'class',    description: 'Double your proficiency bonus for any check made with a tool you are proficient with.' }],
+    7:  [{ name: 'Flash of Genius',   source: 'class',    description: 'As a reaction, add your INT modifier to an ability check or saving throw made by yourself or a creature within 30 ft (INT mod uses per long rest).' }],
+    10: [{ name: 'Magic Item Adept', source: 'class',     description: 'Attune to up to 4 magic items at once; halve the gold and time needed to craft magic items.' }],
+    11: [{ name: 'Spell-Storing Item', source: 'class',   description: 'Imbue an object with a 1st- or 2nd-level spell, usable by anyone holding it, twice per day.' }],
+    14: [{ name: 'Magic Item Savant', source: 'class',    description: 'Attune to up to 5 magic items at once; ignore all class, race, and level requirements on attuning to or using a magic item.' }],
+    18: [{ name: 'Magic Item Master', source: 'class',    description: 'Attune to up to 6 magic items at once.' }],
+    20: [{ name: 'Soul of Artifice',  source: 'class',    description: 'Gain a +1 bonus to all saving throws per magic item you are attuned to; sacrifice an attuned magic item to avoid dropping to 0 HP, dropping to 1 HP instead (once per long rest).' }],
+  },
   Barbarian: {
     2:  [{ name: 'Reckless Attack',   source: 'class',    description: 'Attack with advantage on STR melee attacks; attackers have advantage against you until your next turn.' },
          { name: 'Danger Sense',      source: 'class',    description: 'Advantage on DEX saving throws against effects you can see.' }],
@@ -359,19 +407,26 @@ function slotsArrayToRecord(slots: number[]): Record<string, number> {
 /**
  * Compute standard (non-Pact) spell slots for a given set of class levels.
  *
- * Rules (PHB p.164–165):
- * - Single half-caster class: use the class-specific slot table
- * - All other cases (full casters, mixed): sum caster levels (full=1:1,
- *   half=floor/2) and look up the combined multiclass table
+ * Rules (PHB p.164–165; TCE p.11 for Artificer):
+ * - Single half-caster class (Paladin/Ranger): use the class-specific slot table
+ * - Single-class Artificer: use the dedicated Artificer slot table (spellcasting
+ *   starts at level 1, unlike Paladin/Ranger)
+ * - All other cases (full casters, mixed multiclass): sum caster levels —
+ *   full = 1:1, Paladin/Ranger = floor(level/2), Artificer = ceil(level/2)
+ *   (TCE p.11: Artificer is the one half-caster that rounds UP when
+ *   multiclassing) — then look up the combined multiclass table
  * - Warlocks do not contribute to standard slots
  */
 function computeStandardSlots(classLevels: ClassLevel[]): Record<string, number> {
   let fullCasterLevels = 0;
   const halfCasterEntries: number[] = [];
+  let artificerLevel = 0;
 
   for (const cl of classLevels) {
     const cn = cl.className as ClassName;
-    if (FULL_CASTERS.has(cn)) {
+    if (cn === 'Artificer') {
+      artificerLevel += cl.level;
+    } else if (FULL_CASTERS.has(cn)) {
       fullCasterLevels += cl.level;
     } else if (HALF_CASTERS.has(cn)) {
       halfCasterEntries.push(cl.level);
@@ -379,18 +434,26 @@ function computeStandardSlots(classLevels: ClassLevel[]): Record<string, number>
     // Warlocks and non-casters are excluded from standard slots
   }
 
-  const hasStandardCaster = fullCasterLevels > 0 || halfCasterEntries.length > 0;
+  const hasStandardCaster = fullCasterLevels > 0 || halfCasterEntries.length > 0 || artificerLevel > 0;
   if (!hasStandardCaster) return {};
 
-  // Pure single half-caster: use the dedicated half-caster table
-  if (fullCasterLevels === 0 && halfCasterEntries.length === 1) {
+  // Pure single half-caster (Paladin/Ranger only): use the dedicated half-caster table
+  if (fullCasterLevels === 0 && artificerLevel === 0 && halfCasterEntries.length === 1) {
     const lvl = Math.min(halfCasterEntries[0], 20);
     return slotsArrayToRecord(HALF_CASTER_SLOTS[lvl] ?? []);
   }
 
+  // Pure single-class Artificer: use the dedicated Artificer table
+  if (fullCasterLevels === 0 && halfCasterEntries.length === 0 && artificerLevel > 0) {
+    const lvl = Math.min(artificerLevel, 20);
+    return slotsArrayToRecord(ARTIFICER_SLOTS[lvl] ?? []);
+  }
+
   // Multiclass or pure full-caster: use the combined table
   const halfCasterTotal = halfCasterEntries.reduce((s, l) => s + l, 0);
-  const combined = fullCasterLevels + Math.floor(halfCasterTotal / 2);
+  const combined = fullCasterLevels
+    + Math.floor(halfCasterTotal / 2)
+    + Math.ceil(artificerLevel / 2);
   const clamped  = Math.min(Math.max(combined, 0), 20);
   return slotsArrayToRecord(FULL_CASTER_SLOTS[clamped] ?? []);
 }
@@ -661,7 +724,8 @@ export function applyLevelUp(
 
   const standardSlots = computeStandardSlots(updated.classLevels);
   const hasStandardCasterClass = updated.classLevels.some(cl =>
-    FULL_CASTERS.has(cl.className as ClassName) || HALF_CASTERS.has(cl.className as ClassName),
+    FULL_CASTERS.has(cl.className as ClassName) || HALF_CASTERS.has(cl.className as ClassName)
+    || cl.className === 'Artificer',
   );
 
   if (hasStandardCasterClass) {
@@ -1039,6 +1103,7 @@ export function bootstrapLevelHistory(sheet: CharacterSheet): CharacterSheet {
 export {
   FULL_CASTER_SLOTS,
   HALF_CASTER_SLOTS,
+  ARTIFICER_SLOTS,
   WARLOCK_PACT_SLOTS,
   computeStandardSlots,
 };

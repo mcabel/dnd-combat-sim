@@ -26,7 +26,7 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 const ISO_REGEX  = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/;
 
 const VALID_CLASSES = new Set<string>([
-  'Barbarian', 'Bard', 'Cleric', 'Druid',
+  'Artificer', 'Barbarian', 'Bard', 'Cleric', 'Druid',
   'Fighter', 'Monk', 'Paladin', 'Ranger',
   'Rogue', 'Sorcerer', 'Warlock', 'Wizard',
 ]);

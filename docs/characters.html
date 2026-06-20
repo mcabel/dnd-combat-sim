@@ -314,6 +314,7 @@ button.full { width: 100%; padding: 11px; font-size: 13px; }
         <div>
           <label>Class</label>
           <select id="wiz-class-sel" onchange="wizOnClassChange()" style="width:100%">
+            <option value="Artificer">Artificer</option>
             <option value="Barbarian">Barbarian</option>
             <option value="Bard">Bard</option>
             <option value="Cleric">Cleric</option>
@@ -418,6 +419,7 @@ button.full { width: 100%; padding: 11px; font-size: 13px; }
       <div>
         <label>Class</label>
         <select id="cf-class" onchange="onClassChange()">
+          <option value="Artificer">Artificer</option>
           <option value="Fighter">Fighter</option>
           <option value="Rogue">Rogue</option>
           <option value="Wizard">Wizard</option>
@@ -599,7 +601,7 @@ button.full { width: 100%; padding: 11px; font-size: 13px; }
             list="lvl-class-datalist" style="width:100%"
             onkeydown="if(event.key==='Enter')doLevelUp()" />
           <datalist id="lvl-class-datalist">
-            <option value="Barbarian"><option value="Bard"><option value="Cleric">
+            <option value="Artificer"><option value="Barbarian"><option value="Bard"><option value="Cleric">
             <option value="Druid"><option value="Fighter"><option value="Monk">
             <option value="Paladin"><option value="Ranger"><option value="Rogue">
             <option value="Sorcerer"><option value="Warlock"><option value="Wizard">
@@ -834,11 +836,12 @@ button.full { width: 100%; padding: 11px; font-size: 13px; }
 </div><!-- .app -->
 <script>
 // ── Constants ─────────────────────────────────────────────────
-const CLASS_HD = { Barbarian:12, Fighter:10, Paladin:10, Ranger:10, Bard:8, Cleric:8, Druid:8, Monk:8, Rogue:8, Warlock:8, Sorcerer:6, Wizard:6 };
+const CLASS_HD = { Artificer:8, Barbarian:12, Fighter:10, Paladin:10, Ranger:10, Bard:8, Cleric:8, Druid:8, Monk:8, Rogue:8, Warlock:8, Sorcerer:6, Wizard:6 };
 const CLASS_SAVES = {
   Fighter:['str','con'], Barbarian:['str','con'], Paladin:['wis','cha'], Ranger:['str','dex'],
   Rogue:['dex','int'], Bard:['dex','cha'], Cleric:['wis','cha'], Druid:['int','wis'],
   Monk:['str','dex'], Sorcerer:['con','cha'], Warlock:['wis','cha'], Wizard:['int','wis'],
+  Artificer:['con','int'],
 };
 const CLASS_WEAPON_PROFS = {
   Fighter:['simple-melee','simple-ranged','martial-melee','martial-ranged'],
@@ -853,14 +856,16 @@ const CLASS_WEAPON_PROFS = {
   Sorcerer:['simple-melee','simple-ranged'],
   Warlock:['simple-melee','simple-ranged'],
   Wizard:['simple-melee'],
+  Artificer:['simple-melee','simple-ranged'],
 };
 const CLASS_ARMOR_PROFS = {
   Fighter:['light','medium','heavy','shield'], Barbarian:['light','medium','shield'],
   Paladin:['light','medium','heavy','shield'], Ranger:['light','medium','shield'],
   Bard:['light'], Cleric:['light','medium','shield'], Druid:['light','medium','shield'],
   Monk:[], Rogue:['light'], Sorcerer:[], Warlock:['light'], Wizard:[],
+  Artificer:['light','medium','shield'],
 };
-const CLASS_SKILLS = { Fighter:[], Rogue:[], Wizard:[], Cleric:[], Barbarian:[], Bard:[], Druid:[], Monk:[], Paladin:[], Ranger:[], Sorcerer:[], Warlock:[] };
+const CLASS_SKILLS = { Fighter:[], Rogue:[], Wizard:[], Cleric:[], Barbarian:[], Bard:[], Druid:[], Monk:[], Paladin:[], Ranger:[], Sorcerer:[], Warlock:[], Artificer:[] };
 const CLASS_RESOURCES_L1 = {
   Fighter: { secondWind:{ max:1, remaining:1 } },
   Barbarian: { rage:{ max:2, remaining:2 } },
@@ -868,7 +873,7 @@ const CLASS_RESOURCES_L1 = {
   Paladin: { divineSmite:true },
   Rogue: { sneakAttackDice:'1d6' },
   Wizard: {},
-  Cleric: {}, Druid:{}, Monk:{}, Ranger:{}, Sorcerer:{}, Warlock:{},
+  Cleric: {}, Druid:{}, Monk:{}, Ranger:{}, Sorcerer:{}, Warlock:{}, Artificer:{},
 };
 
 const SUBCLASSES = {
@@ -1939,7 +1944,7 @@ function toggleSpellEdit() {
 // both ['Cleric', 'Wizard'] so spell-datalist suggestions cover both lists.
 function _resolveSpellcastingClasses(c: any): string[] {
   const SPELLCASTERS = new Set([
-    'Bard','Cleric','Druid','Paladin','Ranger','Sorcerer','Warlock','Wizard',
+    'Artificer','Bard','Cleric','Druid','Paladin','Ranger','Sorcerer','Warlock','Wizard',
   ]);
   const SUBCLASS_ALIAS: Record<string, string> = {
     'Eldritch Knight': 'Wizard',
@@ -2726,6 +2731,7 @@ function onClassChange() {
   const cls = document.getElementById('cf-class').value;
   // Set default weapon/armor/hp for class
   const defaults = {
+    Artificer: { weapon:'Light Crossbow', wcat:'simple-ranged', armor:'Scale Mail', acat:'medium', hp:8, ac:14, speed:25 },
     Fighter:   { weapon:'Greatsword', wcat:'martial-melee', armor:'Chain Mail', acat:'heavy', hp:13, ac:16, speed:30 },
     Barbarian: { weapon:'Greataxe',   wcat:'martial-melee', armor:'Hide Armor', acat:'medium',hp:15, ac:14, speed:30 },
     Rogue:     { weapon:'Shortsword', wcat:'martial-melee', armor:'Leather Armor',acat:'light',hp:9, ac:13, speed:30 },
@@ -3297,11 +3303,11 @@ const WIZ_STD_ARRAY = [15,14,13,12,10,8];
 
 const CLASS_HIT_DICE = {
   Barbarian:12, Fighter:10, Paladin:10, Ranger:10,
-  Bard:8, Cleric:8, Druid:8, Monk:8, Rogue:8, Warlock:8,
+  Artificer:8, Bard:8, Cleric:8, Druid:8, Monk:8, Rogue:8, Warlock:8,
   Sorcerer:6, Wizard:6,
 };
 const CLASS_SAVES = {
-  Barbarian:['STR','CON'], Bard:['DEX','CHA'], Cleric:['WIS','CHA'],
+  Artificer:['CON','INT'], Barbarian:['STR','CON'], Bard:['DEX','CHA'], Cleric:['WIS','CHA'],
   Druid:['INT','WIS'], Fighter:['STR','CON'], Monk:['STR','DEX'],
   Paladin:['WIS','CHA'], Ranger:['STR','DEX'], Rogue:['DEX','INT'],
   Sorcerer:['CON','CHA'], Warlock:['WIS','CHA'], Wizard:['INT','WIS'],
