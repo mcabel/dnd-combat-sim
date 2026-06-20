@@ -584,6 +584,38 @@ import {
   shouldCast as shouldCastStinkingCloud,
   execute as executeStinkingCloud,
 } from '../spells/stinking_cloud';
+import {
+  shouldCast as shouldCastPyrotechnics,
+  execute as executePyrotechnics,
+} from '../spells/pyrotechnics';
+import {
+  shouldCast as shouldCastColorSpray,
+  execute as executeColorSpray,
+} from '../spells/color_spray';
+import {
+  shouldCast as shouldCastCommand,
+  execute as executeCommand,
+} from '../spells/command';
+import {
+  shouldCast as shouldCastAnimalFriendship,
+  execute as executeAnimalFriendship,
+} from '../spells/animal_friendship';
+import {
+  shouldCast as shouldCastCauseFear,
+  execute as executeCauseFear,
+} from '../spells/cause_fear';
+import {
+  shouldCast as shouldCastCharmPerson,
+  execute as executeCharmPerson,
+} from '../spells/charm_person';
+import {
+  shouldCast as shouldCastCompelledDuel,
+  execute as executeCompelledDuel,
+} from '../spells/compelled_duel';
+import {
+  shouldCast as shouldCastGrease,
+  execute as executeGrease,
+} from '../spells/grease';
 
 // ── Session 19 — bulk-implementation generic dispatch (262 new spells) ────
 import {
@@ -3271,6 +3303,72 @@ function executePlannedAction(
       // poisoned+incapacitated (DUAL), conc. shouldCast → Combatant[].
       const scTargets = shouldCastStinkingCloud(actor, bf);
       if (scTargets) executeStinkingCloud(actor, scTargets, state);
+      break;
+    }
+
+    case 'pyrotechnics': {
+      // Pyrotechnics — XGE p.162: 60 ft, 10-ft radius AoE, CON save or blinded, NO conc.
+      const pyroTargets = shouldCastPyrotechnics(actor, bf);
+      if (pyroTargets) executePyrotechnics(actor, pyroTargets, state);
+      break;
+    }
+
+    case 'colorSpray': {
+      // Color Spray — PHB p.222: 15-ft cone, 6d10 HP-pool → unconscious (no save), NO conc.
+      const csTargets = shouldCastColorSpray(actor, bf);
+      if (csTargets) executeColorSpray(actor, csTargets, state);
+      break;
+    }
+
+    case 'command': {
+      // Command — PHB p.223: 60 ft, WIS save or incapacitated, NO conc.
+      const cmdTargetId = plan.targetId;
+      const cmdTarget = cmdTargetId ? bf.combatants.get(cmdTargetId) ?? null : null;
+      const cmdLive = cmdTarget && !cmdTarget.isDead && !cmdTarget.isUnconscious ? cmdTarget : shouldCastCommand(actor, bf);
+      if (cmdLive) executeCommand(actor, cmdLive, state);
+      break;
+    }
+
+    case 'animalFriendship': {
+      // Animal Friendship — PHB p.212: 30 ft, WIS save or charmed, NO conc.
+      const afTargetId = plan.targetId;
+      const afTarget = afTargetId ? bf.combatants.get(afTargetId) ?? null : null;
+      const afLive = afTarget && !afTarget.isDead && !afTarget.isUnconscious ? afTarget : shouldCastAnimalFriendship(actor, bf);
+      if (afLive) executeAnimalFriendship(actor, afLive, state);
+      break;
+    }
+
+    case 'causeFear': {
+      // Cause Fear — XGE p.151: 60 ft, WIS save or frightened, NO conc.
+      const cfTargetId = plan.targetId;
+      const cfTarget = cfTargetId ? bf.combatants.get(cfTargetId) ?? null : null;
+      const cfLive = cfTarget && !cfTarget.isDead && !cfTarget.isUnconscious ? cfTarget : shouldCastCauseFear(actor, bf);
+      if (cfLive) executeCauseFear(actor, cfLive, state);
+      break;
+    }
+
+    case 'charmPerson': {
+      // Charm Person — PHB p.221: 30 ft, WIS save or charmed, NO conc.
+      const cpTargetId = plan.targetId;
+      const cpTarget = cpTargetId ? bf.combatants.get(cpTargetId) ?? null : null;
+      const cpLive = cpTarget && !cpTarget.isDead && !cpTarget.isUnconscious ? cpTarget : shouldCastCharmPerson(actor, bf);
+      if (cpLive) executeCharmPerson(actor, cpLive, state);
+      break;
+    }
+
+    case 'compelledDuel': {
+      // Compelled Duel — PHB p.224: 30 ft, WIS save or frightened (taunt), conc.
+      const cdTargetId = plan.targetId;
+      const cdTarget = cdTargetId ? bf.combatants.get(cdTargetId) ?? null : null;
+      const cdLive = cdTarget && !cdTarget.isDead && !cdTarget.isUnconscious ? cdTarget : shouldCastCompelledDuel(actor, bf);
+      if (cdLive) executeCompelledDuel(actor, cdLive, state);
+      break;
+    }
+
+    case 'grease': {
+      // Grease — PHB p.245: 60 ft, 10-ft radius AoE, DEX save or prone, NO conc.
+      const grTargets = shouldCastGrease(actor, bf);
+      if (grTargets) executeGrease(actor, grTargets, state);
       break;
     }
 

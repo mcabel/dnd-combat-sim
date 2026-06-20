@@ -180,6 +180,14 @@ import { shouldCast as shouldCastHypnoticPattern } from '../spells/hypnotic_patt
 import { shouldCast as shouldCastInciteGreed } from '../spells/incite_greed';
 import { shouldCast as shouldCastSleetStorm } from '../spells/sleet_storm';
 import { shouldCast as shouldCastStinkingCloud } from '../spells/stinking_cloud';
+import { shouldCast as shouldCastPyrotechnics } from '../spells/pyrotechnics';
+import { shouldCast as shouldCastColorSpray } from '../spells/color_spray';
+import { shouldCast as shouldCastCommand } from '../spells/command';
+import { shouldCast as shouldCastAnimalFriendship } from '../spells/animal_friendship';
+import { shouldCast as shouldCastCauseFear } from '../spells/cause_fear';
+import { shouldCast as shouldCastCharmPerson } from '../spells/charm_person';
+import { shouldCast as shouldCastCompelledDuel } from '../spells/compelled_duel';
+import { shouldCast as shouldCastGrease } from '../spells/grease';
 
 // ── Session 19 — bulk-implementation generic dispatch (262 new spells) ────
 import { GENERIC_SPELL_LIST } from '../spells/_generic_registry';
@@ -3511,6 +3519,113 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
       plan.action = { type: 'stinkingCloud', action: null, targetId: scTargets[0].id, description: `${self.name} casts Stinking Cloud, catching ${names}` };
       plan.targetId = scTargets[0].id;
       plan.bonusAction = planBonusAction(self, scTargets[0], battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12CH. PYROTECHNICS (CON save or blinded, L2, 10-ft radius, NO conc) ---
+  // XGE p.162: 60 ft, 10-ft radius AoE, CON save or blinded, NO concentration (fire-source assumed).
+  // shouldCast returns Combatant[].
+  if (!plan.action && self.actions.some(a => a.name === 'Pyrotechnics')) {
+    const pyroTargets = shouldCastPyrotechnics(self, battlefield);
+    if (pyroTargets) {
+      const names = pyroTargets.map(t => t.name).join(', ');
+      plan.action = { type: 'pyrotechnics', action: null, targetId: pyroTargets[0].id, description: `${self.name} casts Pyrotechnics, catching ${names}` };
+      plan.targetId = pyroTargets[0].id;
+      plan.bonusAction = planBonusAction(self, pyroTargets[0], battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12CI. COLOR SPRAY (6d10 HP-pool → unconscious, L1, 15-ft cone, NO conc) ---
+  // PHB p.222: 15-ft cone, 6d10 HP-pool → unconscious (no save), NO concentration.
+  // shouldCast returns Combatant[] (enemies in cone; execute rolls budget + sorts).
+  if (!plan.action && self.actions.some(a => a.name === 'Color Spray')) {
+    const csTargets = shouldCastColorSpray(self, battlefield);
+    if (csTargets) {
+      const names = csTargets.map(t => t.name).join(', ');
+      plan.action = { type: 'colorSpray', action: null, targetId: csTargets[0].id, description: `${self.name} casts Color Spray, catching ${names}` };
+      plan.targetId = csTargets[0].id;
+      plan.bonusAction = planBonusAction(self, csTargets[0], battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12CJ. COMMAND (WIS save or incapacitated, L1, NO conc) ---
+  // PHB p.223: 60 ft, WIS save or incapacitated, NO concentration (commands simplified).
+  // shouldCast returns single Combatant.
+  if (!plan.action && self.actions.some(a => a.name === 'Command')) {
+    const cmdTarget = shouldCastCommand(self, battlefield);
+    if (cmdTarget) {
+      plan.action = { type: 'command', action: null, targetId: cmdTarget.id, description: `${self.name} casts Command at ${cmdTarget.name}` };
+      plan.targetId = cmdTarget.id;
+      plan.bonusAction = planBonusAction(self, cmdTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12CK. ANIMAL FRIENDSHIP (WIS save or charmed, L1, NO conc) ---
+  // PHB p.212: 30 ft, WIS save or charmed, NO concentration (beast-only NOT enforced).
+  // shouldCast returns single Combatant.
+  if (!plan.action && self.actions.some(a => a.name === 'Animal Friendship')) {
+    const afTarget = shouldCastAnimalFriendship(self, battlefield);
+    if (afTarget) {
+      plan.action = { type: 'animalFriendship', action: null, targetId: afTarget.id, description: `${self.name} casts Animal Friendship at ${afTarget.name}` };
+      plan.targetId = afTarget.id;
+      plan.bonusAction = planBonusAction(self, afTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12CL. CAUSE FEAR (WIS save or frightened, L1, NO conc) ---
+  // XGE p.151: 60 ft, WIS save or frightened, NO concentration.
+  // shouldCast returns single Combatant.
+  if (!plan.action && self.actions.some(a => a.name === 'Cause Fear')) {
+    const cfTarget = shouldCastCauseFear(self, battlefield);
+    if (cfTarget) {
+      plan.action = { type: 'causeFear', action: null, targetId: cfTarget.id, description: `${self.name} casts Cause Fear at ${cfTarget.name}` };
+      plan.targetId = cfTarget.id;
+      plan.bonusAction = planBonusAction(self, cfTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12CM. CHARM PERSON (WIS save or charmed, L1, NO conc) ---
+  // PHB p.221: 30 ft, WIS save or charmed, NO concentration (humanoid-only NOT enforced).
+  // shouldCast returns single Combatant.
+  if (!plan.action && self.actions.some(a => a.name === 'Charm Person')) {
+    const cpTarget = shouldCastCharmPerson(self, battlefield);
+    if (cpTarget) {
+      plan.action = { type: 'charmPerson', action: null, targetId: cpTarget.id, description: `${self.name} casts Charm Person at ${cpTarget.name}` };
+      plan.targetId = cpTarget.id;
+      plan.bonusAction = planBonusAction(self, cpTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12CN. COMPELLED DUEL (WIS save or frightened, L1, concentration) ---
+  // PHB p.224: 30 ft, WIS save or frightened (taunt), concentration (movement-restriction simplified).
+  // shouldCast returns single Combatant.
+  if (!plan.action && self.actions.some(a => a.name === 'Compelled Duel')) {
+    const cdTarget = shouldCastCompelledDuel(self, battlefield);
+    if (cdTarget) {
+      plan.action = { type: 'compelledDuel', action: null, targetId: cdTarget.id, description: `${self.name} casts Compelled Duel at ${cdTarget.name}` };
+      plan.targetId = cdTarget.id;
+      plan.bonusAction = planBonusAction(self, cdTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12CO. GREASE (DEX save or prone, L1, 10-ft radius, NO conc) ---
+  // PHB p.245: 60 ft, 10-ft radius AoE, DEX save or prone, NO concentration (persistent-terrain simplified).
+  // shouldCast returns Combatant[].
+  if (!plan.action && self.actions.some(a => a.name === 'Grease')) {
+    const grTargets = shouldCastGrease(self, battlefield);
+    if (grTargets) {
+      const names = grTargets.map(t => t.name).join(', ');
+      plan.action = { type: 'grease', action: null, targetId: grTargets[0].id, description: `${self.name} casts Grease, catching ${names}` };
+      plan.targetId = grTargets[0].id;
+      plan.bonusAction = planBonusAction(self, grTargets[0], battlefield);
       return plan;
     }
   }

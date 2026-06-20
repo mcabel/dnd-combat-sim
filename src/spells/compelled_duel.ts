@@ -1,119 +1,95 @@
 // ============================================================
 // Compelled Duel — PHB p.224
 //
-// 1-level enchantment, 1 bonus action, range 30 ft, concentration.
-// Duration: 1 minute.
+// 1st-level enchantment, action, range 30 ft, concentration (1 min).
+// Components: V, S, M (a pair of entwined rings).
 //
-// Effect: You attempt to compel a creature into a duel. One creature that you can see within range must make a Wisdom saving throw. On a failed save, the creature is drawn to you, compelled by your divine deman
+// Effect: You attempt to compel a creature into a duel. One creature
+//         that you can see within range must make a Wisdom saving throw.
+//         On a failed save, the creature is drawn to you, compelled
+//         through your divine word to fight you and only you.
+//         The creature has disadvantage on attack rolls against
+//         creatures other than you. The creature must make a Wisdom
+//         saving throw before moving to a space more than 30 feet away
+//         from you.
 //
-// Upcast: see source (not modelled in v1).
+// Upcast: none (1st-level spell — no upcast).
 //
 // v1 simplifications:
-//   - v1 models this spell as a FORWARD-COMPAT flag only (Session 20 bulk
-//     implementation — level-1 backfill). The spell consumes a slot and
-//     sets the flag `_genericSpellActiveSpells` on the caster; the actual
-//     mechanical effect (damage / save / condition / buff) is NOT applied
-//     in v1. A future implementation should extend the relevant engine
-//     subsystem (damage_zone for persistent damage, condition_apply for
-//     conditions, advantage_vs for buffs, etc.) to consume this flag and
-//     apply the real effect. This mirrors the Session 17/18 forward-compat
-//     pattern established by Darkvision, Arcane Lock, Knock, See Invisibility
-//     and the Session 19 bulk-implementation pattern.
-//   - Concentration spell (forward-compat flag persists for combat).
+//   - Taunt (PHB p.224: "disadvantage on attacks vs others" + "must stay
+//     within 30 ft"): simplified to `condition_apply:frightened` (the
+//     closest available condition — frightened grants a similar "disadv
+//     on attacks while caster visible"). The movement-restriction rider
+//     is NOT modelled (v1 has no movement-compulsion subsystem).
+//     Documented via `compelledDuelTauntV1SimplifiedToFrightened`.
+//   - Concentration: canon 1 min concentration. v1 starts concentration;
+//     not enforced on damage (TG-002). frightened is conc-sourced.
+//   - End-of-turn repeat save (PHB p.224): NOT modelled.
 //
-// Spell module pattern (mirrors Darkvision / Arcane Lock forward-compat
-// self-buff pattern):
-//   shouldCast(caster, bf) → boolean
-//   execute(caster, state) → void
-//   cleanup() — no-op (forward-compat flag persists for combat)
+// Migration note (Session 25 / Batch 2): migrated from the generic
+// forward-compat flag to a bespoke WIS-save-or-frightened (concentration).
+// Removed from `_generic_registry.ts`; routed via `case 'compelledDuel':`
+// in combat.ts and a planner branch in planner.ts. Mirrors Hold Person
+// (single-target conc save-or-condition) but frightened + L1.
+//
+// Spell module pattern (single-target save-or-condition, concentration):
+//   shouldCast(caster, bf) → Combatant | null
+//   execute(caster, target, state) → void
+//   cleanup() — no-op (concentration break handles cleanup)
 // ============================================================
 
 import { Combatant, Battlefield } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
+import { applySpellEffect, removeEffectsFromCaster } from '../engine/spell_effects';
+import { startConcentration, rollSave } from '../engine/utils';
+import { chebyshev3D } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 
-// ---- Metadata -----------------------------------------------
-
 export const metadata = {
-  name: 'Compelled Duel',
-  level: 1,
-  school: 'enchantment',
-  rangeFt: 30,
-  concentration: true,
-  castingTime: 'bonusAction',
-  compelledDuelV1Simplified: true,
+  name: 'Compelled Duel', level: 1, school: 'enchantment', rangeFt: 30,
+  concentration: true, saveAbility: 'wis' as const, castingTime: 'action',
+  compelledDuelTauntV1SimplifiedToFrightened: true,        // taunt + movement-restriction → frightened
+  compelledDuelConcentrationEnforcementV1Implemented: false,
 } as const;
 
-// ---- Local log helper ---------------------------------------
-
-function emit(
-  state: EngineState,
-  type: CombatEvent['type'],
-  actorId: string,
-  desc: string,
-  targetId?: string,
-  value?: number,
-): void {
-  state.log.events.push({
-    round: state.battlefield.round,
-    actorId,
-    type,
-    targetId,
-    value,
-    description: desc,
-  });
+function emit(state: EngineState, type: CombatEvent['type'], actorId: string, desc: string, targetId?: string, value?: number): void {
+  state.log.events.push({ round: state.battlefield.round, actorId, type, targetId, value, description: desc });
 }
 
-// ---- Planner ------------------------------------------------
-
-/**
- * Returns true if the caster should cast Compelled Duel this turn.
- *
- * Preconditions:
- *   - Caster has 'Compelled Duel' in their actions
- *   - Caster has at least one 1-level-or-higher slot available
- *   - Caster is NOT already Compelled Duel-active (re-cast would be a no-op in v1)
- */
-export function shouldCast(caster: Combatant, _bf: Battlefield): boolean {
-  if (!caster.actions.some(a => a.name === 'Compelled Duel')) return false;
-  if (!hasSpellSlot(caster, 1)) return false;
-  if (caster._genericSpellActiveSpells?.has('Compelled Duel')) return false;
-  return true;
-}
-
-// ---- Execution ----------------------------------------------
-
-/**
- * Execute Compelled Duel:
- *  1. Consume a 1-level spell slot.
- *  2. Set the flag on the caster's `_genericSpellActiveSpells` Set.
- *  3. Log the cast.
- */
-export function execute(
-  caster: Combatant,
-  state: EngineState,
-): void {
-  consumeSpellSlot(caster, 1);
-
-  if (!caster._genericSpellActiveSpells) {
-    caster._genericSpellActiveSpells = new Set<string>();
+export function shouldCast(caster: Combatant, bf: Battlefield): Combatant | null {
+  if (caster.concentration?.active) return null;
+  if (!caster.actions.some(a => a.name === 'Compelled Duel')) return null;
+  if (!hasSpellSlot(caster, 1)) return null;
+  const candidates: Array<{ c: Combatant; threat: number; dist: number }> = [];
+  for (const c of bf.combatants.values()) {
+    if (c.id === caster.id) continue;
+    if (c.faction === caster.faction) continue;
+    if (c.isDead || c.isUnconscious) continue;
+    const distFt = chebyshev3D(caster.pos, c.pos) * 5;
+    if (distFt > 30) continue;
+    if (c.conditions.has('frightened')) continue;
+    if (c.activeEffects.some(e => e.casterId === caster.id && e.spellName === 'Compelled Duel')) continue;
+    candidates.push({ c, threat: c.maxHP, dist: distFt });
   }
-  caster._genericSpellActiveSpells.add('Compelled Duel');
-
-  emit(
-    state, 'action', caster.id,
-    `${caster.name} casts Compelled Duel! (v1: forward-compat flag set; mechanical effect not yet implemented)`,
-    caster.id,
-  );
-  emit(
-    state, 'condition_add', caster.id,
-    `${caster.name} is affected by Compelled Duel. (v1: forward-compat flag set; no mechanical effect until engine subsystem is implemented)`,
-    caster.id,
-  );
+  if (candidates.length === 0) return null;
+  candidates.sort((a, b) => a.threat !== b.threat ? b.threat - a.threat : a.dist - b.dist);
+  return candidates[0].c;
 }
 
-// ---- Cleanup ------------------------------------------------
-
-export function cleanup(_c: Combatant): void {
-  // No-op — forward-compat flag persists for combat.
+export function execute(caster: Combatant, target: Combatant, state: EngineState): void {
+  const action = caster.actions.find(a => a.name === 'Compelled Duel');
+  const saveDC = action?.saveDC ?? 13;
+  consumeSpellSlot(caster, 1);
+  if (caster.concentration?.active) removeEffectsFromCaster(caster.id, state.battlefield);
+  startConcentration(caster, 'Compelled Duel');
+  emit(state, 'action', caster.id, `${caster.name} casts Compelled Duel at ${target.name}! (DC ${saveDC} WIS)`, target.id);
+  if (target.isDead || target.isUnconscious) return;
+  const save = rollSave(target, 'wis', saveDC);
+  emit(state, save.success ? 'save_success' : 'save_fail', caster.id,
+    `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} WIS save vs Compelled Duel (rolled ${save.total})`, target.id, save.roll);
+  if (save.success) { emit(state, 'action', caster.id, `${target.name} resists Compelled Duel — no effect!`, target.id); return; }
+  applySpellEffect(target, { casterId: caster.id, spellName: 'Compelled Duel', effectType: 'condition_apply', payload: { condition: 'frightened' }, sourceIsConcentration: true });
+  emit(state, 'condition_add', caster.id, `${target.name} is FRIGHTENED by Compelled Duel! (v1: taunt + movement-restriction simplified to frightened)`, target.id);
 }
+
+export function cleanup(_c: Combatant): void { /* no-op — concentration break handles cleanup */ }

@@ -1,118 +1,86 @@
 // ============================================================
 // Charm Person — PHB p.221
 //
-// 1-level enchantment, 1 action, range 30 ft.
-// Duration: 1 hour.
+// 1st-level enchantment, action, range 30 ft, NO concentration (1 hr).
+// Components: V, S.
 //
-// Effect: You attempt to charm a humanoid you can see within range. It must make a Wisdom saving throw, and does so with advantage if you or your companions are fighting it. If it fails the saving throw, it is
+// Effect: You attempt to charm a humanoid you can see within range. It
+//         must make a Wisdom saving throw, and does so with advantage if
+//         you or your companions are fighting it. On a failed save, the
+//         creature is charmed by you until the spell ends.
 //
-// Upcast: see source (not modelled in v1).
+// Upcast: +1 target per slot-level above 1st (not modelled in v1).
 //
 // v1 simplifications:
-//   - v1 models this spell as a FORWARD-COMPAT flag only (Session 20 bulk
-//     implementation — level-1 backfill). The spell consumes a slot and
-//     sets the flag `_genericSpellActiveSpells` on the caster; the actual
-//     mechanical effect (damage / save / condition / buff) is NOT applied
-//     in v1. A future implementation should extend the relevant engine
-//     subsystem (damage_zone for persistent damage, condition_apply for
-//     conditions, advantage_vs for buffs, etc.) to consume this flag and
-//     apply the real effect. This mirrors the Session 17/18 forward-compat
-//     pattern established by Darkvision, Arcane Lock, Knock, See Invisibility
-//     and the Session 19 bulk-implementation pattern.
+//   - Humanoid-only restriction (PHB p.221: "a humanoid"): NOT enforced
+//     (v1 has no creature-type tag — TG-004).
+//   - Combat advantage on save (PHB p.221: "with advantage if fighting"):
+//     NOT modelled.
+//   - Duration: canon 1 hr (no concentration). v1 has no duration tracker
+//     — charmed persists for the v1 combat. NOT concentration.
+//   - Upcast: +1 target/slot-level NOT modelled.
 //
-// Spell module pattern (mirrors Darkvision / Arcane Lock forward-compat
-// self-buff pattern):
-//   shouldCast(caster, bf) → boolean
-//   execute(caster, state) → void
-//   cleanup() — no-op (forward-compat flag persists for combat)
+// Migration note (Session 25 / Batch 2): migrated from the generic
+// forward-compat flag to a bespoke WIS-save-or-charmed (no conc).
+// Removed from `_generic_registry.ts`; routed via `case 'charmPerson':` in
+// combat.ts and a planner branch in planner.ts. Mirrors Blindness/Deafness.
+//
+// Spell module pattern (single-target save-or-condition, NO concentration):
+//   shouldCast(caster, bf) → Combatant | null
+//   execute(caster, target, state) → void
+//   cleanup() — no-op (no concentration; charmed persists for combat)
 // ============================================================
 
 import { Combatant, Battlefield } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
+import { applySpellEffect } from '../engine/spell_effects';
+import { rollSave } from '../engine/utils';
+import { chebyshev3D } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 
-// ---- Metadata -----------------------------------------------
-
 export const metadata = {
-  name: 'Charm Person',
-  level: 1,
-  school: 'enchantment',
-  rangeFt: 30,
-  concentration: false,
-  castingTime: 'action',
-  charmPersonV1Simplified: true,
+  name: 'Charm Person', level: 1, school: 'enchantment', rangeFt: 30,
+  concentration: false, saveAbility: 'wis' as const, castingTime: 'action',
+  charmPersonHumanoidTypeCheckV1Implemented: false,
+  charmPersonCombatAdvSaveV1Simplified: true,
+  charmPersonUpcastV1Implemented: false,
 } as const;
 
-// ---- Local log helper ---------------------------------------
-
-function emit(
-  state: EngineState,
-  type: CombatEvent['type'],
-  actorId: string,
-  desc: string,
-  targetId?: string,
-  value?: number,
-): void {
-  state.log.events.push({
-    round: state.battlefield.round,
-    actorId,
-    type,
-    targetId,
-    value,
-    description: desc,
-  });
+function emit(state: EngineState, type: CombatEvent['type'], actorId: string, desc: string, targetId?: string, value?: number): void {
+  state.log.events.push({ round: state.battlefield.round, actorId, type, targetId, value, description: desc });
 }
 
-// ---- Planner ------------------------------------------------
-
-/**
- * Returns true if the caster should cast Charm Person this turn.
- *
- * Preconditions:
- *   - Caster has 'Charm Person' in their actions
- *   - Caster has at least one 1-level-or-higher slot available
- *   - Caster is NOT already Charm Person-active (re-cast would be a no-op in v1)
- */
-export function shouldCast(caster: Combatant, _bf: Battlefield): boolean {
-  if (!caster.actions.some(a => a.name === 'Charm Person')) return false;
-  if (!hasSpellSlot(caster, 1)) return false;
-  if (caster._genericSpellActiveSpells?.has('Charm Person')) return false;
-  return true;
-}
-
-// ---- Execution ----------------------------------------------
-
-/**
- * Execute Charm Person:
- *  1. Consume a 1-level spell slot.
- *  2. Set the flag on the caster's `_genericSpellActiveSpells` Set.
- *  3. Log the cast.
- */
-export function execute(
-  caster: Combatant,
-  state: EngineState,
-): void {
-  consumeSpellSlot(caster, 1);
-
-  if (!caster._genericSpellActiveSpells) {
-    caster._genericSpellActiveSpells = new Set<string>();
+export function shouldCast(caster: Combatant, bf: Battlefield): Combatant | null {
+  if (!caster.actions.some(a => a.name === 'Charm Person')) return null;
+  if (!hasSpellSlot(caster, 1)) return null;
+  const candidates: Array<{ c: Combatant; threat: number; dist: number }> = [];
+  for (const c of bf.combatants.values()) {
+    if (c.id === caster.id) continue;
+    if (c.faction === caster.faction) continue;
+    if (c.isDead || c.isUnconscious) continue;
+    const distFt = chebyshev3D(caster.pos, c.pos) * 5;
+    if (distFt > 30) continue;
+    if (c.conditions.has('charmed') || c.conditions.has('incapacitated')) continue;
+    if (c.activeEffects.some(e => e.casterId === caster.id && e.spellName === 'Charm Person')) continue;
+    candidates.push({ c, threat: c.maxHP, dist: distFt });
   }
-  caster._genericSpellActiveSpells.add('Charm Person');
-
-  emit(
-    state, 'action', caster.id,
-    `${caster.name} casts Charm Person! (v1: forward-compat flag set; mechanical effect not yet implemented)`,
-    caster.id,
-  );
-  emit(
-    state, 'condition_add', caster.id,
-    `${caster.name} is affected by Charm Person. (v1: forward-compat flag set; no mechanical effect until engine subsystem is implemented)`,
-    caster.id,
-  );
+  if (candidates.length === 0) return null;
+  candidates.sort((a, b) => a.threat !== b.threat ? b.threat - a.threat : a.dist - b.dist);
+  return candidates[0].c;
 }
 
-// ---- Cleanup ------------------------------------------------
-
-export function cleanup(_c: Combatant): void {
-  // No-op — forward-compat flag persists for combat.
+export function execute(caster: Combatant, target: Combatant, state: EngineState): void {
+  const action = caster.actions.find(a => a.name === 'Charm Person');
+  const saveDC = action?.saveDC ?? 13;
+  consumeSpellSlot(caster, 1);
+  emit(state, 'action', caster.id, `${caster.name} casts Charm Person at ${target.name}! (DC ${saveDC} WIS)`, target.id);
+  if (target.isDead || target.isUnconscious) return;
+  const save = rollSave(target, 'wis', saveDC);
+  emit(state, save.success ? 'save_success' : 'save_fail', caster.id,
+    `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} WIS save vs Charm Person (rolled ${save.total})`, target.id, save.roll);
+  if (save.success) { emit(state, 'action', caster.id, `${target.name} resists Charm Person — not charmed!`, target.id); return; }
+  applySpellEffect(target, { casterId: caster.id, spellName: 'Charm Person', effectType: 'condition_apply', payload: { condition: 'charmed' }, sourceIsConcentration: false });
+  emit(state, 'condition_add', caster.id, `${target.name} is CHARMED by Charm Person! (humanoid-only NOT enforced in v1)`, target.id);
 }
+
+export function cleanup(_c: Combatant): void { /* no-op — NOT concentration */ }

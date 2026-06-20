@@ -1389,6 +1389,14 @@ export interface PlannedAction {
     | 'inciteGreed'       // Incite Greed — EGtW p.151: 30-ft cone, WIS save or charmed, concentration
     | 'sleetStorm'        // Sleet Storm — PHB p.276: 120 ft, 20-ft radius AoE, DEX save or prone, concentration (conc-break rider simplified)
     | 'stinkingCloud'     // Stinking Cloud — PHB p.278: 90 ft, 20-ft radius AoE, CON save or poisoned+incapacitated (DUAL), concentration
+    | 'pyrotechnics'      // Pyrotechnics — XGE p.162: 60 ft, 10-ft radius AoE, CON save or blinded, NO concentration (fire-source assumed)
+    | 'colorSpray'        // Color Spray — PHB p.222: 15-ft cone, 6d10 HP-pool → unconscious (no save), NO concentration (blinded→unconscious per plan; NEW HP-pool pattern)
+    | 'command'           // Command — PHB p.223: 60 ft, WIS save or incapacitated, NO concentration (commands simplified; upcast not modelled)
+    | 'animalFriendship'  // Animal Friendship — PHB p.212: 30 ft, WIS save or charmed, NO concentration (beast-only + INT<4 NOT enforced)
+    | 'causeFear'         // Cause Fear — XGE p.151: 60 ft, WIS save or frightened, NO concentration
+    | 'charmPerson'       // Charm Person — PHB p.221: 30 ft, WIS save or charmed, NO concentration (humanoid-only NOT enforced)
+    | 'compelledDuel'     // Compelled Duel — PHB p.224: 30 ft, WIS save or frightened (taunt), concentration (movement-restriction simplified)
+    | 'grease'            // Grease — PHB p.245: 60 ft, 10-ft radius AoE, DEX save or prone, NO concentration (persistent-terrain simplified)
     // ── Session 19 — bulk-implementation generic dispatch (262 new spells L2-9) ──
     // All non-blocker in-scope spells from levels 2-9 that have not been
     // implemented as bespoke case branches are routed through 'genericSpell'.

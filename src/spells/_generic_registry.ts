@@ -26,12 +26,6 @@ import {
 } from './alarm';
 
 import {
-  shouldCast as shouldCastAnimalFriendship,
-  execute as executeAnimalFriendship,
-  metadata as metadataAnimalFriendship,
-} from './animal_friendship';
-
-import {
   shouldCast as shouldCastArmorOfAgathys,
   execute as executeArmorOfAgathys,
   metadata as metadataArmorOfAgathys,
@@ -50,40 +44,10 @@ import {
 } from './beast_bond';
 
 import {
-  shouldCast as shouldCastCauseFear,
-  execute as executeCauseFear,
-  metadata as metadataCauseFear,
-} from './cause_fear';
-
-import {
   shouldCast as shouldCastCeremony,
   execute as executeCeremony,
   metadata as metadataCeremony,
 } from './ceremony';
-
-import {
-  shouldCast as shouldCastCharmPerson,
-  execute as executeCharmPerson,
-  metadata as metadataCharmPerson,
-} from './charm_person';
-
-import {
-  shouldCast as shouldCastColorSpray,
-  execute as executeColorSpray,
-  metadata as metadataColorSpray,
-} from './color_spray';
-
-import {
-  shouldCast as shouldCastCommand,
-  execute as executeCommand,
-  metadata as metadataCommand,
-} from './command';
-
-import {
-  shouldCast as shouldCastCompelledDuel,
-  execute as executeCompelledDuel,
-  metadata as metadataCompelledDuel,
-} from './compelled_duel';
 
 import {
   shouldCast as shouldCastCreateOrDestroyWater,
@@ -138,12 +102,6 @@ import {
   execute as executeGoodberry,
   metadata as metadataGoodberry,
 } from './goodberry';
-
-import {
-  shouldCast as shouldCastGrease,
-  execute as executeGrease,
-  metadata as metadataGrease,
-} from './grease';
 
 import {
   shouldCast as shouldCastHailOfThorns,
@@ -402,12 +360,6 @@ import {
   execute as executeNystulsMagicAura,
   metadata as metadataNystulsMagicAura,
 } from './nystuls_magic_aura';
-
-import {
-  shouldCast as shouldCastPyrotechnics,
-  execute as executePyrotechnics,
-  metadata as metadataPyrotechnics,
-} from './pyrotechnics';
 
 import {
   shouldCast as shouldCastRimesBindingIce,
@@ -1408,12 +1360,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     shouldCast: shouldCastAlarm,
     execute: executeAlarm,
   },
-  'Animal Friendship': {
-    name: 'Animal Friendship',
-    level: metadataAnimalFriendship.level,
-    shouldCast: shouldCastAnimalFriendship,
-    execute: executeAnimalFriendship,
-  },
   'Armor of Agathys': {
     name: 'Armor of Agathys',
     level: metadataArmorOfAgathys.level,
@@ -1432,41 +1378,11 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     shouldCast: shouldCastBeastBond,
     execute: executeBeastBond,
   },
-  'Cause Fear': {
-    name: 'Cause Fear',
-    level: metadataCauseFear.level,
-    shouldCast: shouldCastCauseFear,
-    execute: executeCauseFear,
-  },
   'Ceremony': {
     name: 'Ceremony',
     level: metadataCeremony.level,
     shouldCast: shouldCastCeremony,
     execute: executeCeremony,
-  },
-  'Charm Person': {
-    name: 'Charm Person',
-    level: metadataCharmPerson.level,
-    shouldCast: shouldCastCharmPerson,
-    execute: executeCharmPerson,
-  },
-  'Color Spray': {
-    name: 'Color Spray',
-    level: metadataColorSpray.level,
-    shouldCast: shouldCastColorSpray,
-    execute: executeColorSpray,
-  },
-  'Command': {
-    name: 'Command',
-    level: metadataCommand.level,
-    shouldCast: shouldCastCommand,
-    execute: executeCommand,
-  },
-  'Compelled Duel': {
-    name: 'Compelled Duel',
-    level: metadataCompelledDuel.level,
-    shouldCast: shouldCastCompelledDuel,
-    execute: executeCompelledDuel,
   },
   'Create or Destroy Water': {
     name: 'Create or Destroy Water',
@@ -1521,12 +1437,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     level: metadataGoodberry.level,
     shouldCast: shouldCastGoodberry,
     execute: executeGoodberry,
-  },
-  'Grease': {
-    name: 'Grease',
-    level: metadataGrease.level,
-    shouldCast: shouldCastGrease,
-    execute: executeGrease,
   },
   'Hail of Thorns': {
     name: 'Hail of Thorns',
@@ -1785,12 +1695,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     level: metadataNystulsMagicAura.level,
     shouldCast: shouldCastNystulsMagicAura,
     execute: executeNystulsMagicAura,
-  },
-  'Pyrotechnics': {
-    name: 'Pyrotechnics',
-    level: metadataPyrotechnics.level,
-    shouldCast: shouldCastPyrotechnics,
-    execute: executePyrotechnics,
   },
   "Rime's Binding Ice": {
     name: "Rime's Binding Ice",

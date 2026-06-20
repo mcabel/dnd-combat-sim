@@ -118,6 +118,16 @@ SPELLS = [
     ('Incite Greed',    'incite_greed',      'InciteGreed'),
     ('Sleet Storm',     'sleet_storm',       'SleetStorm'),
     ('Stinking Cloud',  'stinking_cloud',    'StinkingCloud'),
+    # L2 (1)
+    ('Pyrotechnics',    'pyrotechnics',      'Pyrotechnics'),
+    # L1 (7) — Batch 2 complete (35 spells)
+    ('Color Spray',     'color_spray',       'ColorSpray'),
+    ('Command',         'command',           'Command'),
+    ('Animal Friendship','animal_friendship','AnimalFriendship'),
+    ('Cause Fear',      'cause_fear',        'CauseFear'),
+    ('Charm Person',    'charm_person',      'CharmPerson'),
+    ('Compelled Duel',  'compelled_duel',    'CompelledDuel'),
+    ('Grease',          'grease',            'Grease'),
 ]
 
 REGISTRY = Path('src/spells/_generic_registry.ts')

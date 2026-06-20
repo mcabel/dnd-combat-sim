@@ -143,8 +143,8 @@ assert('Registry is non-empty', SPELL_COUNT > 0);
 // Sunburst, Power Word Kill). The registry then had 299 spells (306 − 7).
 // Session 24: Batch 1 COMPLETE. Migrated all 44 L1-L9 combat-damage spells.
 // Registry now has 255 spells (299 − 44). Cumulative migrated: 58 (7+7+44).
-// Session 25: Batch 2 in progress (35 save-or-condition spells). Each commit
-// migrates a level-group; the floor lowers to 220 (255 − 35) when complete.
+// Session 25: Batch 2 COMPLETE. Migrated all 35 L1-L9 save-or-condition spells.
+// Registry now has 220 spells (255 − 35). Cumulative migrated: 93 (7+7+44+35).
 assert(`Registry has at least 220 spells (got ${SPELL_COUNT})`, SPELL_COUNT >= 220);
 console.log(`  📊 Total bulk-implemented spells: ${SPELL_COUNT}`);
 
@@ -270,6 +270,11 @@ const MIGRATED_SPELLS_S25 = [
   // L3 (10)
   'Antagonize', 'Bestow Curse', 'Catnap', 'Enemies Abound', 'Fast Friends',
   'Fear', 'Hypnotic Pattern', 'Incite Greed', 'Sleet Storm', 'Stinking Cloud',
+  // L2 (1)
+  'Pyrotechnics',
+  // L1 (7) — Batch 2 complete (35 spells)
+  'Color Spray', 'Command', 'Animal Friendship', 'Cause Fear',
+  'Charm Person', 'Compelled Duel', 'Grease',
 ];
 for (const migrated of MIGRATED_SPELLS_S25) {
   eq(`  ${migrated} is no longer in the registry (migrated to bespoke)`,

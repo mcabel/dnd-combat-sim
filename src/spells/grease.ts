@@ -1,118 +1,97 @@
 // ============================================================
-// Grease — PHB p.246
+// Grease — PHB p.245
 //
-// 1-level conjuration, 1 action, range 60 ft.
-// Duration: 1 minute.
+// 1st-level conjuration, action, range 60 ft, NO concentration (1 min).
+// Components: V, S, M (a bit of pork rind or butter).
 //
-// Effect: Slick grease covers the ground in a 10-foot square centered on a point within range and turns it into  for the duration.
+// Effect: Slick grease covers the ground in a 10-foot square centered on
+//         a point within range. When the grease appears, each creature
+//         standing in its area must succeed on a Dexterity saving throw
+//         or fall prone. A creature can also fall prone when it enters
+//         the grease... (persistent-difficult-terrain rider simplified.)
 //
-// Upcast: see source (not modelled in v1).
+// Upcast: none (1st-level spell — no upcast).
 //
 // v1 simplifications:
-//   - v1 models this spell as a FORWARD-COMPAT flag only (Session 20 bulk
-//     implementation — level-1 backfill). The spell consumes a slot and
-//     sets the flag `_genericSpellActiveSpells` on the caster; the actual
-//     mechanical effect (damage / save / condition / buff) is NOT applied
-//     in v1. A future implementation should extend the relevant engine
-//     subsystem (damage_zone for persistent damage, condition_apply for
-//     conditions, advantage_vs for buffs, etc.) to consume this flag and
-//     apply the real effect. This mirrors the Session 17/18 forward-compat
-//     pattern established by Darkvision, Arcane Lock, Knock, See Invisibility
-//     and the Session 19 bulk-implementation pattern.
+//   - Shape: canon 10-foot square. v1 treats as a 10-ft-radius sphere
+//     centered on the highest-threat enemy within 60 ft (mirrors Sunburst
+//     — square approx). Documented via `greaseSquareV1SimplifiedToRadius`.
+//   - Persistent terrain / enter-prone rider (PHB p.245: creatures entering
+//     the grease must save): NOT modelled (v1 has no persistent-AoE-on-
+//     enter subsystem). v1 applies prone once on cast.
+//   - No damage (PHB p.245: no damage roll).
+//   - Duration: canon 1 min (no concentration). v1 has no duration tracker
+//     — prone persists for the v1 combat. NOT concentration.
 //
-// Spell module pattern (mirrors Darkvision / Arcane Lock forward-compat
-// self-buff pattern):
-//   shouldCast(caster, bf) → boolean
-//   execute(caster, state) → void
-//   cleanup() — no-op (forward-compat flag persists for combat)
+// Migration note (Session 25 / Batch 2): migrated from the generic
+// forward-compat flag to a bespoke DEX-save-or-prone AoE (no conc).
+// Removed from `_generic_registry.ts`; routed via `case 'grease':` in
+// combat.ts and a planner branch in planner.ts. Mirrors Sunburst (radius
+// AoE save + condition) but prone + no damage + no conc.
+//
+// Spell module pattern (radius AoE save + condition, NO concentration):
+//   shouldCast(caster, bf) → Combatant[] | null
+//   execute(caster, targets, state) → void
+//   cleanup() — no-op (no concentration; prone persists for combat)
 // ============================================================
 
 import { Combatant, Battlefield } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
+import { applySpellEffect } from '../engine/spell_effects';
+import { rollSave } from '../engine/utils';
+import { chebyshev3D, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 
-// ---- Metadata -----------------------------------------------
-
 export const metadata = {
-  name: 'Grease',
-  level: 1,
-  school: 'conjuration',
-  rangeFt: 60,
-  concentration: false,
-  castingTime: 'action',
-  greaseV1Simplified: true,
+  name: 'Grease', level: 1, school: 'conjuration', rangeFt: 60,
+  aoeRadiusFt: 10, concentration: false, saveAbility: 'dex' as const, castingTime: 'action',
+  greaseSquareV1SimplifiedToRadius: true,                      // 10-ft square → 10-ft radius
+  greasePersistentTerrainV1Simplified: true,                  // enter-prone rider NOT modelled
 } as const;
 
-// ---- Local log helper ---------------------------------------
-
-function emit(
-  state: EngineState,
-  type: CombatEvent['type'],
-  actorId: string,
-  desc: string,
-  targetId?: string,
-  value?: number,
-): void {
-  state.log.events.push({
-    round: state.battlefield.round,
-    actorId,
-    type,
-    targetId,
-    value,
-    description: desc,
-  });
+function emit(state: EngineState, type: CombatEvent['type'], actorId: string, desc: string, targetId?: string, value?: number): void {
+  state.log.events.push({ round: state.battlefield.round, actorId, type, targetId, value, description: desc });
 }
 
-// ---- Planner ------------------------------------------------
-
-/**
- * Returns true if the caster should cast Grease this turn.
- *
- * Preconditions:
- *   - Caster has 'Grease' in their actions
- *   - Caster has at least one 1-level-or-higher slot available
- *   - Caster is NOT already Grease-active (re-cast would be a no-op in v1)
- */
-export function shouldCast(caster: Combatant, _bf: Battlefield): boolean {
-  if (!caster.actions.some(a => a.name === 'Grease')) return false;
-  if (!hasSpellSlot(caster, 1)) return false;
-  if (caster._genericSpellActiveSpells?.has('Grease')) return false;
-  return true;
-}
-
-// ---- Execution ----------------------------------------------
-
-/**
- * Execute Grease:
- *  1. Consume a 1-level spell slot.
- *  2. Set the flag on the caster's `_genericSpellActiveSpells` Set.
- *  3. Log the cast.
- */
-export function execute(
-  caster: Combatant,
-  state: EngineState,
-): void {
-  consumeSpellSlot(caster, 1);
-
-  if (!caster._genericSpellActiveSpells) {
-    caster._genericSpellActiveSpells = new Set<string>();
+export function shouldCast(caster: Combatant, bf: Battlefield): Combatant[] | null {
+  if (!caster.actions.some(a => a.name === 'Grease')) return null;
+  if (!hasSpellSlot(caster, 1)) return null;
+  const enemies = livingEnemiesOf(caster, bf);
+  let center: Combatant | null = null;
+  let centerThreat = -1;
+  let centerDist = Infinity;
+  for (const e of enemies) {
+    const distFt = chebyshev3D(caster.pos, e.pos) * 5;
+    if (distFt > 60) continue;
+    if (e.maxHP > centerThreat || (e.maxHP === centerThreat && distFt < centerDist)) {
+      center = e; centerThreat = e.maxHP; centerDist = distFt;
+    }
   }
-  caster._genericSpellActiveSpells.add('Grease');
-
-  emit(
-    state, 'action', caster.id,
-    `${caster.name} casts Grease! (v1: forward-compat flag set; mechanical effect not yet implemented)`,
-    caster.id,
-  );
-  emit(
-    state, 'condition_add', caster.id,
-    `${caster.name} is affected by Grease. (v1: forward-compat flag set; no mechanical effect until engine subsystem is implemented)`,
-    caster.id,
-  );
+  if (!center) return null;
+  const targets: Combatant[] = [];
+  for (const e of enemies) {
+    const distFt = chebyshev3D(center.pos, e.pos) * 5;
+    if (distFt <= 10) targets.push(e);
+  }
+  return targets.length >= 1 ? targets : null;
 }
 
-// ---- Cleanup ------------------------------------------------
-
-export function cleanup(_c: Combatant): void {
-  // No-op — forward-compat flag persists for combat.
+export function execute(caster: Combatant, targets: Combatant[], state: EngineState): void {
+  const action = caster.actions.find(a => a.name === 'Grease');
+  const saveDC = action?.saveDC ?? 13;
+  consumeSpellSlot(caster, 1);
+  emit(state, 'action', caster.id,
+    `${caster.name} casts Grease! (DC ${saveDC} DEX, prone on fail, ${metadata.aoeRadiusFt}-ft radius) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} caught!`);
+  for (const target of targets) {
+    if (target.isDead || target.isUnconscious) continue;
+    const save = rollSave(target, 'dex', saveDC);
+    emit(state, save.success ? 'save_success' : 'save_fail', caster.id,
+      `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} DEX save vs Grease (rolled ${save.total})${save.success ? '' : ' + PRONE'}`, target.id, save.roll);
+    if (!save.success && !target.conditions.has('prone')) {
+      applySpellEffect(target, { casterId: caster.id, spellName: 'Grease', effectType: 'condition_apply', payload: { condition: 'prone' }, sourceIsConcentration: false });
+      emit(state, 'condition_add', caster.id, `${target.name} slips and falls PRONE!`, target.id);
+    }
+  }
 }
+
+export function cleanup(_c: Combatant): void { /* no-op — NOT concentration */ }
