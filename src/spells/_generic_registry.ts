@@ -32,12 +32,6 @@ import {
 } from './armor_of_agathys';
 
 import {
-  shouldCast as shouldCastBane,
-  execute as executeBane,
-  metadata as metadataBane,
-} from './bane';
-
-import {
   shouldCast as shouldCastBeastBond,
   execute as executeBeastBond,
   metadata as metadataBeastBond,
@@ -68,18 +62,6 @@ import {
 } from './distort_value';
 
 import {
-  shouldCast as shouldCastDivineFavor,
-  execute as executeDivineFavor,
-  metadata as metadataDivineFavor,
-} from './divine_favor';
-
-import {
-  shouldCast as shouldCastEnsnaringStrike,
-  execute as executeEnsnaringStrike,
-  metadata as metadataEnsnaringStrike,
-} from './ensnaring_strike';
-
-import {
   shouldCast as shouldCastExpeditiousRetreat,
   execute as executeExpeditiousRetreat,
   metadata as metadataExpeditiousRetreat,
@@ -102,12 +84,6 @@ import {
   execute as executeGoodberry,
   metadata as metadataGoodberry,
 } from './goodberry';
-
-import {
-  shouldCast as shouldCastHailOfThorns,
-  execute as executeHailOfThorns,
-  metadata as metadataHailOfThorns,
-} from './hail_of_thorns';
 
 import {
   shouldCast as shouldCastHeroism,
@@ -146,12 +122,6 @@ import {
 } from './sanctuary';
 
 import {
-  shouldCast as shouldCastSearingSmite,
-  execute as executeSearingSmite,
-  metadata as metadataSearingSmite,
-} from './searing_smite';
-
-import {
   shouldCast as shouldCastSilentImage,
   execute as executeSilentImage,
   metadata as metadataSilentImage,
@@ -188,28 +158,10 @@ import {
 } from './tensers_floating_disk';
 
 import {
-  shouldCast as shouldCastThunderousSmite,
-  execute as executeThunderousSmite,
-  metadata as metadataThunderousSmite,
-} from './thunderous_smite';
-
-import {
   shouldCast as shouldCastUnseenServant,
   execute as executeUnseenServant,
   metadata as metadataUnseenServant,
 } from './unseen_servant';
-
-import {
-  shouldCast as shouldCastWrathfulSmite,
-  execute as executeWrathfulSmite,
-  metadata as metadataWrathfulSmite,
-} from './wrathful_smite';
-
-import {
-  shouldCast as shouldCastZephyrStrike,
-  execute as executeZephyrStrike,
-  metadata as metadataZephyrStrike,
-} from './zephyr_strike';
 
 import {
   shouldCast as shouldCastAganazzarsScorcher,
@@ -368,12 +320,6 @@ import {
 } from './rimes_binding_ice';
 
 import {
-  shouldCast as shouldCastShadowBlade,
-  execute as executeShadowBlade,
-  metadata as metadataShadowBlade,
-} from './shadow_blade';
-
-import {
   shouldCast as shouldCastSkywrite,
   execute as executeSkywrite,
   metadata as metadataSkywrite,
@@ -434,18 +380,6 @@ import {
 } from './aura_of_vitality';
 
 import {
-  shouldCast as shouldCastBeaconOfHope,
-  execute as executeBeaconOfHope,
-  metadata as metadataBeaconOfHope,
-} from './beacon_of_hope';
-
-import {
-  shouldCast as shouldCastBlindingSmite,
-  execute as executeBlindingSmite,
-  metadata as metadataBlindingSmite,
-} from './blinding_smite';
-
-import {
   shouldCast as shouldCastBlink,
   execute as executeBlink,
   metadata as metadataBlink,
@@ -482,22 +416,10 @@ import {
 } from './daylight';
 
 import {
-  shouldCast as shouldCastElementalWeapon,
-  execute as executeElementalWeapon,
-  metadata as metadataElementalWeapon,
-} from './elemental_weapon';
-
-import {
   shouldCast as shouldCastFeignDeath,
   execute as executeFeignDeath,
   metadata as metadataFeignDeath,
 } from './feign_death';
-
-import {
-  shouldCast as shouldCastFlameArrows,
-  execute as executeFlameArrows,
-  metadata as metadataFlameArrows,
-} from './flame_arrows';
 
 import {
   shouldCast as shouldCastFly,
@@ -530,12 +452,6 @@ import {
 } from './hunger_of_hadar';
 
 import {
-  shouldCast as shouldCastIntellectFortress,
-  execute as executeIntellectFortress,
-  metadata as metadataIntellectFortress,
-} from './intellect_fortress';
-
-import {
   shouldCast as shouldCastLaeralsSilverLance,
   execute as executeLaeralsSilverLance,
   metadata as metadataLaeralsSilverLance,
@@ -546,12 +462,6 @@ import {
   execute as executeLeomundsTinyHut,
   metadata as metadataLeomundsTinyHut,
 } from './leomunds_tiny_hut';
-
-import {
-  shouldCast as shouldCastLightningArrow,
-  execute as executeLightningArrow,
-  metadata as metadataLightningArrow,
-} from './lightning_arrow';
 
 import {
   shouldCast as shouldCastLinkedGlyphs,
@@ -582,12 +492,6 @@ import {
   execute as executeMelfsMinuteMeteors,
   metadata as metadataMelfsMinuteMeteors,
 } from './melfs_minute_meteors';
-
-import {
-  shouldCast as shouldCastMotivationalSpeech,
-  execute as executeMotivationalSpeech,
-  metadata as metadataMotivationalSpeech,
-} from './motivational_speech';
 
 import {
   shouldCast as shouldCastNondetection,
@@ -636,12 +540,6 @@ import {
   execute as executeSpiritGuardians,
   metadata as metadataSpiritGuardians,
 } from './spirit_guardians';
-
-import {
-  shouldCast as shouldCastSpiritShroud,
-  execute as executeSpiritShroud,
-  metadata as metadataSpiritShroud,
-} from './spirit_shroud';
 
 import {
   shouldCast as shouldCastSylunésViper,
@@ -812,12 +710,6 @@ import {
 } from './spirit_of_death';
 
 import {
-  shouldCast as shouldCastStaggeringSmite,
-  execute as executeStaggeringSmite,
-  metadata as metadataStaggeringSmite,
-} from './staggering_smite';
-
-import {
   shouldCast as shouldCastStoneShape,
   execute as executeStoneShape,
   metadata as metadataStoneShape,
@@ -846,12 +738,6 @@ import {
   execute as executeAntilifeShell,
   metadata as metadataAntilifeShell,
 } from './antilife_shell';
-
-import {
-  shouldCast as shouldCastBanishingSmite,
-  execute as executeBanishingSmite,
-  metadata as metadataBanishingSmite,
-} from './banishing_smite';
 
 import {
   shouldCast as shouldCastBigbysHand,
@@ -908,12 +794,6 @@ import {
 } from './greater_restoration';
 
 import {
-  shouldCast as shouldCastHolyWeapon,
-  execute as executeHolyWeapon,
-  metadata as metadataHolyWeapon,
-} from './holy_weapon';
-
-import {
   shouldCast as shouldCastInsectPlague,
   execute as executeInsectPlague,
   metadata as metadataInsectPlague,
@@ -966,12 +846,6 @@ import {
   execute as executeSongalsElementalSuffusion,
   metadata as metadataSongalsElementalSuffusion,
 } from './songals_elemental_suffusion';
-
-import {
-  shouldCast as shouldCastSwiftQuiver,
-  execute as executeSwiftQuiver,
-  metadata as metadataSwiftQuiver,
-} from './swift_quiver';
 
 import {
   shouldCast as shouldCastTelekinesis,
@@ -1250,12 +1124,6 @@ import {
 } from './glibness';
 
 import {
-  shouldCast as shouldCastHolyAura,
-  execute as executeHolyAura,
-  metadata as metadataHolyAura,
-} from './holy_aura';
-
-import {
   shouldCast as shouldCastHolyStarOfMystra,
   execute as executeHolyStarOfMystra,
   metadata as metadataHolyStarOfMystra,
@@ -1284,12 +1152,6 @@ import {
   execute as executeBladeOfDisaster,
   metadata as metadataBladeOfDisaster,
 } from './blade_of_disaster';
-
-import {
-  shouldCast as shouldCastForesight,
-  execute as executeForesight,
-  metadata as metadataForesight,
-} from './foresight';
 
 import {
   shouldCast as shouldCastInvulnerability,
@@ -1366,12 +1228,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     shouldCast: shouldCastArmorOfAgathys,
     execute: executeArmorOfAgathys,
   },
-  'Bane': {
-    name: 'Bane',
-    level: metadataBane.level,
-    shouldCast: shouldCastBane,
-    execute: executeBane,
-  },
   'Beast Bond': {
     name: 'Beast Bond',
     level: metadataBeastBond.level,
@@ -1402,18 +1258,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     shouldCast: shouldCastDistortValue,
     execute: executeDistortValue,
   },
-  'Divine Favor': {
-    name: 'Divine Favor',
-    level: metadataDivineFavor.level,
-    shouldCast: shouldCastDivineFavor,
-    execute: executeDivineFavor,
-  },
-  'Ensnaring Strike': {
-    name: 'Ensnaring Strike',
-    level: metadataEnsnaringStrike.level,
-    shouldCast: shouldCastEnsnaringStrike,
-    execute: executeEnsnaringStrike,
-  },
   'Expeditious Retreat': {
     name: 'Expeditious Retreat',
     level: metadataExpeditiousRetreat.level,
@@ -1437,12 +1281,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     level: metadataGoodberry.level,
     shouldCast: shouldCastGoodberry,
     execute: executeGoodberry,
-  },
-  'Hail of Thorns': {
-    name: 'Hail of Thorns',
-    level: metadataHailOfThorns.level,
-    shouldCast: shouldCastHailOfThorns,
-    execute: executeHailOfThorns,
   },
   'Heroism': {
     name: 'Heroism',
@@ -1480,12 +1318,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     shouldCast: shouldCastSanctuary,
     execute: executeSanctuary,
   },
-  'Searing Smite': {
-    name: 'Searing Smite',
-    level: metadataSearingSmite.level,
-    shouldCast: shouldCastSearingSmite,
-    execute: executeSearingSmite,
-  },
   'Silent Image': {
     name: 'Silent Image',
     level: metadataSilentImage.level,
@@ -1522,29 +1354,11 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     shouldCast: shouldCastTensersFloatingDisk,
     execute: executeTensersFloatingDisk,
   },
-  'Thunderous Smite': {
-    name: 'Thunderous Smite',
-    level: metadataThunderousSmite.level,
-    shouldCast: shouldCastThunderousSmite,
-    execute: executeThunderousSmite,
-  },
   'Unseen Servant': {
     name: 'Unseen Servant',
     level: metadataUnseenServant.level,
     shouldCast: shouldCastUnseenServant,
     execute: executeUnseenServant,
-  },
-  'Wrathful Smite': {
-    name: 'Wrathful Smite',
-    level: metadataWrathfulSmite.level,
-    shouldCast: shouldCastWrathfulSmite,
-    execute: executeWrathfulSmite,
-  },
-  'Zephyr Strike': {
-    name: 'Zephyr Strike',
-    level: metadataZephyrStrike.level,
-    shouldCast: shouldCastZephyrStrike,
-    execute: executeZephyrStrike,
   },
   "Aganazzar's Scorcher": {
     name: "Aganazzar's Scorcher",
@@ -1702,12 +1516,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     shouldCast: shouldCastRimesBindingIce,
     execute: executeRimesBindingIce,
   },
-  'Shadow Blade': {
-    name: 'Shadow Blade',
-    level: metadataShadowBlade.level,
-    shouldCast: shouldCastShadowBlade,
-    execute: executeShadowBlade,
-  },
   'Skywrite': {
     name: 'Skywrite',
     level: metadataSkywrite.level,
@@ -1768,18 +1576,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     shouldCast: shouldCastAuraOfVitality,
     execute: executeAuraOfVitality,
   },
-  'Beacon of Hope': {
-    name: 'Beacon of Hope',
-    level: metadataBeaconOfHope.level,
-    shouldCast: shouldCastBeaconOfHope,
-    execute: executeBeaconOfHope,
-  },
-  'Blinding Smite': {
-    name: 'Blinding Smite',
-    level: metadataBlindingSmite.level,
-    shouldCast: shouldCastBlindingSmite,
-    execute: executeBlindingSmite,
-  },
   'Blink': {
     name: 'Blink',
     level: metadataBlink.level,
@@ -1816,23 +1612,11 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     shouldCast: shouldCastDaylight,
     execute: executeDaylight,
   },
-  'Elemental Weapon': {
-    name: 'Elemental Weapon',
-    level: metadataElementalWeapon.level,
-    shouldCast: shouldCastElementalWeapon,
-    execute: executeElementalWeapon,
-  },
   'Feign Death': {
     name: 'Feign Death',
     level: metadataFeignDeath.level,
     shouldCast: shouldCastFeignDeath,
     execute: executeFeignDeath,
-  },
-  'Flame Arrows': {
-    name: 'Flame Arrows',
-    level: metadataFlameArrows.level,
-    shouldCast: shouldCastFlameArrows,
-    execute: executeFlameArrows,
   },
   'Fly': {
     name: 'Fly',
@@ -1864,12 +1648,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     shouldCast: shouldCastHungerOfHadar,
     execute: executeHungerOfHadar,
   },
-  'Intellect Fortress': {
-    name: 'Intellect Fortress',
-    level: metadataIntellectFortress.level,
-    shouldCast: shouldCastIntellectFortress,
-    execute: executeIntellectFortress,
-  },
   "Laeral's Silver Lance": {
     name: "Laeral's Silver Lance",
     level: metadataLaeralsSilverLance.level,
@@ -1881,12 +1659,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     level: metadataLeomundsTinyHut.level,
     shouldCast: shouldCastLeomundsTinyHut,
     execute: executeLeomundsTinyHut,
-  },
-  'Lightning Arrow': {
-    name: 'Lightning Arrow',
-    level: metadataLightningArrow.level,
-    shouldCast: shouldCastLightningArrow,
-    execute: executeLightningArrow,
   },
   'Linked Glyphs': {
     name: 'Linked Glyphs',
@@ -1917,12 +1689,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     level: metadataMelfsMinuteMeteors.level,
     shouldCast: shouldCastMelfsMinuteMeteors,
     execute: executeMelfsMinuteMeteors,
-  },
-  'Motivational Speech': {
-    name: 'Motivational Speech',
-    level: metadataMotivationalSpeech.level,
-    shouldCast: shouldCastMotivationalSpeech,
-    execute: executeMotivationalSpeech,
   },
   'Nondetection': {
     name: 'Nondetection',
@@ -1971,12 +1737,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     level: metadataSpiritGuardians.level,
     shouldCast: shouldCastSpiritGuardians,
     execute: executeSpiritGuardians,
-  },
-  'Spirit Shroud': {
-    name: 'Spirit Shroud',
-    level: metadataSpiritShroud.level,
-    shouldCast: shouldCastSpiritShroud,
-    execute: executeSpiritShroud,
   },
   "Syluné's Viper": {
     name: "Syluné's Viper",
@@ -2146,12 +1906,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     shouldCast: shouldCastSpiritOfDeath,
     execute: executeSpiritOfDeath,
   },
-  'Staggering Smite': {
-    name: 'Staggering Smite',
-    level: metadataStaggeringSmite.level,
-    shouldCast: shouldCastStaggeringSmite,
-    execute: executeStaggeringSmite,
-  },
   'Stone Shape': {
     name: 'Stone Shape',
     level: metadataStoneShape.level,
@@ -2181,12 +1935,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     level: metadataAntilifeShell.level,
     shouldCast: shouldCastAntilifeShell,
     execute: executeAntilifeShell,
-  },
-  'Banishing Smite': {
-    name: 'Banishing Smite',
-    level: metadataBanishingSmite.level,
-    shouldCast: shouldCastBanishingSmite,
-    execute: executeBanishingSmite,
   },
   "Bigby's Hand": {
     name: "Bigby's Hand",
@@ -2242,12 +1990,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     shouldCast: shouldCastGreaterRestoration,
     execute: executeGreaterRestoration,
   },
-  'Holy Weapon': {
-    name: 'Holy Weapon',
-    level: metadataHolyWeapon.level,
-    shouldCast: shouldCastHolyWeapon,
-    execute: executeHolyWeapon,
-  },
   'Insect Plague': {
     name: 'Insect Plague',
     level: metadataInsectPlague.level,
@@ -2301,12 +2043,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     level: metadataSongalsElementalSuffusion.level,
     shouldCast: shouldCastSongalsElementalSuffusion,
     execute: executeSongalsElementalSuffusion,
-  },
-  'Swift Quiver': {
-    name: 'Swift Quiver',
-    level: metadataSwiftQuiver.level,
-    shouldCast: shouldCastSwiftQuiver,
-    execute: executeSwiftQuiver,
   },
   'Telekinesis': {
     name: 'Telekinesis',
@@ -2584,12 +2320,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     shouldCast: shouldCastGlibness,
     execute: executeGlibness,
   },
-  'Holy Aura': {
-    name: 'Holy Aura',
-    level: metadataHolyAura.level,
-    shouldCast: shouldCastHolyAura,
-    execute: executeHolyAura,
-  },
   'Holy Star of Mystra': {
     name: 'Holy Star of Mystra',
     level: metadataHolyStarOfMystra.level,
@@ -2619,12 +2349,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     level: metadataBladeOfDisaster.level,
     shouldCast: shouldCastBladeOfDisaster,
     execute: executeBladeOfDisaster,
-  },
-  'Foresight': {
-    name: 'Foresight',
-    level: metadataForesight.level,
-    shouldCast: shouldCastForesight,
-    execute: executeForesight,
   },
   'Invulnerability': {
     name: 'Invulnerability',

@@ -617,6 +617,31 @@ import {
   execute as executeGrease,
 } from '../spells/grease';
 
+// ── Session 27 — Batch 3 concentration buffs (23 spells) ────────────────
+import { shouldCast as shouldCastBane,            execute as executeBane }            from '../spells/bane';
+import { shouldCast as shouldCastMotivationalSpeech, execute as executeMotivationalSpeech } from '../spells/motivational_speech';
+import { shouldCast as shouldCastEnsnaringStrike, execute as executeEnsnaringStrike } from '../spells/ensnaring_strike';
+import { shouldCast as shouldCastHailOfThorns,    execute as executeHailOfThorns }    from '../spells/hail_of_thorns';
+import { shouldCast as shouldCastSearingSmite,    execute as executeSearingSmite }    from '../spells/searing_smite';
+import { shouldCast as shouldCastThunderousSmite, execute as executeThunderousSmite } from '../spells/thunderous_smite';
+import { shouldCast as shouldCastWrathfulSmite,   execute as executeWrathfulSmite }   from '../spells/wrathful_smite';
+import { shouldCast as shouldCastZephyrStrike,    execute as executeZephyrStrike }    from '../spells/zephyr_strike';
+import { shouldCast as shouldCastBlindingSmite,   execute as executeBlindingSmite }   from '../spells/blinding_smite';
+import { shouldCast as shouldCastLightningArrow,  execute as executeLightningArrow }  from '../spells/lightning_arrow';
+import { shouldCast as shouldCastSpiritShroud,    execute as executeSpiritShroud }    from '../spells/spirit_shroud';
+import { shouldCast as shouldCastStaggeringSmite, execute as executeStaggeringSmite } from '../spells/staggering_smite';
+import { shouldCast as shouldCastBanishingSmite,  execute as executeBanishingSmite }  from '../spells/banishing_smite';
+import { shouldCast as shouldCastDivineFavor,     execute as executeDivineFavor }     from '../spells/divine_favor';
+import { shouldCast as shouldCastShadowBlade,     execute as executeShadowBlade }     from '../spells/shadow_blade';
+import { shouldCast as shouldCastElementalWeapon, execute as executeElementalWeapon } from '../spells/elemental_weapon';
+import { shouldCast as shouldCastFlameArrows,     execute as executeFlameArrows }     from '../spells/flame_arrows';
+import { shouldCast as shouldCastHolyWeapon,      execute as executeHolyWeapon }      from '../spells/holy_weapon';
+import { shouldCast as shouldCastSwiftQuiver,     execute as executeSwiftQuiver }     from '../spells/swift_quiver';
+import { shouldCast as shouldCastBeaconOfHope,    execute as executeBeaconOfHope }    from '../spells/beacon_of_hope';
+import { shouldCast as shouldCastIntellectFortress, execute as executeIntellectFortress } from '../spells/intellect_fortress';
+import { shouldCast as shouldCastHolyAura,        execute as executeHolyAura }        from '../spells/holy_aura';
+import { shouldCast as shouldCastForesight,       execute as executeForesight }       from '../spells/foresight';
+
 // ── Session 19 — bulk-implementation generic dispatch (262 new spells) ────
 import {
   lookupGenericSpell,
@@ -3428,6 +3453,68 @@ function executePlannedAction(
       if (grTargets) executeGrease(actor, grTargets, state);
       break;
     }
+
+    // ── Session 27 — Batch 3 concentration buffs (23 spells) ──────────────
+    // 6 multi-target buffs (Combatant[] signature): bane, motivationalSpeech,
+    //   beaconOfHope, intellectFortress, holyAura, foresight.
+    // 17 self-buffs (boolean signature): 11 smites + 6 weapon enchants.
+    case 'bane': {
+      // Bane — PHB p.216: 30 ft, CHA save or -1d4 (bane_die), conc (up to 3 enemies).
+      const baneTargets = shouldCastBane(actor, bf);
+      if (baneTargets) executeBane(actor, baneTargets, state);
+      break;
+    }
+    case 'motivationalSpeech': {
+      // Motivational Speech — AI p.77: 60 ft, +1d4 (bless_die) + 5 temp HP, conc (up to 3 allies).
+      const msTargets = shouldCastMotivationalSpeech(actor, bf);
+      if (msTargets) executeMotivationalSpeech(actor, msTargets, state);
+      break;
+    }
+    case 'beaconOfHope': {
+      // Beacon of Hope — PHB p.217: 30 ft, adv on WIS saves, conc (up to 3 allies).
+      const bohTargets = shouldCastBeaconOfHope(actor, bf);
+      if (bohTargets) executeBeaconOfHope(actor, bohTargets, state);
+      break;
+    }
+    case 'intellectFortress': {
+      // Intellect Fortress — XGE: adv on INT/WIS/CHA saves (v1: all saves), conc (allies).
+      const ifTargets = shouldCastIntellectFortress(actor, bf);
+      if (ifTargets) executeIntellectFortress(actor, ifTargets, state);
+      break;
+    }
+    case 'holyAura': {
+      // Holy Aura — PHB p.251: 30-ft aura, adv on saves, conc (all allies in aura).
+      const haTargets = shouldCastHolyAura(actor, bf);
+      if (haTargets) executeHolyAura(actor, haTargets, state);
+      break;
+    }
+    case 'foresight': {
+      // Foresight — PHB p.244: Touch (5 ft), adv on all d20 rolls, conc (1 ally).
+      const fsTargetId = plan.targetId;
+      const fsTarget = fsTargetId ? bf.combatants.get(fsTargetId) ?? null : null;
+      const fsLive = fsTarget && !fsTarget.isDead && !fsTarget.isUnconscious ? [fsTarget] : shouldCastForesight(actor, bf);
+      if (fsLive) executeForesight(actor, fsLive, state);
+      break;
+    }
+    // 11 smites (self-buff, boolean signature — set _nextHitRider):
+    case 'ensnaringStrike':   if (shouldCastEnsnaringStrike(actor, bf))   executeEnsnaringStrike(actor, state);   break;
+    case 'hailOfThorns':      if (shouldCastHailOfThorns(actor, bf))      executeHailOfThorns(actor, state);      break;
+    case 'searingSmite':      if (shouldCastSearingSmite(actor, bf))      executeSearingSmite(actor, state);      break;
+    case 'thunderousSmite':   if (shouldCastThunderousSmite(actor, bf))   executeThunderousSmite(actor, state);   break;
+    case 'wrathfulSmite':     if (shouldCastWrathfulSmite(actor, bf))     executeWrathfulSmite(actor, state);     break;
+    case 'zephyrStrike':      if (shouldCastZephyrStrike(actor, bf))      executeZephyrStrike(actor, state);      break;
+    case 'blindingSmite':     if (shouldCastBlindingSmite(actor, bf))     executeBlindingSmite(actor, state);     break;
+    case 'lightningArrow':    if (shouldCastLightningArrow(actor, bf))    executeLightningArrow(actor, state);    break;
+    case 'spiritShroud':      if (shouldCastSpiritShroud(actor, bf))      executeSpiritShroud(actor, state);      break;
+    case 'staggeringSmite':   if (shouldCastStaggeringSmite(actor, bf))   executeStaggeringSmite(actor, state);   break;
+    case 'banishingSmite':    if (shouldCastBanishingSmite(actor, bf))    executeBanishingSmite(actor, state);    break;
+    // 6 weapon enchants (self-buff, boolean signature — apply weapon_enchant):
+    case 'divineFavor':       if (shouldCastDivineFavor(actor, bf))       executeDivineFavor(actor, state);       break;
+    case 'shadowBlade':       if (shouldCastShadowBlade(actor, bf))       executeShadowBlade(actor, state);       break;
+    case 'elementalWeapon':   if (shouldCastElementalWeapon(actor, bf))   executeElementalWeapon(actor, state);   break;
+    case 'flameArrows':       if (shouldCastFlameArrows(actor, bf))       executeFlameArrows(actor, state);       break;
+    case 'holyWeapon':        if (shouldCastHolyWeapon(actor, bf))        executeHolyWeapon(actor, state);        break;
+    case 'swiftQuiver':       if (shouldCastSwiftQuiver(actor, bf))       executeSwiftQuiver(actor, state);       break;
 
     // ── Session 19 — generic spell dispatch ────────────────────────────
     // Routes any spell in the GENERIC_SPELLS registry (262 bulk-implemented

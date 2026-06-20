@@ -1,35 +1,44 @@
 // ============================================================
 // Thunderous Smite — PHB p.282
 //
-// 1-level evocation, 1 bonus action, range Self, concentration.
-// Duration: 1 minute.
+// 1st-level evocation, BONUS ACTION, range Self, concentration (1 min).
+// Components: V only.
 //
-// Effect: The first time you hit with a melee weapon attack during this spell's duration, your weapon rings with thunder that is audible within 300 feet of you, and the attack deals an extra  thund
+// Effect: The next time you hit a creature with a weapon attack
+//         before this spell ends, your weapon crackles with thunder,
+//         and the attack deals an extra 2d6 thunder damage to the
+//         target and pushes the target 10 feet away if it is Large
+//         or smaller.
 //
 // Upcast: see source (not modelled in v1).
 //
 // v1 simplifications:
-//   - v1 models this spell as a FORWARD-COMPAT flag only (Session 20 bulk
-//     implementation — level-1 backfill). The spell consumes a slot and
-//     sets the flag `_genericSpellActiveSpells` on the caster; the actual
-//     mechanical effect (damage / save / condition / buff) is NOT applied
-//     in v1. A future implementation should extend the relevant engine
-//     subsystem (damage_zone for persistent damage, condition_apply for
-//     conditions, advantage_vs for buffs, etc.) to consume this flag and
-//     apply the real effect. This mirrors the Session 17/18 forward-compat
-//     pattern established by Darkvision, Arcane Lock, Knock, See Invisibility
-//     and the Session 19 bulk-implementation pattern.
-//   - Concentration spell (forward-compat flag persists for combat).
+//   - Duration: canon 1 min concentration → v1 one-shot scratch field
+//     `_nextHitRider` on the CASTER. The rider is consumed by
+//     resolveAttack's damage branch on the next weapon hit. Documented
+//     via `thunderousSmiteCanonV1Implemented: true`.
+//   - Push 10 ft rider (PHB p.282: target pushed 10 ft if Large or
+//     smaller) NOT modelled — v1 only applies the bonus 2d6 thunder
+//     damage. Documented via `thunderousSmiteRidersV1Simplified: true`.
+//   - Upcast: not applicable (PHB has no per-slot-level scaling; v1
+//     always rolls 2d6 thunder).
 //
-// Spell module pattern (mirrors Darkvision / Arcane Lock forward-compat
-// self-buff pattern):
-//   shouldCast(caster, bf) → boolean
+// Session 27 Batch 3 — migrated from generic forward-compat stub to
+// bespoke `_nextHitRider` self-buff. The stub previously set a flag on
+// `_genericSpellActiveSpells` and applied no mechanical effect; this
+// implementation drives the engine's next-hit rider pipeline directly.
+//
+// Spell module pattern:
+//   shouldCast(caster, bf) → boolean   (self-buff — no target)
 //   execute(caster, state) → void
-//   cleanup() — no-op (forward-compat flag persists for combat)
+//   metadata → spell stats
+//   cleanup(c) — clears stale `_nextHitRider` if concentration broke
 // ============================================================
 
-import { Combatant, Battlefield } from '../types/core';
+import { Combatant, Battlefield, DamageType } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
+import { removeEffectsFromCaster } from '../engine/spell_effects';
+import { startConcentration } from '../engine/utils';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 
 // ---- Metadata -----------------------------------------------
@@ -38,10 +47,14 @@ export const metadata = {
   name: 'Thunderous Smite',
   level: 1,
   school: 'evocation',
-  rangeFt: 0,
+  rangeFt: 0,              // self
   concentration: true,
-  castingTime: 'bonusAction',
-  thunderousSmiteV1Simplified: true,
+  castingTime: 'bonus action',
+  dieSides: 6,
+  count: 2,
+  damageType: 'thunder' as const,
+  thunderousSmiteCanonV1Implemented: true,
+  thunderousSmiteRidersV1Simplified: true,    // 10-ft push rider simplified
 } as const;
 
 // ---- Local log helper ---------------------------------------
@@ -70,14 +83,18 @@ function emit(
  * Returns true if the caster should cast Thunderous Smite this turn.
  *
  * Preconditions:
- *   - Caster has 'Thunderous Smite' in their actions
- *   - Caster has at least one 1-level-or-higher slot available
- *   - Caster is NOT already Thunderous Smite-active (re-cast would be a no-op in v1)
+ *   - Caster is NOT already concentrating on another spell.
+ *   - Caster has 'Thunderous Smite' in their actions.
+ *   - Caster has at least one 1st-level-or-higher slot available.
+ *   - Caster does NOT already have a pending `_nextHitRider`.
+ *
+ * Target priority: self only (PHB p.282: range Self).
  */
 export function shouldCast(caster: Combatant, _bf: Battlefield): boolean {
+  if (caster.concentration?.active) return false;
   if (!caster.actions.some(a => a.name === 'Thunderous Smite')) return false;
   if (!hasSpellSlot(caster, 1)) return false;
-  if (caster._genericSpellActiveSpells?.has('Thunderous Smite')) return false;
+  if (caster._nextHitRider) return false;
   return true;
 }
 
@@ -85,35 +102,62 @@ export function shouldCast(caster: Combatant, _bf: Battlefield): boolean {
 
 /**
  * Execute Thunderous Smite:
- *  1. Consume a 1-level spell slot.
- *  2. Set the flag on the caster's `_genericSpellActiveSpells` Set.
- *  3. Log the cast.
+ *  1. Consume a 1st-level spell slot (or higher — consumeSpellSlot handles upcast).
+ *  2. Safety: drop any stale concentration effects before starting new.
+ *  3. Start concentration on 'Thunderous Smite'.
+ *  4. Set `_nextHitRider` on the caster (one-shot rider).
+ *
+ * The rider is CONSUMED by resolveAttack's damage branch in combat.ts
+ * on the next weapon hit. The damage branch rolls 2d6 thunder (crit
+ * doubles), adds it to the damage total, then sets `_nextHitRider = null`
+ * (one-shot — PHB p.282).
+ *
+ * @param caster  The casting Combatant (Paladin / Ranger)
+ * @param state   Current EngineState (for logging)
  */
-export function execute(
-  caster: Combatant,
-  state: EngineState,
-): void {
+export function execute(caster: Combatant, state: EngineState): void {
   consumeSpellSlot(caster, 1);
 
-  if (!caster._genericSpellActiveSpells) {
-    caster._genericSpellActiveSpells = new Set<string>();
+  // Safety net: drop stale concentration effects before starting new
+  if (caster.concentration?.active) {
+    removeEffectsFromCaster(caster.id, state.battlefield);
   }
-  caster._genericSpellActiveSpells.add('Thunderous Smite');
+  startConcentration(caster, 'Thunderous Smite');
+
+  caster._nextHitRider = {
+    spellName: 'Thunderous Smite',
+    dieSides: metadata.dieSides,
+    count: metadata.count,
+    damageType: metadata.damageType as DamageType,
+  };
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Thunderous Smite! (v1: forward-compat flag set; mechanical effect not yet implemented)`,
+    `${caster.name} casts Thunderous Smite! (Next weapon hit: +${metadata.count}d${metadata.dieSides} ${metadata.damageType})`,
     caster.id,
   );
   emit(
     state, 'condition_add', caster.id,
-    `${caster.name} is affected by Thunderous Smite. (v1: forward-compat flag set; no mechanical effect until engine subsystem is implemented)`,
+    `${caster.name} readies Thunderous Smite — next weapon hit deals +${metadata.count}d${metadata.dieSides} ${metadata.damageType}!`,
     caster.id,
   );
 }
 
 // ---- Cleanup ------------------------------------------------
 
-export function cleanup(_c: Combatant): void {
-  // No-op — forward-compat flag persists for combat.
+/**
+ * Cleanup hook for Thunderous Smite — clears a stale `_nextHitRider`
+ * (whose spellName is 'Thunderous Smite') if concentration broke
+ * before the next weapon hit consumed it. Called from resetBudget()
+ * at the start of the caster's next turn.
+ *
+ * @param c  The combatant whose turn is starting (the caster)
+ */
+export function cleanup(c: Combatant): void {
+  if (
+    c._nextHitRider?.spellName === 'Thunderous Smite' &&
+    (!c.concentration?.active || c.concentration.spellName !== 'Thunderous Smite')
+  ) {
+    c._nextHitRider = null;
+  }
 }

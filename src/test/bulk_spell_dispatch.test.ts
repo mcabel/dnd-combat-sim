@@ -145,7 +145,9 @@ assert('Registry is non-empty', SPELL_COUNT > 0);
 // Registry now has 255 spells (299 − 44). Cumulative migrated: 58 (7+7+44).
 // Session 25: Batch 2 COMPLETE. Migrated all 35 L1-L9 save-or-condition spells.
 // Registry now has 220 spells (255 − 35). Cumulative migrated: 93 (7+7+44+35).
-assert(`Registry has at least 220 spells (got ${SPELL_COUNT})`, SPELL_COUNT >= 220);
+// Session 27: Batch 3 COMPLETE. Migrated all 23 concentration-buff spells.
+// Registry now has 197 spells (220 − 23). Cumulative migrated: 116 (7+7+44+35+23).
+assert(`Registry has at least 197 spells (got ${SPELL_COUNT})`, SPELL_COUNT >= 197);
 console.log(`  📊 Total bulk-implemented spells: ${SPELL_COUNT}`);
 
 // Sample spells — one per level 1-9. Updated in Session 23 to avoid the
@@ -277,6 +279,25 @@ const MIGRATED_SPELLS_S25 = [
   'Charm Person', 'Compelled Duel', 'Grease',
 ];
 for (const migrated of MIGRATED_SPELLS_S25) {
+  eq(`  ${migrated} is no longer in the registry (migrated to bespoke)`,
+    lookupGenericSpell(migrated), null);
+}
+
+console.log('\n=== 1f. Session 27 — Batch 3 migrated spells removed from registry ===\n');
+const MIGRATED_SPELLS_S27 = [
+  // BUFF_BLESS_DIE (2)
+  'Bane', 'Motivational Speech',
+  // BUFF_HEX_RIDER / smites (11)
+  'Ensnaring Strike', 'Hail of Thorns', 'Searing Smite', 'Thunderous Smite',
+  'Wrathful Smite', 'Zephyr Strike', 'Blinding Smite', 'Lightning Arrow',
+  'Spirit Shroud', 'Staggering Smite', 'Banishing Smite',
+  // BUFF_WEAPON_ENCHANT (6)
+  'Divine Favor', 'Shadow Blade', 'Elemental Weapon', 'Flame Arrows',
+  'Holy Weapon', 'Swift Quiver',
+  // BUFF_ADVANTAGE_VS (4)
+  'Beacon of Hope', 'Intellect Fortress', 'Holy Aura', 'Foresight',
+];
+for (const migrated of MIGRATED_SPELLS_S27) {
   eq(`  ${migrated} is no longer in the registry (migrated to bespoke)`,
     lookupGenericSpell(migrated), null);
 }

@@ -1,35 +1,47 @@
 // ============================================================
 // Divine Favor — PHB p.234
 //
-// 1-level evocation, 1 bonus action, range Self, concentration.
-// Duration: 1 minute.
+// 1st-level evocation, bonus action, range Self, concentration (1 min).
+// Components: V, S.
 //
-// Effect: Your prayer empowers you with divine radiance. Until the spell ends, your weapon attacks deal an extra  radiant damage on a hit.
+// Effect: Your prayer empowers you with divine radiance. Until the spell
+//         ends, your weapon attacks deal an extra 1d4 radiant damage on a
+//         hit.
 //
-// Upcast: see source (not modelled in v1).
+// Upcast: None (PHB p.234 — fixed 1d4 at all slot levels).
 //
 // v1 simplifications:
-//   - v1 models this spell as a FORWARD-COMPAT flag only (Session 20 bulk
-//     implementation — level-1 backfill). The spell consumes a slot and
-//     sets the flag `_genericSpellActiveSpells` on the caster; the actual
-//     mechanical effect (damage / save / condition / buff) is NOT applied
-//     in v1. A future implementation should extend the relevant engine
-//     subsystem (damage_zone for persistent damage, condition_apply for
-//     conditions, advantage_vs for buffs, etc.) to consume this flag and
-//     apply the real effect. This mirrors the Session 17/18 forward-compat
-//     pattern established by Darkvision, Arcane Lock, Knock, See Invisibility
-//     and the Session 19 bulk-implementation pattern.
-//   - Concentration spell (forward-compat flag persists for combat).
+//   - Self-buff only: canon is "your weapon attacks" — v1 applies the
+//     `weapon_enchant` ActiveEffect to the CASTER and the engine consumes
+//     it on every weapon attack the caster makes (melee AND ranged, NOT
+//     spell). This matches canon exactly (canon doesn't distinguish melee
+//     vs ranged — just "your weapon attacks").
+//   - Duration: canon 1 min concentration → v1: concentration is started,
+//     but NOT enforced (TG-002). The `weapon_enchant` ActiveEffect persists
+//     until removeEffectsFromCaster() is called.
 //
-// Spell module pattern (mirrors Darkvision / Arcane Lock forward-compat
-// self-buff pattern):
+// Weapon_enchant pattern (Session 27 Batch 3):
+//   The engine's resolveAttack damage branch consumes `damageDie` ×
+//   `damageDieCount` of `damageDieType` and rolls them, adding the result
+//   to the weapon's damage (PHB p.196: crit doubles the dice). The
+//   `attackBonus` and `damageBonus` (flat) are 0 for Divine Favor — only
+//   the radiant damage die is added.
+//
+// Migration note: Session 27 Batch 3 — migrated from generic forward-compat
+// stub to bespoke weapon_enchant self-buff. Previously this spell only
+// set a `_genericSpellActiveSpells` flag with no mechanical effect; now
+// it applies a real `weapon_enchant` effect with a 1d4 radiant damage die.
+//
+// Spell module pattern (self-buff, mirrors magic_weapon.ts but self-only):
 //   shouldCast(caster, bf) → boolean
 //   execute(caster, state) → void
-//   cleanup() — no-op (forward-compat flag persists for combat)
+//   cleanup() — no-op (concentration break handled by removeEffectsFromCaster)
 // ============================================================
 
-import { Combatant, Battlefield } from '../types/core';
+import { Combatant, Battlefield, DamageType } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
+import { applySpellEffect, removeEffectsFromCaster } from '../engine/spell_effects';
+import { startConcentration } from '../engine/utils';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 
 // ---- Metadata -----------------------------------------------
@@ -38,10 +50,15 @@ export const metadata = {
   name: 'Divine Favor',
   level: 1,
   school: 'evocation',
-  rangeFt: 0,
+  rangeFt: 0,                  // self-buff
   concentration: true,
-  castingTime: 'bonusAction',
-  divineFavorV1Simplified: true,
+  castingTime: 'bonus action',
+  attackBonus: 0,
+  damageBonus: 0,
+  damageDie: 4,                // +1d4 radiant per weapon attack (PHB p.234)
+  damageDieCount: 1,
+  damageType: 'radiant' as DamageType,
+  divineFavorCanonV1Implemented: true,
 } as const;
 
 // ---- Local log helper ---------------------------------------
@@ -70,14 +87,19 @@ function emit(
  * Returns true if the caster should cast Divine Favor this turn.
  *
  * Preconditions:
+ *   - Caster is NOT already concentrating (one concentration spell at a time)
  *   - Caster has 'Divine Favor' in their actions
- *   - Caster has at least one 1-level-or-higher slot available
- *   - Caster is NOT already Divine Favor-active (re-cast would be a no-op in v1)
+ *   - Caster has at least one 1st-level-or-higher slot available
+ *   - Caster does NOT already have an active Divine Favor weapon_enchant
+ *     (re-cast would be a waste — the effect doesn't stack with itself)
  */
 export function shouldCast(caster: Combatant, _bf: Battlefield): boolean {
+  if (caster.concentration?.active) return false;
   if (!caster.actions.some(a => a.name === 'Divine Favor')) return false;
   if (!hasSpellSlot(caster, 1)) return false;
-  if (caster._genericSpellActiveSpells?.has('Divine Favor')) return false;
+  if (caster.activeEffects.some(e =>
+    e.casterId === caster.id && e.spellName === 'Divine Favor'
+  )) return false;
   return true;
 }
 
@@ -85,9 +107,18 @@ export function shouldCast(caster: Combatant, _bf: Battlefield): boolean {
 
 /**
  * Execute Divine Favor:
- *  1. Consume a 1-level spell slot.
- *  2. Set the flag on the caster's `_genericSpellActiveSpells` Set.
- *  3. Log the cast.
+ *  1. Consume a 1st-level spell slot.
+ *  2. Break any existing concentration (safety net — planner should prevent).
+ *  3. Start concentration on Divine Favor.
+ *  4. Apply a `weapon_enchant` ActiveEffect on the CASTER (self-buff) with
+ *     payload.damageDie=4, payload.damageDieCount=1, payload.damageDieType='radiant'.
+ *     The engine's resolveAttack damage branch rolls the 1d4 radiant and adds
+ *     it to every weapon attack (melee/ranged, NOT spell). Crit doubles the
+ *     die (PHB p.196).
+ *
+ * v1 simplifications: concentration NOT enforced (TG-002); self-buff applies
+ * to ALL of the caster's weapon attacks (canon: "your weapon attacks" —
+ * matches canon exactly).
  */
 export function execute(
   caster: Combatant,
@@ -95,19 +126,34 @@ export function execute(
 ): void {
   consumeSpellSlot(caster, 1);
 
-  if (!caster._genericSpellActiveSpells) {
-    caster._genericSpellActiveSpells = new Set<string>();
+  if (caster.concentration?.active) {
+    removeEffectsFromCaster(caster.id, state.battlefield);
   }
-  caster._genericSpellActiveSpells.add('Divine Favor');
+  startConcentration(caster, 'Divine Favor');
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Divine Favor! (v1: forward-compat flag set; mechanical effect not yet implemented)`,
+    `${caster.name} casts Divine Favor! (+1d4 radiant on weapon attacks)`,
     caster.id,
   );
+
+  applySpellEffect(caster, {
+    casterId: caster.id,
+    spellName: 'Divine Favor',
+    effectType: 'weapon_enchant',
+    payload: {
+      attackBonus: 0,
+      damageBonus: 0,
+      damageDie: 4,
+      damageDieCount: 1,
+      damageDieType: 'radiant',
+    },
+    sourceIsConcentration: true,
+  });
+
   emit(
     state, 'condition_add', caster.id,
-    `${caster.name} is affected by Divine Favor. (v1: forward-compat flag set; no mechanical effect until engine subsystem is implemented)`,
+    `${caster.name}'s weapon is enchanted! (+1d4 radiant damage on weapon attacks)`,
     caster.id,
   );
 }
@@ -115,5 +161,5 @@ export function execute(
 // ---- Cleanup ------------------------------------------------
 
 export function cleanup(_c: Combatant): void {
-  // No-op — forward-compat flag persists for combat.
+  // No-op — concentration break handles cleanup via removeEffectsFromCaster.
 }

@@ -1446,6 +1446,35 @@ export interface PlannedAction {
     | 'charmPerson'       // Charm Person — PHB p.221: 30 ft, WIS save or charmed, NO concentration (Session 27 TG-004: humanoid-only NOW enforced)
     | 'compelledDuel'     // Compelled Duel — PHB p.224: 30 ft, WIS save or frightened (taunt), concentration (movement-restriction simplified)
     | 'grease'            // Grease — PHB p.245: 60 ft, 10-ft radius AoE, DEX save or prone, NO concentration (persistent-terrain simplified)
+    // ── Session 27 — Batch 3 concentration buffs (23 spells) ──────────────
+    // Migrated from Session 20 forward-compat stubs to bespoke implementations
+    // using existing + new SpellEffectType values (bane_die, bless_die,
+    // weapon_enchant with damage-dice, advantage_vs, _nextHitRider scratch).
+    // 6 multi-target buffs + 17 self-buffs. Each has its own case branch in
+    // combat.ts + planner branch in planner.ts (12CP+).
+    | 'bane'              // Bane — PHB p.216: 30 ft, CHA save or -1d4 (bane_die), conc (up to 3 enemies)
+    | 'motivationalSpeech' // Motivational Speech — AI p.77: 60 ft, +1d4 (bless_die) + 5 temp HP, conc (up to 3 allies)
+    | 'ensnaringStrike'   // Ensnaring Strike — PHB p.237: self, next hit +1d6 piercing + restrained, conc (bonus action)
+    | 'hailOfThorns'      // Hail of Thorns — PHB p.249: self, next ranged hit +1d10 piercing, conc (bonus action; AoE simplified)
+    | 'searingSmite'      // Searing Smite — PHB p.274: self, next hit +1d6 fire, conc (bonus action; DoT simplified)
+    | 'thunderousSmite'   // Thunderous Smite — PHB p.282: self, next hit +2d6 thunder, conc (bonus action; push simplified)
+    | 'wrathfulSmite'     // Wrathful Smite — PHB p.289: self, next hit +1d6 psychic + frightened, conc (bonus action)
+    | 'zephyrStrike'      // Zephyr Strike — XGE p.171: self, next hit +1d8 force, conc (bonus action; disengage+speed simplified)
+    | 'blindingSmite'     // Blinding Smite — PHB p.219: self, next hit +3d8 radiant + blinded, conc (bonus action)
+    | 'lightningArrow'    // Lightning Arrow — PHB p.255: self, next ranged hit +4d8 lightning, conc (bonus action; AoE simplified)
+    | 'spiritShroud'      // Spirit Shroud — XGE/TCE: self, next hit +1d8 radiant, conc (bonus action; aura+slow simplified)
+    | 'staggeringSmite'   // Staggering Smite — PHB p.279: self, next hit +4d6 psychic + stunned, conc (bonus action)
+    | 'banishingSmite'    // Banishing Smite — PHB p.216: self, next hit +5d10 force, conc (bonus action; banish simplified)
+    | 'divineFavor'       // Divine Favor — PHB p.234: self, +1d4 radiant on weapon attacks, conc (bonus action)
+    | 'shadowBlade'       // Shadow Blade — PHB p.275: self, +2d8 psychic weapon (+1 atk), conc (bonus action; creates-weapon simplified)
+    | 'elementalWeapon'   // Elemental Weapon — PHB p.234: self, +1 atk + 1d4 fire, conc (action; element-choice simplified to fire)
+    | 'flameArrows'       // Flame Arrows — XGE: self, +1d6 fire on weapon attacks, conc (action)
+    | 'holyWeapon'        // Holy Weapon — PHB p.275: self, +5d8 radiant + 1 atk, conc (action; dismiss-blast simplified)
+    | 'swiftQuiver'       // Swift Quiver — PHB p.279: self, bonus-action extra attack, conc (bonus action; extra-attack NOT modelled — marker only)
+    | 'beaconOfHope'      // Beacon of Hope — PHB p.217: 30 ft, adv on WIS saves, conc (up to 3 allies; max-heal NOT modelled)
+    | 'intellectFortress' // Intellect Fortress — XGE: adv on INT/WIS/CHA saves (v1: all saves), conc (allies; psychic-resist NOT modelled)
+    | 'holyAura'          // Holy Aura — PHB p.251: 30-ft aura, adv on saves, conc (all allies; light+blind-attackers simplified)
+    | 'foresight'         // Foresight — PHB p.244: Touch (5 ft), adv on all d20 rolls, conc (1 ally; enemies-disadv + 8hr NOT modelled)
     // ── Session 19 — bulk-implementation generic dispatch (262 new spells L2-9) ──
     // All non-blocker in-scope spells from levels 2-9 that have not been
     // implemented as bespoke case branches are routed through 'genericSpell'.

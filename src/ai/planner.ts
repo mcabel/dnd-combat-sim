@@ -188,6 +188,30 @@ import { shouldCast as shouldCastCauseFear } from '../spells/cause_fear';
 import { shouldCast as shouldCastCharmPerson } from '../spells/charm_person';
 import { shouldCast as shouldCastCompelledDuel } from '../spells/compelled_duel';
 import { shouldCast as shouldCastGrease } from '../spells/grease';
+// ── Session 27 — Batch 3 concentration buffs (23 spells) ────────────────
+import { shouldCast as shouldCastBane } from '../spells/bane';
+import { shouldCast as shouldCastMotivationalSpeech } from '../spells/motivational_speech';
+import { shouldCast as shouldCastEnsnaringStrike } from '../spells/ensnaring_strike';
+import { shouldCast as shouldCastHailOfThorns } from '../spells/hail_of_thorns';
+import { shouldCast as shouldCastSearingSmite } from '../spells/searing_smite';
+import { shouldCast as shouldCastThunderousSmite } from '../spells/thunderous_smite';
+import { shouldCast as shouldCastWrathfulSmite } from '../spells/wrathful_smite';
+import { shouldCast as shouldCastZephyrStrike } from '../spells/zephyr_strike';
+import { shouldCast as shouldCastBlindingSmite } from '../spells/blinding_smite';
+import { shouldCast as shouldCastLightningArrow } from '../spells/lightning_arrow';
+import { shouldCast as shouldCastSpiritShroud } from '../spells/spirit_shroud';
+import { shouldCast as shouldCastStaggeringSmite } from '../spells/staggering_smite';
+import { shouldCast as shouldCastBanishingSmite } from '../spells/banishing_smite';
+import { shouldCast as shouldCastDivineFavor } from '../spells/divine_favor';
+import { shouldCast as shouldCastShadowBlade } from '../spells/shadow_blade';
+import { shouldCast as shouldCastElementalWeapon } from '../spells/elemental_weapon';
+import { shouldCast as shouldCastFlameArrows } from '../spells/flame_arrows';
+import { shouldCast as shouldCastHolyWeapon } from '../spells/holy_weapon';
+import { shouldCast as shouldCastSwiftQuiver } from '../spells/swift_quiver';
+import { shouldCast as shouldCastBeaconOfHope } from '../spells/beacon_of_hope';
+import { shouldCast as shouldCastIntellectFortress } from '../spells/intellect_fortress';
+import { shouldCast as shouldCastHolyAura } from '../spells/holy_aura';
+import { shouldCast as shouldCastForesight } from '../spells/foresight';
 
 // ── Session 19 — bulk-implementation generic dispatch (262 new spells) ────
 import { GENERIC_SPELL_LIST } from '../spells/_generic_registry';
@@ -3635,6 +3659,129 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
       plan.bonusAction = planBonusAction(self, grTargets[0], battlefield);
       return plan;
     }
+  }
+
+  // === SESSION 27 — BATCH 3 CONCENTRATION BUFFS (23 spells: 12CP+) ===
+  // Priority: high-level first (L9→L1) within each category. 6 multi-target
+  // buffs (Combatant[] signature) + 17 self-buffs (boolean signature).
+  // Self-buffs: cast as a BONUS ACTION when the caster has a weapon attack
+  // planned (smites/weapon-enchants complement the main action). v1 casts
+  // them as the ACTION when no higher-priority action exists (the smite
+  // rider / weapon enchant then applies to a future turn's weapon attack).
+
+  // --- 12CP. BANE (CHA save or -1d4 bane_die, L1, conc, up to 3 enemies) ---
+  if (!plan.action && self.actions.some(a => a.name === 'Bane')) {
+    const baneTargets = shouldCastBane(self, battlefield);
+    if (baneTargets) {
+      const names = baneTargets.map(t => t.name).join(', ');
+      plan.action = { type: 'bane', action: null, targetId: baneTargets[0].id, description: `${self.name} casts Bane on ${names}` };
+      plan.targetId = baneTargets[0].id;
+      return plan;
+    }
+  }
+  // --- 12CQ. MOTIVATIONAL SPEECH (+1d4 bless_die + 5 temp HP, L3, conc, up to 3 allies) ---
+  if (!plan.action && self.actions.some(a => a.name === 'Motivational Speech')) {
+    const msTargets = shouldCastMotivationalSpeech(self, battlefield);
+    if (msTargets) {
+      const names = msTargets.map(t => t.name).join(', ');
+      plan.action = { type: 'motivationalSpeech', action: null, targetId: msTargets[0].id, description: `${self.name} casts Motivational Speech on ${names}` };
+      plan.targetId = msTargets[0].id;
+      return plan;
+    }
+  }
+  // --- 12CR. BEACON OF HOPE (adv WIS saves, L3, conc, up to 3 allies) ---
+  if (!plan.action && self.actions.some(a => a.name === 'Beacon of Hope')) {
+    const bohTargets = shouldCastBeaconOfHope(self, battlefield);
+    if (bohTargets) {
+      const names = bohTargets.map(t => t.name).join(', ');
+      plan.action = { type: 'beaconOfHope', action: null, targetId: bohTargets[0].id, description: `${self.name} casts Beacon of Hope on ${names}` };
+      plan.targetId = bohTargets[0].id;
+      return plan;
+    }
+  }
+  // --- 12CS. INTELLECT FORTRESS (adv all saves, L3, conc, allies) ---
+  if (!plan.action && self.actions.some(a => a.name === 'Intellect Fortress')) {
+    const ifTargets = shouldCastIntellectFortress(self, battlefield);
+    if (ifTargets) {
+      const names = ifTargets.map(t => t.name).join(', ');
+      plan.action = { type: 'intellectFortress', action: null, targetId: ifTargets[0].id, description: `${self.name} casts Intellect Fortress on ${names}` };
+      plan.targetId = ifTargets[0].id;
+      return plan;
+    }
+  }
+  // --- 12CT. HOLY AURA (adv saves, L8, conc, 30-ft aura) ---
+  if (!plan.action && self.actions.some(a => a.name === 'Holy Aura')) {
+    const haTargets = shouldCastHolyAura(self, battlefield);
+    if (haTargets) {
+      const names = haTargets.map(t => t.name).join(', ');
+      plan.action = { type: 'holyAura', action: null, targetId: haTargets[0].id, description: `${self.name} casts Holy Aura on ${names}` };
+      plan.targetId = haTargets[0].id;
+      return plan;
+    }
+  }
+  // --- 12CU. FORESIGHT (adv all d20, L9, conc, Touch 1 ally) ---
+  if (!plan.action && self.actions.some(a => a.name === 'Foresight')) {
+    const fsTargets = shouldCastForesight(self, battlefield);
+    if (fsTargets) {
+      plan.action = { type: 'foresight', action: null, targetId: fsTargets[0].id, description: `${self.name} casts Foresight on ${fsTargets[0].name}` };
+      plan.targetId = fsTargets[0].id;
+      return plan;
+    }
+  }
+  // --- 12CV–12D5. 11 SMITES (self-buff next-hit rider, boolean shouldCast) ---
+  // Cast as the action when no higher-priority action exists; the rider
+  // applies to the caster's next weapon hit (this turn or a future turn).
+  if (!plan.action && self.actions.some(a => a.name === 'Banishing Smite') && shouldCastBanishingSmite(self, battlefield)) {
+    plan.action = { type: 'banishingSmite', action: null, targetId: self.id, description: `${self.name} casts Banishing Smite (next hit +5d10 force)` }; return plan;
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'Staggering Smite') && shouldCastStaggeringSmite(self, battlefield)) {
+    plan.action = { type: 'staggeringSmite', action: null, targetId: self.id, description: `${self.name} casts Staggering Smite (next hit +4d6 psychic + stunned)` }; return plan;
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'Blinding Smite') && shouldCastBlindingSmite(self, battlefield)) {
+    plan.action = { type: 'blindingSmite', action: null, targetId: self.id, description: `${self.name} casts Blinding Smite (next hit +3d8 radiant + blinded)` }; return plan;
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'Lightning Arrow') && shouldCastLightningArrow(self, battlefield)) {
+    plan.action = { type: 'lightningArrow', action: null, targetId: self.id, description: `${self.name} casts Lightning Arrow (next hit +4d8 lightning)` }; return plan;
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'Spirit Shroud') && shouldCastSpiritShroud(self, battlefield)) {
+    plan.action = { type: 'spiritShroud', action: null, targetId: self.id, description: `${self.name} casts Spirit Shroud (next hit +1d8 radiant)` }; return plan;
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'Thunderous Smite') && shouldCastThunderousSmite(self, battlefield)) {
+    plan.action = { type: 'thunderousSmite', action: null, targetId: self.id, description: `${self.name} casts Thunderous Smite (next hit +2d6 thunder)` }; return plan;
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'Wrathful Smite') && shouldCastWrathfulSmite(self, battlefield)) {
+    plan.action = { type: 'wrathfulSmite', action: null, targetId: self.id, description: `${self.name} casts Wrathful Smite (next hit +1d6 psychic + frightened)` }; return plan;
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'Zephyr Strike') && shouldCastZephyrStrike(self, battlefield)) {
+    plan.action = { type: 'zephyrStrike', action: null, targetId: self.id, description: `${self.name} casts Zephyr Strike (next hit +1d8 force)` }; return plan;
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'Ensnaring Strike') && shouldCastEnsnaringStrike(self, battlefield)) {
+    plan.action = { type: 'ensnaringStrike', action: null, targetId: self.id, description: `${self.name} casts Ensnaring Strike (next hit +1d6 piercing + restrained)` }; return plan;
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'Hail of Thorns') && shouldCastHailOfThorns(self, battlefield)) {
+    plan.action = { type: 'hailOfThorns', action: null, targetId: self.id, description: `${self.name} casts Hail of Thorns (next hit +1d10 piercing)` }; return plan;
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'Searing Smite') && shouldCastSearingSmite(self, battlefield)) {
+    plan.action = { type: 'searingSmite', action: null, targetId: self.id, description: `${self.name} casts Searing Smite (next hit +1d6 fire)` }; return plan;
+  }
+  // --- 12D6–12DB. 6 WEAPON ENCHANTS (self-buff weapon_enchant, boolean shouldCast) ---
+  if (!plan.action && self.actions.some(a => a.name === 'Holy Weapon') && shouldCastHolyWeapon(self, battlefield)) {
+    plan.action = { type: 'holyWeapon', action: null, targetId: self.id, description: `${self.name} casts Holy Weapon (+5d8 radiant + 1 atk)` }; return plan;
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'Swift Quiver') && shouldCastSwiftQuiver(self, battlefield)) {
+    plan.action = { type: 'swiftQuiver', action: null, targetId: self.id, description: `${self.name} casts Swift Quiver (marker — bonus-action attack NOT modelled)` }; return plan;
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'Elemental Weapon') && shouldCastElementalWeapon(self, battlefield)) {
+    plan.action = { type: 'elementalWeapon', action: null, targetId: self.id, description: `${self.name} casts Elemental Weapon (+1 atk + 1d4 fire)` }; return plan;
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'Flame Arrows') && shouldCastFlameArrows(self, battlefield)) {
+    plan.action = { type: 'flameArrows', action: null, targetId: self.id, description: `${self.name} casts Flame Arrows (+1d6 fire)` }; return plan;
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'Shadow Blade') && shouldCastShadowBlade(self, battlefield)) {
+    plan.action = { type: 'shadowBlade', action: null, targetId: self.id, description: `${self.name} casts Shadow Blade (+2d8 psychic + 1 atk)` }; return plan;
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'Divine Favor') && shouldCastDivineFavor(self, battlefield)) {
+    plan.action = { type: 'divineFavor', action: null, targetId: self.id, description: `${self.name} casts Divine Favor (+1d4 radiant)` }; return plan;
   }
 
   // === SESSION 19 — GENERIC SPELL LOOP (262 bulk-implemented spells) ===
