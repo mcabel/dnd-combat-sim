@@ -166,11 +166,44 @@ Each migrated spell:
 > After all 4 batches: spell cache 420 → 544/557 implemented (97.7%). The remaining 13
 > are TG-006..011 blockers (summons, walls, reactions, antimagic, LOS, complex mechanics).
 >
-> **To run the megabatch:** Launch a long-running task agent with the prompt:
-> *"Read `/home/z/my-project/dnd-combat-sim/MEGABATCH-MIGRATION-PLAN.md` and execute
-> Batch 1 (44 combat damage spells). Follow the 7-step migration recipe for each spell.
-> Commit as Cantrip-24, push, then write zHANDOVER-SESSION-24.md."* — then repeat for
-> Batches 2-4 in subsequent overnight runs.
+> **To run the megabatch:** Launch a long-running task agent with the prompt below. The
+> prompt is also embedded in `MEGABATCH-MIGRATION-PLAN.md` §"AGENT LAUNCH PROMPT" — copy
+> it from there for the exact wording. The key operational rules: **commit incrementally
+> every 8-12 spells** (NOT once at the end — so progress survives a crash), **push after
+> every commit**, and **keep going** until all 4 batches are done OR the time budget is hit.
+>
+> ```
+> You are migrating D&D 5e spells in the dnd-combat-sim repo at
+> /home/z/my-project/dnd-combat-sim.
+>
+> STEP 1: Read /home/z/my-project/dnd-combat-sim/MEGABATCH-MIGRATION-PLAN.md IN FULL
+> before doing anything else. It is the complete spec — follow it exactly.
+>
+> STEP 2: `git pull origin main && npm install` to sync.
+>
+> STEP 3: Execute Batch 1 (44 combat damage spells), then Batch 2 (35 save-or-condition),
+> then Batch 3 (23 buffs), then Batch 4 (22 zones/heals) — IN ORDER. Use the per-spell
+> specs in the plan. Follow the 7-step migration recipe for each spell.
+>
+> CRITICAL OPERATIONAL RULES:
+> - COMMIT INCREMENTALLY every 8-12 spells (NOT once at the end). Use commit messages
+>   like "Cantrip-24 (spells 1-10 of 44): combat damage — chaos_bolt, earth_tremor, ...".
+> - PUSH after every commit (`git push origin main`) so work is safely on GitHub.
+> - KEEP GOING after each commit — a commit is a checkpoint, not a stopping point.
+>   Continue until you finish all 4 batches OR you hit the time budget for this run.
+> - If a spell is harder than expected, SKIP it (note in handover) and move to the next.
+>   Do not block on one spell and lose the whole batch.
+> - Run `npx tsc --noEmit` (excluding TS7006) + the new spell tests after each commit
+>   to catch regressions early.
+>
+> STEP 4: When you finish all 4 batches OR hit the time budget, write
+> zHANDOVER-SESSION-2N.md (N = 24 if you only did Batch 1, 25 if Batch 1+2, etc.)
+> summarizing: what was migrated, what was skipped + why, test counts, and where the
+> next run should pick up. Commit + push the handover.
+>
+> GOAL: migrate as many of the 124 spells as possible. 420/557 are implemented now;
+> after all 4 batches it should be 544/557 (97.7%).
+> ```
 
 ### Manual next-action (if NOT running the megabatch)
 

@@ -32,6 +32,52 @@ for the megabatch — see `TEAMGOALS.md` for their blocker status.
 
 ---
 
+## AGENT LAUNCH PROMPT (copy-paste this into the long-running task)
+
+> **Recommended prompt for the overnight long-running task agent:**
+>
+> ```
+> You are migrating D&D 5e spells in the dnd-combat-sim repo at
+> /home/z/my-project/dnd-combat-sim.
+>
+> STEP 1: Read /home/z/my-project/dnd-combat-sim/MEGABATCH-MIGRATION-PLAN.md IN FULL
+> before doing anything else. It is the complete spec — follow it exactly.
+>
+> STEP 2: `git pull origin main && npm install` to sync.
+>
+> STEP 3: Execute Batch 1 (44 combat damage spells), then Batch 2 (35 save-or-condition),
+> then Batch 3 (23 buffs), then Batch 4 (22 zones/heals) — IN ORDER. Use the per-spell
+> specs in the plan. Follow the 7-step migration recipe for each spell.
+>
+> CRITICAL OPERATIONAL RULES:
+> - COMMIT INCREMENTALLY every 8-12 spells (NOT once at the end). Use commit messages
+>   like "Cantrip-24 (spells 1-10 of 44): combat damage — chaos_bolt, earth_tremor, ...".
+> - PUSH after every commit (`git push origin main`) so work is safely on GitHub.
+> - KEEP GOING after each commit — a commit is a checkpoint, not a stopping point.
+>   Continue until you finish all 4 batches OR you hit the time budget for this run.
+> - If a spell is harder than expected, SKIP it (note in handover) and move to the next.
+>   Do not block on one spell and lose the whole batch.
+> - Run `npx tsc --noEmit` (excluding TS7006) + the new spell tests after each commit
+>   to catch regressions early.
+>
+> STEP 4: When you finish all 4 batches OR hit the time budget, write
+> zHANDOVER-SESSION-2N.md (N = 24 if you only did Batch 1, 25 if Batch 1+2, etc.)
+> summarizing: what was migrated, what was skipped + why, test counts, and where the
+> next run should pick up. Commit + push the handover.
+>
+> GOAL: migrate as many of the 124 spells as possible. 420/557 are implemented now;
+> after all 4 batches it should be 544/557 (97.7%).
+> ```
+>
+> **Why this wording:** It explicitly tells the agent to (a) commit incrementally so
+> progress isn't lost on crash, (b) keep going after each commit until the batch is done
+> or time runs out, and (c) continue to the next batch if time allows. The original
+> wording ("Commit as Cantrip-24, push, then write zHANDOVER-SESSION-24.md") was
+> ambiguous — it could be read as "do all 44 spells, commit once at the end, stop" which
+> risks losing everything on a crash.
+
+---
+
 ## STARTUP CHECKLIST (run before EVERY batch)
 
 1. `cd /home/z/my-project/dnd-combat-sim && git pull origin main` — get latest.
@@ -121,6 +167,15 @@ doubles dice on crit.
 **For cone AoE** (mirror `burning_hands.ts`): use `inConeFt(caster.pos, aimAt.pos, enemy.pos, rangeFt, halfAngleDeg)`.
 
 **For line AoE** (mirror `lightning_bolt.ts`): use `inLineFt(caster.pos, aimAt.pos, enemy.pos, lengthFt, widthFt)`.
+
+> **Line geometry note:** A D&D 5e "line" area of effect **IS a rectangle (plane)**,
+> per PHB p.204 ("A line is an area of effect that extends from one edge of
+> the caster's space in a direction the caster chooses. A line has a specified
+> length and a width of 5 feet."). The `inLineFt` helper models this correctly
+> as a thin rectangle (perpendicular distance ≤ width/2) — this is the **canon
+> shape**, NOT a simplification. Do not second-guess it. Default width is 5 ft
+> per PHB; some spells (e.g. Lightning Bolt) specify a different width, but
+> all spells in this megabatch use the default 5 ft.
 
 **For flat-bonus damage** (mirror `disintegrate.ts`): add `flatDamageBonus: <N>` to metadata;
 `rollDamage(includeFlat = true)` adds the bonus; bonus IS halved on save.
@@ -257,7 +312,7 @@ After each batch:
 
 ---
 
-## POST-BATCH VERIFICATION (run after EVERY batch)
+## POST-BATCH VERIFICATION (run at the END of each batch — but see "When to commit" above for the incremental-commit DURING the batch)
 
 1. **tsc:** `npx tsc --noEmit 2>&1 | grep -v TS7006 | grep "error TS"` — must be empty.
 2. **All new spell tests pass:**
@@ -275,14 +330,19 @@ After each batch:
 5. **Spell cache rebuild:** `npm run spell-cache:build` — implemented count should rise
    by the batch size (420 → 464 after Batch 1, → 499 after Batch 2, → 522 after Batch 3,
    → 544 after Batch 4).
-6. **Commit:** `git add -A && git commit -m "Cantrip-<N>: Megabatch batch <B> — <count> <pattern> spells"`
+6. **Final commit for the batch** (if any uncommitted work remains after the incremental
+   commits): `git add -A && git commit -m "Cantrip-<N>: Megabatch batch <B> complete — <count> <pattern> spells"`
    - Batch 1 → Cantrip-24
    - Batch 2 → Cantrip-25
    - Batch 3 → Cantrip-26
    - Batch 4 → Cantrip-27
+   - NOTE: This is IN ADDITION TO the incremental commits every 8-12 spells during the
+     batch (see "When to commit and when to keep going" above). The incremental commits
+     are the crash-safety net; this final commit just closes out the batch.
 7. **Push:** `git push origin main` — tell the user if the push fails.
 8. **Write handover:** Update `zHANDOVER-SESSION-<N>.md` (24, 25, 26, 27) with the batch
    summary, test counts, and next-batch instructions. Commit + push the handover.
+9. **Continue to next batch** if time budget allows (see "When to commit" rule #4).
 
 ---
 
@@ -796,15 +856,35 @@ after the respective TG entries are implemented.
 7. **combat.ts case branch never fires** — you forgot the import, OR the `case` label
    doesn't match the `type:` string in planner.ts (they must be identical camelCase).
 
-### When to stop and commit
+### When to commit and when to keep going
 
-Commit after each batch (44 / 35 / 23 / 22 spells), NOT after each spell. This keeps the
-git history clean and makes rollback easy if a batch introduces a regression.
+**Commit INCREMENTALLY — do NOT wait until the end of the batch.** A long-running task
+agent can crash or hit its time budget at any point; if you haven't committed, all work
+since the last commit is lost. The rule:
+
+- **Commit every 8-12 spells** (roughly every 2-3 hours of work). Use commit messages
+  like `Cantrip-24 (spells 1-10 of 44): combat damage — chaos_bolt, earth_tremor, ...`
+  so the git log shows incremental progress.
+- **Push after every commit** (`git push origin main`) so the work is safely on GitHub.
+- **Keep going** until either (a) the batch is complete (all 44/35/23/22 spells done),
+  OR (b) you hit the time budget for this overnight run. Do NOT stop early just because
+  you committed — a commit is a checkpoint, not a stopping point.
+- **If the batch finishes with time to spare**, continue to the NEXT batch (Batch 2 → 3 → 4)
+  using the same incremental-commit strategy. The goal is to migrate as many of the 124
+  spells as possible across the overnight run.
+- **At the end of the run** (batch done OR time budget hit), write the handover
+  (`zHANDOVER-SESSION-2N.md`) summarizing what was migrated, what was skipped, and where
+  the next run should pick up. Commit + push the handover.
 
 If you hit a spell that's harder than expected (e.g. the `damage_zone` payload shape
 doesn't fit, or a condition isn't in the available list), SKIP that spell, note it in the
 handover, and continue to the next. Better to migrate 40/44 spells cleanly than to block
 on 1 spell and lose the whole batch.
+
+**Why incremental commits matter:** If the agent crashes at spell 30/44 with no commits,
+the entire night's work is lost. With commits every 10 spells, the worst case is losing
+~10 spells of work (the uncommitted ones since the last checkpoint). This is the single
+most important operational rule in this plan.
 
 ---
 
