@@ -1040,28 +1040,10 @@ import {
 } from './dawn';
 
 import {
-  shouldCast as shouldCastDestructiveWave,
-  execute as executeDestructiveWave,
-  metadata as metadataDestructiveWave,
-} from './destructive_wave';
-
-import {
   shouldCast as shouldCastDominatePerson,
   execute as executeDominatePerson,
   metadata as metadataDominatePerson,
 } from './dominate_person';
-
-import {
-  shouldCast as shouldCastEnervation,
-  execute as executeEnervation,
-  metadata as metadataEnervation,
-} from './enervation';
-
-import {
-  shouldCast as shouldCastFlameStrike,
-  execute as executeFlameStrike,
-  metadata as metadataFlameStrike,
-} from './flame_strike';
 
 import {
   shouldCast as shouldCastGeas,
@@ -1088,22 +1070,10 @@ import {
 } from './holy_weapon';
 
 import {
-  shouldCast as shouldCastImmolation,
-  execute as executeImmolation,
-  metadata as metadataImmolation,
-} from './immolation';
-
-import {
   shouldCast as shouldCastInsectPlague,
   execute as executeInsectPlague,
   metadata as metadataInsectPlague,
 } from './insect_plague';
-
-import {
-  shouldCast as shouldCastMaelstrom,
-  execute as executeMaelstrom,
-  metadata as metadataMaelstrom,
-} from './maelstrom';
 
 import {
   shouldCast as shouldCastMassCureWounds,
@@ -1122,12 +1092,6 @@ import {
   execute as executeModifyMemory,
   metadata as metadataModifyMemory,
 } from './modify_memory';
-
-import {
-  shouldCast as shouldCastNegativeEnergyFlood,
-  execute as executeNegativeEnergyFlood,
-  metadata as metadataNegativeEnergyFlood,
-} from './negative_energy_flood';
 
 import {
   shouldCast as shouldCastPasswall,
@@ -1160,22 +1124,10 @@ import {
 } from './songals_elemental_suffusion';
 
 import {
-  shouldCast as shouldCastSteelWindStrike,
-  execute as executeSteelWindStrike,
-  metadata as metadataSteelWindStrike,
-} from './steel_wind_strike';
-
-import {
   shouldCast as shouldCastSwiftQuiver,
   execute as executeSwiftQuiver,
   metadata as metadataSwiftQuiver,
 } from './swift_quiver';
-
-import {
-  shouldCast as shouldCastSynapticStatic,
-  execute as executeSynapticStatic,
-  metadata as metadataSynapticStatic,
-} from './synaptic_static';
 
 import {
   shouldCast as shouldCastTelekinesis,
@@ -2716,29 +2668,11 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     shouldCast: shouldCastDawn,
     execute: executeDawn,
   },
-  'Destructive Wave': {
-    name: 'Destructive Wave',
-    level: metadataDestructiveWave.level,
-    shouldCast: shouldCastDestructiveWave,
-    execute: executeDestructiveWave,
-  },
   'Dominate Person': {
     name: 'Dominate Person',
     level: metadataDominatePerson.level,
     shouldCast: shouldCastDominatePerson,
     execute: executeDominatePerson,
-  },
-  'Enervation': {
-    name: 'Enervation',
-    level: metadataEnervation.level,
-    shouldCast: shouldCastEnervation,
-    execute: executeEnervation,
-  },
-  'Flame Strike': {
-    name: 'Flame Strike',
-    level: metadataFlameStrike.level,
-    shouldCast: shouldCastFlameStrike,
-    execute: executeFlameStrike,
   },
   'Geas': {
     name: 'Geas',
@@ -2764,23 +2698,11 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     shouldCast: shouldCastHolyWeapon,
     execute: executeHolyWeapon,
   },
-  'Immolation': {
-    name: 'Immolation',
-    level: metadataImmolation.level,
-    shouldCast: shouldCastImmolation,
-    execute: executeImmolation,
-  },
   'Insect Plague': {
     name: 'Insect Plague',
     level: metadataInsectPlague.level,
     shouldCast: shouldCastInsectPlague,
     execute: executeInsectPlague,
-  },
-  'Maelstrom': {
-    name: 'Maelstrom',
-    level: metadataMaelstrom.level,
-    shouldCast: shouldCastMaelstrom,
-    execute: executeMaelstrom,
   },
   'Mass Cure Wounds': {
     name: 'Mass Cure Wounds',
@@ -2799,12 +2721,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     level: metadataModifyMemory.level,
     shouldCast: shouldCastModifyMemory,
     execute: executeModifyMemory,
-  },
-  'Negative Energy Flood': {
-    name: 'Negative Energy Flood',
-    level: metadataNegativeEnergyFlood.level,
-    shouldCast: shouldCastNegativeEnergyFlood,
-    execute: executeNegativeEnergyFlood,
   },
   'Passwall': {
     name: 'Passwall',
@@ -2836,23 +2752,11 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     shouldCast: shouldCastSongalsElementalSuffusion,
     execute: executeSongalsElementalSuffusion,
   },
-  'Steel Wind Strike': {
-    name: 'Steel Wind Strike',
-    level: metadataSteelWindStrike.level,
-    shouldCast: shouldCastSteelWindStrike,
-    execute: executeSteelWindStrike,
-  },
   'Swift Quiver': {
     name: 'Swift Quiver',
     level: metadataSwiftQuiver.level,
     shouldCast: shouldCastSwiftQuiver,
     execute: executeSwiftQuiver,
-  },
-  'Synaptic Static': {
-    name: 'Synaptic Static',
-    level: metadataSynapticStatic.level,
-    shouldCast: shouldCastSynapticStatic,
-    execute: executeSynapticStatic,
   },
   'Telekinesis': {
     name: 'Telekinesis',

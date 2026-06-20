@@ -1,117 +1,120 @@
 // ============================================================
-// Negative Energy Flood — XGE p.163
+// Negative Energy Flood — XGE p.162
 //
-// 5-level necromancy, 1 action, range 60 ft.
-// Duration: Instantaneous.
+// 5th-level necromancy, action, range 60 ft, NO concentration.
+// Components: V, S.
 //
-// Effect: You send ribbons of negative energy at one creature you can see within range. Unless the target is undead, it must make a Constitution saving throw, taking  necrotic damage on a failed s
+// Effect: You send a flood of necrotic energy toward a creature within
+//         range. The target must make a Constitution saving throw. On a
+//         failed save, the target takes 5d12 necrotic damage. On a
+//         successful save, the creature takes half as much damage.
 //
-// Upcast: see source (not modelled in v1).
+//         NOTE: XGE p.162 also has an undead-boost rider: if the target
+//         is undead and survives, it gains 5d12 HP. v1 does NOT model
+//         this (no creature-type tag). See simplifications.
+//
+// Upcast: +1d12 necrotic per slot level above 5th (not modelled in v1).
 //
 // v1 simplifications:
-//   - v1 models this spell as a FORWARD-COMPAT flag only (Session 19 bulk
-//     implementation). The spell consumes a slot and sets the flag
-//     `_genericSpellActiveSpells` on the caster; the actual mechanical
-//     effect (damage / save / condition / buff) is NOT applied in v1.
-//     A future implementation should extend the relevant engine subsystem
-//     (damage_zone for persistent damage, condition_apply for conditions,
-//     advantage_vs for buffs, etc.) to consume this flag and apply the
-//     real effect. This mirrors the Session 17/18 forward-compat pattern
-//     established by Darkvision, Arcane Lock, Knock, See Invisibility.
+//   - Undead-boost rider (XGE p.162: "if the target is undead and
+//     survives, it gains 5d12 HP"): NOT modelled — v1 has no creature-
+//     type tag. One-shot 5d12 necrotic only. Documented via
+//     `negativeEnergyFloodUndeadBoostV1Simplified: true`.
+//   - Upcast: NOT modelled.
+//   - NOT concentration (XGE p.162: instantaneous).
 //
-// Spell module pattern (mirrors Darkvision / Arcane Lock forward-compat
-// self-buff pattern):
-//   shouldCast(caster, bf) → boolean
-//   execute(caster, state) → void
-//   cleanup() — no-op (forward-compat flag persists for combat)
+// Migration note (Session 24): Mirrors Catapult (Session 21) but with
+// CON save, 5d12 necrotic, L5 slot, 60-ft range.
+//
+// Spell module pattern (single-target save — mirrors catapult.ts):
+//   shouldCast(caster, bf) → Combatant | null
+//   execute(caster, target, state) → void
+//   cleanup() — no-op
 // ============================================================
 
 import { Combatant, Battlefield } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
+import { rollSave, rollDie, applyDamageWithTempHP } from '../engine/utils';
+import { chebyshev3D, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
-
-// ---- Metadata -----------------------------------------------
 
 export const metadata = {
   name: 'Negative Energy Flood',
   level: 5,
   school: 'necromancy',
-  rangeFt: 60,
+  rangeFt: 60,                   // XGE p.162: 60 ft
+  dieCount: 5,
+  dieSides: 12,
+  damageType: 'necrotic' as const,
   concentration: false,
+  saveAbility: 'con' as const,
   castingTime: 'action',
-  negativeEnergyFloodV1Simplified: true,
+  negativeEnergyFloodUndeadBoostV1Simplified: true,                   // undead-boost rider NOT modelled (no creature-type tag)
+  negativeEnergyFloodUpcastV1Implemented: false,                       // +1d12/slot-level NOT modelled
 } as const;
 
-// ---- Local log helper ---------------------------------------
-
-function emit(
-  state: EngineState,
-  type: CombatEvent['type'],
-  actorId: string,
-  desc: string,
-  targetId?: string,
-  value?: number,
-): void {
-  state.log.events.push({
-    round: state.battlefield.round,
-    actorId,
-    type,
-    targetId,
-    value,
-    description: desc,
-  });
+function emit(state: EngineState, type: CombatEvent['type'], actorId: string, desc: string, targetId?: string, value?: number): void {
+  state.log.events.push({ round: state.battlefield.round, actorId, type, targetId, value, description: desc });
 }
 
-// ---- Planner ------------------------------------------------
-
-/**
- * Returns true if the caster should cast Negative Energy Flood this turn.
- *
- * Preconditions:
- *   - Caster has 'Negative Energy Flood' in their actions
- *   - Caster has at least one 5-level-or-higher slot available
- *   - Caster is NOT already Negative Energy Flood-active (re-cast would be a no-op in v1)
- */
-export function shouldCast(caster: Combatant, _bf: Battlefield): boolean {
-  if (!caster.actions.some(a => a.name === 'Negative Energy Flood')) return false;
-  if (!hasSpellSlot(caster, 5)) return false;
-  if (caster._genericSpellActiveSpells?.has('Negative Energy Flood')) return false;
-  return true;
+export function rollDamage(): number {
+  let total = 0;
+  for (let i = 0; i < metadata.dieCount; i++) total += rollDie(metadata.dieSides);
+  return total;
 }
 
-// ---- Execution ----------------------------------------------
+export function shouldCast(caster: Combatant, bf: Battlefield): Combatant | null {
+  if (!caster.actions.some(a => a.name === 'Negative Energy Flood')) return null;
+  if (!hasSpellSlot(caster, 5)) return null;
 
-/**
- * Execute Negative Energy Flood:
- *  1. Consume a 5-level spell slot.
- *  2. Set the flag on the caster's `_genericSpellActiveSpells` Set.
- *  3. Log the cast.
- */
-export function execute(
-  caster: Combatant,
-  state: EngineState,
-): void {
-  consumeSpellSlot(caster, 5);
-
-  if (!caster._genericSpellActiveSpells) {
-    caster._genericSpellActiveSpells = new Set<string>();
+  const enemies = livingEnemiesOf(caster, bf);
+  const candidates: Array<{ c: Combatant; threat: number; curHP: number; dist: number }> = [];
+  for (const e of enemies) {
+    const distFt = chebyshev3D(caster.pos, e.pos) * 5;
+    if (distFt > 60) continue;
+    candidates.push({ c: e, threat: e.maxHP, curHP: e.currentHP, dist: distFt });
   }
-  caster._genericSpellActiveSpells.add('Negative Energy Flood');
+  if (candidates.length === 0) return null;
+  candidates.sort((a, b) => {
+    if (a.threat !== b.threat) return b.threat - a.threat;
+    if (a.curHP !== b.curHP) return a.curHP - b.curHP;
+    return a.dist - b.dist;
+  });
+  return candidates[0].c;
+}
+
+export function execute(caster: Combatant, target: Combatant, state: EngineState): void {
+  const action = caster.actions.find(a => a.name === 'Negative Energy Flood');
+  const saveDC = action?.saveDC ?? 15;
+
+  consumeSpellSlot(caster, 5);
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Negative Energy Flood! (v1: forward-compat flag set; mechanical effect not yet implemented)`,
-    caster.id,
+    `${caster.name} casts Negative Energy Flood at ${target.name}! (DC ${saveDC} CON, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}, half on save)`,
+    target.id,
   );
+
+  if (target.isDead || target.isUnconscious) {
+    emit(state, 'save_success', caster.id, `Negative Energy Flood: ${target.name} is already down — the flood disperses.`, target.id);
+    return;
+  }
+
+  const save = rollSave(target, 'con', saveDC);
+  const fullDmg = rollDamage();
+  const dmg = save.success ? Math.floor(fullDmg / 2) : fullDmg;
+  const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);
+
   emit(
-    state, 'condition_add', caster.id,
-    `${caster.name} is affected by Negative Energy Flood. (v1: forward-compat flag set; no mechanical effect until engine subsystem is implemented)`,
+    state,
+    save.success ? 'save_success' : 'save_fail',
     caster.id,
+    `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} CON save vs Negative Energy Flood (rolled ${save.total}) — ${dealt} ${metadata.damageType} damage (${metadata.dieCount}d${metadata.dieSides}=${fullDmg}${save.success ? ', halved' : ''})`,
+    target.id, save.roll,
   );
+  emit(state, 'damage', caster.id, `Negative Energy Flood: ${target.name} takes ${dealt} ${metadata.damageType} damage`, target.id, dealt);
 }
 
-// ---- Cleanup ------------------------------------------------
-
 export function cleanup(_c: Combatant): void {
-  // No-op — forward-compat flag persists for combat.
+  // No-op — instantaneous.
 }

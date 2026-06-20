@@ -1,118 +1,138 @@
 // ============================================================
 // Enervation — XGE p.155
 //
-// 5-level necromancy, 1 action, range 60 ft, concentration.
-// Duration: 1 minute.
+// 5th-level necromancy, action, range 60 ft. Canon: concentration,
+// up to 1 minute. v1: concentration + DoT simplified to one-shot.
+// Components: V, S.
 //
-// Effect: A tendril of inky darkness reaches out from you, touching a creature you can see within range to drain life from it. The target must make a Dexterity saving throw. On a successful save, the target tak
+// Effect: A tendril of cloying black energy extends from you toward a
+//         creature within range. The target must make a Dexterity saving
+//         throw. On a failed save, the target takes 4d8 necrotic damage,
+//         and you regain hit points equal to half the amount of damage
+//         dealt. On a successful save, the target takes half as much
+//         damage and you regain hit points equal to half that amount.
 //
-// Upcast: see source (not modelled in v1).
+//         Canon concentration rider (XGE p.155: "concentration, up to 1
+//         minute" — 4d8 necrotic on the first turn and 2d8 at the end of
+//         each subsequent turn): v1 simplifies to a single one-shot.
+//
+// Upcast: +1d8 necrotic per slot level above 5th (not modelled in v1).
 //
 // v1 simplifications:
-//   - v1 models this spell as a FORWARD-COMPAT flag only (Session 19 bulk
-//     implementation). The spell consumes a slot and sets the flag
-//     `_genericSpellActiveSpells` on the caster; the actual mechanical
-//     effect (damage / save / condition / buff) is NOT applied in v1.
-//     A future implementation should extend the relevant engine subsystem
-//     (damage_zone for persistent damage, condition_apply for conditions,
-//     advantage_vs for buffs, etc.) to consume this flag and apply the
-//     real effect. This mirrors the Session 17/18 forward-compat pattern
-//     established by Darkvision, Arcane Lock, Knock, See Invisibility.
-//   - Concentration spell (forward-compat flag persists for combat).
+//   - Concentration + DoT (XGE p.155: "concentration, up to 1 minute";
+//     4d8 first turn, 2d8/turn after): v1 simplifies to one-shot
+//     (concentration: false). Per-turn DoT NOT modelled (same gap as
+//     Spellfire Storm). Documented via `enervationConcentrationV1Simplified: true`.
+//   - Heal amount: half the ACTUAL necrotic damage dealt (after target's
+//     temp HP / resistance), per XGE p.155 ("you regain hit points equal
+//     to half the amount of damage dealt"). v1 uses applyHeal(caster,
+//     floor(dealt / 2)). On save success, half damage → quarter-raw heal.
+//     Documented via `enervationHealBasedOnActualDamageV1: true`.
+//   - Upcast: NOT modelled.
 //
-// Spell module pattern (mirrors Darkvision / Arcane Lock forward-compat
-// self-buff pattern):
-//   shouldCast(caster, bf) → boolean
-//   execute(caster, state) → void
-//   cleanup() — no-op (forward-compat flag persists for combat)
+// Migration note (Session 24): Mirrors Vampiric Touch (Session 24) for
+// the heal-caster-half rider, but with a DEX SAVE (not melee attack),
+// 4d8 necrotic (vs 3d6), L5 slot, 60-ft range.
+//
+// Spell module pattern (single-target save + heal rider — mirrors
+// vampiric_touch.ts heal + catapult.ts save):
+//   shouldCast(caster, bf) → Combatant | null
+//   execute(caster, target, state) → void
+//   cleanup() — no-op (v1 one-shot)
 // ============================================================
 
 import { Combatant, Battlefield } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
+import { rollSave, rollDie, applyDamageWithTempHP, applyHeal } from '../engine/utils';
+import { chebyshev3D, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
-
-// ---- Metadata -----------------------------------------------
 
 export const metadata = {
   name: 'Enervation',
   level: 5,
   school: 'necromancy',
-  rangeFt: 60,
-  concentration: true,
+  rangeFt: 60,                   // XGE p.155: 60 ft
+  dieCount: 4,
+  dieSides: 8,
+  damageType: 'necrotic' as const,
+  healFraction: 2,               // XGE p.155: heal = half the necrotic dealt
+  concentration: false,          // v1 simplification: one-shot (canon concentration 1 min + DoT)
+  saveAbility: 'dex' as const,
   castingTime: 'action',
-  enervationV1Simplified: true,
+  enervationConcentrationV1Simplified: true,                           // canon concentration + DoT simplified to one-shot
+  enervationHealBasedOnActualDamageV1: true,                           // heal = half actual necrotic dealt
+  enervationUpcastV1Implemented: false,                                 // +1d8/slot-level NOT modelled
 } as const;
 
-// ---- Local log helper ---------------------------------------
-
-function emit(
-  state: EngineState,
-  type: CombatEvent['type'],
-  actorId: string,
-  desc: string,
-  targetId?: string,
-  value?: number,
-): void {
-  state.log.events.push({
-    round: state.battlefield.round,
-    actorId,
-    type,
-    targetId,
-    value,
-    description: desc,
-  });
+function emit(state: EngineState, type: CombatEvent['type'], actorId: string, desc: string, targetId?: string, value?: number): void {
+  state.log.events.push({ round: state.battlefield.round, actorId, type, targetId, value, description: desc });
 }
 
-// ---- Planner ------------------------------------------------
-
-/**
- * Returns true if the caster should cast Enervation this turn.
- *
- * Preconditions:
- *   - Caster has 'Enervation' in their actions
- *   - Caster has at least one 5-level-or-higher slot available
- *   - Caster is NOT already Enervation-active (re-cast would be a no-op in v1)
- */
-export function shouldCast(caster: Combatant, _bf: Battlefield): boolean {
-  if (!caster.actions.some(a => a.name === 'Enervation')) return false;
-  if (!hasSpellSlot(caster, 5)) return false;
-  if (caster._genericSpellActiveSpells?.has('Enervation')) return false;
-  return true;
+export function rollDamage(): number {
+  let total = 0;
+  for (let i = 0; i < metadata.dieCount; i++) total += rollDie(metadata.dieSides);
+  return total;
 }
 
-// ---- Execution ----------------------------------------------
+export function shouldCast(caster: Combatant, bf: Battlefield): Combatant | null {
+  if (!caster.actions.some(a => a.name === 'Enervation')) return null;
+  if (!hasSpellSlot(caster, 5)) return null;
 
-/**
- * Execute Enervation:
- *  1. Consume a 5-level spell slot.
- *  2. Set the flag on the caster's `_genericSpellActiveSpells` Set.
- *  3. Log the cast.
- */
-export function execute(
-  caster: Combatant,
-  state: EngineState,
-): void {
-  consumeSpellSlot(caster, 5);
-
-  if (!caster._genericSpellActiveSpells) {
-    caster._genericSpellActiveSpells = new Set<string>();
+  const enemies = livingEnemiesOf(caster, bf);
+  const candidates: Array<{ c: Combatant; threat: number; curHP: number; dist: number }> = [];
+  for (const e of enemies) {
+    const distFt = chebyshev3D(caster.pos, e.pos) * 5;
+    if (distFt > 60) continue;
+    candidates.push({ c: e, threat: e.maxHP, curHP: e.currentHP, dist: distFt });
   }
-  caster._genericSpellActiveSpells.add('Enervation');
+  if (candidates.length === 0) return null;
+  candidates.sort((a, b) => {
+    if (a.threat !== b.threat) return b.threat - a.threat;
+    if (a.curHP !== b.curHP) return a.curHP - b.curHP;
+    return a.dist - b.dist;
+  });
+  return candidates[0].c;
+}
+
+export function execute(caster: Combatant, target: Combatant, state: EngineState): void {
+  const action = caster.actions.find(a => a.name === 'Enervation');
+  const saveDC = action?.saveDC ?? 15;
+
+  consumeSpellSlot(caster, 5);
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Enervation! (v1: forward-compat flag set; mechanical effect not yet implemented)`,
-    caster.id,
+    `${caster.name} casts Enervation at ${target.name}! (DC ${saveDC} DEX, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}, half on save + heal self for half the necrotic dealt)`,
+    target.id,
   );
+
+  if (target.isDead || target.isUnconscious) {
+    emit(state, 'save_success', caster.id, `Enervation: ${target.name} is already down — the tendril finds no life.`, target.id);
+    return;
+  }
+
+  const save = rollSave(target, 'dex', saveDC);
+  const fullDmg = rollDamage();
+  const dmg = save.success ? Math.floor(fullDmg / 2) : fullDmg;
+  const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);
+
   emit(
-    state, 'condition_add', caster.id,
-    `${caster.name} is affected by Enervation. (v1: forward-compat flag set; no mechanical effect until engine subsystem is implemented)`,
+    state,
+    save.success ? 'save_success' : 'save_fail',
     caster.id,
+    `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} DEX save vs Enervation (rolled ${save.total}) — ${dealt} ${metadata.damageType} damage (${metadata.dieCount}d${metadata.dieSides}=${fullDmg}${save.success ? ', halved' : ''})`,
+    target.id, save.roll,
   );
+  emit(state, 'damage', caster.id, `Enervation: ${target.name} takes ${dealt} ${metadata.damageType} damage`, target.id, dealt);
+
+  // Heal the caster for half the ACTUAL necrotic damage dealt.
+  const healAmount = Math.floor(dealt / metadata.healFraction);
+  if (healAmount > 0) {
+    const healed = applyHeal(caster, healAmount);
+    emit(state, 'heal', caster.id, `Enervation: ${caster.name} siphons ${healed} HP from ${target.name} (half of ${dealt} necrotic dealt)`, caster.id, healed);
+  }
 }
 
-// ---- Cleanup ------------------------------------------------
-
 export function cleanup(_c: Combatant): void {
-  // No-op — forward-compat flag persists for combat.
+  // No-op — v1 one-shot.
 }

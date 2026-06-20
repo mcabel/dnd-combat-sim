@@ -386,6 +386,38 @@ import {
   shouldCast as shouldCastVitriolicSphere,
   execute as executeVitriolicSphere,
 } from '../spells/vitriolic_sphere';
+import {
+  shouldCast as shouldCastDestructiveWave,
+  execute as executeDestructiveWave,
+} from '../spells/destructive_wave';
+import {
+  shouldCast as shouldCastEnervation,
+  execute as executeEnervation,
+} from '../spells/enervation';
+import {
+  shouldCast as shouldCastFlameStrike,
+  execute as executeFlameStrike,
+} from '../spells/flame_strike';
+import {
+  shouldCast as shouldCastImmolation,
+  execute as executeImmolation,
+} from '../spells/immolation';
+import {
+  shouldCast as shouldCastMaelstrom,
+  execute as executeMaelstrom,
+} from '../spells/maelstrom';
+import {
+  shouldCast as shouldCastNegativeEnergyFlood,
+  execute as executeNegativeEnergyFlood,
+} from '../spells/negative_energy_flood';
+import {
+  shouldCast as shouldCastSteelWindStrike,
+  execute as executeSteelWindStrike,
+} from '../spells/steel_wind_strike';
+import {
+  shouldCast as shouldCastSynapticStatic,
+  execute as executeSynapticStatic,
+} from '../spells/synaptic_static';
 
 // ── Session 19 — bulk-implementation generic dispatch (262 new spells) ────
 import {
@@ -2636,6 +2668,76 @@ function executePlannedAction(
       // Vitriolic Sphere — XGE p.168: 150 ft, DEX save 10d4 acid, 20-ft radius.
       const vsTargets = shouldCastVitriolicSphere(actor, bf);
       if (vsTargets) executeVitriolicSphere(actor, vsTargets, state);
+      break;
+    }
+
+    // ── Session 24 — L5 combat damage spells (8) ────────────────────
+
+    case 'destructiveWave': {
+      // Destructive Wave — PHB p.250: Self (30-ft radius), CON save 5d6 thunder + prone.
+      const dwTargets = shouldCastDestructiveWave(actor, bf);
+      if (dwTargets) executeDestructiveWave(actor, dwTargets, state);
+      break;
+    }
+
+    case 'enervation': {
+      // Enervation — XGE p.155: 60 ft, DEX save 4d8 necrotic + heal self half.
+      const enTargetId = plan.targetId;
+      const enTarget = enTargetId ? bf.combatants.get(enTargetId) ?? null : null;
+      const liveTarget = enTarget && !enTarget.isDead && !enTarget.isUnconscious
+        ? enTarget
+        : shouldCastEnervation(actor, bf);
+      if (liveTarget) executeEnervation(actor, liveTarget, state);
+      break;
+    }
+
+    case 'flameStrike': {
+      // Flame Strike — PHB p.243: 60 ft, DEX save 4d6 fire + 4d6 radiant, 10-ft radius.
+      const fsTargets = shouldCastFlameStrike(actor, bf);
+      if (fsTargets) executeFlameStrike(actor, fsTargets, state);
+      break;
+    }
+
+    case 'immolation': {
+      // Immolation — XGE p.157: 90 ft, DEX save 8d6 fire, single-target.
+      const imTargetId = plan.targetId;
+      const imTarget = imTargetId ? bf.combatants.get(imTargetId) ?? null : null;
+      const liveTarget = imTarget && !imTarget.isDead && !imTarget.isUnconscious
+        ? imTarget
+        : shouldCastImmolation(actor, bf);
+      if (liveTarget) executeImmolation(actor, liveTarget, state);
+      break;
+    }
+
+    case 'maelstrom': {
+      // Maelstrom — XGE p.160: 120 ft, DEX save 6d6 bludgeoning + restrained, 20-ft radius.
+      const maTargets = shouldCastMaelstrom(actor, bf);
+      if (maTargets) executeMaelstrom(actor, maTargets, state);
+      break;
+    }
+
+    case 'negativeEnergyFlood': {
+      // Negative Energy Flood — XGE p.162: 60 ft, CON save 5d12 necrotic, single-target.
+      const nefTargetId = plan.targetId;
+      const nefTarget = nefTargetId ? bf.combatants.get(nefTargetId) ?? null : null;
+      const liveTarget = nefTarget && !nefTarget.isDead && !nefTarget.isUnconscious
+        ? nefTarget
+        : shouldCastNegativeEnergyFlood(actor, bf);
+      if (liveTarget) executeNegativeEnergyFlood(actor, liveTarget, state);
+      break;
+    }
+
+    case 'steelWindStrike': {
+      // Steel Wind Strike — XGE p.166: 30 ft, 5 melee spell attacks 6d10 force, multi-target.
+      const swsTargets = shouldCastSteelWindStrike(actor, bf);
+      if (swsTargets) executeSteelWindStrike(actor, swsTargets, state);
+      break;
+    }
+
+    case 'synapticStatic': {
+      // Synaptic Static — XGE p.167: 120 ft, INT save 8d6 psychic + incapacitated, 20-ft radius.
+      const ssTargets = shouldCastSynapticStatic(actor, bf);
+      if (ssTargets) executeSynapticStatic(actor, ssTargets, state);
       break;
     }
 

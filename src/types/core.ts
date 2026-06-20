@@ -1328,6 +1328,14 @@ export interface PlannedAction {
     | 'spellfireStorm'      // Spellfire Storm — SCAG p.150: 60 ft, AUTO-HIT 4d10 fire (no save, no attack), v1 one-shot (canon concentration + DoT simplified)
     | 'stormSphere'         // Storm Sphere — XGE p.166: 150 ft, CON save 6d6 thunder (half on save), 20-ft radius AoE, v1 one-shot (canon concentration + lightning rider simplified)
     | 'vitriolicSphere'     // Vitriolic Sphere — XGE p.168: 150 ft, DEX save 10d4 acid (half on save), 20-ft radius AoE, NO concentration (DoT simplified)
+    | 'destructiveWave'     // Destructive Wave — PHB p.250: Self (30-ft radius), CON save 5d6 thunder + prone on fail, caster excluded, NO concentration
+    | 'enervation'          // Enervation — XGE p.155: 60 ft, DEX save 4d8 necrotic + heal self half (half on save), v1 one-shot (canon concentration + DoT simplified)
+    | 'flameStrike'         // Flame Strike — PHB p.243: 60 ft, DEX save 4d6 fire + 4d6 radiant (half on save, dual damage), 10-ft radius AoE, NO concentration
+    | 'immolation'          // Immolation — XGE p.157: 90 ft, DEX save 8d6 fire (half on save), single-target, v1 one-shot (canon concentration + DoT simplified)
+    | 'maelstrom'           // Maelstrom — XGE p.160: 120 ft, DEX save 6d6 bludgeoning + restrained on fail, 20-ft radius AoE, v1 one-shot (canon concentration simplified)
+    | 'negativeEnergyFlood' // Negative Energy Flood — XGE p.162: 60 ft, CON save 5d12 necrotic (half on save), single-target, NO concentration (undead-boost simplified)
+    | 'steelWindStrike'     // Steel Wind Strike — XGE p.166: 30 ft, 5 melee spell attacks 6d10 force (crit doubles), multi-target, NO concentration (teleport simplified)
+    | 'synapticStatic'      // Synaptic Static — XGE p.167: 120 ft, INT save 8d6 psychic + incapacitated on fail (-1d6 simplified), 20-ft radius AoE, NO concentration
     // ── Session 19 — bulk-implementation generic dispatch (262 new spells L2-9) ──
     // All non-blocker in-scope spells from levels 2-9 that have not been
     // implemented as bespoke case branches are routed through 'genericSpell'.

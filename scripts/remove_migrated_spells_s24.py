@@ -54,6 +54,15 @@ SPELLS = [
     ('Spellfire Storm', 'spellfire_storm',  'SpellfireStorm'),
     ('Storm Sphere',    'storm_sphere',     'StormSphere'),
     ('Vitriolic Sphere', 'vitriolic_sphere', 'VitriolicSphere'),
+    # L5 (8) — increment 5
+    ('Destructive Wave', 'destructive_wave', 'DestructiveWave'),
+    ('Enervation',      'enervation',       'Enervation'),
+    ('Flame Strike',    'flame_strike',     'FlameStrike'),
+    ('Immolation',      'immolation',       'Immolation'),
+    ('Maelstrom',       'maelstrom',        'Maelstrom'),
+    ('Negative Energy Flood', 'negative_energy_flood', 'NegativeEnergyFlood'),
+    ('Steel Wind Strike', 'steel_wind_strike', 'SteelWindStrike'),
+    ('Synaptic Static', 'synaptic_static',  'SynapticStatic'),
 ]
 
 REGISTRY = Path('src/spells/_generic_registry.ts')

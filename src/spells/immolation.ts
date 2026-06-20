@@ -1,118 +1,119 @@
 // ============================================================
-// Immolation — XGE p.158
+// Immolation — XGE p.157
 //
-// 5-level evocation, 1 action, range 90 ft, concentration.
-// Duration: 1 minute.
+// 5th-level evocation, action, range 90 ft. Canon: concentration, until
+// extinguished. v1: concentration + DoT simplified to one-shot.
+// Components: V.
 //
-// Effect: Flames wreathe one creature you can see within range. The target must make a Dexterity saving throw. It takes  fire damage on a failed save, or half as much damage on a successful one. On
+// Effect: Flames wreathe one creature you can see within range. The
+//         target must make a Dexterity saving throw. It takes 8d6 fire
+//         damage on a failed save, or half as much on a successful one.
+//         On a failed save, the target also burns for the duration
+//         (canon: 4d6 fire at the end of each of its turns until it or
+//         an ally uses an action to extinguish the flames).
 //
-// Upcast: see source (not modelled in v1).
+// Upcast: +1d6 fire per slot level above 5th (not modelled in v1).
 //
 // v1 simplifications:
-//   - v1 models this spell as a FORWARD-COMPAT flag only (Session 19 bulk
-//     implementation). The spell consumes a slot and sets the flag
-//     `_genericSpellActiveSpells` on the caster; the actual mechanical
-//     effect (damage / save / condition / buff) is NOT applied in v1.
-//     A future implementation should extend the relevant engine subsystem
-//     (damage_zone for persistent damage, condition_apply for conditions,
-//     advantage_vs for buffs, etc.) to consume this flag and apply the
-//     real effect. This mirrors the Session 17/18 forward-compat pattern
-//     established by Darkvision, Arcane Lock, Knock, See Invisibility.
-//   - Concentration spell (forward-compat flag persists for combat).
+//   - Concentration + DoT (XGE p.157: "concentration, until the spell
+//     ends" + 4d6/turn until extinguished): v1 simplifies to one-shot
+//     (concentration: false). The per-turn DoT is NOT modelled (same gap
+//     as Spellfire Storm / Enervation). One-shot 8d6 fire. Documented
+//     via `immolationConcentrationV1Simplified: true`.
+//   - Upcast: NOT modelled.
 //
-// Spell module pattern (mirrors Darkvision / Arcane Lock forward-compat
-// self-buff pattern):
-//   shouldCast(caster, bf) → boolean
-//   execute(caster, state) → void
-//   cleanup() — no-op (forward-compat flag persists for combat)
+// Migration note (Session 24): Mirrors Catapult (Session 21) but with
+// DEX save, 8d6 fire, L5 slot, 90-ft range.
+//
+// Spell module pattern (single-target save — mirrors catapult.ts):
+//   shouldCast(caster, bf) → Combatant | null
+//   execute(caster, target, state) → void
+//   cleanup() — no-op (v1 one-shot)
 // ============================================================
 
 import { Combatant, Battlefield } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
+import { rollSave, rollDie, applyDamageWithTempHP } from '../engine/utils';
+import { chebyshev3D, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
-
-// ---- Metadata -----------------------------------------------
 
 export const metadata = {
   name: 'Immolation',
   level: 5,
   school: 'evocation',
-  rangeFt: 90,
-  concentration: true,
+  rangeFt: 90,                   // XGE p.157: 90 ft
+  dieCount: 8,
+  dieSides: 6,
+  damageType: 'fire' as const,
+  concentration: false,          // v1 simplification: one-shot (canon concentration + DoT)
+  saveAbility: 'dex' as const,
   castingTime: 'action',
-  immolationV1Simplified: true,
+  immolationConcentrationV1Simplified: true,                           // canon concentration + DoT simplified to one-shot
+  immolationUpcastV1Implemented: false,                                 // +1d6/slot-level NOT modelled
 } as const;
 
-// ---- Local log helper ---------------------------------------
-
-function emit(
-  state: EngineState,
-  type: CombatEvent['type'],
-  actorId: string,
-  desc: string,
-  targetId?: string,
-  value?: number,
-): void {
-  state.log.events.push({
-    round: state.battlefield.round,
-    actorId,
-    type,
-    targetId,
-    value,
-    description: desc,
-  });
+function emit(state: EngineState, type: CombatEvent['type'], actorId: string, desc: string, targetId?: string, value?: number): void {
+  state.log.events.push({ round: state.battlefield.round, actorId, type, targetId, value, description: desc });
 }
 
-// ---- Planner ------------------------------------------------
-
-/**
- * Returns true if the caster should cast Immolation this turn.
- *
- * Preconditions:
- *   - Caster has 'Immolation' in their actions
- *   - Caster has at least one 5-level-or-higher slot available
- *   - Caster is NOT already Immolation-active (re-cast would be a no-op in v1)
- */
-export function shouldCast(caster: Combatant, _bf: Battlefield): boolean {
-  if (!caster.actions.some(a => a.name === 'Immolation')) return false;
-  if (!hasSpellSlot(caster, 5)) return false;
-  if (caster._genericSpellActiveSpells?.has('Immolation')) return false;
-  return true;
+export function rollDamage(): number {
+  let total = 0;
+  for (let i = 0; i < metadata.dieCount; i++) total += rollDie(metadata.dieSides);
+  return total;
 }
 
-// ---- Execution ----------------------------------------------
+export function shouldCast(caster: Combatant, bf: Battlefield): Combatant | null {
+  if (!caster.actions.some(a => a.name === 'Immolation')) return null;
+  if (!hasSpellSlot(caster, 5)) return null;
 
-/**
- * Execute Immolation:
- *  1. Consume a 5-level spell slot.
- *  2. Set the flag on the caster's `_genericSpellActiveSpells` Set.
- *  3. Log the cast.
- */
-export function execute(
-  caster: Combatant,
-  state: EngineState,
-): void {
-  consumeSpellSlot(caster, 5);
-
-  if (!caster._genericSpellActiveSpells) {
-    caster._genericSpellActiveSpells = new Set<string>();
+  const enemies = livingEnemiesOf(caster, bf);
+  const candidates: Array<{ c: Combatant; threat: number; curHP: number; dist: number }> = [];
+  for (const e of enemies) {
+    const distFt = chebyshev3D(caster.pos, e.pos) * 5;
+    if (distFt > 90) continue;
+    candidates.push({ c: e, threat: e.maxHP, curHP: e.currentHP, dist: distFt });
   }
-  caster._genericSpellActiveSpells.add('Immolation');
+  if (candidates.length === 0) return null;
+  candidates.sort((a, b) => {
+    if (a.threat !== b.threat) return b.threat - a.threat;
+    if (a.curHP !== b.curHP) return a.curHP - b.curHP;
+    return a.dist - b.dist;
+  });
+  return candidates[0].c;
+}
+
+export function execute(caster: Combatant, target: Combatant, state: EngineState): void {
+  const action = caster.actions.find(a => a.name === 'Immolation');
+  const saveDC = action?.saveDC ?? 15;
+
+  consumeSpellSlot(caster, 5);
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Immolation! (v1: forward-compat flag set; mechanical effect not yet implemented)`,
-    caster.id,
+    `${caster.name} casts Immolation at ${target.name}! (DC ${saveDC} DEX, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}, half on save)`,
+    target.id,
   );
+
+  if (target.isDead || target.isUnconscious) {
+    emit(state, 'save_success', caster.id, `Immolation: ${target.name} is already down — the flames find no fuel.`, target.id);
+    return;
+  }
+
+  const save = rollSave(target, 'dex', saveDC);
+  const fullDmg = rollDamage();
+  const dmg = save.success ? Math.floor(fullDmg / 2) : fullDmg;
+  const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);
+
   emit(
-    state, 'condition_add', caster.id,
-    `${caster.name} is affected by Immolation. (v1: forward-compat flag set; no mechanical effect until engine subsystem is implemented)`,
+    state,
+    save.success ? 'save_success' : 'save_fail',
     caster.id,
+    `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} DEX save vs Immolation (rolled ${save.total}) — ${dealt} ${metadata.damageType} damage (${metadata.dieCount}d${metadata.dieSides}=${fullDmg}${save.success ? ', halved' : ''})`,
+    target.id, save.roll,
   );
+  emit(state, 'damage', caster.id, `Immolation: ${target.name} takes ${dealt} ${metadata.damageType} damage`, target.id, dealt);
 }
 
-// ---- Cleanup ------------------------------------------------
-
 export function cleanup(_c: Combatant): void {
-  // No-op — forward-compat flag persists for combat.
+  // No-op — v1 one-shot.
 }

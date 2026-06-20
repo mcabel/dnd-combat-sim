@@ -141,9 +141,9 @@ assert('Registry is non-empty', SPELL_COUNT > 0);
 // Session 23: lowered from 290 to 280 after migrating 7 more high-damage
 // spells (Blight, Cloudkill, Disintegrate, Harm, Finger of Death,
 // Sunburst, Power Word Kill). The registry then had 299 spells (306 − 7).
-// Session 24: lowered from 280 to 245 after migrating 22 L1+L2+L3+L4 combat-damage
-// spells. The registry now has 277 spells (299 − 22). Cumulative migrated: 36.
-assert(`Registry has at least 245 spells (got ${SPELL_COUNT})`, SPELL_COUNT >= 245);
+// Session 24: lowered from 280 to 235 after migrating 30 L1-L5 combat-damage
+// spells. The registry now has 269 spells (299 − 30). Cumulative migrated: 44.
+assert(`Registry has at least 235 spells (got ${SPELL_COUNT})`, SPELL_COUNT >= 235);
 console.log(`  📊 Total bulk-implemented spells: ${SPELL_COUNT}`);
 
 // Sample spells — one per level 1-9. Updated in Session 23 to avoid the
@@ -221,6 +221,8 @@ const MIGRATED_SPELLS_S24 = [
   'Erupting Earth', 'Life Transference', 'Pulse Wave', 'Tidal Wave', 'Vampiric Touch',
   'Elemental Bane', 'Gravity Sinkhole', 'Ice Storm', 'Sickening Radiance',
   'Spellfire Storm', 'Storm Sphere', 'Vitriolic Sphere',
+  'Destructive Wave', 'Enervation', 'Flame Strike', 'Immolation', 'Maelstrom',
+  'Negative Energy Flood', 'Steel Wind Strike', 'Synaptic Static',
 ];
 for (const migrated of MIGRATED_SPELLS_S24) {
   eq(`  ${migrated} is no longer in the registry (migrated to bespoke)`,

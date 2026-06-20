@@ -129,6 +129,14 @@ import { shouldCast as shouldCastSickeningRadiance } from '../spells/sickening_r
 import { shouldCast as shouldCastSpellfireStorm } from '../spells/spellfire_storm';
 import { shouldCast as shouldCastStormSphere } from '../spells/storm_sphere';
 import { shouldCast as shouldCastVitriolicSphere } from '../spells/vitriolic_sphere';
+import { shouldCast as shouldCastDestructiveWave } from '../spells/destructive_wave';
+import { shouldCast as shouldCastEnervation } from '../spells/enervation';
+import { shouldCast as shouldCastFlameStrike } from '../spells/flame_strike';
+import { shouldCast as shouldCastImmolation } from '../spells/immolation';
+import { shouldCast as shouldCastMaelstrom } from '../spells/maelstrom';
+import { shouldCast as shouldCastNegativeEnergyFlood } from '../spells/negative_energy_flood';
+import { shouldCast as shouldCastSteelWindStrike } from '../spells/steel_wind_strike';
+import { shouldCast as shouldCastSynapticStatic } from '../spells/synaptic_static';
 
 // ── Session 19 — bulk-implementation generic dispatch (262 new spells) ────
 import { GENERIC_SPELL_LIST } from '../spells/_generic_registry';
@@ -2621,6 +2629,158 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
       };
       plan.targetId = vsTargets[0].id;
       plan.bonusAction = planBonusAction(self, vsTargets[0], battlefield);
+      return plan;
+    }
+  }
+
+  // ── Session 24 — L5 combat damage spells (12AK–12AR) ────────────
+
+  // --- 12AK. DESTRUCTIVE WAVE (CON save 5d6 thunder + prone, L5, NO concentration) ---
+  // PHB p.250: Self (30-ft radius), CON save 5d6 thunder + prone on fail, caster excluded.
+  // v1 follows plan (5d6 thunder only; canon 5d6 thunder + 5d6 radiant/necrotic simplified).
+  // shouldCast returns Combatant[] (enemies within 30 ft of caster). Avg 17.5 thunder + prone.
+  if (!plan.action && self.actions.some(a => a.name === 'Destructive Wave')) {
+    const dwTargets = shouldCastDestructiveWave(self, battlefield);
+    if (dwTargets) {
+      const names = dwTargets.map(t => t.name).join(', ');
+      plan.action = {
+        type: 'destructiveWave',
+        action: null,
+        targetId: dwTargets[0].id,
+        description: `${self.name} casts Destructive Wave, catching ${names}`,
+      };
+      plan.targetId = dwTargets[0].id;
+      plan.bonusAction = planBonusAction(self, dwTargets[0], battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12AL. ENERVATION (DEX save 4d8 necrotic + heal self half, L5, v1 one-shot) ---
+  // XGE p.155: 60 ft, DEX save 4d8 necrotic + heal caster half (half on save). v1 one-shot.
+  // shouldCast returns a single enemy. Avg 18 necrotic + ~9 self-heal.
+  if (!plan.action && self.actions.some(a => a.name === 'Enervation')) {
+    const enTarget = shouldCastEnervation(self, battlefield);
+    if (enTarget) {
+      plan.action = {
+        type: 'enervation',
+        action: null,
+        targetId: enTarget.id,
+        description: `${self.name} casts Enervation at ${enTarget.name}`,
+      };
+      plan.targetId = enTarget.id;
+      plan.bonusAction = planBonusAction(self, enTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12AM. FLAME STRIKE (DEX save 4d6 fire + 4d6 radiant, L5, NO concentration) ---
+  // PHB p.243: 60 ft, DEX save 4d6 fire + 4d6 radiant (dual damage, half on save), 10-ft radius.
+  // shouldCast returns Combatant[]. Avg 28 fire+radiant.
+  if (!plan.action && self.actions.some(a => a.name === 'Flame Strike')) {
+    const fsTargets = shouldCastFlameStrike(self, battlefield);
+    if (fsTargets) {
+      const names = fsTargets.map(t => t.name).join(', ');
+      plan.action = {
+        type: 'flameStrike',
+        action: null,
+        targetId: fsTargets[0].id,
+        description: `${self.name} casts Flame Strike, catching ${names}`,
+      };
+      plan.targetId = fsTargets[0].id;
+      plan.bonusAction = planBonusAction(self, fsTargets[0], battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12AN. IMMOLATION (DEX save 8d6 fire, L5, v1 one-shot) ---
+  // XGE p.157: 90 ft, DEX save 8d6 fire (half on save), single-target. v1 one-shot.
+  // shouldCast returns a single enemy. Avg 28 fire.
+  if (!plan.action && self.actions.some(a => a.name === 'Immolation')) {
+    const imTarget = shouldCastImmolation(self, battlefield);
+    if (imTarget) {
+      plan.action = {
+        type: 'immolation',
+        action: null,
+        targetId: imTarget.id,
+        description: `${self.name} casts Immolation at ${imTarget.name}`,
+      };
+      plan.targetId = imTarget.id;
+      plan.bonusAction = planBonusAction(self, imTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12AO. MAELSTROM (DEX save 6d6 bludgeoning + restrained, L5, v1 one-shot) ---
+  // XGE p.160: 120 ft, DEX save 6d6 bludgeoning + restrained on fail, 20-ft radius. v1 one-shot.
+  // shouldCast returns Combatant[]. Avg 21 bludgeoning + restrained.
+  if (!plan.action && self.actions.some(a => a.name === 'Maelstrom')) {
+    const maTargets = shouldCastMaelstrom(self, battlefield);
+    if (maTargets) {
+      const names = maTargets.map(t => t.name).join(', ');
+      plan.action = {
+        type: 'maelstrom',
+        action: null,
+        targetId: maTargets[0].id,
+        description: `${self.name} casts Maelstrom, catching ${names}`,
+      };
+      plan.targetId = maTargets[0].id;
+      plan.bonusAction = planBonusAction(self, maTargets[0], battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12AP. NEGATIVE ENERGY FLOOD (CON save 5d12 necrotic, L5, NO concentration) ---
+  // XGE p.162: 60 ft, CON save 5d12 necrotic (half on save), single-target. Undead-boost simplified.
+  // shouldCast returns a single enemy. Avg 32.5 necrotic.
+  if (!plan.action && self.actions.some(a => a.name === 'Negative Energy Flood')) {
+    const nefTarget = shouldCastNegativeEnergyFlood(self, battlefield);
+    if (nefTarget) {
+      plan.action = {
+        type: 'negativeEnergyFlood',
+        action: null,
+        targetId: nefTarget.id,
+        description: `${self.name} casts Negative Energy Flood at ${nefTarget.name}`,
+      };
+      plan.targetId = nefTarget.id;
+      plan.bonusAction = planBonusAction(self, nefTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12AQ. STEEL WIND STRIKE (5 melee spell attacks 6d10 force, L5, NO concentration) ---
+  // XGE p.166: 30 ft, 5 melee spell attacks 6d10 force (crit doubles), multi-target. Teleport simplified.
+  // shouldCast returns Combatant[] (5 targets, may repeat). Avg 33 force per hit × 5 hits.
+  if (!plan.action && self.actions.some(a => a.name === 'Steel Wind Strike')) {
+    const swsTargets = shouldCastSteelWindStrike(self, battlefield);
+    if (swsTargets) {
+      const names = [...new Set(swsTargets.map(t => t.name))].join(', ');
+      plan.action = {
+        type: 'steelWindStrike',
+        action: null,
+        targetId: swsTargets[0].id,
+        description: `${self.name} casts Steel Wind Strike at ${names} (5 attacks)`,
+      };
+      plan.targetId = swsTargets[0].id;
+      plan.bonusAction = planBonusAction(self, swsTargets[0], battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12AR. SYNAPTIC STATIC (INT save 8d6 psychic + incapacitated, L5, NO concentration) ---
+  // XGE p.167: 120 ft, INT save 8d6 psychic + incapacitated on fail (-1d6 simplified), 20-ft radius.
+  // shouldCast returns Combatant[]. Avg 28 psychic + incapacitated.
+  if (!plan.action && self.actions.some(a => a.name === 'Synaptic Static')) {
+    const ssTargets = shouldCastSynapticStatic(self, battlefield);
+    if (ssTargets) {
+      const names = ssTargets.map(t => t.name).join(', ');
+      plan.action = {
+        type: 'synapticStatic',
+        action: null,
+        targetId: ssTargets[0].id,
+        description: `${self.name} casts Synaptic Static, catching ${names}`,
+      };
+      plan.targetId = ssTargets[0].id;
+      plan.bonusAction = planBonusAction(self, ssTargets[0], battlefield);
       return plan;
     }
   }
