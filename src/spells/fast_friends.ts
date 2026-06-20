@@ -1,34 +1,37 @@
 // ============================================================
-// Fast Friends — AI p.75
+// Fast Friends — EGtW p.151 (Explorer's Guide to Wildemount)
 //
-// 3-level enchantment, 1 action, range 30 ft, concentration.
-// Duration: 1 hour.
+// 3rd-level enchantment, action, range 30 ft, concentration (1 hr).
+// Components: V, S, M (a small amount of food).
 //
-// Effect: When you need to make sure something gets done, you can't rely on vague promises, sworn oaths, or binding contracts of employment. When you cast this spell, choose one humanoid within range that can s
+// Effect: You choose one creature you can see within range and compel
+//         it to make a Wisdom saving throw. On a failed save, the target
+//         is charmed by you for the duration (v1: control rider simplified
+//         to charmed).
 //
-// Upcast: see source (not modelled in v1).
+// Upcast: none (3rd-level spell — no upcast).
 //
-// v1 simplifications:
-//   - v1 models this spell as a FORWARD-COMPAT flag only (Session 19 bulk
-//     implementation). The spell consumes a slot and sets the flag
-//     `_genericSpellActiveSpells` on the caster; the actual mechanical
-//     effect (damage / save / condition / buff) is NOT applied in v1.
-//     A future implementation should extend the relevant engine subsystem
-//     (damage_zone for persistent damage, condition_apply for conditions,
-//     advantage_vs for buffs, etc.) to consume this flag and apply the
-//     real effect. This mirrors the Session 17/18 forward-compat pattern
-//     established by Darkvision, Arcane Lock, Knock, See Invisibility.
-//   - Concentration spell (forward-compat flag persists for combat).
+// v1 simplifications: control/behaviour-modification simplified to charmed;
+// concentration not enforced (TG-002); end-of-turn save not modelled;
+// range 30 ft (chebyshev approx).
 //
-// Spell module pattern (mirrors Darkvision / Arcane Lock forward-compat
-// self-buff pattern):
-//   shouldCast(caster, bf) → boolean
-//   execute(caster, state) → void
-//   cleanup() — no-op (forward-compat flag persists for combat)
+// Migration note (Session 25 / Batch 2): migrated from the generic
+// forward-compat flag to a bespoke WIS-save-or-charmed (concentration).
+// Removed from `_generic_registry.ts`; routed via `case 'fastFriends':`
+// in combat.ts and a planner branch in planner.ts. Mirrors Hold Person
+// (single-target conc save-or-condition) but charmed + range 30.
+//
+// Spell module pattern (single-target save-or-condition, concentration):
+//   shouldCast(caster, bf) → Combatant | null
+//   execute(caster, target, state) → void
+//   cleanup() — no-op (concentration break handles cleanup)
 // ============================================================
 
 import { Combatant, Battlefield } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
+import { applySpellEffect, removeEffectsFromCaster } from '../engine/spell_effects';
+import { startConcentration, rollSave } from '../engine/utils';
+import { chebyshev3D } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 
 // ---- Metadata -----------------------------------------------
@@ -39,8 +42,10 @@ export const metadata = {
   school: 'enchantment',
   rangeFt: 30,
   concentration: true,
+  saveAbility: 'wis' as const,
   castingTime: 'action',
-  fastFriendsV1Simplified: true,
+  fastFriendsControlV1Simplified: true,
+  fastFriendsConcentrationEnforcementV1Implemented: false,
 } as const;
 
 // ---- Local log helper ---------------------------------------
@@ -53,66 +58,63 @@ function emit(
   targetId?: string,
   value?: number,
 ): void {
-  state.log.events.push({
-    round: state.battlefield.round,
-    actorId,
-    type,
-    targetId,
-    value,
-    description: desc,
-  });
+  state.log.events.push({ round: state.battlefield.round, actorId, type, targetId, value, description: desc });
 }
 
 // ---- Planner ------------------------------------------------
 
-/**
- * Returns true if the caster should cast Fast Friends this turn.
- *
- * Preconditions:
- *   - Caster has 'Fast Friends' in their actions
- *   - Caster has at least one 3-level-or-higher slot available
- *   - Caster is NOT already Fast Friends-active (re-cast would be a no-op in v1)
- */
-export function shouldCast(caster: Combatant, _bf: Battlefield): boolean {
-  if (!caster.actions.some(a => a.name === 'Fast Friends')) return false;
-  if (!hasSpellSlot(caster, 3)) return false;
-  if (caster._genericSpellActiveSpells?.has('Fast Friends')) return false;
-  return true;
+export function shouldCast(caster: Combatant, bf: Battlefield): Combatant | null {
+  if (caster.concentration?.active) return null;
+  if (!caster.actions.some(a => a.name === 'Fast Friends')) return null;
+  if (!hasSpellSlot(caster, 3)) return null;
+
+  const candidates: Array<{ c: Combatant; threat: number; dist: number }> = [];
+  for (const c of bf.combatants.values()) {
+    if (c.id === caster.id) continue;
+    if (c.faction === caster.faction) continue;
+    if (c.isDead || c.isUnconscious) continue;
+    const distFt = chebyshev3D(caster.pos, c.pos) * 5;
+    if (distFt > 30) continue;
+    if (c.conditions.has('charmed') || c.conditions.has('incapacitated')) continue;
+    if (c.activeEffects.some(e => e.casterId === caster.id && e.spellName === 'Fast Friends')) continue;
+    candidates.push({ c, threat: c.maxHP, dist: distFt });
+  }
+  if (candidates.length === 0) return null;
+  candidates.sort((a, b) => a.threat !== b.threat ? b.threat - a.threat : a.dist - b.dist);
+  return candidates[0].c;
 }
 
 // ---- Execution ----------------------------------------------
 
-/**
- * Execute Fast Friends:
- *  1. Consume a 3-level spell slot.
- *  2. Set the flag on the caster's `_genericSpellActiveSpells` Set.
- *  3. Log the cast.
- */
-export function execute(
-  caster: Combatant,
-  state: EngineState,
-): void {
+export function execute(caster: Combatant, target: Combatant, state: EngineState): void {
+  const action = caster.actions.find(a => a.name === 'Fast Friends');
+  const saveDC = action?.saveDC ?? 13;
+
   consumeSpellSlot(caster, 3);
+  if (caster.concentration?.active) removeEffectsFromCaster(caster.id, state.battlefield);
+  startConcentration(caster, 'Fast Friends');
 
-  if (!caster._genericSpellActiveSpells) {
-    caster._genericSpellActiveSpells = new Set<string>();
+  emit(state, 'action', caster.id, `${caster.name} casts Fast Friends at ${target.name}! (DC ${saveDC} WIS)`, target.id);
+  if (target.isDead || target.isUnconscious) return;
+
+  const save = rollSave(target, 'wis', saveDC);
+  emit(state, save.success ? 'save_success' : 'save_fail', caster.id,
+    `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} WIS save vs Fast Friends (rolled ${save.total})`, target.id, save.roll);
+
+  if (save.success) {
+    emit(state, 'action', caster.id, `${target.name} resists Fast Friends — not charmed!`, target.id);
+    return;
   }
-  caster._genericSpellActiveSpells.add('Fast Friends');
 
-  emit(
-    state, 'action', caster.id,
-    `${caster.name} casts Fast Friends! (v1: forward-compat flag set; mechanical effect not yet implemented)`,
-    caster.id,
-  );
-  emit(
-    state, 'condition_add', caster.id,
-    `${caster.name} is affected by Fast Friends. (v1: forward-compat flag set; no mechanical effect until engine subsystem is implemented)`,
-    caster.id,
-  );
+  applySpellEffect(target, {
+    casterId: caster.id, spellName: 'Fast Friends',
+    effectType: 'condition_apply', payload: { condition: 'charmed' },
+    sourceIsConcentration: true,
+  });
+  emit(state, 'condition_add', caster.id,
+    `${target.name} is CHARMED by Fast Friends! (v1: control rider NOT modelled — charm only)`, target.id);
 }
 
 // ---- Cleanup ------------------------------------------------
 
-export function cleanup(_c: Combatant): void {
-  // No-op — forward-compat flag persists for combat.
-}
+export function cleanup(_c: Combatant): void { /* no-op — concentration break handles cleanup */ }

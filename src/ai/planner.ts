@@ -170,6 +170,16 @@ import { shouldCast as shouldCastPhantasmalKiller } from '../spells/phantasmal_k
 import { shouldCast as shouldCastWaterySphere } from '../spells/watery_sphere';
 import { shouldCast as shouldCastDominateBeast } from '../spells/dominate_beast';
 import { shouldCast as shouldCastCharmMonster } from '../spells/charm_monster';
+import { shouldCast as shouldCastAntagonize } from '../spells/antagonize';
+import { shouldCast as shouldCastBestowCurse } from '../spells/bestow_curse';
+import { shouldCast as shouldCastCatnap } from '../spells/catnap';
+import { shouldCast as shouldCastEnemiesAbound } from '../spells/enemies_abound';
+import { shouldCast as shouldCastFastFriends } from '../spells/fast_friends';
+import { shouldCast as shouldCastFear } from '../spells/fear';
+import { shouldCast as shouldCastHypnoticPattern } from '../spells/hypnotic_pattern';
+import { shouldCast as shouldCastInciteGreed } from '../spells/incite_greed';
+import { shouldCast as shouldCastSleetStorm } from '../spells/sleet_storm';
+import { shouldCast as shouldCastStinkingCloud } from '../spells/stinking_cloud';
 
 // ── Session 19 — bulk-implementation generic dispatch (262 new spells) ────
 import { GENERIC_SPELL_LIST } from '../spells/_generic_registry';
@@ -3365,6 +3375,142 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
       plan.action = { type: 'charmMonster', action: null, targetId: cmTarget.id, description: `${self.name} casts Charm Monster at ${cmTarget.name}` };
       plan.targetId = cmTarget.id;
       plan.bonusAction = planBonusAction(self, cmTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12BX. ANTAGONIZE (WIS save 4d4 psychic + frightened, L3, NO conc) ---
+  // EGtW p.150: 60 ft, WIS save 4d4 psychic (half on save) + frightened on fail, NO concentration.
+  // shouldCast returns single Combatant.
+  if (!plan.action && self.actions.some(a => a.name === 'Antagonize')) {
+    const antTarget = shouldCastAntagonize(self, battlefield);
+    if (antTarget) {
+      plan.action = { type: 'antagonize', action: null, targetId: antTarget.id, description: `${self.name} casts Antagonize at ${antTarget.name}` };
+      plan.targetId = antTarget.id;
+      plan.bonusAction = planBonusAction(self, antTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12BY. BESTOW CURSE (WIS save or incapacitated, L3, concentration) ---
+  // PHB p.214: 60 ft (v1), WIS save or incapacitated, concentration (4 curse options simplified).
+  // shouldCast returns single Combatant.
+  if (!plan.action && self.actions.some(a => a.name === 'Bestow Curse')) {
+    const bcTarget = shouldCastBestowCurse(self, battlefield);
+    if (bcTarget) {
+      plan.action = { type: 'bestowCurse', action: null, targetId: bcTarget.id, description: `${self.name} casts Bestow Curse at ${bcTarget.name}` };
+      plan.targetId = bcTarget.id;
+      plan.bonusAction = planBonusAction(self, bcTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12BZ. CATNAP (3 willing allies asleep, L3, NO save, NO conc) ---
+  // XGE p.151: 30 ft, up to 3 WILLING ALLIES asleep (no save), NO concentration.
+  // shouldCast returns Combatant[] (allies). NOTE: tactically poor in v1 (no short-rest benefit).
+  if (!plan.action && self.actions.some(a => a.name === 'Catnap')) {
+    const cnTargets = shouldCastCatnap(self, battlefield);
+    if (cnTargets) {
+      const names = cnTargets.map(t => t.name).join(', ');
+      plan.action = { type: 'catnap', action: null, targetId: cnTargets[0].id, description: `${self.name} casts Catnap, soothing ${names}` };
+      plan.targetId = cnTargets[0].id;
+      plan.bonusAction = planBonusAction(self, cnTargets[0], battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12CA. ENEMIES ABOUND (INT save or frightened, L3, concentration) ---
+  // XGE p.155: 120 ft, INT save or frightened, concentration (target-acquisition debuff simplified).
+  // shouldCast returns single Combatant.
+  if (!plan.action && self.actions.some(a => a.name === 'Enemies Abound')) {
+    const eaTarget = shouldCastEnemiesAbound(self, battlefield);
+    if (eaTarget) {
+      plan.action = { type: 'enemiesAbound', action: null, targetId: eaTarget.id, description: `${self.name} casts Enemies Abound at ${eaTarget.name}` };
+      plan.targetId = eaTarget.id;
+      plan.bonusAction = planBonusAction(self, eaTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12CB. FAST FRIENDS (WIS save or charmed, L3, concentration) ---
+  // EGtW p.151: 30 ft, WIS save or charmed, concentration (control simplified).
+  // shouldCast returns single Combatant.
+  if (!plan.action && self.actions.some(a => a.name === 'Fast Friends')) {
+    const ffTarget = shouldCastFastFriends(self, battlefield);
+    if (ffTarget) {
+      plan.action = { type: 'fastFriends', action: null, targetId: ffTarget.id, description: `${self.name} casts Fast Friends at ${ffTarget.name}` };
+      plan.targetId = ffTarget.id;
+      plan.bonusAction = planBonusAction(self, ffTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12CC. FEAR (WIS save or frightened, L3, 30-ft cone, NO conc v1) ---
+  // PHB p.239: 30-ft cone, WIS save or frightened, NO concentration v1 (canon conc; drop-weapon simplified).
+  // shouldCast returns Combatant[].
+  if (!plan.action && self.actions.some(a => a.name === 'Fear')) {
+    const fearTargets = shouldCastFear(self, battlefield);
+    if (fearTargets) {
+      const names = fearTargets.map(t => t.name).join(', ');
+      plan.action = { type: 'fear', action: null, targetId: fearTargets[0].id, description: `${self.name} casts Fear, catching ${names}` };
+      plan.targetId = fearTargets[0].id;
+      plan.bonusAction = planBonusAction(self, fearTargets[0], battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12CD. HYPNOTIC PATTERN (WIS save or charmed+incapacitated, L3, DUAL, conc) ---
+  // PHB p.252: 120 ft, 10-ft radius AoE, WIS save or charmed+incapacitated (DUAL), concentration.
+  // shouldCast returns Combatant[].
+  if (!plan.action && self.actions.some(a => a.name === 'Hypnotic Pattern')) {
+    const hpTargets = shouldCastHypnoticPattern(self, battlefield);
+    if (hpTargets) {
+      const names = hpTargets.map(t => t.name).join(', ');
+      plan.action = { type: 'hypnoticPattern', action: null, targetId: hpTargets[0].id, description: `${self.name} casts Hypnotic Pattern, catching ${names}` };
+      plan.targetId = hpTargets[0].id;
+      plan.bonusAction = planBonusAction(self, hpTargets[0], battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12CE. INCITE GREED (WIS save or charmed, L3, 30-ft cone, conc) ---
+  // EGtW p.151: 30-ft cone, WIS save or charmed, concentration.
+  // shouldCast returns Combatant[].
+  if (!plan.action && self.actions.some(a => a.name === 'Incite Greed')) {
+    const igTargets = shouldCastInciteGreed(self, battlefield);
+    if (igTargets) {
+      const names = igTargets.map(t => t.name).join(', ');
+      plan.action = { type: 'inciteGreed', action: null, targetId: igTargets[0].id, description: `${self.name} casts Incite Greed, catching ${names}` };
+      plan.targetId = igTargets[0].id;
+      plan.bonusAction = planBonusAction(self, igTargets[0], battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12CF. SLEET STORM (DEX save or prone, L3, 20-ft radius, conc) ---
+  // PHB p.276: 120 ft, 20-ft radius AoE, DEX save or prone, concentration (conc-break rider simplified).
+  // shouldCast returns Combatant[].
+  if (!plan.action && self.actions.some(a => a.name === 'Sleet Storm')) {
+    const ssTargets = shouldCastSleetStorm(self, battlefield);
+    if (ssTargets) {
+      const names = ssTargets.map(t => t.name).join(', ');
+      plan.action = { type: 'sleetStorm', action: null, targetId: ssTargets[0].id, description: `${self.name} casts Sleet Storm, catching ${names}` };
+      plan.targetId = ssTargets[0].id;
+      plan.bonusAction = planBonusAction(self, ssTargets[0], battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12CG. STINKING CLOUD (CON save or poisoned+incapacitated, L3, DUAL, conc) ---
+  // PHB p.278: 90 ft, 20-ft radius AoE, CON save or poisoned+incapacitated (DUAL), concentration.
+  // shouldCast returns Combatant[].
+  if (!plan.action && self.actions.some(a => a.name === 'Stinking Cloud')) {
+    const scTargets = shouldCastStinkingCloud(self, battlefield);
+    if (scTargets) {
+      const names = scTargets.map(t => t.name).join(', ');
+      plan.action = { type: 'stinkingCloud', action: null, targetId: scTargets[0].id, description: `${self.name} casts Stinking Cloud, catching ${names}` };
+      plan.targetId = scTargets[0].id;
+      plan.bonusAction = planBonusAction(self, scTargets[0], battlefield);
       return plan;
     }
   }

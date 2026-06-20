@@ -544,6 +544,46 @@ import {
   shouldCast as shouldCastCharmMonster,
   execute as executeCharmMonster,
 } from '../spells/charm_monster';
+import {
+  shouldCast as shouldCastAntagonize,
+  execute as executeAntagonize,
+} from '../spells/antagonize';
+import {
+  shouldCast as shouldCastBestowCurse,
+  execute as executeBestowCurse,
+} from '../spells/bestow_curse';
+import {
+  shouldCast as shouldCastCatnap,
+  execute as executeCatnap,
+} from '../spells/catnap';
+import {
+  shouldCast as shouldCastEnemiesAbound,
+  execute as executeEnemiesAbound,
+} from '../spells/enemies_abound';
+import {
+  shouldCast as shouldCastFastFriends,
+  execute as executeFastFriends,
+} from '../spells/fast_friends';
+import {
+  shouldCast as shouldCastFear,
+  execute as executeFear,
+} from '../spells/fear';
+import {
+  shouldCast as shouldCastHypnoticPattern,
+  execute as executeHypnoticPattern,
+} from '../spells/hypnotic_pattern';
+import {
+  shouldCast as shouldCastInciteGreed,
+  execute as executeInciteGreed,
+} from '../spells/incite_greed';
+import {
+  shouldCast as shouldCastSleetStorm,
+  execute as executeSleetStorm,
+} from '../spells/sleet_storm';
+import {
+  shouldCast as shouldCastStinkingCloud,
+  execute as executeStinkingCloud,
+} from '../spells/stinking_cloud';
 
 // ── Session 19 — bulk-implementation generic dispatch (262 new spells) ────
 import {
@@ -3150,6 +3190,87 @@ function executePlannedAction(
       const cmTarget = cmTargetId ? bf.combatants.get(cmTargetId) ?? null : null;
       const cmLive = cmTarget && !cmTarget.isDead && !cmTarget.isUnconscious ? cmTarget : shouldCastCharmMonster(actor, bf);
       if (cmLive) executeCharmMonster(actor, cmLive, state);
+      break;
+    }
+
+    case 'antagonize': {
+      // Antagonize — EGtW p.150: 60 ft, WIS save 4d4 psychic (half) + frightened on fail, NO conc.
+      const antTargetId = plan.targetId;
+      const antTarget = antTargetId ? bf.combatants.get(antTargetId) ?? null : null;
+      const antLive = antTarget && !antTarget.isDead && !antTarget.isUnconscious ? antTarget : shouldCastAntagonize(actor, bf);
+      if (antLive) executeAntagonize(actor, antLive, state);
+      break;
+    }
+
+    case 'bestowCurse': {
+      // Bestow Curse — PHB p.214: 60 ft (v1), WIS save or incapacitated, conc.
+      const bcTargetId = plan.targetId;
+      const bcTarget = bcTargetId ? bf.combatants.get(bcTargetId) ?? null : null;
+      const bcLive = bcTarget && !bcTarget.isDead && !bcTarget.isUnconscious ? bcTarget : shouldCastBestowCurse(actor, bf);
+      if (bcLive) executeBestowCurse(actor, bcLive, state);
+      break;
+    }
+
+    case 'catnap': {
+      // Catnap — XGE p.151: 30 ft, up to 3 WILLING ALLIES asleep (no save), NO conc.
+      // shouldCast → Combatant[] (allies, not enemies).
+      const cnTargets = shouldCastCatnap(actor, bf);
+      if (cnTargets) executeCatnap(actor, cnTargets, state);
+      break;
+    }
+
+    case 'enemiesAbound': {
+      // Enemies Abound — XGE p.155: 120 ft, INT save or frightened, conc.
+      const eaTargetId = plan.targetId;
+      const eaTarget = eaTargetId ? bf.combatants.get(eaTargetId) ?? null : null;
+      const eaLive = eaTarget && !eaTarget.isDead && !eaTarget.isUnconscious ? eaTarget : shouldCastEnemiesAbound(actor, bf);
+      if (eaLive) executeEnemiesAbound(actor, eaLive, state);
+      break;
+    }
+
+    case 'fastFriends': {
+      // Fast Friends — EGtW p.151: 30 ft, WIS save or charmed, conc.
+      const ffTargetId = plan.targetId;
+      const ffTarget = ffTargetId ? bf.combatants.get(ffTargetId) ?? null : null;
+      const ffLive = ffTarget && !ffTarget.isDead && !ffTarget.isUnconscious ? ffTarget : shouldCastFastFriends(actor, bf);
+      if (ffLive) executeFastFriends(actor, ffLive, state);
+      break;
+    }
+
+    case 'fear': {
+      // Fear — PHB p.239: 30-ft cone, WIS save or frightened, NO conc (v1).
+      const fearTargets = shouldCastFear(actor, bf);
+      if (fearTargets) executeFear(actor, fearTargets, state);
+      break;
+    }
+
+    case 'hypnoticPattern': {
+      // Hypnotic Pattern — PHB p.252: 120 ft, 10-ft radius AoE, WIS save or
+      // charmed+incapacitated (DUAL), conc. shouldCast → Combatant[].
+      const hpTargets = shouldCastHypnoticPattern(actor, bf);
+      if (hpTargets) executeHypnoticPattern(actor, hpTargets, state);
+      break;
+    }
+
+    case 'inciteGreed': {
+      // Incite Greed — EGtW p.151: 30-ft cone, WIS save or charmed, conc.
+      const igTargets = shouldCastInciteGreed(actor, bf);
+      if (igTargets) executeInciteGreed(actor, igTargets, state);
+      break;
+    }
+
+    case 'sleetStorm': {
+      // Sleet Storm — PHB p.276: 120 ft, 20-ft radius AoE, DEX save or prone, conc.
+      const ssTargets = shouldCastSleetStorm(actor, bf);
+      if (ssTargets) executeSleetStorm(actor, ssTargets, state);
+      break;
+    }
+
+    case 'stinkingCloud': {
+      // Stinking Cloud — PHB p.278: 90 ft, 20-ft radius AoE, CON save or
+      // poisoned+incapacitated (DUAL), conc. shouldCast → Combatant[].
+      const scTargets = shouldCastStinkingCloud(actor, bf);
+      if (scTargets) executeStinkingCloud(actor, scTargets, state);
       break;
     }
 

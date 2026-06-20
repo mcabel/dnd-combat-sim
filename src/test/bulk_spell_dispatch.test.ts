@@ -157,7 +157,7 @@ console.log(`  📊 Total bulk-implemented spells: ${SPELL_COUNT}`);
 const SAMPLE_SPELLS = [
   { name: 'Alarm', level: 1 },
   { name: 'Continual Flame', level: 2 },
-  { name: 'Fear', level: 3 },
+  { name: 'Spirit Guardians', level: 3 },  // Session 25: was 'Fear' (migrated to bespoke)
   { name: 'Polymorph', level: 4 },
   { name: 'Animate Objects', level: 5 },     // Session 25: was 'Hold Monster' (migrated to bespoke)
   { name: 'Globe of Invulnerability', level: 6 }, // Session 23: was 'Disintegrate' (migrated)
@@ -267,6 +267,9 @@ const MIGRATED_SPELLS_S25 = [
   'Hold Monster', 'Contagion', 'Dominate Person', 'Geas',
   // L4 (4)
   'Phantasmal Killer', 'Watery Sphere', 'Dominate Beast', 'Charm Monster',
+  // L3 (10)
+  'Antagonize', 'Bestow Curse', 'Catnap', 'Enemies Abound', 'Fast Friends',
+  'Fear', 'Hypnotic Pattern', 'Incite Greed', 'Sleet Storm', 'Stinking Cloud',
 ];
 for (const migrated of MIGRATED_SPELLS_S25) {
   eq(`  ${migrated} is no longer in the registry (migrated to bespoke)`,
@@ -317,9 +320,9 @@ assert('Every list element is in the map', allInMap);
 // Updated in Session 21: was 'Fireball', now 'Fear' (Fireball migrated
 // to bespoke — see src/spells/fireball.ts and src/test/fireball.test.ts).
 
-console.log('\n=== 5. shouldCast gates (sample: Fear) ===\n');
+console.log('\n=== 5. shouldCast gates (sample: Spirit Guardians) ===\n');
 
-const sampleDesc = lookupGenericSpell('Fear');
+const sampleDesc = lookupGenericSpell('Spirit Guardians');
 if (sampleDesc) {
   // 5a. No Fear action → false
   {
@@ -334,7 +337,7 @@ if (sampleDesc) {
   // 5b. No 3rd-level slots → false
   {
     const caster = makeCombatant('wiz', {
-      actions: [makeSpellAction('Fear', 3)],
+      actions: [makeSpellAction('Spirit Guardians', 3)],
       resources: withSlots(3, 0),
     });
     const enemy = makeCombatant('e1', { faction: 'enemy', pos: { x: 1, y: 0, z: 0 } });
@@ -344,10 +347,10 @@ if (sampleDesc) {
   // 5c. Already active → false
   {
     const caster = makeCombatant('wiz', {
-      actions: [makeSpellAction('Fear', 3)],
+      actions: [makeSpellAction('Spirit Guardians', 3)],
       resources: withSlots(3, 2),
     });
-    caster._genericSpellActiveSpells = new Set<string>(['Fear']);
+    caster._genericSpellActiveSpells = new Set<string>(['Spirit Guardians']);
     const enemy = makeCombatant('e1', { faction: 'enemy', pos: { x: 1, y: 0, z: 0 } });
     const bf = makeBF([caster, enemy]);
     eq('Returns false when already Fear-active', sampleDesc.shouldCast(caster, bf as any), false);
@@ -355,7 +358,7 @@ if (sampleDesc) {
   // 5d. All preconditions met → true
   {
     const caster = makeCombatant('wiz', {
-      actions: [makeSpellAction('Fear', 3)],
+      actions: [makeSpellAction('Spirit Guardians', 3)],
       resources: withSlots(3, 2),
     });
     const enemy = makeCombatant('e1', { faction: 'enemy', pos: { x: 1, y: 0, z: 0 } });
@@ -365,15 +368,15 @@ if (sampleDesc) {
 }
 
 // ============================================================
-// 6. execute applies the flag + consumes the slot (sample: Fear)
+// 6. execute applies the flag + consumes the slot (sample: Spirit Guardians)
 // ============================================================
 // Updated in Session 21: was 'Fireball', now 'Fear' (Fireball migrated).
 
-console.log('\n=== 6. execute (sample: Fear) ===\n');
+console.log('\n=== 6. execute (sample: Spirit Guardians) ===\n');
 
 if (sampleDesc) {
   const caster = makeCombatant('wiz', {
-    actions: [makeSpellAction('Fear', 3)],
+    actions: [makeSpellAction('Spirit Guardians', 3)],
     resources: withSlots(3, 2),
   });
   const enemy = makeCombatant('e1', { faction: 'enemy', pos: { x: 1, y: 0, z: 0 } });
@@ -387,7 +390,7 @@ if (sampleDesc) {
     (caster.resources as any).spellSlots[3].remaining, 1);
   // 6b. Flag set
   assert('Flag set on caster',
-    caster._genericSpellActiveSpells?.has('Fear') === true);
+    caster._genericSpellActiveSpells?.has('Spirit Guardians') === true);
   // 6c. Log events emitted
   const actions = state.log.events.filter(e => e.type === 'action');
   assert('Action log emitted', actions.length === 1);
@@ -395,12 +398,12 @@ if (sampleDesc) {
   assert('Condition-add log emitted', condAdds.length === 1);
   // 6d. Log description contains spell name
   if (actions.length === 1) {
-    assert('Action log mentions Fear', actions[0].description.includes('Fear'));
+    assert('Action log mentions Fear', actions[0].description.includes('Spirit Guardians'));
   }
 }
 
 // ============================================================
-// 7. Re-cast is blocked by the flag (sample: Fear)
+// 7. Re-cast is blocked by the flag (sample: Spirit Guardians)
 // ============================================================
 // Updated in Session 21: was 'Fireball', now 'Fear' (Fireball migrated).
 
@@ -408,7 +411,7 @@ console.log('\n=== 7. Re-cast blocked by flag ===\n');
 
 if (sampleDesc) {
   const caster = makeCombatant('wiz', {
-    actions: [makeSpellAction('Fear', 3)],
+    actions: [makeSpellAction('Spirit Guardians', 3)],
     resources: withSlots(3, 2),
   });
   const enemy = makeCombatant('e1', { faction: 'enemy', pos: { x: 1, y: 0, z: 0 } });
@@ -439,10 +442,10 @@ console.log('\n=== 8. PlannedAction.spellName field works ===\n');
     type: 'genericSpell',
     action: null,
     targetId: 'wiz',
-    description: 'Wizard casts Fear',
-    spellName: 'Fear',
+    description: 'Wizard casts Spirit Guardians',
+    spellName: 'Spirit Guardians',
   };
-  eq('PlannedAction.spellName reads back correctly', plan.spellName, 'Fear');
+  eq('PlannedAction.spellName reads back correctly', plan.spellName, 'Spirit Guardians');
   eq('PlannedAction.type is genericSpell', plan.type, 'genericSpell');
 }
 
@@ -460,9 +463,9 @@ console.log('\n=== 9. Multi-level slot gating ===\n');
 const SAMPLE_BY_LEVEL: Record<number, string | null> = {
   1: 'Alarm',
   2: 'Continual Flame',
-  3: 'Fear',
+  3: 'Spirit Guardians',
   4: 'Polymorph',
-  5: 'Hold Monster',
+  5: 'Animate Objects',
   6: 'Globe of Invulnerability',
   7: 'Forcecage',
   8: 'Feeblemind',

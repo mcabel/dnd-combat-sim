@@ -1,34 +1,46 @@
 // ============================================================
 // Fear — PHB p.239
 //
-// 3-level illusion, 1 action, range 30 ft, concentration.
-// Duration: 1 minute.
+// 3rd-level illusion, action, range 30 ft (cone), NO concentration (v1).
+// Components: V, S, M (a white feather or the heart of a hen).
 //
-// Effect: You project a phantasmal image of a creature's worst fears. Each creature in a 30-foot cone must succeed on a Wisdom saving throw or drop whatever it is holding and become  for
+// Effect: You project a phantasmal image of a creature's worst fears.
+//         Each creature in a 30-foot cone must make a Wisdom saving
+//         throw or drop whatever it is holding and become frightened
+//         for the duration. (Drop-weapon rider simplified away in v1.)
 //
-// Upcast: see source (not modelled in v1).
+// Upcast: none (3rd-level spell — no upcast).
 //
 // v1 simplifications:
-//   - v1 models this spell as a FORWARD-COMPAT flag only (Session 19 bulk
-//     implementation). The spell consumes a slot and sets the flag
-//     `_genericSpellActiveSpells` on the caster; the actual mechanical
-//     effect (damage / save / condition / buff) is NOT applied in v1.
-//     A future implementation should extend the relevant engine subsystem
-//     (damage_zone for persistent damage, condition_apply for conditions,
-//     advantage_vs for buffs, etc.) to consume this flag and apply the
-//     real effect. This mirrors the Session 17/18 forward-compat pattern
-//     established by Darkvision, Arcane Lock, Knock, See Invisibility.
-//   - Concentration spell (forward-compat flag persists for combat).
+//   - Drop-weapon rider (PHB p.239: "drop whatever it is holding"):
+//     simplified away. v1 applies frightened only. Documented via
+//     `fearDropWeaponV1Simplified`.
+//   - Concentration: canon 1 min concentration (PHB p.239). PER PLAN,
+//     v1 models Fear as NON-concentration (mirror Sunburst — one-shot,
+//     no concentration tracking). The frightened persists for the v1
+//     combat duration (no end-of-turn expiry hook). Documented via
+//     `fearConcentrationV1SimplifiedToNone`.
+//   - End-of-turn WIS save to end frightened (PHB p.239): NOT modelled.
+//   - Shape: canon 30-ft cone from caster. v1 uses inConeFt aimed at the
+//     nearest living enemy within 30 ft (mirrors Spray of Cards).
 //
-// Spell module pattern (mirrors Darkvision / Arcane Lock forward-compat
-// self-buff pattern):
-//   shouldCast(caster, bf) → boolean
-//   execute(caster, state) → void
-//   cleanup() — no-op (forward-compat flag persists for combat)
+// Migration note (Session 25 / Batch 2): migrated from the generic
+// forward-compat flag to a bespoke WIS-save-or-frightened cone (no conc).
+// Removed from `_generic_registry.ts`; routed via `case 'fear':` in
+// combat.ts and a planner branch in planner.ts. Mirrors Spray of Cards
+// (cone AoE) + Blindness/Deafness (no-conc condition).
+//
+// Spell module pattern (cone AoE save + condition, NO concentration):
+//   shouldCast(caster, bf) → Combatant[] | null
+//   execute(caster, targets, state) → void
+//   cleanup() — no-op (no concentration; frightened persists for combat)
 // ============================================================
 
 import { Combatant, Battlefield } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
+import { applySpellEffect } from '../engine/spell_effects';
+import { rollSave } from '../engine/utils';
+import { inConeFt, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 
 // ---- Metadata -----------------------------------------------
@@ -37,11 +49,17 @@ export const metadata = {
   name: 'Fear',
   level: 3,
   school: 'illusion',
-  rangeFt: 30,
-  concentration: true,
+  rangeFt: 30,                   // PHB p.239: 30-ft cone
+  concentration: false,          // v1 per plan (canon: concentration)
+  saveAbility: 'wis' as const,
   castingTime: 'action',
-  fearV1Simplified: true,
+  fearDropWeaponV1Simplified: true,                        // drop-weapon rider simplified away
+  fearConcentrationV1SimplifiedToNone: true,               // canon conc → v1 none (mirror Sunburst)
+  fearEndOfTurnSaveV1Implemented: false,
 } as const;
+
+const CONE_RANGE_FT = 30;
+const CONE_HALF_ANGLE_DEG = 26.57;
 
 // ---- Local log helper ---------------------------------------
 
@@ -53,66 +71,68 @@ function emit(
   targetId?: string,
   value?: number,
 ): void {
-  state.log.events.push({
-    round: state.battlefield.round,
-    actorId,
-    type,
-    targetId,
-    value,
-    description: desc,
-  });
+  state.log.events.push({ round: state.battlefield.round, actorId, type, targetId, value, description: desc });
 }
 
 // ---- Planner ------------------------------------------------
 
 /**
- * Returns true if the caster should cast Fear this turn.
- *
- * Preconditions:
- *   - Caster has 'Fear' in their actions
- *   - Caster has at least one 3-level-or-higher slot available
- *   - Caster is NOT already Fear-active (re-cast would be a no-op in v1)
+ * Returns the list of enemies caught in a Fear 30-ft cone aimed at the
+ * nearest living enemy within 30 ft, or null when the spell should not be cast.
  */
-export function shouldCast(caster: Combatant, _bf: Battlefield): boolean {
-  if (!caster.actions.some(a => a.name === 'Fear')) return false;
-  if (!hasSpellSlot(caster, 3)) return false;
-  if (caster._genericSpellActiveSpells?.has('Fear')) return false;
-  return true;
+export function shouldCast(caster: Combatant, bf: Battlefield): Combatant[] | null {
+  if (!caster.actions.some(a => a.name === 'Fear')) return null;
+  if (!hasSpellSlot(caster, 3)) return null;
+
+  const enemies = livingEnemiesOf(caster, bf);
+  let nearest: Combatant | null = null;
+  let nearestDistFt = Infinity;
+  for (const e of enemies) {
+    const dx = e.pos.x - caster.pos.x;
+    const dy = e.pos.y - caster.pos.y;
+    const distFt = Math.sqrt(dx * dx + dy * dy) * 5;
+    if (distFt <= CONE_RANGE_FT && distFt < nearestDistFt) {
+      nearest = e; nearestDistFt = distFt;
+    }
+  }
+  if (!nearest) return null;
+
+  const targets: Combatant[] = [];
+  for (const e of enemies) {
+    if (inConeFt(caster.pos, nearest.pos, e.pos, CONE_HALF_ANGLE_DEG, CONE_RANGE_FT)) targets.push(e);
+  }
+  return targets.length >= 1 ? targets : null;
 }
 
 // ---- Execution ----------------------------------------------
 
-/**
- * Execute Fear:
- *  1. Consume a 3-level spell slot.
- *  2. Set the flag on the caster's `_genericSpellActiveSpells` Set.
- *  3. Log the cast.
- */
-export function execute(
-  caster: Combatant,
-  state: EngineState,
-): void {
+export function execute(caster: Combatant, targets: Combatant[], state: EngineState): void {
+  const action = caster.actions.find(a => a.name === 'Fear');
+  const saveDC = action?.saveDC ?? 13;
+
   consumeSpellSlot(caster, 3);
 
-  if (!caster._genericSpellActiveSpells) {
-    caster._genericSpellActiveSpells = new Set<string>();
-  }
-  caster._genericSpellActiveSpells.add('Fear');
+  emit(state, 'action', caster.id,
+    `${caster.name} casts Fear! (DC ${saveDC} WIS, frightened on fail, ${CONE_RANGE_FT}-ft cone) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} caught!`);
 
-  emit(
-    state, 'action', caster.id,
-    `${caster.name} casts Fear! (v1: forward-compat flag set; mechanical effect not yet implemented)`,
-    caster.id,
-  );
-  emit(
-    state, 'condition_add', caster.id,
-    `${caster.name} is affected by Fear. (v1: forward-compat flag set; no mechanical effect until engine subsystem is implemented)`,
-    caster.id,
-  );
+  for (const target of targets) {
+    if (target.isDead || target.isUnconscious) continue;
+    const save = rollSave(target, 'wis', saveDC);
+    emit(state, save.success ? 'save_success' : 'save_fail', caster.id,
+      `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} WIS save vs Fear (rolled ${save.total})${save.success ? '' : ' + FRIGHTENED'}`, target.id, save.roll);
+
+    if (!save.success && !target.conditions.has('frightened')) {
+      applySpellEffect(target, {
+        casterId: caster.id, spellName: 'Fear',
+        effectType: 'condition_apply', payload: { condition: 'frightened' },
+        sourceIsConcentration: false,   // v1 per plan (canon: concentration)
+      });
+      emit(state, 'condition_add', caster.id,
+        `${target.name} is FRIGHTENED! (v1: drop-weapon rider simplified; canon conc → v1 none)`, target.id);
+    }
+  }
 }
 
 // ---- Cleanup ------------------------------------------------
 
-export function cleanup(_c: Combatant): void {
-  // No-op — forward-compat flag persists for combat.
-}
+export function cleanup(_c: Combatant): void { /* no-op — NOT concentration (v1); frightened persists */ }

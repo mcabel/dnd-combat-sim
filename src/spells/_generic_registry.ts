@@ -470,12 +470,6 @@ import {
 } from './wristpocket';
 
 import {
-  shouldCast as shouldCastAntagonize,
-  execute as executeAntagonize,
-  metadata as metadataAntagonize,
-} from './antagonize';
-
-import {
   shouldCast as shouldCastAshardalonsStride,
   execute as executeAshardalonsStride,
   metadata as metadataAshardalonsStride,
@@ -492,12 +486,6 @@ import {
   execute as executeBeaconOfHope,
   metadata as metadataBeaconOfHope,
 } from './beacon_of_hope';
-
-import {
-  shouldCast as shouldCastBestowCurse,
-  execute as executeBestowCurse,
-  metadata as metadataBestowCurse,
-} from './bestow_curse';
 
 import {
   shouldCast as shouldCastBlindingSmite,
@@ -524,12 +512,6 @@ import {
 } from './call_lightning';
 
 import {
-  shouldCast as shouldCastCatnap,
-  execute as executeCatnap,
-  metadata as metadataCatnap,
-} from './catnap';
-
-import {
   shouldCast as shouldCastCreateFoodAndWater,
   execute as executeCreateFoodAndWater,
   metadata as metadataCreateFoodAndWater,
@@ -552,24 +534,6 @@ import {
   execute as executeElementalWeapon,
   metadata as metadataElementalWeapon,
 } from './elemental_weapon';
-
-import {
-  shouldCast as shouldCastEnemiesAbound,
-  execute as executeEnemiesAbound,
-  metadata as metadataEnemiesAbound,
-} from './enemies_abound';
-
-import {
-  shouldCast as shouldCastFastFriends,
-  execute as executeFastFriends,
-  metadata as metadataFastFriends,
-} from './fast_friends';
-
-import {
-  shouldCast as shouldCastFear,
-  execute as executeFear,
-  metadata as metadataFear,
-} from './fear';
 
 import {
   shouldCast as shouldCastFeignDeath,
@@ -612,18 +576,6 @@ import {
   execute as executeHungerOfHadar,
   metadata as metadataHungerOfHadar,
 } from './hunger_of_hadar';
-
-import {
-  shouldCast as shouldCastHypnoticPattern,
-  execute as executeHypnoticPattern,
-  metadata as metadataHypnoticPattern,
-} from './hypnotic_pattern';
-
-import {
-  shouldCast as shouldCastInciteGreed,
-  execute as executeInciteGreed,
-  metadata as metadataInciteGreed,
-} from './incite_greed';
 
 import {
   shouldCast as shouldCastIntellectFortress,
@@ -710,12 +662,6 @@ import {
 } from './remove_curse';
 
 import {
-  shouldCast as shouldCastSleetStorm,
-  execute as executeSleetStorm,
-  metadata as metadataSleetStorm,
-} from './sleet_storm';
-
-import {
   shouldCast as shouldCastSlow,
   execute as executeSlow,
   metadata as metadataSlow,
@@ -744,12 +690,6 @@ import {
   execute as executeSpiritShroud,
   metadata as metadataSpiritShroud,
 } from './spirit_shroud';
-
-import {
-  shouldCast as shouldCastStinkingCloud,
-  execute as executeStinkingCloud,
-  metadata as metadataStinkingCloud,
-} from './stinking_cloud';
 
 import {
   shouldCast as shouldCastSylunésViper,
@@ -1912,12 +1852,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     shouldCast: shouldCastWristpocket,
     execute: executeWristpocket,
   },
-  'Antagonize': {
-    name: 'Antagonize',
-    level: metadataAntagonize.level,
-    shouldCast: shouldCastAntagonize,
-    execute: executeAntagonize,
-  },
   "Ashardalon's Stride": {
     name: "Ashardalon's Stride",
     level: metadataAshardalonsStride.level,
@@ -1935,12 +1869,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     level: metadataBeaconOfHope.level,
     shouldCast: shouldCastBeaconOfHope,
     execute: executeBeaconOfHope,
-  },
-  'Bestow Curse': {
-    name: 'Bestow Curse',
-    level: metadataBestowCurse.level,
-    shouldCast: shouldCastBestowCurse,
-    execute: executeBestowCurse,
   },
   'Blinding Smite': {
     name: 'Blinding Smite',
@@ -1966,12 +1894,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     shouldCast: shouldCastCallLightning,
     execute: executeCallLightning,
   },
-  'Catnap': {
-    name: 'Catnap',
-    level: metadataCatnap.level,
-    shouldCast: shouldCastCatnap,
-    execute: executeCatnap,
-  },
   'Create Food and Water': {
     name: 'Create Food and Water',
     level: metadataCreateFoodAndWater.level,
@@ -1995,24 +1917,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     level: metadataElementalWeapon.level,
     shouldCast: shouldCastElementalWeapon,
     execute: executeElementalWeapon,
-  },
-  'Enemies Abound': {
-    name: 'Enemies Abound',
-    level: metadataEnemiesAbound.level,
-    shouldCast: shouldCastEnemiesAbound,
-    execute: executeEnemiesAbound,
-  },
-  'Fast Friends': {
-    name: 'Fast Friends',
-    level: metadataFastFriends.level,
-    shouldCast: shouldCastFastFriends,
-    execute: executeFastFriends,
-  },
-  'Fear': {
-    name: 'Fear',
-    level: metadataFear.level,
-    shouldCast: shouldCastFear,
-    execute: executeFear,
   },
   'Feign Death': {
     name: 'Feign Death',
@@ -2055,18 +1959,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     level: metadataHungerOfHadar.level,
     shouldCast: shouldCastHungerOfHadar,
     execute: executeHungerOfHadar,
-  },
-  'Hypnotic Pattern': {
-    name: 'Hypnotic Pattern',
-    level: metadataHypnoticPattern.level,
-    shouldCast: shouldCastHypnoticPattern,
-    execute: executeHypnoticPattern,
-  },
-  'Incite Greed': {
-    name: 'Incite Greed',
-    level: metadataInciteGreed.level,
-    shouldCast: shouldCastInciteGreed,
-    execute: executeInciteGreed,
   },
   'Intellect Fortress': {
     name: 'Intellect Fortress',
@@ -2152,12 +2044,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     shouldCast: shouldCastRemoveCurse,
     execute: executeRemoveCurse,
   },
-  'Sleet Storm': {
-    name: 'Sleet Storm',
-    level: metadataSleetStorm.level,
-    shouldCast: shouldCastSleetStorm,
-    execute: executeSleetStorm,
-  },
   'Slow': {
     name: 'Slow',
     level: metadataSlow.level,
@@ -2187,12 +2073,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     level: metadataSpiritShroud.level,
     shouldCast: shouldCastSpiritShroud,
     execute: executeSpiritShroud,
-  },
-  'Stinking Cloud': {
-    name: 'Stinking Cloud',
-    level: metadataStinkingCloud.level,
-    shouldCast: shouldCastStinkingCloud,
-    execute: executeStinkingCloud,
   },
   "Syluné's Viper": {
     name: "Syluné's Viper",

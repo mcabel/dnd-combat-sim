@@ -107,6 +107,17 @@ SPELLS = [
     ('Watery Sphere',   'watery_sphere',     'WaterySphere'),
     ('Dominate Beast',  'dominate_beast',    'DominateBeast'),
     ('Charm Monster',   'charm_monster',     'CharmMonster'),
+    # L3 (10)
+    ('Antagonize',      'antagonize',        'Antagonize'),
+    ('Bestow Curse',    'bestow_curse',      'BestowCurse'),
+    ('Catnap',          'catnap',            'Catnap'),
+    ('Enemies Abound',  'enemies_abound',    'EnemiesAbound'),
+    ('Fast Friends',    'fast_friends',      'FastFriends'),
+    ('Fear',            'fear',              'Fear'),
+    ('Hypnotic Pattern','hypnotic_pattern',  'HypnoticPattern'),
+    ('Incite Greed',    'incite_greed',      'InciteGreed'),
+    ('Sleet Storm',     'sleet_storm',       'SleetStorm'),
+    ('Stinking Cloud',  'stinking_cloud',    'StinkingCloud'),
 ]
 
 REGISTRY = Path('src/spells/_generic_registry.ts')

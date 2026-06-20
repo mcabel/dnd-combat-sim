@@ -1,34 +1,47 @@
 // ============================================================
 // Sleet Storm — PHB p.276
 //
-// 3-level conjuration, 1 action, range 150 ft, concentration.
-// Duration: 1 minute.
+// 3rd-level conjuration, action, range 120 ft, concentration (1 min).
+// Components: V, S, M (dust and water).
 //
-// Effect: Until the spell ends, freezing rain and sleet fall in a 20-foot-tall cylinder with a 40-foot radius centered on a point you choose within range. The area is {@quickref Vision and Light|PHB|2||heavily
+// Effect: Until the spell ends, freezing rain and sleet fall in a
+//         20-foot-tall cylinder centered on a point you choose within
+//         range. The ground in the area is covered with slick ice. Each
+//         creature in the area must make a Dexterity saving throw. On a
+//         failed save, the creature falls prone. (Concentration-break
+//         rider + difficult-terrain simplified away in v1.)
 //
-// Upcast: see source (not modelled in v1).
+// Upcast: none (3rd-level spell — no upcast).
 //
 // v1 simplifications:
-//   - v1 models this spell as a FORWARD-COMPAT flag only (Session 19 bulk
-//     implementation). The spell consumes a slot and sets the flag
-//     `_genericSpellActiveSpells` on the caster; the actual mechanical
-//     effect (damage / save / condition / buff) is NOT applied in v1.
-//     A future implementation should extend the relevant engine subsystem
-//     (damage_zone for persistent damage, condition_apply for conditions,
-//     advantage_vs for buffs, etc.) to consume this flag and apply the
-//     real effect. This mirrors the Session 17/18 forward-compat pattern
-//     established by Darkvision, Arcane Lock, Knock, See Invisibility.
-//   - Concentration spell (forward-compat flag persists for combat).
+//   - Shape: canon 20-ft-radius cylinder. v1 centers on highest-threat
+//     enemy within 120 ft (mirrors Sunburst); 20-ft radius (chebyshev).
+//   - Concentration-break rider (PHB p.276: "creatures concentrating must
+//     make a CON save or lose concentration"): simplified away. v1 applies
+//     prone only. Documented via `sleetStormConcentrationBreakV1Simplified`.
+//   - Difficult terrain (PHB p.276: "ground is difficult terrain"): NOT
+//     modelled (v1 has no terrain subsystem).
+//   - No damage (PHB p.276: no damage roll).
+//   - Concentration: canon 1 min. v1 starts concentration; not enforced
+//     on damage (TG-002). prone is conc-sourced.
 //
-// Spell module pattern (mirrors Darkvision / Arcane Lock forward-compat
-// self-buff pattern):
-//   shouldCast(caster, bf) → boolean
-//   execute(caster, state) → void
-//   cleanup() — no-op (forward-compat flag persists for combat)
+// Migration note (Session 25 / Batch 2): migrated from the generic
+// forward-compat flag to a bespoke DEX-save-or-prone AoE (concentration).
+// Removed from `_generic_registry.ts`; routed via `case 'sleetStorm':` in
+// combat.ts and a planner branch in planner.ts. Mirrors Sunburst (radius
+// AoE save + condition) but prone + concentration, no damage.
+//
+// Spell module pattern (radius AoE save + condition, concentration):
+//   shouldCast(caster, bf) → Combatant[] | null
+//   execute(caster, targets, state) → void
+//   cleanup() — no-op (concentration break handles cleanup)
 // ============================================================
 
 import { Combatant, Battlefield } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
+import { applySpellEffect, removeEffectsFromCaster } from '../engine/spell_effects';
+import { startConcentration, rollSave } from '../engine/utils';
+import { chebyshev3D, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 
 // ---- Metadata -----------------------------------------------
@@ -37,10 +50,13 @@ export const metadata = {
   name: 'Sleet Storm',
   level: 3,
   school: 'conjuration',
-  rangeFt: 150,
+  rangeFt: 120,                  // PHB p.276: 120 ft
+  aoeRadiusFt: 20,               // PHB p.276: 20-ft radius cylinder
   concentration: true,
+  saveAbility: 'dex' as const,
   castingTime: 'action',
-  sleetStormV1Simplified: true,
+  sleetStormConcentrationBreakV1Simplified: true,          // conc-break rider simplified away
+  sleetStormDifficultTerrainV1Simplified: true,            // terrain NOT modelled
 } as const;
 
 // ---- Local log helper ---------------------------------------
@@ -53,66 +69,67 @@ function emit(
   targetId?: string,
   value?: number,
 ): void {
-  state.log.events.push({
-    round: state.battlefield.round,
-    actorId,
-    type,
-    targetId,
-    value,
-    description: desc,
-  });
+  state.log.events.push({ round: state.battlefield.round, actorId, type, targetId, value, description: desc });
 }
 
 // ---- Planner ------------------------------------------------
 
-/**
- * Returns true if the caster should cast Sleet Storm this turn.
- *
- * Preconditions:
- *   - Caster has 'Sleet Storm' in their actions
- *   - Caster has at least one 3-level-or-higher slot available
- *   - Caster is NOT already Sleet Storm-active (re-cast would be a no-op in v1)
- */
-export function shouldCast(caster: Combatant, _bf: Battlefield): boolean {
-  if (!caster.actions.some(a => a.name === 'Sleet Storm')) return false;
-  if (!hasSpellSlot(caster, 3)) return false;
-  if (caster._genericSpellActiveSpells?.has('Sleet Storm')) return false;
-  return true;
+export function shouldCast(caster: Combatant, bf: Battlefield): Combatant[] | null {
+  if (caster.concentration?.active) return null;
+  if (!caster.actions.some(a => a.name === 'Sleet Storm')) return null;
+  if (!hasSpellSlot(caster, 3)) return null;
+
+  const enemies = livingEnemiesOf(caster, bf);
+  let center: Combatant | null = null;
+  let centerThreat = -1;
+  let centerDist = Infinity;
+  for (const e of enemies) {
+    const distFt = chebyshev3D(caster.pos, e.pos) * 5;
+    if (distFt > 120) continue;
+    if (e.maxHP > centerThreat || (e.maxHP === centerThreat && distFt < centerDist)) {
+      center = e; centerThreat = e.maxHP; centerDist = distFt;
+    }
+  }
+  if (!center) return null;
+
+  const targets: Combatant[] = [];
+  for (const e of enemies) {
+    const distFt = chebyshev3D(center.pos, e.pos) * 5;
+    if (distFt <= 20) targets.push(e);
+  }
+  return targets.length >= 1 ? targets : null;
 }
 
 // ---- Execution ----------------------------------------------
 
-/**
- * Execute Sleet Storm:
- *  1. Consume a 3-level spell slot.
- *  2. Set the flag on the caster's `_genericSpellActiveSpells` Set.
- *  3. Log the cast.
- */
-export function execute(
-  caster: Combatant,
-  state: EngineState,
-): void {
+export function execute(caster: Combatant, targets: Combatant[], state: EngineState): void {
+  const action = caster.actions.find(a => a.name === 'Sleet Storm');
+  const saveDC = action?.saveDC ?? 13;
+
   consumeSpellSlot(caster, 3);
+  if (caster.concentration?.active) removeEffectsFromCaster(caster.id, state.battlefield);
+  startConcentration(caster, 'Sleet Storm');
 
-  if (!caster._genericSpellActiveSpells) {
-    caster._genericSpellActiveSpells = new Set<string>();
+  emit(state, 'action', caster.id,
+    `${caster.name} casts Sleet Storm! (DC ${saveDC} DEX, prone on fail, ${metadata.aoeRadiusFt}-ft radius) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} caught!`);
+
+  for (const target of targets) {
+    if (target.isDead || target.isUnconscious) continue;
+    const save = rollSave(target, 'dex', saveDC);
+    emit(state, save.success ? 'save_success' : 'save_fail', caster.id,
+      `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} DEX save vs Sleet Storm (rolled ${save.total})${save.success ? '' : ' + PRONE'}`, target.id, save.roll);
+
+    if (!save.success && !target.conditions.has('prone')) {
+      applySpellEffect(target, {
+        casterId: caster.id, spellName: 'Sleet Storm',
+        effectType: 'condition_apply', payload: { condition: 'prone' },
+        sourceIsConcentration: true,
+      });
+      emit(state, 'condition_add', caster.id, `${target.name} is knocked PRONE by the sleet! (disadv on attacks, adv on melee attacks vs them)`, target.id);
+    }
   }
-  caster._genericSpellActiveSpells.add('Sleet Storm');
-
-  emit(
-    state, 'action', caster.id,
-    `${caster.name} casts Sleet Storm! (v1: forward-compat flag set; mechanical effect not yet implemented)`,
-    caster.id,
-  );
-  emit(
-    state, 'condition_add', caster.id,
-    `${caster.name} is affected by Sleet Storm. (v1: forward-compat flag set; no mechanical effect until engine subsystem is implemented)`,
-    caster.id,
-  );
 }
 
 // ---- Cleanup ------------------------------------------------
 
-export function cleanup(_c: Combatant): void {
-  // No-op — forward-compat flag persists for combat.
-}
+export function cleanup(_c: Combatant): void { /* no-op — concentration break handles cleanup */ }

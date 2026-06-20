@@ -1,34 +1,52 @@
 // ============================================================
 // Stinking Cloud — PHB p.278
 //
-// 3-level conjuration, 1 action, range 90 ft, concentration.
-// Duration: 1 minute.
+// 3rd-level conjuration, action, range 90 ft, concentration (1 min).
+// Components: V, S, M (a rotten egg or cabbage leaves).
 //
-// Effect: You create a 20-foot-radius sphere of yellow, nauseating gas centered on a point within range. The cloud spreads around corners, and its area is . T
+// Effect: You create a 20-foot-radius sphere of nauseating gas centered
+//         on a point within range. The cloud spreads around corners. Each
+//         creature that is completely within the cloud must succeed on a
+//         Constitution saving throw or be poisoned until the end of its
+//         next turn. While poisoned in this way, a creature can take
+//         either an action or a bonus action on its turn, not both...
+//         (v1 simplifies to poisoned AND incapacitated.)
 //
-// Upcast: see source (not modelled in v1).
+// Upcast: none (3rd-level spell — no upcast).
 //
 // v1 simplifications:
-//   - v1 models this spell as a FORWARD-COMPAT flag only (Session 19 bulk
-//     implementation). The spell consumes a slot and sets the flag
-//     `_genericSpellActiveSpells` on the caster; the actual mechanical
-//     effect (damage / save / condition / buff) is NOT applied in v1.
-//     A future implementation should extend the relevant engine subsystem
-//     (damage_zone for persistent damage, condition_apply for conditions,
-//     advantage_vs for buffs, etc.) to consume this flag and apply the
-//     real effect. This mirrors the Session 17/18 forward-compat pattern
-//     established by Darkvision, Arcane Lock, Knock, See Invisibility.
-//   - Concentration spell (forward-compat flag persists for combat).
+//   - Shape: canon 20-ft-radius sphere. v1 centers on highest-threat enemy
+//     within 90 ft (mirrors Sunburst); 20-ft radius (chebyshev).
+//   - DUAL-condition (PHB p.278: "poisoned" + "while poisoned... can take
+//     either an action or a bonus action, not both" — effectively a partial
+//     incapacitation): v1 applies BOTH poisoned AND incapacitated (two
+//     applySpellEffect calls). The action-economy restriction is simplified
+//     to full incapacitated. Documented via `stinkingCloudDualConditionV1`.
+//   - End-of-next-turn expiry (PHB p.278: "until the end of its next turn"):
+//     NOT modelled — conditions persist for the v1 combat (or until conc
+//     breaks).
+//   - Concentration: canon 1 min. v1 starts concentration; not enforced
+//     on damage (TG-002). Both conditions are conc-sourced.
+//   - No damage (PHB p.278: no damage roll).
 //
-// Spell module pattern (mirrors Darkvision / Arcane Lock forward-compat
-// self-buff pattern):
-//   shouldCast(caster, bf) → boolean
-//   execute(caster, state) → void
-//   cleanup() — no-op (forward-compat flag persists for combat)
+// Migration note (Session 25 / Batch 2): migrated from the generic
+// forward-compat flag to a bespoke CON-save-or-poisoned+incapacitated AoE
+// (concentration, DUAL-condition). Removed from `_generic_registry.ts`;
+// routed via `case 'stinkingCloud':` in combat.ts and a planner branch in
+// planner.ts. Mirrors Sunburst (radius AoE save + condition) + applies TWO
+// conditions (poisoned AND incapacitated).
+//
+// Spell module pattern (radius AoE save + dual-condition, concentration):
+//   shouldCast(caster, bf) → Combatant[] | null
+//   execute(caster, targets, state) → void
+//   cleanup() — no-op (concentration break handles cleanup)
 // ============================================================
 
 import { Combatant, Battlefield } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
+import { applySpellEffect, removeEffectsFromCaster } from '../engine/spell_effects';
+import { startConcentration, rollSave } from '../engine/utils';
+import { chebyshev3D, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 
 // ---- Metadata -----------------------------------------------
@@ -37,10 +55,14 @@ export const metadata = {
   name: 'Stinking Cloud',
   level: 3,
   school: 'conjuration',
-  rangeFt: 90,
+  rangeFt: 90,                   // PHB p.278: 90 ft
+  aoeRadiusFt: 20,               // PHB p.278: 20-ft radius sphere
   concentration: true,
+  saveAbility: 'con' as const,
   castingTime: 'action',
-  stinkingCloudV1Simplified: true,
+  stinkingCloudDualConditionV1: true,                       // poisoned AND incapacitated (two calls)
+  stinkingCloudEndOfNextTurnV1Simplified: true,             // end-of-next-turn not tracked
+  stinkingCloudConcentrationEnforcementV1Implemented: false,
 } as const;
 
 // ---- Local log helper ---------------------------------------
@@ -53,66 +75,78 @@ function emit(
   targetId?: string,
   value?: number,
 ): void {
-  state.log.events.push({
-    round: state.battlefield.round,
-    actorId,
-    type,
-    targetId,
-    value,
-    description: desc,
-  });
+  state.log.events.push({ round: state.battlefield.round, actorId, type, targetId, value, description: desc });
 }
 
 // ---- Planner ------------------------------------------------
 
-/**
- * Returns true if the caster should cast Stinking Cloud this turn.
- *
- * Preconditions:
- *   - Caster has 'Stinking Cloud' in their actions
- *   - Caster has at least one 3-level-or-higher slot available
- *   - Caster is NOT already Stinking Cloud-active (re-cast would be a no-op in v1)
- */
-export function shouldCast(caster: Combatant, _bf: Battlefield): boolean {
-  if (!caster.actions.some(a => a.name === 'Stinking Cloud')) return false;
-  if (!hasSpellSlot(caster, 3)) return false;
-  if (caster._genericSpellActiveSpells?.has('Stinking Cloud')) return false;
-  return true;
+export function shouldCast(caster: Combatant, bf: Battlefield): Combatant[] | null {
+  if (caster.concentration?.active) return null;
+  if (!caster.actions.some(a => a.name === 'Stinking Cloud')) return null;
+  if (!hasSpellSlot(caster, 3)) return null;
+
+  const enemies = livingEnemiesOf(caster, bf);
+  let center: Combatant | null = null;
+  let centerThreat = -1;
+  let centerDist = Infinity;
+  for (const e of enemies) {
+    const distFt = chebyshev3D(caster.pos, e.pos) * 5;
+    if (distFt > 90) continue;
+    if (e.maxHP > centerThreat || (e.maxHP === centerThreat && distFt < centerDist)) {
+      center = e; centerThreat = e.maxHP; centerDist = distFt;
+    }
+  }
+  if (!center) return null;
+
+  const targets: Combatant[] = [];
+  for (const e of enemies) {
+    const distFt = chebyshev3D(center.pos, e.pos) * 5;
+    if (distFt <= 20) targets.push(e);
+  }
+  return targets.length >= 1 ? targets : null;
 }
 
 // ---- Execution ----------------------------------------------
 
-/**
- * Execute Stinking Cloud:
- *  1. Consume a 3-level spell slot.
- *  2. Set the flag on the caster's `_genericSpellActiveSpells` Set.
- *  3. Log the cast.
- */
-export function execute(
-  caster: Combatant,
-  state: EngineState,
-): void {
+export function execute(caster: Combatant, targets: Combatant[], state: EngineState): void {
+  const action = caster.actions.find(a => a.name === 'Stinking Cloud');
+  const saveDC = action?.saveDC ?? 13;
+
   consumeSpellSlot(caster, 3);
+  if (caster.concentration?.active) removeEffectsFromCaster(caster.id, state.battlefield);
+  startConcentration(caster, 'Stinking Cloud');
 
-  if (!caster._genericSpellActiveSpells) {
-    caster._genericSpellActiveSpells = new Set<string>();
+  emit(state, 'action', caster.id,
+    `${caster.name} casts Stinking Cloud! (DC ${saveDC} CON, poisoned+incapacitated on fail, ${metadata.aoeRadiusFt}-ft radius) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} caught!`);
+
+  for (const target of targets) {
+    if (target.isDead || target.isUnconscious) continue;
+    const save = rollSave(target, 'con', saveDC);
+    emit(state, save.success ? 'save_success' : 'save_fail', caster.id,
+      `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} CON save vs Stinking Cloud (rolled ${save.total})${save.success ? '' : ' + POISONED+INCAPACITATED'}`, target.id, save.roll);
+
+    if (!save.success) {
+      // DUAL-condition: apply BOTH poisoned AND incapacitated (two calls).
+      if (!target.conditions.has('poisoned')) {
+        applySpellEffect(target, {
+          casterId: caster.id, spellName: 'Stinking Cloud',
+          effectType: 'condition_apply', payload: { condition: 'poisoned' },
+          sourceIsConcentration: true,
+        });
+      }
+      if (!target.conditions.has('incapacitated')) {
+        applySpellEffect(target, {
+          casterId: caster.id, spellName: 'Stinking Cloud',
+          effectType: 'condition_apply', payload: { condition: 'incapacitated' },
+          sourceIsConcentration: true,
+        });
+      }
+      emit(state, 'condition_add', caster.id,
+        `${target.name} is POISONED and INCAPACITATED by the nauseating cloud! (v1: action-economy restriction simplified to full incapacitated)`, target.id);
+    }
   }
-  caster._genericSpellActiveSpells.add('Stinking Cloud');
-
-  emit(
-    state, 'action', caster.id,
-    `${caster.name} casts Stinking Cloud! (v1: forward-compat flag set; mechanical effect not yet implemented)`,
-    caster.id,
-  );
-  emit(
-    state, 'condition_add', caster.id,
-    `${caster.name} is affected by Stinking Cloud. (v1: forward-compat flag set; no mechanical effect until engine subsystem is implemented)`,
-    caster.id,
-  );
 }
 
 // ---- Cleanup ------------------------------------------------
 
-export function cleanup(_c: Combatant): void {
-  // No-op — forward-compat flag persists for combat.
-}
+export function cleanup(_c: Combatant): void { /* no-op — concentration break handles cleanup */ }

@@ -1379,6 +1379,16 @@ export interface PlannedAction {
     | 'waterySphere'       // Watery Sphere — XGE p.170: 90 ft, 5-ft radius AoE, STR save or restrained, concentration (movement rider simplified)
     | 'dominateBeast'      // Dominate Beast — PHB p.235: 60 ft, WIS save or charmed (control simplified), concentration, beast
     | 'charmMonster'       // Charm Monster — PHB p.221: 30 ft, WIS save or charmed, NO concentration (1 hr), any creature
+    | 'antagonize'        // Antagonize — EGtW p.150: 60 ft, WIS save 4d4 psychic (half on save) + frightened on fail, NO concentration (taunt→frightened)
+    | 'bestowCurse'       // Bestow Curse — PHB p.214: 60 ft (v1; canon Touch), WIS save or incapacitated, concentration (4 curse options simplified)
+    | 'catnap'            // Catnap — XGE p.151: 30 ft, up to 3 WILLING ALLIES fall asleep (no save), NO concentration (short-rest NOT modelled)
+    | 'enemiesAbound'     // Enemies Abound — XGE p.155: 120 ft, INT save or frightened, concentration (target-acquisition debuff simplified)
+    | 'fastFriends'       // Fast Friends — EGtW p.151: 30 ft, WIS save or charmed, concentration (control simplified)
+    | 'fear'              // Fear — PHB p.239: 30-ft cone, WIS save or frightened, NO concentration v1 (canon conc; drop-weapon simplified)
+    | 'hypnoticPattern'   // Hypnotic Pattern — PHB p.252: 120 ft, 10-ft radius AoE, WIS save or charmed+incapacitated (DUAL), concentration
+    | 'inciteGreed'       // Incite Greed — EGtW p.151: 30-ft cone, WIS save or charmed, concentration
+    | 'sleetStorm'        // Sleet Storm — PHB p.276: 120 ft, 20-ft radius AoE, DEX save or prone, concentration (conc-break rider simplified)
+    | 'stinkingCloud'     // Stinking Cloud — PHB p.278: 90 ft, 20-ft radius AoE, CON save or poisoned+incapacitated (DUAL), concentration
     // ── Session 19 — bulk-implementation generic dispatch (262 new spells L2-9) ──
     // All non-blocker in-scope spells from levels 2-9 that have not been
     // implemented as bespoke case branches are routed through 'genericSpell'.
