@@ -18,6 +18,19 @@
 
 ---
 
+## PENDING REVIEW
+
+> Seeded by TG-012 (see below) — check this log at the START of every
+> session, before reading your own TASK.md. Action the item or reply
+> `ACKNOWLEDGED — reviewing, ETA <N>` on the same line. Remove the line once
+> the underlying TG entry is actioned.
+
+- TG-006 awaiting Core Engine review since Cantrip-z session 21 (commit
+  `b53b622`) — see `docs/TG-006-SUMMON-PLAN.md` for the 4-phase plan Cantrip-z
+  is blocked on.
+
+---
+
 ## CROSS-WORKSTREAM TASKS
 
 These tasks touch files owned by MORE THAN ONE workstream. They cannot be
@@ -274,6 +287,47 @@ completed by a single agent without coordination.
   - **Level 7 (4):** Etherealness, Plane Shift, Resurrection, Teleport, Temple of the Gods.
   - **Level 8 (3):** Maze, Mighty Fortress, Mind Blank.
   - **Level 9 (4):** Astral Projection, Imprisonment, True Resurrection, Wish.
+
+### TG-012: Sheet clearance on TG-001..TG-011 + RFC-stall fallback (Sheet-proposed)
+
+- **Status:** OPEN (protocol portion — clearance portion below is DONE)
+- **Owners:** Sheet (driving this entry) — protocol applies to all three workstreams
+- **Source:** SHEET-HANDOVER-31 follow-up session; reviewed all of TG-001 through
+  TG-011 and `docs/TG-006-SUMMON-PLAN.md` against Sheet-owned files
+  (`src/characters/*`, `src/character_router.ts`, `docs/characters.html`).
+- **Clearance (DONE):** Zero overlap found. Specifically checked TG-006 Phase 3
+  (Find Familiar / Find Steed / Find Greater Steed) for a persistent
+  companion/familiar field on the character sheet — confirmed these spawn as
+  combat-only `Combatant` entries via the existing `spawnSummon` pattern, so
+  no character-sheet schema change is needed. No other TG entry references
+  character data, spell-list data, or any Sheet-owned file. **Sheet has no
+  open prerequisite blocking any TG item today.** If a future TG item needs
+  persistent character-sheet data (e.g. a permanent familiar slot), tag Sheet
+  as a reviewer in that entry and this agent will pick it up next session.
+- **Stall risk observed:** `zHANDOVER-SESSION-21.md` (commit `b53b622`) has
+  Cantrip-z completing research + a 4-phase plan for TG-006 and explicitly
+  waiting on a Core Engine RFC review before touching `combat.ts`/`runCombat`.
+  Core Engine's current `TASK.md` (Tier-1 PHB 1st-level spells: Shield,
+  Guiding Bolt, Healing Word) does not yet reference TG-006, so the RFC has
+  no guaranteed read-by date.
+- **Proposed fallback protocol (non-binding until an owning agent adopts it,
+  per the RFC rule above):**
+  1. A driving agent posting an RFC that needs another workstream's sign-off
+     adds one line under a new `## PENDING REVIEW` log at the top of this
+     file: `TG-### awaiting <workstream> review since session <N> — see <doc>`.
+  2. Every agent checks that log at session start (before its own TASK.md)
+     and either actions it or replies `ACKNOWLEDGED — reviewing, ETA <N>`.
+  3. If 2 full sessions pass with no acknowledgment, the driving agent may
+     proceed on LOW-risk, purely-additive sub-phases only (new optional
+     fields, new files in directories it already owns) — it still may NOT
+     touch another workstream's shared hot-path files (e.g. `runCombat`,
+     `computeLOS`) without explicit sign-off, timeout or not.
+  4. On completion, the driving agent deletes its `PENDING REVIEW` line and
+     flips the TG entry to DONE.
+- **Risk:** LOW — process-only change, no code/type impact.
+- **Coordination protocol:** This entry is itself the RFC. Core Engine or
+  Cantrip-z may amend/reject in their own next commit; otherwise treat as a
+  recommendation, not a rule, per the RFCs section below.
 
 ---
 
