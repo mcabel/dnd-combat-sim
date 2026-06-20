@@ -134,21 +134,46 @@ const SPELL_NAMES = Object.keys(GENERIC_SPELLS);
 const SPELL_COUNT = SPELL_NAMES.length;
 
 assert('Registry is non-empty', SPELL_COUNT > 0);
-assert(`Registry has at least 300 spells (got ${SPELL_COUNT})`, SPELL_COUNT >= 300);
+// Session 21: lowered from 300 to 290 after migrating 7 combat damage
+// spells (Fireball, Lightning Bolt, Cone of Cold, Inflict Wounds,
+// Chromatic Orb, Catapult, Ice Knife) from generic dispatch to bespoke
+// implementations. The registry now has 306 spells (313 − 7).
+assert(`Registry has at least 290 spells (got ${SPELL_COUNT})`, SPELL_COUNT >= 290);
 console.log(`  📊 Total bulk-implemented spells: ${SPELL_COUNT}`);
 
-// Sample spells — one per level 1-9
+// Sample spells — one per level 1-9. Updated in Session 21 to avoid the
+// 7 migrated bespoke spells (Fireball L3, Cone of Cold L5 — both moved
+// out of the generic registry into bespoke case branches).
 const SAMPLE_SPELLS = [
   { name: 'Alarm', level: 1 },
   { name: 'Continual Flame', level: 2 },
-  { name: 'Fireball', level: 3 },
+  { name: 'Fear', level: 3 },
   { name: 'Polymorph', level: 4 },
-  { name: 'Cone of Cold', level: 5 },
+  { name: 'Cloudkill', level: 5 },
   { name: 'Disintegrate', level: 6 },
   { name: 'Finger of Death', level: 7 },
   { name: 'Feeblemind', level: 8 },
   { name: 'Power Word Kill', level: 9 },
 ];
+
+// ============================================================
+// 1b. Session 21 — migrated spells are NO LONGER in the registry
+// ============================================================
+// The 7 combat damage spells migrated in Session 21 to bespoke
+// implementations must NOT appear in the generic registry. Their
+// bespoke modules at src/spells/<snake>.ts have a different execute
+// signature (some take Combatant[] targets, some take a single target,
+// some take an IceKnifePlan) that doesn't fit the generic dispatch
+// shape (caster, state) → void.
+console.log('\n=== 1b. Session 21 — migrated spells removed from registry ===\n');
+const MIGRATED_SPELLS = [
+  'Fireball', 'Lightning Bolt', 'Cone of Cold',
+  'Inflict Wounds', 'Chromatic Orb', 'Catapult', 'Ice Knife',
+];
+for (const migrated of MIGRATED_SPELLS) {
+  eq(`  ${migrated} is no longer in the registry (migrated to bespoke)`,
+    lookupGenericSpell(migrated), null);
+}
 
 // ============================================================
 // 2. Sample spell lookup
@@ -189,14 +214,16 @@ const allInMap = GENERIC_SPELL_LIST.every(d => GENERIC_SPELLS[d.name] === d);
 assert('Every list element is in the map', allInMap);
 
 // ============================================================
-// 5. shouldCast gates work for a sample spell (Fireball)
+// 5. shouldCast gates work for a sample spell (Fear — L3, still generic)
 // ============================================================
+// Updated in Session 21: was 'Fireball', now 'Fear' (Fireball migrated
+// to bespoke — see src/spells/fireball.ts and src/test/fireball.test.ts).
 
-console.log('\n=== 5. shouldCast gates (sample: Fireball) ===\n');
+console.log('\n=== 5. shouldCast gates (sample: Fear) ===\n');
 
-const fireballDesc = lookupGenericSpell('Fireball');
-if (fireballDesc) {
-  // 5a. No Fireball action → false
+const sampleDesc = lookupGenericSpell('Fear');
+if (sampleDesc) {
+  // 5a. No Fear action → false
   {
     const caster = makeCombatant('wiz', {
       actions: [],
@@ -204,64 +231,65 @@ if (fireballDesc) {
     });
     const enemy = makeCombatant('e1', { faction: 'enemy', pos: { x: 1, y: 0, z: 0 } });
     const bf = makeBF([caster, enemy]);
-    eq('Returns false when caster lacks Fireball action', fireballDesc.shouldCast(caster, bf as any), false);
+    eq('Returns false when caster lacks Fear action', sampleDesc.shouldCast(caster, bf as any), false);
   }
   // 5b. No 3rd-level slots → false
   {
     const caster = makeCombatant('wiz', {
-      actions: [makeSpellAction('Fireball', 3)],
+      actions: [makeSpellAction('Fear', 3)],
       resources: withSlots(3, 0),
     });
     const enemy = makeCombatant('e1', { faction: 'enemy', pos: { x: 1, y: 0, z: 0 } });
     const bf = makeBF([caster, enemy]);
-    eq('Returns false when no 3rd-level slots', fireballDesc.shouldCast(caster, bf as any), false);
+    eq('Returns false when no 3rd-level slots', sampleDesc.shouldCast(caster, bf as any), false);
   }
   // 5c. Already active → false
   {
     const caster = makeCombatant('wiz', {
-      actions: [makeSpellAction('Fireball', 3)],
+      actions: [makeSpellAction('Fear', 3)],
       resources: withSlots(3, 2),
     });
-    caster._genericSpellActiveSpells = new Set<string>(['Fireball']);
+    caster._genericSpellActiveSpells = new Set<string>(['Fear']);
     const enemy = makeCombatant('e1', { faction: 'enemy', pos: { x: 1, y: 0, z: 0 } });
     const bf = makeBF([caster, enemy]);
-    eq('Returns false when already Fireball-active', fireballDesc.shouldCast(caster, bf as any), false);
+    eq('Returns false when already Fear-active', sampleDesc.shouldCast(caster, bf as any), false);
   }
   // 5d. All preconditions met → true
   {
     const caster = makeCombatant('wiz', {
-      actions: [makeSpellAction('Fireball', 3)],
+      actions: [makeSpellAction('Fear', 3)],
       resources: withSlots(3, 2),
     });
     const enemy = makeCombatant('e1', { faction: 'enemy', pos: { x: 1, y: 0, z: 0 } });
     const bf = makeBF([caster, enemy]);
-    eq('Returns true when all preconditions met', fireballDesc.shouldCast(caster, bf as any), true);
+    eq('Returns true when all preconditions met', sampleDesc.shouldCast(caster, bf as any), true);
   }
 }
 
 // ============================================================
-// 6. execute applies the flag + consumes the slot
+// 6. execute applies the flag + consumes the slot (sample: Fear)
 // ============================================================
+// Updated in Session 21: was 'Fireball', now 'Fear' (Fireball migrated).
 
-console.log('\n=== 6. execute (sample: Fireball) ===\n');
+console.log('\n=== 6. execute (sample: Fear) ===\n');
 
-if (fireballDesc) {
+if (sampleDesc) {
   const caster = makeCombatant('wiz', {
-    actions: [makeSpellAction('Fireball', 3)],
+    actions: [makeSpellAction('Fear', 3)],
     resources: withSlots(3, 2),
   });
   const enemy = makeCombatant('e1', { faction: 'enemy', pos: { x: 1, y: 0, z: 0 } });
   const bf = makeBF([caster, enemy]);
   const state = makeState(bf);
 
-  fireballDesc.execute(caster, state);
+  sampleDesc.execute(caster, state);
 
   // 6a. Slot consumed
   eq('Slot consumed (3rd level: 2 → 1)',
     (caster.resources as any).spellSlots[3].remaining, 1);
   // 6b. Flag set
   assert('Flag set on caster',
-    caster._genericSpellActiveSpells?.has('Fireball') === true);
+    caster._genericSpellActiveSpells?.has('Fear') === true);
   // 6c. Log events emitted
   const actions = state.log.events.filter(e => e.type === 'action');
   assert('Action log emitted', actions.length === 1);
@@ -269,19 +297,20 @@ if (fireballDesc) {
   assert('Condition-add log emitted', condAdds.length === 1);
   // 6d. Log description contains spell name
   if (actions.length === 1) {
-    assert('Action log mentions Fireball', actions[0].description.includes('Fireball'));
+    assert('Action log mentions Fear', actions[0].description.includes('Fear'));
   }
 }
 
 // ============================================================
-// 7. Re-cast is blocked by the flag
+// 7. Re-cast is blocked by the flag (sample: Fear)
 // ============================================================
+// Updated in Session 21: was 'Fireball', now 'Fear' (Fireball migrated).
 
 console.log('\n=== 7. Re-cast blocked by flag ===\n');
 
-if (fireballDesc) {
+if (sampleDesc) {
   const caster = makeCombatant('wiz', {
-    actions: [makeSpellAction('Fireball', 3)],
+    actions: [makeSpellAction('Fear', 3)],
     resources: withSlots(3, 2),
   });
   const enemy = makeCombatant('e1', { faction: 'enemy', pos: { x: 1, y: 0, z: 0 } });
@@ -289,11 +318,11 @@ if (fireballDesc) {
   const state = makeState(bf);
 
   // First cast succeeds
-  assert('First shouldCast returns true', fireballDesc.shouldCast(caster, bf as any) === true);
-  fireballDesc.execute(caster, state);
+  assert('First shouldCast returns true', sampleDesc.shouldCast(caster, bf as any) === true);
+  sampleDesc.execute(caster, state);
 
   // Second shouldCast returns false (already active)
-  eq('Second shouldCast returns false (already active)', fireballDesc.shouldCast(caster, bf as any), false);
+  eq('Second shouldCast returns false (already active)', sampleDesc.shouldCast(caster, bf as any), false);
 
   // Slot NOT consumed on blocked second cast (because shouldCast blocks before execute)
   eq('Slot count still 1 after blocked re-cast attempt',
@@ -303,6 +332,7 @@ if (fireballDesc) {
 // ============================================================
 // 8. PlannedAction.spellName dispatch (TypeScript-level)
 // ============================================================
+// Updated in Session 21: was 'Fireball', now 'Fear' (Fireball migrated).
 
 console.log('\n=== 8. PlannedAction.spellName field works ===\n');
 
@@ -311,10 +341,10 @@ console.log('\n=== 8. PlannedAction.spellName field works ===\n');
     type: 'genericSpell',
     action: null,
     targetId: 'wiz',
-    description: 'Wizard casts Fireball',
-    spellName: 'Fireball',
+    description: 'Wizard casts Fear',
+    spellName: 'Fear',
   };
-  eq('PlannedAction.spellName reads back correctly', plan.spellName, 'Fireball');
+  eq('PlannedAction.spellName reads back correctly', plan.spellName, 'Fear');
   eq('PlannedAction.type is genericSpell', plan.type, 'genericSpell');
 }
 
@@ -324,12 +354,14 @@ console.log('\n=== 8. PlannedAction.spellName field works ===\n');
 
 console.log('\n=== 9. Multi-level slot gating ===\n');
 
+// Updated in Session 21: 'Fireball' (L3) → 'Fear', 'Cone of Cold' (L5) →
+// 'Cloudkill' — both migrated to bespoke implementations.
 const SAMPLE_BY_LEVEL: Record<number, string | null> = {
   1: 'Alarm',
   2: 'Continual Flame',
-  3: 'Fireball',
+  3: 'Fear',
   4: 'Polymorph',
-  5: 'Cone of Cold',
+  5: 'Cloudkill',
   6: 'Disintegrate',
   7: 'Finger of Death',
   8: 'Feeblemind',

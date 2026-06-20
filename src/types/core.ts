@@ -1253,6 +1253,22 @@ export interface PlannedAction {
     | 'prayerOfHealing'     // Prayer of Healing — 30 ft, 2d8+spellcasting heal up to 3 creatures (v1: action cast), NO concentration
     | 'knock'               // Knock — 60 ft, opens objects (forward-compat), NO concentration
     | 'arcaneLock'          // Arcane Lock — touch, locks object (forward-compat), permanent, NO concentration
+    // ── Session 21 — Real-mechanics migration (7 combat damage spells) ──
+    // Migrated from the Session 19/20 generic dispatch registry to bespoke
+    // implementations with real mechanical effects (DEX/CON saves, spell
+    // attack rolls, AoE damage). Mirrors the Session 18 bespoke pattern
+    // (Moonbeam / Shatter / Scorching Ray). Each migrated spell:
+    //   - Removed from _generic_registry.ts
+    //   - Has its own case branch in combat.ts executePlannedAction
+    //   - Has its own planner branch in planner.ts
+    //   - Has its own test file in src/test/<spell>.test.ts
+    | 'fireball'            // Fireball — PHB p.241: 150 ft, DEX save 8d6 fire (half on save), 20-ft radius AoE, NO concentration
+    | 'lightningBolt'       // Lightning Bolt — PHB p.255: 100-ft × 5-ft line from caster, DEX save 8d6 lightning (half on save), NO concentration
+    | 'coneOfCold'          // Cone of Cold — PHB p.229: self (60-ft cone), CON save 8d8 cold (half on save), NO concentration
+    | 'inflictWounds'       // Inflict Wounds — PHB p.253: touch (5 ft), melee spell attack 3d10 necrotic (crit doubles), NO concentration
+    | 'chromaticOrb'        // Chromatic Orb — PHB p.221: 90 ft, ranged spell attack 3d8 chosen-elemental (picker avoids resistances, crit doubles), NO concentration
+    | 'catapult'            // Catapult — XGE p.15: 60 ft, DEX save 3d8 bludgeoning (half on save), single-target, NO concentration
+    | 'iceKnife'            // Ice Knife — XGE p.157: 60 ft, ranged spell attack 1d10 piercing + 2d6 cold DEX save 5-ft radius AoE (explodes on hit or miss), NO concentration
     // ── Session 19 — bulk-implementation generic dispatch (262 new spells L2-9) ──
     // All non-blocker in-scope spells from levels 2-9 that have not been
     // implemented as bespoke case branches are routed through 'genericSpell'.

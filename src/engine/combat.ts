@@ -209,6 +209,44 @@ import {
   execute as executeArcaneLock,
 } from '../spells/arcane_lock';
 
+// ── Session 21 — Real-mechanics migration (7 combat damage spells) ─────────
+// Migrated from the Session 19/20 generic dispatch registry to bespoke
+// implementations with real mechanical effects (DEX/CON saves, spell
+// attack rolls, AoE damage). Mirrors the Session 18 bespoke pattern
+// (Moonbeam / Shatter / Scorching Ray). Each migrated spell:
+//   - Removed from _generic_registry.ts (no longer dispatched via 'genericSpell')
+//   - Has its own case branch in executePlannedAction (below)
+//   - Has its own planner branch in planner.ts (sets plan.action.type)
+//   - Has its own test file in src/test/<spell>.test.ts
+import {
+  shouldCast as shouldCastFireball,
+  execute as executeFireball,
+} from '../spells/fireball';
+import {
+  shouldCast as shouldCastLightningBolt,
+  execute as executeLightningBolt,
+} from '../spells/lightning_bolt';
+import {
+  shouldCast as shouldCastConeOfCold,
+  execute as executeConeOfCold,
+} from '../spells/cone_of_cold';
+import {
+  shouldCast as shouldCastInflictWounds,
+  execute as executeInflictWounds,
+} from '../spells/inflict_wounds';
+import {
+  shouldCast as shouldCastChromaticOrb,
+  execute as executeChromaticOrb,
+} from '../spells/chromatic_orb';
+import {
+  shouldCast as shouldCastCatapult,
+  execute as executeCatapult,
+} from '../spells/catapult';
+import {
+  shouldCast as shouldCastIceKnife,
+  execute as executeIceKnife,
+} from '../spells/ice_knife';
+
 // ── Session 19 — bulk-implementation generic dispatch (262 new spells) ────
 import {
   lookupGenericSpell,
@@ -2039,6 +2077,90 @@ function executePlannedAction(
       // Arcane Lock — PHB p.215: action, touch, locks object (forward-compat
       // flag on caster), permanent, NO concentration.
       if (shouldCastArcaneLock(actor, bf)) executeArcaneLock(actor, state);
+      break;
+    }
+
+    // ── Session 21 — Real-mechanics migration (7 combat damage spells) ────
+    // These spells were bulk-implemented in Session 19/20 as forward-compat
+    // flags (no mechanical effect). Session 21 migrated them to bespoke
+    // implementations with REAL mechanical effects. Each case branch
+    // mirrors the Session 18 bespoke pattern (Moonbeam / Shatter).
+
+    case 'fireball': {
+      // Fireball — PHB p.241: action, 150 ft, DEX save 8d6 fire (half on
+      // save), 20-ft radius AoE. NO concentration.
+      // shouldCast returns Combatant[] (all enemies in 20 ft of primary).
+      const fbTargets = shouldCastFireball(actor, bf);
+      if (fbTargets) executeFireball(actor, fbTargets, state);
+      break;
+    }
+
+    case 'lightningBolt': {
+      // Lightning Bolt — PHB p.255: action, 100-ft × 5-ft line from caster,
+      // DEX save 8d6 lightning (half on save). NO concentration.
+      // shouldCast returns Combatant[] (all enemies in the line rectangle).
+      const lbTargets = shouldCastLightningBolt(actor, bf);
+      if (lbTargets) executeLightningBolt(actor, lbTargets, state);
+      break;
+    }
+
+    case 'coneOfCold': {
+      // Cone of Cold — PHB p.229: action, self (60-ft cone), CON save 8d8
+      // cold (half on save). NO concentration.
+      // shouldCast returns Combatant[] (all enemies in the cone).
+      const cocTargets = shouldCastConeOfCold(actor, bf);
+      if (cocTargets) executeConeOfCold(actor, cocTargets, state);
+      break;
+    }
+
+    case 'inflictWounds': {
+      // Inflict Wounds — PHB p.253: action, touch (5 ft), melee spell attack
+      // 3d10 necrotic (crit doubles). NO concentration.
+      // shouldCast returns a single Combatant (highest-threat adjacent enemy).
+      const iwTargetId = plan.targetId;
+      const iwTarget = iwTargetId ? bf.combatants.get(iwTargetId) ?? null : null;
+      const liveTarget = iwTarget && !iwTarget.isDead && !iwTarget.isUnconscious
+        ? iwTarget
+        : shouldCastInflictWounds(actor, bf);
+      if (liveTarget) executeInflictWounds(actor, liveTarget, state);
+      break;
+    }
+
+    case 'chromaticOrb': {
+      // Chromatic Orb — PHB p.221: action, 90 ft, ranged spell attack 3d8
+      // chosen-elemental (acid/cold/fire/lightning/poison/thunder — picker
+      // avoids target's resistances). Crit doubles. NO concentration.
+      // shouldCast returns a single Combatant (highest-threat enemy in range).
+      const coTargetId = plan.targetId;
+      const coTarget = coTargetId ? bf.combatants.get(coTargetId) ?? null : null;
+      const liveTarget = coTarget && !coTarget.isDead && !coTarget.isUnconscious
+        ? coTarget
+        : shouldCastChromaticOrb(actor, bf);
+      if (liveTarget) executeChromaticOrb(actor, liveTarget, state);
+      break;
+    }
+
+    case 'catapult': {
+      // Catapult — XGE p.15: action, 60 ft, DEX save 3d8 bludgeoning (half
+      // on save), single-target. NO concentration.
+      // shouldCast returns a single Combatant (highest-threat enemy in range).
+      const catTargetId = plan.targetId;
+      const catTarget = catTargetId ? bf.combatants.get(catTargetId) ?? null : null;
+      const liveTarget = catTarget && !catTarget.isDead && !catTarget.isUnconscious
+        ? catTarget
+        : shouldCastCatapult(actor, bf);
+      if (liveTarget) executeCatapult(actor, liveTarget, state);
+      break;
+    }
+
+    case 'iceKnife': {
+      // Ice Knife — XGE p.157: action, 60 ft, ranged spell attack 1d10
+      // piercing + 2d6 cold DEX save in 5-ft radius AoE (explodes on hit
+      // OR miss). NO concentration.
+      // shouldCast returns an IceKnifePlan { primary, explosion } (a hybrid
+      // attack-roll + AoE-save spell — first of its kind in v1).
+      const ikPlan = shouldCastIceKnife(actor, bf);
+      if (ikPlan) executeIceKnife(actor, ikPlan, state);
       break;
     }
 

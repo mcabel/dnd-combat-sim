@@ -1,33 +1,56 @@
 // ============================================================
 // Lightning Bolt — PHB p.255
 //
-// 3-level evocation, 1 action, range 100 ft.
-// Duration: Instantaneous.
+// 3rd-level evocation, action, range 100 ft (self → 100-ft line),
+// NO concentration.
+// Components: V, S, M (a bit of fur and an amber, crystal, or glass rod).
 //
-// Effect: A stroke of lightning forming a line 100 feet long and 5 feet wide blasts out from you in a direction you choose. Each creature in the line must make a Dexterity saving throw. A creature takes {@damag
+// Effect: A stroke of lightning forming a line 100 feet long and 5
+//         feet wide blasts out from you in a direction you choose.
+//         Each creature in the line must make a Dexterity saving
+//         throw. A creature takes 8d6 lightning damage on a failed
+//         save, or half as much on a successful one.
 //
-// Upcast: see source (not modelled in v1).
+//         The lightning ignites flammable objects in the area that
+//         aren't being worn or carried.
+//
+// Upcast: +1d6 lightning per slot level above 3rd (not modelled in v1).
 //
 // v1 simplifications:
-//   - v1 models this spell as a FORWARD-COMPAT flag only (Session 19 bulk
-//     implementation). The spell consumes a slot and sets the flag
-//     `_genericSpellActiveSpells` on the caster; the actual mechanical
-//     effect (damage / save / condition / buff) is NOT applied in v1.
-//     A future implementation should extend the relevant engine subsystem
-//     (damage_zone for persistent damage, condition_apply for conditions,
-//     advantage_vs for buffs, etc.) to consume this flag and apply the
-//     real effect. This mirrors the Session 17/18 forward-compat pattern
-//     established by Darkvision, Arcane Lock, Knock, See Invisibility.
+//   - Line shape: canon 100-ft × 5-ft line from the caster's space
+//     in a chosen direction. v1 aims the line toward the highest-
+//     threat enemy within 100 ft and collects all enemies inside the
+//     line rectangle (via the new `inLineFt` helper in movement.ts).
+//     v1 uses a thin-rectangle approximation (perpendicular distance
+//     <= 2.5 ft from the centre line). Forward-compat TODO via the
+//     metadata flag `lightningBoltExactLineGeometryV1Simplified: true`.
+//   - Object damage / flammable ignition (PHB p.255): NOT modelled
+//     — v1 has no object HP subsystem.
+//   - Upcast: +1d6/slot-level NOT modelled — v1 always rolls 8d6
+//     lightning. Forward-compat TODO via
+//     `lightningBoltUpcastV1Implemented: false`.
+//   - NOT a concentration spell (PHB p.255: instantaneous).
 //
-// Spell module pattern (mirrors Darkvision / Arcane Lock forward-compat
-// self-buff pattern):
-//   shouldCast(caster, bf) → boolean
-//   execute(caster, state) → void
-//   cleanup() — no-op (forward-compat flag persists for combat)
+// Migration note (Session 21): This spell was BULK-IMPLEMENTED in
+// Session 19 as a forward-compat flag (no mechanical effect).
+// Session 21 migrated it to a bespoke implementation with REAL DEX
+// save + 8d6 lightning damage via the new `inLineFt` helper. Removed
+// from `_generic_registry.ts`; routed via `case 'lightningBolt':` in
+// combat.ts and a planner branch in planner.ts. Mirrors the Burning
+// Hands bespoke pattern (Session 17) but uses inLineFt instead of
+// inConeFt.
+//
+// Spell module pattern (line AoE save — new pattern, mirrors
+// shatter.ts but with `inLineFt` instead of `chebyshev3D`):
+//   shouldCast(caster, bf) → Combatant[] | null
+//   execute(caster, targets, state) → void
+//   cleanup() — no-op (instantaneous)
 // ============================================================
 
 import { Combatant, Battlefield } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
+import { rollSave, rollDie, applyDamageWithTempHP } from '../engine/utils';
+import { inLineFt, chebyshev3D, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 
 // ---- Metadata -----------------------------------------------
@@ -36,10 +59,17 @@ export const metadata = {
   name: 'Lightning Bolt',
   level: 3,
   school: 'evocation',
-  rangeFt: 100,
+  rangeFt: 100,                // PHB p.255: 100-ft line
+  lineLengthFt: 100,           // PHB p.255
+  lineWidthFt: 5,              // PHB p.204 (default line width)
+  dieCount: 8,
+  dieSides: 6,
+  damageType: 'lightning' as const,
   concentration: false,
+  saveAbility: 'dex' as const,
   castingTime: 'action',
-  lightningBoltV1Simplified: true,
+  lightningBoltExactLineGeometryV1Simplified: true,                // thin-rectangle approx
+  lightningBoltUpcastV1Implemented: false,                         // +1d6/slot-level NOT modelled
 } as const;
 
 // ---- Local log helper ---------------------------------------
@@ -62,56 +92,138 @@ function emit(
   });
 }
 
+// ---- Dice helper --------------------------------------------
+
+/** Roll `metadata.dieCount`d`metadata.dieSides` and return the total. */
+export function rollDamage(): number {
+  let total = 0;
+  for (let i = 0; i < metadata.dieCount; i++) total += rollDie(metadata.dieSides);
+  return total;
+}
+
 // ---- Planner ------------------------------------------------
 
 /**
- * Returns true if the caster should cast Lightning Bolt this turn.
+ * Returns the list of enemies caught in a Lightning Bolt 100-ft × 5-ft
+ * line aimed at the highest-threat enemy within 100 ft of the caster,
+ * or null when the spell should not be cast.
+ *
+ * Target selection:
+ *   1. Find the highest-threat (maxHP) living enemy within 100 ft of
+ *      the caster — this is the line's aim point.
+ *   2. Collect ALL living enemies inside the line rectangle from the
+ *      caster to the aim point (using inLineFt).
  *
  * Preconditions:
  *   - Caster has 'Lightning Bolt' in their actions
- *   - Caster has at least one 3-level-or-higher slot available
- *   - Caster is NOT already Lightning Bolt-active (re-cast would be a no-op in v1)
+ *   - Caster has at least one 3rd-level-or-higher slot available
+ *   - At least 1 valid enemy target exists within 100 ft
+ *
+ * Note: Lightning Bolt is NOT concentration — it can be cast while
+ * concentrating on another spell. The planner should NOT gate on
+ * concentration.
  */
-export function shouldCast(caster: Combatant, _bf: Battlefield): boolean {
-  if (!caster.actions.some(a => a.name === 'Lightning Bolt')) return false;
-  if (!hasSpellSlot(caster, 3)) return false;
-  if (caster._genericSpellActiveSpells?.has('Lightning Bolt')) return false;
-  return true;
+export function shouldCast(caster: Combatant, bf: Battlefield): Combatant[] | null {
+  if (!caster.actions.some(a => a.name === 'Lightning Bolt')) return null;
+  if (!hasSpellSlot(caster, 3)) return null;
+
+  const enemies = livingEnemiesOf(caster, bf);
+
+  // Find highest-threat enemy within 100 ft of the caster (line aim point).
+  let aimAt: Combatant | null = null;
+  let aimThreat = -1;
+  let aimDist = Infinity;
+  for (const e of enemies) {
+    const distFt = chebyshev3D(caster.pos, e.pos) * 5;
+    if (distFt > 100) continue;
+    // Threat proxy: maxHP. Tie-break: closest to caster.
+    if (e.maxHP > aimThreat ||
+        (e.maxHP === aimThreat && distFt < aimDist)) {
+      aimAt = e;
+      aimThreat = e.maxHP;
+      aimDist = distFt;
+    }
+  }
+
+  if (!aimAt) return null;
+
+  // Collect all enemies inside the line rectangle from caster to aimAt.
+  const targets: Combatant[] = [];
+  for (const e of enemies) {
+    if (inLineFt(caster.pos, aimAt.pos, e.pos, metadata.lineLengthFt, metadata.lineWidthFt)) {
+      targets.push(e);
+    }
+  }
+
+  return targets.length >= 1 ? targets : null;
 }
 
 // ---- Execution ----------------------------------------------
 
 /**
  * Execute Lightning Bolt:
- *  1. Consume a 3-level spell slot.
- *  2. Set the flag on the caster's `_genericSpellActiveSpells` Set.
- *  3. Log the cast.
+ *  1. Consume a 3rd-level spell slot (or higher — consumeSpellSlot handles upcast).
+ *  2. For each target in the list:
+ *     a. Roll the target's DEX save vs the caster's saveDC.
+ *     b. On fail: 8d6 lightning. On success: half (floor).
+ *     c. Apply via applyDamageWithTempHP (handles resistances / temp HP /
+ *        Warding Bond redirect).
+ *     d. Log each save result + damage.
+ *
+ * v1 simplifications: 100-ft × 5-ft line (thin-rectangle approximation);
+ * object damage / flammable ignition NOT modelled; upcast NOT modelled;
+ * NOT concentration.
+ *
+ * @param caster  The casting Combatant (Sorcerer / Wizard / Storm Cleric
+ *                via domain / some Warlock patrons, etc.)
+ * @param targets Candidates from shouldCast (all enemies in the line)
+ * @param state   Current EngineState (for logging + battlefield access)
  */
 export function execute(
   caster: Combatant,
+  targets: Combatant[],
   state: EngineState,
 ): void {
-  consumeSpellSlot(caster, 3);
+  const action = caster.actions.find(a => a.name === 'Lightning Bolt');
+  const saveDC = action?.saveDC ?? 15;
 
-  if (!caster._genericSpellActiveSpells) {
-    caster._genericSpellActiveSpells = new Set<string>();
-  }
-  caster._genericSpellActiveSpells.add('Lightning Bolt');
+  consumeSpellSlot(caster, 3);
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Lightning Bolt! (v1: forward-compat flag set; mechanical effect not yet implemented)`,
-    caster.id,
+    `${caster.name} casts Lightning Bolt! (DC ${saveDC} DEX, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}, ${metadata.lineLengthFt}-ft × ${metadata.lineWidthFt}-ft line) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} caught!`,
   );
-  emit(
-    state, 'condition_add', caster.id,
-    `${caster.name} is affected by Lightning Bolt. (v1: forward-compat flag set; no mechanical effect until engine subsystem is implemented)`,
-    caster.id,
-  );
+
+  for (const target of targets) {
+    if (target.isDead || target.isUnconscious) continue;
+
+    const save = rollSave(target, 'dex', saveDC);
+    const fullDmg = rollDamage();
+    const dmg = save.success ? Math.floor(fullDmg / 2) : fullDmg;
+    const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);
+
+    emit(
+      state,
+      save.success ? 'save_success' : 'save_fail',
+      caster.id,
+      `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} DEX save vs Lightning Bolt (rolled ${save.total}) — ${dealt} ${metadata.damageType} damage (${metadata.dieCount}d${metadata.dieSides}=${fullDmg}${save.success ? ', halved' : ''})`,
+      target.id, save.roll,
+    );
+    emit(
+      state, 'damage', caster.id,
+      `Lightning Bolt: ${target.name} takes ${dealt} ${metadata.damageType} damage`,
+      target.id, dealt,
+    );
+  }
 }
 
 // ---- Cleanup ------------------------------------------------
 
+/**
+ * Cleanup hook for Lightning Bolt — NO-OP because:
+ *   - Lightning Bolt is instantaneous (no persistent effect).
+ *   - No concentration, no scratch field, no damage_zone sentinel.
+ */
 export function cleanup(_c: Combatant): void {
-  // No-op — forward-compat flag persists for combat.
+  // No-op — instantaneous spell, nothing to clean up.
 }

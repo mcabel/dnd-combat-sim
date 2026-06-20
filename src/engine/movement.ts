@@ -374,6 +374,67 @@ export function inConeFt(
   return dot >= cosHalf;
 }
 
+/**
+ * Is `test` inside a line AoE originating at `origin`, aimed at `aimAt`,
+ * with the given length and width?
+ *
+ * D&D 5e line geometry (PHB p.204 / SAC v2.7):
+ *   "A line is an area of effect that extends from one edge of the
+ *    caster's space in a direction the caster chooses. A line has a
+ *    specified length and a width of 5 feet."
+ *
+ * v1 implementation: approximate the line as a thin rectangle along
+ * the origin→aimAt direction. The rectangle's length is `lengthFt` and
+ * its width is `widthFt` (default 5). The line origin is the centre of
+ * the caster's space (`origin`); the rectangle is the set of points
+ * whose projection onto the line direction is in [0, lengthFt] and
+ * whose perpendicular distance is <= widthFt/2.
+ *
+ * Used by Lightning Bolt (100-ft × 5-ft line, PHB p.255).
+ *
+ * @param origin    The line's starting position (caster centre).
+ * @param aimAt     The line's far-end aim point (determines direction).
+ * @param test      The candidate position to test for inclusion.
+ * @param lengthFt  Line length in feet (e.g. 100 for Lightning Bolt).
+ * @param widthFt   Line width in feet (default 5 per PHB p.204).
+ * @returns true if `test` is inside the line rectangle.
+ */
+export function inLineFt(
+  origin: Vec3,
+  aimAt: Vec3,
+  test: Vec3,
+  lengthFt: number,
+  widthFt = 5,
+): boolean {
+  const dx = test.x - origin.x;
+  const dy = test.y - origin.y;
+  const distSq = dx * dx + dy * dy;
+  if (distSq < 0.0001) return false;                // origin cell excluded
+
+  const aimDx = aimAt.x - origin.x;
+  const aimDy = aimAt.y - origin.y;
+  const aimLen = Math.sqrt(aimDx * aimDx + aimDy * aimDy);
+  if (aimLen < 0.0001) return false;                // aiming at self — undefined
+
+  // Direction unit vector (in grid units; 1 grid unit = 5 ft).
+  const ux = aimDx / aimLen;
+  const uy = aimDy / aimLen;
+
+  // Projection of (test - origin) onto the line direction, in grid units.
+  // Convert to feet by multiplying by 5.
+  const alongGrid = dx * ux + dy * uy;
+  const alongFt = alongGrid * 5;
+  if (alongFt < 0 || alongFt > lengthFt) return false;
+
+  // Perpendicular distance from the line, in grid units → feet.
+  // |perpGrid| = |dx * uy - dy * ux| (cross product magnitude).
+  const perpGrid = Math.abs(dx * uy - dy * ux);
+  const perpFt = perpGrid * 5;
+  if (perpFt > widthFt / 2) return false;
+
+  return true;
+}
+
 // ---- Adjacency helpers --------------------------------------
 
 /** Is `pos` within melee reach (5ft) of `other`? */

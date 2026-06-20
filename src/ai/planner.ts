@@ -75,6 +75,19 @@ import { shouldCast as shouldCastPrayerOfHealing } from '../spells/prayer_of_hea
 import { shouldCast as shouldCastKnock } from '../spells/knock';
 import { shouldCast as shouldCastArcaneLock } from '../spells/arcane_lock';
 
+// ── Session 21 — Real-mechanics migration (7 combat damage spells) ─────────
+// Migrated from the Session 19/20 generic dispatch registry to bespoke
+// implementations with real mechanical effects (DEX/CON saves, spell
+// attack rolls, AoE damage). Each planner branch mirrors the Session 18
+// bespoke pattern (Moonbeam / Shatter / Scorching Ray).
+import { shouldCast as shouldCastFireball } from '../spells/fireball';
+import { shouldCast as shouldCastLightningBolt } from '../spells/lightning_bolt';
+import { shouldCast as shouldCastConeOfCold } from '../spells/cone_of_cold';
+import { shouldCast as shouldCastInflictWounds } from '../spells/inflict_wounds';
+import { shouldCast as shouldCastChromaticOrb } from '../spells/chromatic_orb';
+import { shouldCast as shouldCastCatapult } from '../spells/catapult';
+import { shouldCast as shouldCastIceKnife } from '../spells/ice_knife';
+
 // ── Session 19 — bulk-implementation generic dispatch (262 new spells) ────
 import { GENERIC_SPELL_LIST } from '../spells/_generic_registry';
 import { selectAction, selfPreserveDecision, selectLegendaryAction } from './actions';
@@ -1806,6 +1819,163 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
       };
       plan.targetId = self.id;
       plan.bonusAction = planBonusAction(self, target, battlefield);
+      return plan;
+    }
+  }
+
+  // === SESSION 21 — REAL-MECHANICS MIGRATION (7 combat damage spells) ===
+  // Migrated from the Session 19/20 generic dispatch registry to bespoke
+  // implementations with real mechanical effects (DEX/CON saves, spell
+  // attack rolls, AoE damage). Each branch sits ABOVE the generic spell
+  // loop so the migrated spell wins over its generic-registry shadow
+  // (the migrated spell's module file OVERRIDES the generic-registry
+  // entry — but the generic registry still has a stale entry that we
+  // also remove in this session).
+  //
+  // Tactical priority order (highest first):
+  //   12A. Cone of Cold (L5, 8d8 cold AoE — highest single-cast damage)
+  //   12B. Fireball (L3, 8d6 fire AoE — most iconic combat spell)
+  //   12C. Lightning Bolt (L3, 8d6 lightning line AoE)
+  //   12D. Ice Knife (L1, hybrid 1d10 pierce + 2d6 cold AoE)
+  //   12E. Inflict Wounds (L1, melee spell attack 3d10 necrotic)
+  //   12F. Chromatic Orb (L1, ranged spell attack 3d8 chosen-elemental)
+  //   12G. Catapult (L1, DEX save 3d8 bludgeoning single-target)
+  // L5 spells first (more damage), then L3 (iconic AoE), then L1 by
+  // expected damage (Ice Knife hybrid > Inflict Wounds melee > Chromatic
+  // Orb ranged > Catapult save-for-half).
+
+  // --- 12A. CONE OF COLD (CON save 8d8 cold cone AoE, L5, NO concentration) ---
+  // PHB p.229: action, self (60-ft cone), CON save 8d8 cold (half on save).
+  // Highest single-cast damage of the 7 migrated spells (avg 36).
+  if (!plan.action && self.actions.some(a => a.name === 'Cone of Cold')) {
+    const cocTargets = shouldCastConeOfCold(self, battlefield);
+    if (cocTargets) {
+      const names = cocTargets.map(t => t.name).join(', ');
+      plan.action = {
+        type: 'coneOfCold',
+        action: null,
+        targetId: cocTargets[0].id,
+        description: `${self.name} casts Cone of Cold on ${names}`,
+      };
+      plan.targetId = cocTargets[0].id;
+      plan.bonusAction = planBonusAction(self, cocTargets[0], battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12B. FIREBALL (DEX save 8d6 fire AoE, L3, NO concentration) ---
+  // PHB p.241: action, 150 ft, DEX save 8d6 fire (half on save), 20-ft radius
+  // AoE. The most iconic combat spell in D&D — avg 28 dmg to each enemy in radius.
+  if (!plan.action && self.actions.some(a => a.name === 'Fireball')) {
+    const fbTargets = shouldCastFireball(self, battlefield);
+    if (fbTargets) {
+      const names = fbTargets.map(t => t.name).join(', ');
+      plan.action = {
+        type: 'fireball',
+        action: null,
+        targetId: fbTargets[0].id,
+        description: `${self.name} casts Fireball on ${names}`,
+      };
+      plan.targetId = fbTargets[0].id;
+      plan.bonusAction = planBonusAction(self, fbTargets[0], battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12C. LIGHTNING BOLT (DEX save 8d6 lightning line AoE, L3, NO concentration) ---
+  // PHB p.255: action, 100-ft × 5-ft line from caster, DEX save 8d6 lightning
+  // (half on save). Same damage as Fireball but a line shape (better vs
+  // formations, worse vs clusters).
+  if (!plan.action && self.actions.some(a => a.name === 'Lightning Bolt')) {
+    const lbTargets = shouldCastLightningBolt(self, battlefield);
+    if (lbTargets) {
+      const names = lbTargets.map(t => t.name).join(', ');
+      plan.action = {
+        type: 'lightningBolt',
+        action: null,
+        targetId: lbTargets[0].id,
+        description: `${self.name} casts Lightning Bolt on ${names}`,
+      };
+      plan.targetId = lbTargets[0].id;
+      plan.bonusAction = planBonusAction(self, lbTargets[0], battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12D. ICE KNIFE (ranged spell attack 1d10 pierce + 2d6 cold DEX save AoE, L1, NO concentration) ---
+  // XGE p.157: action, 60 ft, ranged spell attack 1d10 piercing + 2d6 cold
+  // DEX save in 5-ft radius AoE (explodes on hit OR miss). Hybrid attack +
+  // AoE — first of its kind in v1. Avg 5.5 pierce + 7 cold (per target in AoE,
+  // half on save) = solid L1 value.
+  if (!plan.action && self.actions.some(a => a.name === 'Ice Knife')) {
+    const ikPlan = shouldCastIceKnife(self, battlefield);
+    if (ikPlan) {
+      const expNames = ikPlan.explosion.map(t => t.name).join(', ');
+      plan.action = {
+        type: 'iceKnife',
+        action: null,
+        targetId: ikPlan.primary.id,
+        description: `${self.name} casts Ice Knife at ${ikPlan.primary.name} (explosion: ${expNames})`,
+      };
+      plan.targetId = ikPlan.primary.id;
+      plan.bonusAction = planBonusAction(self, ikPlan.primary, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12E. INFLICT WOUNDS (melee spell attack 3d10 necrotic, L1, NO concentration) ---
+  // PHB p.253: action, touch (5 ft), melee spell attack 3d10 necrotic (crit
+  // doubles). Highest single-target L1 damage (avg 16.5) — but requires
+  // adjacency, so it's situational for spellcasters.
+  if (!plan.action && self.actions.some(a => a.name === 'Inflict Wounds')) {
+    const iwTarget = shouldCastInflictWounds(self, battlefield);
+    if (iwTarget) {
+      plan.action = {
+        type: 'inflictWounds',
+        action: null,
+        targetId: iwTarget.id,
+        description: `${self.name} casts Inflict Wounds on ${iwTarget.name}`,
+      };
+      plan.targetId = iwTarget.id;
+      plan.bonusAction = planBonusAction(self, iwTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12F. CHROMATIC ORB (ranged spell attack 3d8 chosen-elemental, L1, NO concentration) ---
+  // PHB p.221: action, 90 ft, ranged spell attack 3d8 chosen-elemental (picker
+  // avoids target's resistances, crit doubles). Solid L1 ranged damage (avg 13.5)
+  // with smart-type-choice heuristic.
+  if (!plan.action && self.actions.some(a => a.name === 'Chromatic Orb')) {
+    const coTarget = shouldCastChromaticOrb(self, battlefield);
+    if (coTarget) {
+      plan.action = {
+        type: 'chromaticOrb',
+        action: null,
+        targetId: coTarget.id,
+        description: `${self.name} casts Chromatic Orb at ${coTarget.name}`,
+      };
+      plan.targetId = coTarget.id;
+      plan.bonusAction = planBonusAction(self, coTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12G. CATAPULT (DEX save 3d8 bludgeoning single-target, L1, NO concentration) ---
+  // XGE p.15: action, 60 ft, DEX save 3d8 bludgeoning (half on save),
+  // single-target. Lowest expected damage of the 7 migrated spells
+  // (avg 13.5 fail, 6.75 save — DEX is a common strong save).
+  if (!plan.action && self.actions.some(a => a.name === 'Catapult')) {
+    const catTarget = shouldCastCatapult(self, battlefield);
+    if (catTarget) {
+      plan.action = {
+        type: 'catapult',
+        action: null,
+        targetId: catTarget.id,
+        description: `${self.name} casts Catapult at ${catTarget.name}`,
+      };
+      plan.targetId = catTarget.id;
+      plan.bonusAction = planBonusAction(self, catTarget, battlefield);
       return plan;
     }
   }

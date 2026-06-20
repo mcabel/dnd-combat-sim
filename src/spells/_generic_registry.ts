@@ -50,12 +50,6 @@ import {
 } from './beast_bond';
 
 import {
-  shouldCast as shouldCastCatapult,
-  execute as executeCatapult,
-  metadata as metadataCatapult,
-} from './catapult';
-
-import {
   shouldCast as shouldCastCauseFear,
   execute as executeCauseFear,
   metadata as metadataCauseFear,
@@ -78,12 +72,6 @@ import {
   execute as executeCharmPerson,
   metadata as metadataCharmPerson,
 } from './charm_person';
-
-import {
-  shouldCast as shouldCastChromaticOrb,
-  execute as executeChromaticOrb,
-  metadata as metadataChromaticOrb,
-} from './chromatic_orb';
 
 import {
   shouldCast as shouldCastColorSpray,
@@ -192,18 +180,6 @@ import {
   execute as executeHuntersMark,
   metadata as metadataHuntersMark,
 } from './hunters_mark';
-
-import {
-  shouldCast as shouldCastIceKnife,
-  execute as executeIceKnife,
-  metadata as metadataIceKnife,
-} from './ice_knife';
-
-import {
-  shouldCast as shouldCastInflictWounds,
-  execute as executeInflictWounds,
-  metadata as metadataInflictWounds,
-} from './inflict_wounds';
 
 import {
   shouldCast as shouldCastJimsMagicMissile,
@@ -668,12 +644,6 @@ import {
 } from './feign_death';
 
 import {
-  shouldCast as shouldCastFireball,
-  execute as executeFireball,
-  metadata as metadataFireball,
-} from './fireball';
-
-import {
   shouldCast as shouldCastFlameArrows,
   execute as executeFlameArrows,
   metadata as metadataFlameArrows,
@@ -750,12 +720,6 @@ import {
   execute as executeLightningArrow,
   metadata as metadataLightningArrow,
 } from './lightning_arrow';
-
-import {
-  shouldCast as shouldCastLightningBolt,
-  execute as executeLightningBolt,
-  metadata as metadataLightningBolt,
-} from './lightning_bolt';
 
 import {
   shouldCast as shouldCastLinkedGlyphs,
@@ -1182,12 +1146,6 @@ import {
   execute as executeCommuneWithNature,
   metadata as metadataCommuneWithNature,
 } from './commune_with_nature';
-
-import {
-  shouldCast as shouldCastConeOfCold,
-  execute as executeConeOfCold,
-  metadata as metadataConeOfCold,
-} from './cone_of_cold';
 
 import {
   shouldCast as shouldCastContagion,
@@ -1942,12 +1900,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     shouldCast: shouldCastBeastBond,
     execute: executeBeastBond,
   },
-  'Catapult': {
-    name: 'Catapult',
-    level: metadataCatapult.level,
-    shouldCast: shouldCastCatapult,
-    execute: executeCatapult,
-  },
   'Cause Fear': {
     name: 'Cause Fear',
     level: metadataCauseFear.level,
@@ -1971,12 +1923,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     level: metadataCharmPerson.level,
     shouldCast: shouldCastCharmPerson,
     execute: executeCharmPerson,
-  },
-  'Chromatic Orb': {
-    name: 'Chromatic Orb',
-    level: metadataChromaticOrb.level,
-    shouldCast: shouldCastChromaticOrb,
-    execute: executeChromaticOrb,
   },
   'Color Spray': {
     name: 'Color Spray',
@@ -2085,18 +2031,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     level: metadataHuntersMark.level,
     shouldCast: shouldCastHuntersMark,
     execute: executeHuntersMark,
-  },
-  'Ice Knife': {
-    name: 'Ice Knife',
-    level: metadataIceKnife.level,
-    shouldCast: shouldCastIceKnife,
-    execute: executeIceKnife,
-  },
-  'Inflict Wounds': {
-    name: 'Inflict Wounds',
-    level: metadataInflictWounds.level,
-    shouldCast: shouldCastInflictWounds,
-    execute: executeInflictWounds,
   },
   "Jim's Magic Missile": {
     name: "Jim's Magic Missile",
@@ -2560,12 +2494,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     shouldCast: shouldCastFeignDeath,
     execute: executeFeignDeath,
   },
-  'Fireball': {
-    name: 'Fireball',
-    level: metadataFireball.level,
-    shouldCast: shouldCastFireball,
-    execute: executeFireball,
-  },
   'Flame Arrows': {
     name: 'Flame Arrows',
     level: metadataFlameArrows.level,
@@ -2643,12 +2571,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     level: metadataLightningArrow.level,
     shouldCast: shouldCastLightningArrow,
     execute: executeLightningArrow,
-  },
-  'Lightning Bolt': {
-    name: 'Lightning Bolt',
-    level: metadataLightningBolt.level,
-    shouldCast: shouldCastLightningBolt,
-    execute: executeLightningBolt,
   },
   'Linked Glyphs': {
     name: 'Linked Glyphs',
@@ -3075,12 +2997,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     level: metadataCommuneWithNature.level,
     shouldCast: shouldCastCommuneWithNature,
     execute: executeCommuneWithNature,
-  },
-  'Cone of Cold': {
-    name: 'Cone of Cold',
-    level: metadataConeOfCold.level,
-    shouldCast: shouldCastConeOfCold,
-    execute: executeConeOfCold,
   },
   'Contagion': {
     name: 'Contagion',
