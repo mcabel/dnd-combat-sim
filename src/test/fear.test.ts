@@ -1,5 +1,5 @@
-// fear.test.ts — Fear (Session 25 / Batch 2)
-// PHB p.239: L3, 30-ft cone, WIS save or frightened, NO concentration (v1 per plan).
+// fear.test.ts — Fear (Session 27 — CANON CONCENTRATION FIX)
+// PHB p.239: L3, 30-ft cone, WIS save or frightened, concentration (canon — Session 27 fix; was non-conc per plan in Batch 2).
 import { shouldCast, execute, metadata } from '../spells/fear';
 import { Combatant, Action, PlayerResources, Condition } from '../types/core';
 
@@ -19,7 +19,7 @@ const weak = (id: string, pos: any, o: Partial<Combatant> = {}) => makeCombatant
 const strong = (id: string, pos: any, o: Partial<Combatant> = {}) => makeCombatant(id, { name: id, faction: 'enemy', wis: 30, pos, ...o });
 
 console.log('\n=== 1. Metadata ===\n');
-eq('Name', metadata.name, 'Fear'); eq('Level 3', metadata.level, 3); eq('Range 30 (cone)', metadata.rangeFt, 30); eq('Save wis', metadata.saveAbility, 'wis'); eq('NOT concentration (v1)', metadata.concentration, false);
+eq('Name', metadata.name, 'Fear'); eq('Level 3', metadata.level, 3); eq('Range 30 (cone)', metadata.rangeFt, 30); eq('Save wis', metadata.saveAbility, 'wis'); eq('concentration (canon)', metadata.concentration, true); assert('canon conc flag set', metadata.fearCanonConcentrationV1 === true);
 console.log('\n=== 2. shouldCast gates ===\n');
 { const c = makeCombatant('wiz', { actions: [], resources: withSlots3(1) }); eq('null: no action', shouldCast(c, makeBF([c, weak('e1', { x: 1, y: 0 })])), null); }
 { const c = makeCombatant('wiz', { actions: [FEAR_ACTION], resources: withSlots3(0) }); eq('null: no slots', shouldCast(c, makeBF([c, weak('e1', { x: 1, y: 0 })])), null); }
@@ -27,11 +27,13 @@ console.log('\n=== 2. shouldCast gates ===\n');
 { const c = makeCaster(); const r = shouldCast(c, makeBF([c, weak('e1', { x: 1, y: 0 })])); assert('non-null', r !== null); if (r) { assert('is array', Array.isArray(r)); eq('catches e1', r[0].id, 'e1'); } }
 console.log('\n=== 3. shouldCast cone shape ===\n');
 { const c = makeCaster(); const aim = weak('aim', { x: 1, y: 0 }); const inCone = weak('inCone', { x: 3, y: 0 }); const outCone = weak('outCone', { x: 0, y: 3 }); const r = shouldCast(c, makeBF([c, aim, inCone, outCone])); if (r) { const ids = r.map(x => x.id).sort(); eq('catches aim+inCone, excludes outCone', ids.join(','), 'aim,inCone'); } }
-console.log('\n=== 4. execute — guaranteed fail (frightened) ===\n');
-{ const c = makeCaster(); const e = weak('e1', { x: 1, y: 0 }); const bf = makeBF([c, e]); const st = makeState(bf); const t = shouldCast(c, bf); if (t) { execute(c, t, st); eq('slot consumed', (c.resources as any).spellSlots[3].remaining, 0); assert('NOT concentrating (v1)', !(c.concentration?.active)); assert('frightened applied', e.conditions.has('frightened')); } }
+console.log('\n=== 4. execute — guaranteed fail (frightened, concentration) ===\n');
+{ const c = makeCaster(); const e = weak('e1', { x: 1, y: 0 }); const bf = makeBF([c, e]); const st = makeState(bf); const t = shouldCast(c, bf); if (t) { execute(c, t, st); eq('slot consumed', (c.resources as any).spellSlots[3].remaining, 0); assert('IS concentrating (canon)', !!(c.concentration?.active)); eq('conc spell name', (c.concentration as any).spellName, 'Fear'); assert('frightened applied', e.conditions.has('frightened')); assert('frightened is conc-sourced', e.activeEffects.some((x: any) => x.casterId === c.id && x.spellName === 'Fear' && x.sourceIsConcentration === true)); } }
 console.log('\n=== 5. execute — guaranteed success ===\n');
-{ const c = makeCaster({ x: 0, y: 0, z: 0 }, FEAR_ACTION_LOW); const e = strong('e1', { x: 1, y: 0 }); const bf = makeBF([c, e]); const st = makeState(bf); const t = shouldCast(c, bf); if (t) { execute(c, t, st); assert('NOT frightened', !e.conditions.has('frightened')); const ss = st.log.events.filter((x: any) => x.type === 'save_success'); assert('save_success log', ss.length === 1); } }
-console.log('\n=== 6. Cleanup no-op ===\n');
+{ const c = makeCaster({ x: 0, y: 0, z: 0 }, FEAR_ACTION_LOW); const e = strong('e1', { x: 1, y: 0 }); const bf = makeBF([c, e]); const st = makeState(bf); const t = shouldCast(c, bf); if (t) { execute(c, t, st); assert('NOT frightened', !e.conditions.has('frightened')); assert('still concentrating (conc started regardless of save)', !!(c.concentration?.active)); const ss = st.log.events.filter((x: any) => x.type === 'save_success'); assert('save_success log', ss.length === 1); } }
+console.log('\n=== 6. shouldCast null when already concentrating ===\n');
+{ const c = makeCaster(); c.concentration = { active: true, spellName: 'Bless', startedAtRound: 1 } as any; const r = shouldCast(c, makeBF([c, weak('e1', { x: 1, y: 0 })])); eq('null: already concentrating', r, null); }
+console.log('\n=== 7. Cleanup no-op ===\n');
 { let ok = true; try { (require('../spells/fear') as any).cleanup(makeCaster()); } catch { ok = false; } assert('no throw', ok); }
 console.log(`\n=== Results: ${passed} passed, ${failed} failed ===\n`);
 if (failed > 0) process.exit(1);

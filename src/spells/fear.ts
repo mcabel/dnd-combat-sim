@@ -1,7 +1,7 @@
 // ============================================================
 // Fear — PHB p.239
 //
-// 3rd-level illusion, action, range 30 ft (cone), NO concentration (v1).
+// 3rd-level illusion, action, range 30 ft (cone), concentration (1 min).
 // Components: V, S, M (a white feather or the heart of a hen).
 //
 // Effect: You project a phantasmal image of a creature's worst fears.
@@ -15,31 +15,33 @@
 //   - Drop-weapon rider (PHB p.239: "drop whatever it is holding"):
 //     simplified away. v1 applies frightened only. Documented via
 //     `fearDropWeaponV1Simplified`.
-//   - Concentration: canon 1 min concentration (PHB p.239). PER PLAN,
-//     v1 models Fear as NON-concentration (mirror Sunburst — one-shot,
-//     no concentration tracking). The frightened persists for the v1
-//     combat duration (no end-of-turn expiry hook). Documented via
-//     `fearConcentrationV1SimplifiedToNone`.
-//   - End-of-turn WIS save to end frightened (PHB p.239): NOT modelled.
+//   - Concentration: canon 1 min concentration (PHB p.239). Session 27
+//     canon fix: Fear is now concentration (was non-conc per plan in
+//     Batch 2 — "mirror Sunburst"). The frightened is conc-sourced; it
+//     ends when concentration breaks (engine does NOT enforce conc checks
+//     on damage taken — TG-002). Documented via `fearCanonConcentrationV1`.
+//   - End-of-turn WIS save to end frightened (PHB p.239): NOT modelled
+//     (the frightened persists for the v1 combat or until conc breaks).
 //   - Shape: canon 30-ft cone from caster. v1 uses inConeFt aimed at the
 //     nearest living enemy within 30 ft (mirrors Spray of Cards).
 //
 // Migration note (Session 25 / Batch 2): migrated from the generic
-// forward-compat flag to a bespoke WIS-save-or-frightened cone (no conc).
-// Removed from `_generic_registry.ts`; routed via `case 'fear':` in
-// combat.ts and a planner branch in planner.ts. Mirrors Spray of Cards
-// (cone AoE) + Blindness/Deafness (no-conc condition).
+// forward-compat flag to a bespoke WIS-save-or-frightened cone.
+// Session 27 canon fix: switched from non-concentration (per plan) to
+// canon concentration (PHB p.239). Removed from `_generic_registry.ts`;
+// routed via `case 'fear':` in combat.ts and a planner branch in planner.ts.
+// Mirrors Spray of Cards (cone AoE) + Hold Person (concentration).
 //
-// Spell module pattern (cone AoE save + condition, NO concentration):
+// Spell module pattern (cone AoE save + condition, concentration):
 //   shouldCast(caster, bf) → Combatant[] | null
 //   execute(caster, targets, state) → void
-//   cleanup() — no-op (no concentration; frightened persists for combat)
+//   cleanup() — no-op (concentration break handles cleanup)
 // ============================================================
 
 import { Combatant, Battlefield } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
-import { applySpellEffect } from '../engine/spell_effects';
-import { rollSave } from '../engine/utils';
+import { applySpellEffect, removeEffectsFromCaster } from '../engine/spell_effects';
+import { startConcentration, rollSave } from '../engine/utils';
 import { inConeFt, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 
@@ -50,12 +52,12 @@ export const metadata = {
   level: 3,
   school: 'illusion',
   rangeFt: 30,                   // PHB p.239: 30-ft cone
-  concentration: false,          // v1 per plan (canon: concentration)
+  concentration: true,           // canon (PHB p.239) — Session 27 fix (was false per plan)
   saveAbility: 'wis' as const,
   castingTime: 'action',
   fearDropWeaponV1Simplified: true,                        // drop-weapon rider simplified away
-  fearConcentrationV1SimplifiedToNone: true,               // canon conc → v1 none (mirror Sunburst)
-  fearEndOfTurnSaveV1Implemented: false,
+  fearCanonConcentrationV1: true,                          // Session 27: canon conc (was non-conc per plan)
+  fearEndOfTurnSaveV1Implemented: false,                   // end-of-turn WIS save NOT modelled
 } as const;
 
 const CONE_RANGE_FT = 30;
@@ -81,6 +83,7 @@ function emit(
  * nearest living enemy within 30 ft, or null when the spell should not be cast.
  */
 export function shouldCast(caster: Combatant, bf: Battlefield): Combatant[] | null {
+  if (caster.concentration?.active) return null;   // never interrupt active concentration
   if (!caster.actions.some(a => a.name === 'Fear')) return null;
   if (!hasSpellSlot(caster, 3)) return null;
 
@@ -112,8 +115,14 @@ export function execute(caster: Combatant, targets: Combatant[], state: EngineSt
 
   consumeSpellSlot(caster, 3);
 
+  // Safety: clean up any stale concentration before starting new.
+  if (caster.concentration?.active) {
+    removeEffectsFromCaster(caster.id, state.battlefield);
+  }
+  startConcentration(caster, 'Fear');
+
   emit(state, 'action', caster.id,
-    `${caster.name} casts Fear! (DC ${saveDC} WIS, frightened on fail, ${CONE_RANGE_FT}-ft cone) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} caught!`);
+    `${caster.name} casts Fear! (DC ${saveDC} WIS, frightened on fail, ${CONE_RANGE_FT}-ft cone, concentration) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} caught!`);
 
   for (const target of targets) {
     if (target.isDead || target.isUnconscious) continue;
@@ -125,14 +134,14 @@ export function execute(caster: Combatant, targets: Combatant[], state: EngineSt
       applySpellEffect(target, {
         casterId: caster.id, spellName: 'Fear',
         effectType: 'condition_apply', payload: { condition: 'frightened' },
-        sourceIsConcentration: false,   // v1 per plan (canon: concentration)
+        sourceIsConcentration: true,    // canon concentration (Session 27 fix)
       });
       emit(state, 'condition_add', caster.id,
-        `${target.name} is FRIGHTENED! (v1: drop-weapon rider simplified; canon conc → v1 none)`, target.id);
+        `${target.name} is FRIGHTENED! (v1: drop-weapon rider simplified; canon conc — ends if caster loses concentration)`, target.id);
     }
   }
 }
 
 // ---- Cleanup ------------------------------------------------
 
-export function cleanup(_c: Combatant): void { /* no-op — NOT concentration (v1); frightened persists */ }
+export function cleanup(_c: Combatant): void { /* no-op — concentration break handles cleanup (Session 27: canon conc) */ }

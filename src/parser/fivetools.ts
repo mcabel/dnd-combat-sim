@@ -468,6 +468,7 @@ export function monsterToCombatant(
     independentMount: false,
     role: 'regular',
     bonded: null,
+    creatureType: typeof raw.type === 'string' ? raw.type.toLowerCase() : '',   // MM p.6 — beast/humanoid/undead/etc. (Session 27 TG-004)
     tempHP: 0,
     resources: null,
     usedSneakAttackThisTurn: false,

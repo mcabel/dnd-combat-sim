@@ -3108,7 +3108,8 @@ function executePlannedAction(
     }
 
     case 'whirlwind': {
-      // Whirlwind — PHB p.298: 50-ft cone, CON save or restrained, conc.
+      // Whirlwind — PHB p.298: 50-ft cone, CON save or 7d8 bludgeoning + restrained, conc.
+      // Session 27 canon fix: damage now rolled (was dropped per plan).
       // shouldCast → Combatant[].
       const whTargets = shouldCastWhirlwind(actor, bf);
       if (whTargets) executeWhirlwind(actor, whTargets, state);
@@ -3235,7 +3236,7 @@ function executePlannedAction(
     }
 
     case 'bestowCurse': {
-      // Bestow Curse — PHB p.214: 60 ft (v1), WIS save or incapacitated, conc.
+      // Bestow Curse — PHB p.214: Touch (5 ft) (Session 27 canon fix; was 60 ft per plan), WIS save or incapacitated, conc.
       const bcTargetId = plan.targetId;
       const bcTarget = bcTargetId ? bf.combatants.get(bcTargetId) ?? null : null;
       const bcLive = bcTarget && !bcTarget.isDead && !bcTarget.isUnconscious ? bcTarget : shouldCastBestowCurse(actor, bf);
@@ -3270,7 +3271,7 @@ function executePlannedAction(
     }
 
     case 'fear': {
-      // Fear — PHB p.239: 30-ft cone, WIS save or frightened, NO conc (v1).
+      // Fear — PHB p.239: 30-ft cone, WIS save or frightened, conc (Session 27 canon fix; was non-conc per plan).
       const fearTargets = shouldCastFear(actor, bf);
       if (fearTargets) executeFear(actor, fearTargets, state);
       break;
@@ -3307,7 +3308,8 @@ function executePlannedAction(
     }
 
     case 'pyrotechnics': {
-      // Pyrotechnics — XGE p.162: 60 ft, 10-ft radius AoE, CON save or blinded, NO conc.
+      // Pyrotechnics — XGE p.162: 60 ft, 10-ft radius AoE. FIREWORKS: CON save or blinded (default). SMOKE: no save, all blinded.
+      // Session 27: 2-mode picker (executeSmoke available; planner uses fireworks). NO conc.
       const pyroTargets = shouldCastPyrotechnics(actor, bf);
       if (pyroTargets) executePyrotechnics(actor, pyroTargets, state);
       break;
@@ -3332,7 +3334,7 @@ function executePlannedAction(
     }
 
     case 'animalFriendship': {
-      // Animal Friendship — PHB p.212: 30 ft, WIS save or charmed, NO conc.
+      // Animal Friendship — PHB p.212: 30 ft, WIS save or charmed, NO conc (Session 27 TG-004: beast-only + INT<4 NOW enforced).
       const afTargetId = plan.targetId;
       const afTarget = afTargetId ? bf.combatants.get(afTargetId) ?? null : null;
       const afLive = afTarget && !afTarget.isDead && !afTarget.isUnconscious ? afTarget : shouldCastAnimalFriendship(actor, bf);
@@ -3350,7 +3352,7 @@ function executePlannedAction(
     }
 
     case 'charmPerson': {
-      // Charm Person — PHB p.221: 30 ft, WIS save or charmed, NO conc.
+      // Charm Person — PHB p.221: 30 ft, WIS save or charmed, NO conc (Session 27 TG-004: humanoid-only NOW enforced).
       const cpTargetId = plan.targetId;
       const cpTarget = cpTargetId ? bf.combatants.get(cpTargetId) ?? null : null;
       const cpLive = cpTarget && !cpTarget.isDead && !cpTarget.isUnconscious ? cpTarget : shouldCastCharmPerson(actor, bf);

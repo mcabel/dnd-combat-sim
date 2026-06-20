@@ -1,5 +1,5 @@
-// bestow_curse.test.ts — Bestow Curse (Session 25 / Batch 2)
-// PHB p.214: L3, 60 ft (v1), WIS save or incapacitated, concentration.
+// bestow_curse.test.ts — Bestow Curse (Session 27 — CANON TOUCH RANGE FIX)
+// PHB p.214: L3, Touch (5 ft), WIS save or incapacitated, concentration (canon Touch — Session 27 fix; was 60 ft per plan in Batch 2).
 import { shouldCast, execute, metadata } from '../spells/bestow_curse';
 import { Combatant, Action, PlayerResources, Condition } from '../types/core';
 
@@ -19,20 +19,21 @@ const weak = (id: string, pos: any, o: Partial<Combatant> = {}) => makeCombatant
 const strong = (id: string, pos: any, o: Partial<Combatant> = {}) => makeCombatant(id, { name: id, faction: 'enemy', wis: 30, pos, ...o });
 
 console.log('\n=== 1. Metadata ===\n');
-eq('Name', metadata.name, 'Bestow Curse'); eq('Level 3', metadata.level, 3); eq('Range 60 (v1)', metadata.rangeFt, 60); eq('Save wis', metadata.saveAbility, 'wis'); eq('Concentration', metadata.concentration, true);
+eq('Name', metadata.name, 'Bestow Curse'); eq('Level 3', metadata.level, 3); eq('Range 5 (canon Touch)', metadata.rangeFt, 5); eq('Save wis', metadata.saveAbility, 'wis'); eq('Concentration', metadata.concentration, true); assert('canon Touch range flag', metadata.bestowCurseCanonTouchRangeV1 === true);
 console.log('\n=== 2. shouldCast gates ===\n');
 { const c = makeCombatant('wiz', { actions: [], resources: withSlots3(1) }); eq('null: no action', shouldCast(c, makeBF([c, weak('e1', { x: 1, y: 0 })])), null); }
 { const c = makeCombatant('wiz', { actions: [BC_ACTION], resources: withSlots3(0) }); eq('null: no slots', shouldCast(c, makeBF([c, weak('e1', { x: 1, y: 0 })])), null); }
 { const c = makeCaster(); c.concentration = { active: true, spellName: 'Bless', startedAtRound: 1 } as any; eq('null: already concentrating', shouldCast(c, makeBF([c, weak('e1', { x: 1, y: 0 })])), null); }
-{ const c = makeCaster(); eq('null: out of range', shouldCast(c, makeBF([c, weak('e1', { x: 50, y: 0 })])), null); }
-{ const c = makeCaster(); const r = shouldCast(c, makeBF([c, weak('e1', { x: 1, y: 0 })])); assert('non-null', r !== null); if (r) eq('enemy id', (r as Combatant).id, 'e1'); }
-console.log('\n=== 3. shouldCast target selection ===\n');
-{ const c = makeCaster(); const lo = weak('lo', { x: 1, y: 0 }, { maxHP: 30 }); const hi = weak('hi', { x: 5, y: 0 }, { maxHP: 300 }); const r = shouldCast(c, makeBF([c, lo, hi])); if (r) eq('picks highest-threat', (r as Combatant).id, 'hi'); }
-{ const c = makeCaster(); const inc = weak('inc', { x: 1, y: 0 }, { maxHP: 300 }); inc.conditions.add('incapacitated' as Condition); const fr = weak('fr', { x: 5, y: 0 }, { maxHP: 50 }); const r = shouldCast(c, makeBF([c, inc, fr])); if (r) eq('skips incapacitated', (r as Combatant).id, 'fr'); }
-console.log('\n=== 4. execute — guaranteed fail (incapacitated) ===\n');
-{ const c = makeCaster(); const e = weak('e1', { x: 5, y: 0 }); const bf = makeBF([c, e]); const st = makeState(bf); const t = shouldCast(c, bf); if (t) { execute(c, t as Combatant, st); eq('slot consumed', (c.resources as any).spellSlots[3].remaining, 0); assert('concentration started', c.concentration?.active === true); assert('incapacitated applied', e.conditions.has('incapacitated')); } }
+{ const c = makeCaster(); eq('null: out of Touch range (10ft)', shouldCast(c, makeBF([c, weak('e1', { x: 2, y: 0 })])), null); }
+{ const c = makeCaster(); eq('null: way out of range (50ft)', shouldCast(c, makeBF([c, weak('e1', { x: 50, y: 0 })])), null); }
+{ const c = makeCaster(); const r = shouldCast(c, makeBF([c, weak('e1', { x: 1, y: 0 })])); assert('non-null (adjacent, 5ft)', r !== null); if (r) eq('enemy id', (r as Combatant).id, 'e1'); }
+console.log('\n=== 3. shouldCast target selection (both adjacent) ===\n');
+{ const c = makeCaster(); const lo = weak('lo', { x: 1, y: 0 }, { maxHP: 30 }); const hi = weak('hi', { x: 0, y: 1 }, { maxHP: 300 }); const r = shouldCast(c, makeBF([c, lo, hi])); if (r) eq('picks highest-threat (both in Touch)', (r as Combatant).id, 'hi'); }
+{ const c = makeCaster(); const inc = weak('inc', { x: 1, y: 0 }, { maxHP: 300 }); inc.conditions.add('incapacitated' as Condition); const fr = weak('fr', { x: 0, y: 1 }, { maxHP: 50 }); const r = shouldCast(c, makeBF([c, inc, fr])); if (r) eq('skips incapacitated', (r as Combatant).id, 'fr'); }
+console.log('\n=== 4. execute — guaranteed fail (incapacitated, Touch) ===\n');
+{ const c = makeCaster(); const e = weak('e1', { x: 1, y: 0 }); const bf = makeBF([c, e]); const st = makeState(bf); const t = shouldCast(c, bf); if (t) { execute(c, t as Combatant, st); eq('slot consumed', (c.resources as any).spellSlots[3].remaining, 0); assert('concentration started', c.concentration?.active === true); assert('incapacitated applied', e.conditions.has('incapacitated')); } }
 console.log('\n=== 5. execute — guaranteed success ===\n');
-{ const c = makeCaster({ x: 0, y: 0, z: 0 }, BC_ACTION_LOW); const e = strong('e1', { x: 5, y: 0 }); const bf = makeBF([c, e]); const st = makeState(bf); const t = shouldCast(c, bf); if (t) { execute(c, t as Combatant, st); assert('NOT incapacitated', !e.conditions.has('incapacitated')); const ss = st.log.events.filter((x: any) => x.type === 'save_success'); assert('save_success log', ss.length === 1); } }
+{ const c = makeCaster({ x: 0, y: 0, z: 0 }, BC_ACTION_LOW); const e = strong('e1', { x: 1, y: 0 }); const bf = makeBF([c, e]); const st = makeState(bf); const t = shouldCast(c, bf); if (t) { execute(c, t as Combatant, st); assert('NOT incapacitated', !e.conditions.has('incapacitated')); const ss = st.log.events.filter((x: any) => x.type === 'save_success'); assert('save_success log', ss.length === 1); } }
 console.log('\n=== 6. Cleanup no-op ===\n');
 { let ok = true; try { (require('../spells/bestow_curse') as any).cleanup(makeCaster()); } catch { ok = false; } assert('no throw', ok); }
 console.log(`\n=== Results: ${passed} passed, ${failed} failed ===\n`);

@@ -1,8 +1,7 @@
 // ============================================================
 // Bestow Curse — PHB p.214
 //
-// 3rd-level necromancy, action, range 60 ft (v1 per plan; canon Touch),
-// concentration (1 min).
+// 3rd-level necromancy, action, range Touch (5 ft), concentration (1 min).
 // Components: V, S.
 //
 // Effect: You touch a creature, and that creature must succeed on a
@@ -17,14 +16,16 @@
 //   - Curse options (PHB p.214: 4 choices): v1 picks ONE —
 //     `condition_apply:incapacitated` (the most disabling; a "no action"
 //     curse). Documented via `bestowCurseOptionsV1SimplifiedToIncapacitated`.
-//   - Range: canon Touch (5 ft). v1 uses 60 ft per plan ("mirror hold_person")
-//     — documented deviation. `bestowCurseRangeV1SimplifiedTo60Ft`.
+//   - Range: canon Touch (5 ft). Session 27 canon fix — NOW canon Touch
+//     (was 60 ft per plan in Batch 2 — "mirror hold_person"). Documented
+//     via `bestowCurseCanonTouchRangeV1` (replaces `...RangeV1SimplifiedTo60Ft`).
 //   - Concentration: canon 1 min concentration. v1 starts concentration;
 //     not enforced on damage (TG-002). incapacitated is conc-sourced.
 //   - Upcast duration extensions (no-conc at 4th) NOT modelled.
 //
 // Migration note (Session 25 / Batch 2): migrated from the generic
 // forward-compat flag to a bespoke WIS-save-or-incapacitated (concentration).
+// Session 27 canon fix: reverted range to canon Touch (was 60 ft per plan).
 // Removed from `_generic_registry.ts`; routed via `case 'bestowCurse':` in
 // combat.ts and a planner branch in planner.ts. Mirrors Hold Person
 // (single-target concentration save-or-condition) but with incapacitated.
@@ -48,12 +49,12 @@ export const metadata = {
   name: 'Bestow Curse',
   level: 3,
   school: 'necromancy',
-  rangeFt: 60,                   // v1 per plan (canon: Touch)
+  rangeFt: 5,                    // canon Touch (Session 27 fix; was 60 ft per plan)
   concentration: true,
   saveAbility: 'wis' as const,
   castingTime: 'action',
   bestowCurseOptionsV1SimplifiedToIncapacitated: true,    // 4 curse options → incapacitated
-  bestowCurseRangeV1SimplifiedTo60Ft: true,               // canon Touch → v1 60 ft per plan
+  bestowCurseCanonTouchRangeV1: true,                     // Session 27: canon Touch range (was 60 ft per plan)
   bestowCurseConcentrationEnforcementV1Implemented: false,
   bestowCurseUpcastV1Implemented: false,                  // duration extensions NOT modelled
 } as const;
@@ -74,8 +75,8 @@ function emit(
 // ---- Planner ------------------------------------------------
 
 /**
- * Returns the single best target for Bestow Curse (a living enemy within 60 ft,
- * not already incapacitated), or null when the spell should not be cast.
+ * Returns the single best target for Bestow Curse (a living enemy within Touch
+ * range (5 ft), not already incapacitated), or null when the spell should not be cast.
  * Target priority: highest-threat, then closest.
  */
 export function shouldCast(caster: Combatant, bf: Battlefield): Combatant | null {
@@ -89,7 +90,7 @@ export function shouldCast(caster: Combatant, bf: Battlefield): Combatant | null
     if (c.faction === caster.faction) continue;
     if (c.isDead || c.isUnconscious) continue;
     const distFt = chebyshev3D(caster.pos, c.pos) * 5;
-    if (distFt > 60) continue;
+    if (distFt > 5) continue;   // canon Touch range (Session 27 fix; was 60 ft)
     if (c.conditions.has('incapacitated')) continue;
     if (c.activeEffects.some(e => e.casterId === caster.id && e.spellName === 'Bestow Curse')) continue;
     candidates.push({ c, threat: c.maxHP, dist: distFt });

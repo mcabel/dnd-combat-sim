@@ -7,42 +7,45 @@
 // Effect: A whirlwind of air howls in a 50-foot cone from you. Each
 //         creature in that area must make a Constitution saving throw.
 //         On a failed save, a creature takes 7d8 bludgeoning damage
-//         (per canon) and is restrained by the wind. (Plan simplifies
-//         to a pure save-or-condition: NO damage, restrained on fail.)
+//         (canon — Session 27 fix; was dropped per plan in Batch 2) and
+//         is restrained by the wind. On a successful save, a creature
+//         takes half damage and is NOT restrained.
 //
 // Upcast: +1d8/slot-level above 7th (not modelled in v1).
 //
 // v1 simplifications:
 //   - Shape: canon 50-ft cone from caster. v1 uses inConeFt aimed at
 //     the nearest living enemy within 50 ft (mirrors Spray of Cards).
-//   - Damage: canon 7d8 bludgeoning. PER PLAN, v1 drops the damage and
-//     models Whirlwind as a PURE save-or-condition (restrained on fail).
-//     Documented via `whirlwindDamageV1DroppedPerPlan`.
+//   - Damage: canon 7d8 bludgeoning. Session 27 canon fix: damage is now
+//     rolled and applied (half on save). Was dropped per plan in Batch 2.
+//     Documented via `whirlwindCanonDamageV1`.
 //   - Restraint duration: canon 1 min (or until target escapes with an
 //     action + STR check). v1 has no escape-action hook — restrained
 //     persists for the entire combat (or until concentration breaks).
 //   - Concentration: canon 1 min concentration. v1 starts concentration
 //     via startConcentration(); engine does NOT enforce concentration
-//     checks on damage taken (TG-002). The restrained is
-//     sourceIsConcentration: true.
-//   - Upcast: +1d8/slot-level NOT modelled — v1 is one-shot, no damage.
+//     checks on damage taken (TG-002). The restrained + damage are
+//     sourceIsConcentration: true (restrained ends on conc break; damage
+//     is already dealt and NOT reverted).
+//   - Upcast: +1d8/slot-level NOT modelled — v1 always rolls 7d8.
 //
 // Migration note (Session 25 / Batch 2): migrated from the generic
 // forward-compat flag to a bespoke CON-save-or-restrained cone (conc).
+// Session 27 canon fix: added canon 7d8 bludgeoning damage (was dropped).
 // Removed from `_generic_registry.ts`; routed via `case 'whirlwind':`
-// in combat.ts and a planner branch in planner.ts. Mirrors Spray of
-// Cards (cone) + Hold Person (concentration).
+// in combat.ts and a planner branch in planner.ts. Mirrors Sunburst
+// (cone AoE save + damage + condition) + Hold Person (concentration).
 //
-// Spell module pattern (cone AoE save + condition, concentration):
+// Spell module pattern (cone AoE save + damage + condition, concentration):
 //   shouldCast(caster, bf) → Combatant[] | null
 //   execute(caster, targets, state) → void
 //   cleanup() — no-op (concentration break handles cleanup)
 // ============================================================
 
-import { Combatant, Battlefield } from '../types/core';
+import { Combatant, Battlefield, DamageType } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
 import { applySpellEffect, removeEffectsFromCaster } from '../engine/spell_effects';
-import { startConcentration, rollSave } from '../engine/utils';
+import { startConcentration, rollSave, rollDie, applyDamageWithTempHP } from '../engine/utils';
 import { inConeFt, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 
@@ -56,7 +59,10 @@ export const metadata = {
   concentration: true,
   saveAbility: 'con' as const,
   castingTime: 'action',
-  whirlwindDamageV1DroppedPerPlan: true,                  // plan: pure save-or-condition (no 7d8)
+  dieCount: 7,                   // PHB p.298: 7d8 bludgeoning (Session 27 canon fix)
+  dieSides: 8,
+  damageType: 'bludgeoning' as DamageType,
+  whirlwindCanonDamageV1: true,                            // Session 27: canon 7d8 damage (was dropped per plan)
   whirlwindEscapeActionV1Simplified: true,                // no STR-check escape hook
   whirlwindUpcastV1Implemented: false,                    // +1d8/slot-level NOT modelled
 } as const;
@@ -82,6 +88,15 @@ function emit(
     value,
     description: desc,
   });
+}
+
+// ---- Dice helper --------------------------------------------
+
+/** Roll `metadata.dieCount`d`metadata.dieSides` and return the total. */
+export function rollDamage(): number {
+  let total = 0;
+  for (let i = 0; i < metadata.dieCount; i++) total += rollDie(metadata.dieSides);
+  return total;
 }
 
 // ---- Planner ------------------------------------------------
@@ -162,19 +177,28 @@ export function execute(
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Whirlwind! (DC ${saveDC} CON, restrained on fail, ${CONE_RANGE_FT}-ft cone) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} caught!`,
+    `${caster.name} casts Whirlwind! (DC ${saveDC} CON, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType} + restrained on fail, ${CONE_RANGE_FT}-ft cone, concentration) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} caught!`,
   );
 
   for (const target of targets) {
     if (target.isDead || target.isUnconscious) continue;
 
     const save = rollSave(target, 'con', saveDC);
+    const fullDmg = rollDamage();
+    const dmg = save.success ? Math.floor(fullDmg / 2) : fullDmg;
+    const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);
+
     emit(
       state,
       save.success ? 'save_success' : 'save_fail',
       caster.id,
-      `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} CON save vs Whirlwind (rolled ${save.total})${save.success ? '' : ' + RESTRAINED'}`,
+      `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} CON save vs Whirlwind (rolled ${save.total}) — ${dealt} ${metadata.damageType} damage (${metadata.dieCount}d${metadata.dieSides}=${fullDmg}${save.success ? ', halved' : ''})${save.success ? '' : ' + RESTRAINED'}`,
       target.id, save.roll,
+    );
+    emit(
+      state, 'damage', caster.id,
+      `Whirlwind: ${target.name} takes ${dealt} ${metadata.damageType} damage`,
+      target.id, dealt,
     );
 
     if (!save.success && !target.conditions.has('restrained')) {

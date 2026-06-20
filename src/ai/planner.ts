@@ -3189,8 +3189,9 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
     }
   }
 
-  // --- 12BK. WHIRLWIND (CON save or restrained, L7, 50-ft cone, concentration) ---
-  // PHB p.298: 50-ft cone, CON save or restrained, concentration (no damage v1).
+  // --- 12BK. WHIRLWIND (CON save or 7d8 bludgeoning + restrained, L7, 50-ft cone, concentration) ---
+  // PHB p.298: 50-ft cone, CON save or 7d8 bludgeoning + restrained, concentration.
+  // Session 27 canon fix: damage now rolled (was dropped per plan).
   // shouldCast returns Combatant[].
   if (!plan.action && self.actions.some(a => a.name === 'Whirlwind')) {
     const whTargets = shouldCastWhirlwind(self, battlefield);
@@ -3400,8 +3401,8 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
     }
   }
 
-  // --- 12BY. BESTOW CURSE (WIS save or incapacitated, L3, concentration) ---
-  // PHB p.214: 60 ft (v1), WIS save or incapacitated, concentration (4 curse options simplified).
+  // --- 12BY. BESTOW CURSE (WIS save or incapacitated, L3, Touch range, concentration) ---
+  // PHB p.214: Touch (5 ft) (Session 27 canon fix; was 60 ft per plan), WIS save or incapacitated, concentration (4 curse options simplified).
   // shouldCast returns single Combatant.
   if (!plan.action && self.actions.some(a => a.name === 'Bestow Curse')) {
     const bcTarget = shouldCastBestowCurse(self, battlefield);
@@ -3453,8 +3454,8 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
     }
   }
 
-  // --- 12CC. FEAR (WIS save or frightened, L3, 30-ft cone, NO conc v1) ---
-  // PHB p.239: 30-ft cone, WIS save or frightened, NO concentration v1 (canon conc; drop-weapon simplified).
+  // --- 12CC. FEAR (WIS save or frightened, L3, 30-ft cone, concentration) ---
+  // PHB p.239: 30-ft cone, WIS save or frightened, concentration (Session 27 canon fix; was non-conc per plan; drop-weapon simplified).
   // shouldCast returns Combatant[].
   if (!plan.action && self.actions.some(a => a.name === 'Fear')) {
     const fearTargets = shouldCastFear(self, battlefield);
@@ -3523,8 +3524,9 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
     }
   }
 
-  // --- 12CH. PYROTECHNICS (CON save or blinded, L2, 10-ft radius, NO conc) ---
-  // XGE p.162: 60 ft, 10-ft radius AoE, CON save or blinded, NO concentration (fire-source assumed).
+  // --- 12CH. PYROTECHNICS (CON save or blinded [fireworks] / no-save all-blinded [smoke], L2, 10-ft radius, NO conc) ---
+  // XGE p.162: 60 ft, 10-ft radius AoE. FIREWORKS (default): CON save or blinded. SMOKE: no save, all blinded.
+  // Session 27: 2-mode picker (planner uses fireworks; executeSmoke available). NO concentration (fire-source assumed).
   // shouldCast returns Combatant[].
   if (!plan.action && self.actions.some(a => a.name === 'Pyrotechnics')) {
     const pyroTargets = shouldCastPyrotechnics(self, battlefield);
@@ -3570,7 +3572,7 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
   }
 
   // --- 12CK. ANIMAL FRIENDSHIP (WIS save or charmed, L1, NO conc) ---
-  // PHB p.212: 30 ft, WIS save or charmed, NO concentration (beast-only NOT enforced).
+  // PHB p.212: 30 ft, WIS save or charmed, NO concentration (Session 27 TG-004: beast-only + INT<4 NOW enforced).
   // shouldCast returns single Combatant.
   if (!plan.action && self.actions.some(a => a.name === 'Animal Friendship')) {
     const afTarget = shouldCastAnimalFriendship(self, battlefield);
@@ -3596,7 +3598,7 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
   }
 
   // --- 12CM. CHARM PERSON (WIS save or charmed, L1, NO conc) ---
-  // PHB p.221: 30 ft, WIS save or charmed, NO concentration (humanoid-only NOT enforced).
+  // PHB p.221: 30 ft, WIS save or charmed, NO concentration (Session 27 TG-004: humanoid-only NOW enforced).
   // shouldCast returns single Combatant.
   if (!plan.action && self.actions.some(a => a.name === 'Charm Person')) {
     const cpTarget = shouldCastCharmPerson(self, battlefield);

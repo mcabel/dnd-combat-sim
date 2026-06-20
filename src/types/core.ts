@@ -379,6 +379,14 @@ export interface Combatant {
   role: 'familiar' | 'mount' | 'companion' | 'regular';  // creature type/role
   bonded: string | null;       // ID of bonded caster (for familiars) or bonded companion owner
 
+  // Creature type (MM p.6) — e.g. 'beast', 'humanoid', 'undead', 'fiend'.
+  // Set from bestiary `type` (fivetools.ts) or 'humanoid' for PCs (pc.ts).
+  // Used by spells with creature-type restrictions: Animal Friendship (beast),
+  // Charm Person (humanoid), Dominate Beast (beast), Dominate Person (humanoid).
+  // Optional — undefined means "unknown" (spells that require a type will skip).
+  // Session 27 canon fix (TG-004): closes the creature-type enforcement gap.
+  creatureType?: string;
+
   // Per-turn flags (reset by engine at start of each turn)
   usedSneakAttackThisTurn: boolean;  // Rogue: once per turn only
   helpedThisTurn: boolean;     // Familiar/ally used Help action this turn; grants advantage to next attack
@@ -1366,7 +1374,7 @@ export interface PlannedAction {
     | 'powerWordStun'      // Power Word Stun — PHB p.267: 60 ft, NO save, NO attack — stunned if currentHP ≤ 150, NO concentration
     | 'dominateMonster'    // Dominate Monster — PHB p.235: 60 ft, WIS save or charmed (control simplified), concentration, any creature
     | 'powerWordPain'      // Power Word Pain — XGE p.163: 60 ft, NO save/attack — 4d8 psychic + restrained if HP ≤ 60, NO concentration (slowed→restrained, DoT one-shot)
-    | 'whirlwind'          // Whirlwind — PHB p.298: 50-ft cone, CON save or restrained, concentration (canon 7d8 damage dropped per plan; no damage v1)
+    | 'whirlwind'          // Whirlwind — PHB p.298: 50-ft cone, CON save or 7d8 bludgeoning + restrained, concentration (Session 27 canon fix: damage now rolled; was dropped per plan)
     | 'reverseGravity'     // Reverse Gravity — PHB p.277: 100 ft, 50-ft radius AoE, DEX save or restrained, concentration (fall-upward→restrained)
     | 'eyebite'            // Eyebite — PHB p.238: 60 ft, WIS save or sleeping (Asleep option), concentration, one-shot (per-turn re-target simplified)
     | 'fleshToStone'       // Flesh to Stone — PHB p.241: 60 ft, CON save or restrained, concentration (3-fail petrified simplified)
@@ -1380,21 +1388,21 @@ export interface PlannedAction {
     | 'dominateBeast'      // Dominate Beast — PHB p.235: 60 ft, WIS save or charmed (control simplified), concentration, beast
     | 'charmMonster'       // Charm Monster — PHB p.221: 30 ft, WIS save or charmed, NO concentration (1 hr), any creature
     | 'antagonize'        // Antagonize — EGtW p.150: 60 ft, WIS save 4d4 psychic (half on save) + frightened on fail, NO concentration (taunt→frightened)
-    | 'bestowCurse'       // Bestow Curse — PHB p.214: 60 ft (v1; canon Touch), WIS save or incapacitated, concentration (4 curse options simplified)
+    | 'bestowCurse'       // Bestow Curse — PHB p.214: Touch (5 ft) (Session 27 canon fix; was 60 ft per plan), WIS save or incapacitated, concentration (4 curse options simplified)
     | 'catnap'            // Catnap — XGE p.151: 30 ft, up to 3 WILLING ALLIES fall asleep (no save), NO concentration (short-rest NOT modelled)
     | 'enemiesAbound'     // Enemies Abound — XGE p.155: 120 ft, INT save or frightened, concentration (target-acquisition debuff simplified)
     | 'fastFriends'       // Fast Friends — EGtW p.151: 30 ft, WIS save or charmed, concentration (control simplified)
-    | 'fear'              // Fear — PHB p.239: 30-ft cone, WIS save or frightened, NO concentration v1 (canon conc; drop-weapon simplified)
+    | 'fear'              // Fear — PHB p.239: 30-ft cone, WIS save or frightened, concentration (Session 27 canon fix; was non-conc per plan; drop-weapon simplified)
     | 'hypnoticPattern'   // Hypnotic Pattern — PHB p.252: 120 ft, 10-ft radius AoE, WIS save or charmed+incapacitated (DUAL), concentration
     | 'inciteGreed'       // Incite Greed — EGtW p.151: 30-ft cone, WIS save or charmed, concentration
     | 'sleetStorm'        // Sleet Storm — PHB p.276: 120 ft, 20-ft radius AoE, DEX save or prone, concentration (conc-break rider simplified)
     | 'stinkingCloud'     // Stinking Cloud — PHB p.278: 90 ft, 20-ft radius AoE, CON save or poisoned+incapacitated (DUAL), concentration
-    | 'pyrotechnics'      // Pyrotechnics — XGE p.162: 60 ft, 10-ft radius AoE, CON save or blinded, NO concentration (fire-source assumed)
+    | 'pyrotechnics'      // Pyrotechnics — XGE p.162: 60 ft, 10-ft radius AoE, CON save or blinded (fireworks) OR no-save all-blinded (smoke), NO concentration (Session 27: 2-mode picker; fire-source assumed)
     | 'colorSpray'        // Color Spray — PHB p.222: 15-ft cone, 6d10 HP-pool → BLINDED (canon, no save), NO concentration (Session 26 canon fix: was unconscious in Batch 2 per plan; allies in cone ARE valid targets; temp HP does NOT count)
     | 'command'           // Command — PHB p.223: 60 ft, WIS save or incapacitated, NO concentration (commands simplified; upcast not modelled)
-    | 'animalFriendship'  // Animal Friendship — PHB p.212: 30 ft, WIS save or charmed, NO concentration (beast-only + INT<4 NOT enforced)
+    | 'animalFriendship'  // Animal Friendship — PHB p.212: 30 ft, WIS save or charmed, NO concentration (Session 27 TG-004: beast-only + INT<4 NOW enforced)
     | 'causeFear'         // Cause Fear — XGE p.151: 60 ft, WIS save or frightened, NO concentration
-    | 'charmPerson'       // Charm Person — PHB p.221: 30 ft, WIS save or charmed, NO concentration (humanoid-only NOT enforced)
+    | 'charmPerson'       // Charm Person — PHB p.221: 30 ft, WIS save or charmed, NO concentration (Session 27 TG-004: humanoid-only NOW enforced)
     | 'compelledDuel'     // Compelled Duel — PHB p.224: 30 ft, WIS save or frightened (taunt), concentration (movement-restriction simplified)
     | 'grease'            // Grease — PHB p.245: 60 ft, 10-ft radius AoE, DEX save or prone, NO concentration (persistent-terrain simplified)
     // ── Session 19 — bulk-implementation generic dispatch (262 new spells L2-9) ──

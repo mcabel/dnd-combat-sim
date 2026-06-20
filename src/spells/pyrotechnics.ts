@@ -5,10 +5,12 @@
 // Components: V, S.
 //
 // Effect: Choose an existing flame you can see within range. The flame
-//         blossoms with a deafening boom... OR thick black smoke...
-//         Each creature in a 10-foot-radius sphere centered on the flame
-//         must make a Constitution saving throw. On a failed save, a
-//         creature is blinded until the spell ends.
+//         either blossoms with a deafening boom OR thick black smoke
+//         billows forth.
+//   - Fireworks mode: Each creature in a 10-ft-radius sphere centered on
+//     the flame makes a CON save or is blinded for the duration.
+//   - Smoke mode: A 10-ft-radius sphere of thick smoke heavily obscures
+//     the area for the duration (no save — terrain).
 //
 // Upcast: none (2nd-level spell — no upcast).
 //
@@ -20,18 +22,25 @@
 //   - Shape: canon 10-ft-radius sphere. v1 uses chebyshev (square approx).
 //   - Blinded duration: canon 1 min. v1 has no duration tracker — blinded
 //     persists for the v1 combat. NOT concentration (sourceIsConc: false).
-//   - Two-mode choice (boom light vs smoke): v1 always picks the blinded
-//     mode (more combat-relevant).
+//   - Smoke mode (Session 27 canon fix): canon creates a heavily obscured
+//     sphere (terrain). v1 has no persistent-terrain/vision subsystem, so
+//     smoke mode applies `blinded` to ALL creatures in the sphere (no save)
+//     for the combat — PHB p.183: a creature in a heavily obscured area is
+//     "effectively blinded". The smoke mode is exposed via `executeSmoke()`;
+//     the v1 planner defaults to fireworks (more universally useful). Both
+//     modes are tested. Documented via `pyrotechnicsSmokeModeV1Implemented`.
 //
 // Migration note (Session 25 / Batch 2): migrated from the generic
 // forward-compat flag to a bespoke CON-save-or-blinded AoE (no conc).
+// Session 27 canon fix: added the 2nd (smoke) mode per XGE p.162.
 // Removed from `_generic_registry.ts`; routed via `case 'pyrotechnics':`
 // in combat.ts and a planner branch in planner.ts. Mirrors Sunburst
 // (radius AoE save + condition) but blinded + no damage + no conc.
 //
 // Spell module pattern (radius AoE save + condition, NO concentration):
-//   shouldCast(caster, bf) → Combatant[] | null
-//   execute(caster, targets, state) → void
+//   shouldCast(caster, bf) → Combatant[] | null   (shared by both modes)
+//   execute(caster, targets, state) → void          (FIREWORKS mode — default)
+//   executeSmoke(caster, targets, state) → void     (SMOKE mode — no save, all blinded)
 //   cleanup() — no-op (no concentration; blinded persists for combat)
 // ============================================================
 
@@ -54,8 +63,11 @@ export const metadata = {
   saveAbility: 'con' as const,
   castingTime: 'action',
   pyrotechnicsFireSourceV1Simplified: true,                 // fire-source assumed available
-  pyrotechnicsModeChoiceV1Simplified: true,                 // always blinded mode
+  pyrotechnicsFireworksModeV1Default: true,                 // planner picks fireworks by default
+  pyrotechnicsSmokeModeV1Implemented: true,                 // Session 27: smoke mode available (executeSmoke)
 } as const;
+
+export type PyrotechnicsMode = 'fireworks' | 'smoke';
 
 // ---- Local log helper ---------------------------------------
 
@@ -100,13 +112,18 @@ export function shouldCast(caster: Combatant, bf: Battlefield): Combatant[] | nu
 // ---- Execution ----------------------------------------------
 
 export function execute(caster: Combatant, targets: Combatant[], state: EngineState): void {
+  executeFireworks(caster, targets, state);
+}
+
+/** FIREWORKS mode — CON save or blinded (default). */
+export function executeFireworks(caster: Combatant, targets: Combatant[], state: EngineState): void {
   const action = caster.actions.find(a => a.name === 'Pyrotechnics');
   const saveDC = action?.saveDC ?? 13;
 
   consumeSpellSlot(caster, 2);
 
   emit(state, 'action', caster.id,
-    `${caster.name} casts Pyrotechnics! (DC ${saveDC} CON, blinded on fail, ${metadata.aoeRadiusFt}-ft radius — fire-source assumed) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} caught!`);
+    `${caster.name} casts Pyrotechnics (FIREWORKS)! (DC ${saveDC} CON, blinded on fail, ${metadata.aoeRadiusFt}-ft radius — fire-source assumed) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} caught!`);
 
   for (const target of targets) {
     if (target.isDead || target.isUnconscious) continue;
@@ -122,6 +139,28 @@ export function execute(caster: Combatant, targets: Combatant[], state: EngineSt
       });
       emit(state, 'condition_add', caster.id, `${target.name} is BLINDED by the flash! (disadv on attacks, adv on attacks vs them)`, target.id);
     }
+  }
+}
+
+/** SMOKE mode — NO save, ALL creatures in sphere blinded (heavily obscured terrain). */
+export function executeSmoke(caster: Combatant, targets: Combatant[], state: EngineState): void {
+  consumeSpellSlot(caster, 2);
+
+  emit(state, 'action', caster.id,
+    `${caster.name} casts Pyrotechnics (SMOKE)! (NO save, ${metadata.aoeRadiusFt}-ft radius heavily obscured — all in sphere blinded; fire-source assumed) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} caught!`);
+
+  for (const target of targets) {
+    if (target.isDead || target.isUnconscious) continue;
+    if (target.conditions.has('blinded')) {
+      emit(state, 'condition_add', caster.id, `${target.name} is already blinded — smoke has no additional effect.`, target.id);
+      continue;
+    }
+    applySpellEffect(target, {
+      casterId: caster.id, spellName: 'Pyrotechnics',
+      effectType: 'condition_apply', payload: { condition: 'blinded' },
+      sourceIsConcentration: false,
+    });
+    emit(state, 'condition_add', caster.id, `${target.name} is BLINDED by the thick smoke! (heavily obscured — no save; disadv on attacks, adv on attacks vs them)`, target.id);
   }
 }
 

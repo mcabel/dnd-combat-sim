@@ -1,6 +1,6 @@
-// whirlwind.test.ts — Whirlwind (Session 25 / Batch 2)
-// PHB p.298: L7, 50-ft cone, CON save or restrained, concentration (no damage per plan).
-import { shouldCast, execute, metadata } from '../spells/whirlwind';
+// whirlwind.test.ts — Whirlwind (Session 27 — CANON DAMAGE FIX)
+// PHB p.298: L7, 50-ft cone, CON save or 7d8 bludgeoning + restrained, concentration (canon damage — Session 27 fix; was dropped per plan in Batch 2).
+import { shouldCast, execute, metadata, rollDamage } from '../spells/whirlwind';
 import { Combatant, Action, PlayerResources, Vec3, Condition } from '../types/core';
 
 let passed = 0, failed = 0;
@@ -46,6 +46,8 @@ console.log('\n=== 1. Metadata ===\n');
 eq('Name', metadata.name, 'Whirlwind'); eq('Level 7', metadata.level, 7);
 eq('Range 50', metadata.rangeFt, 50); eq('Save con', metadata.saveAbility, 'con');
 eq('Concentration', metadata.concentration, true);
+eq('dieCount 7', metadata.dieCount, 7); eq('dieSides 8', metadata.dieSides, 8); eq('damageType bludgeoning', metadata.damageType, 'bludgeoning');
+assert('canon damage flag set', metadata.whirlwindCanonDamageV1 === true);
 
 console.log('\n=== 2. shouldCast gates ===\n');
 { const c = makeCombatant('wiz', { actions: [], resources: withSlots7(1) }); eq('null: no action', shouldCast(c, makeBF([c, weak('e1', { x: 1, y: 0 })])), null); }
@@ -64,21 +66,24 @@ console.log('\n=== 3. shouldCast cone shape ===\n');
   if (r) { const ids = r.map(x => x.id).sort(); eq('catches aim+inCone, excludes outCone', ids.join(','), 'aim,inCone'); }
 }
 
-console.log('\n=== 4. execute — guaranteed fail (restrained) ===\n');
+console.log('\n=== 4. execute — guaranteed fail (7d8 damage + restrained) ===\n');
 {
   const c = makeCaster(); const e = weak('e1', { x: 1, y: 0 }, { maxHP: 1000, currentHP: 1000 });
   const bf = makeBF([c, e]); const st = makeState(bf); const t = shouldCast(c, bf);
-  if (t) { execute(c, t, st); eq('slot consumed', (c.resources as any).spellSlots[7].remaining, 0); assert('concentration started', c.concentration?.active === true); assert('restrained', e.conditions.has('restrained')); assert('no damage (HP unchanged)', e.currentHP === 1000); }
+  if (t) { execute(c, t, st); eq('slot consumed', (c.resources as any).spellSlots[7].remaining, 0); assert('concentration started', c.concentration?.active === true); assert('restrained', e.conditions.has('restrained')); assert('damage dealt (HP reduced)', e.currentHP < 1000); assert('damage in 7d8 range [7..56]', e.currentHP >= 1000 - 56 && e.currentHP <= 1000 - 7); const dmg = st.log.events.filter(x => x.type === 'damage'); assert('damage log emitted', dmg.length === 1); assert('restrained is conc-sourced', e.activeEffects.some(x => x.casterId === c.id && x.spellName === 'Whirlwind' && x.sourceIsConcentration === true)); }
 }
 
-console.log('\n=== 5. execute — guaranteed success ===\n');
+console.log('\n=== 5. execute — guaranteed success (half damage, NOT restrained) ===\n');
 {
-  const c = makeCaster({ x: 0, y: 0, z: 0 }, WH_ACTION_LOW); const e = strong('e1', { x: 1, y: 0 });
+  const c = makeCaster({ x: 0, y: 0, z: 0 }, WH_ACTION_LOW); const e = strong('e1', { x: 1, y: 0 }, { maxHP: 1000, currentHP: 1000 });
   const bf = makeBF([c, e]); const st = makeState(bf); const t = shouldCast(c, bf);
-  if (t) { execute(c, t, st); assert('NOT restrained', !e.conditions.has('restrained')); const ss = st.log.events.filter(x => x.type === 'save_success'); assert('save_success log', ss.length === 1); }
+  if (t) { execute(c, t, st); assert('NOT restrained', !e.conditions.has('restrained')); assert('half damage dealt (HP reduced)', e.currentHP < 1000); assert('half-damage in [3..28] range', e.currentHP >= 1000 - 28 && e.currentHP <= 1000 - 3); const ss = st.log.events.filter(x => x.type === 'save_success'); assert('save_success log', ss.length === 1); }
 }
 
-console.log('\n=== 6. Cleanup no-op ===\n');
+console.log('\n=== 6. rollDamage range ===\n');
+{ let min = Infinity, max = -Infinity; for (let i = 0; i < 500; i++) { const r = rollDamage(); if (r < min) min = r; if (r > max) max = r; } assert('rollDamage min >= 7', min >= 7); assert('rollDamage max <= 56', max <= 56); assert('rollDamage min < max (variance)', min < max); }
+
+console.log('\n=== 7. Cleanup no-op ===\n');
 { let ok = true; try { (require('../spells/whirlwind') as any).cleanup(makeCaster()); } catch { ok = false; } assert('no throw', ok); }
 
 console.log(`\n=== Results: ${passed} passed, ${failed} failed ===\n`);

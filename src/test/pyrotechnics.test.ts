@@ -1,6 +1,6 @@
-// pyrotechnics.test.ts — Pyrotechnics (Session 25 / Batch 2)
-// XGE p.162: L2, 60 ft, 10-ft radius AoE, CON save or blinded, NO concentration.
-import { shouldCast, execute, metadata } from '../spells/pyrotechnics';
+// pyrotechnics.test.ts — Pyrotechnics (Session 27 — 2-MODE PICKER FIX)
+// XGE p.162: L2, 60 ft, 10-ft radius AoE. FIREWORKS: CON save or blinded. SMOKE: no save, all blinded. NO concentration.
+import { shouldCast, execute, executeFireworks, executeSmoke, metadata } from '../spells/pyrotechnics';
 import { Combatant, Action, PlayerResources, Condition } from '../types/core';
 
 let passed = 0, failed = 0;
@@ -21,6 +21,7 @@ const strong = (id: string, pos: any, o: Partial<Combatant> = {}) => makeCombata
 console.log('\n=== 1. Metadata ===\n');
 eq('Name', metadata.name, 'Pyrotechnics'); eq('Level 2', metadata.level, 2); eq('Range 60', metadata.rangeFt, 60);
 eq('AoE 10', metadata.aoeRadiusFt, 10); eq('Save con', metadata.saveAbility, 'con'); eq('NOT concentration', metadata.concentration, false);
+assert('fireworks default flag', metadata.pyrotechnicsFireworksModeV1Default === true); assert('smoke mode implemented flag', metadata.pyrotechnicsSmokeModeV1Implemented === true);
 console.log('\n=== 2. shouldCast gates ===\n');
 { const c = makeCombatant('wiz', { actions: [], resources: withSlots2(1) }); eq('null: no action', shouldCast(c, makeBF([c, weak('e1', { x: 1, y: 0 })])), null); }
 { const c = makeCombatant('wiz', { actions: [PYRO_ACTION], resources: withSlots2(0) }); eq('null: no slots', shouldCast(c, makeBF([c, weak('e1', { x: 1, y: 0 })])), null); }
@@ -28,11 +29,17 @@ console.log('\n=== 2. shouldCast gates ===\n');
 { const c = makeCaster(); const r = shouldCast(c, makeBF([c, weak('e1', { x: 1, y: 0 })])); assert('non-null', r !== null); if (r) { assert('is array', Array.isArray(r)); eq('catches e1', r[0].id, 'e1'); } }
 console.log('\n=== 3. shouldCast AoE shape (10-ft radius) ===\n');
 { const c = makeCaster(); const center = weak('center', { x: 5, y: 0 }, { maxHP: 300 }); const near = weak('near', { x: 6, y: 0 }, { maxHP: 50 }); const far = weak('far', { x: 9, y: 0 }, { maxHP: 200 }); const r = shouldCast(c, makeBF([c, center, near, far])); if (r) { const ids = r.map(x => x.id).sort(); eq('catches center+near (≤10ft), excludes far (20ft)', ids.join(','), 'center,near'); } }
-console.log('\n=== 4. execute — guaranteed fail (blinded) ===\n');
-{ const c = makeCaster(); const e = weak('e1', { x: 5, y: 0 }); const bf = makeBF([c, e]); const st = makeState(bf); const t = shouldCast(c, bf); if (t) { execute(c, t, st); eq('slot consumed', (c.resources as any).spellSlots[2].remaining, 0); assert('NOT concentrating', !(c.concentration?.active)); assert('blinded applied', e.conditions.has('blinded')); } }
-console.log('\n=== 5. execute — guaranteed success ===\n');
+console.log('\n=== 4. execute (FIREWORKS default) — guaranteed fail (blinded) ===\n');
+{ const c = makeCaster(); const e = weak('e1', { x: 5, y: 0 }); const bf = makeBF([c, e]); const st = makeState(bf); const t = shouldCast(c, bf); if (t) { execute(c, t, st); eq('slot consumed', (c.resources as any).spellSlots[2].remaining, 0); assert('NOT concentrating', !(c.concentration?.active)); assert('blinded applied', e.conditions.has('blinded')); assert('save_fail log present', st.log.events.some((x: any) => x.type === 'save_fail')); } }
+console.log('\n=== 5. execute (FIREWORKS) — guaranteed success ===\n');
 { const c = makeCaster({ x: 0, y: 0, z: 0 }, PYRO_ACTION_LOW); const e = strong('e1', { x: 5, y: 0 }); const bf = makeBF([c, e]); const st = makeState(bf); const t = shouldCast(c, bf); if (t) { execute(c, t, st); assert('NOT blinded', !e.conditions.has('blinded')); const ss = st.log.events.filter((x: any) => x.type === 'save_success'); assert('save_success log', ss.length === 1); } }
-console.log('\n=== 6. Cleanup no-op ===\n');
+console.log('\n=== 6. executeSmoke (SMOKE) — NO save, ALL blinded ===\n');
+{ const c = makeCaster(); const e1 = weak('e1', { x: 5, y: 0 }); const e2 = strong('e2', { x: 6, y: 0 }); const bf = makeBF([c, e1, e2]); const st = makeState(bf); const t = shouldCast(c, bf); if (t) { executeSmoke(c, t, st); eq('slot consumed', (c.resources as any).spellSlots[2].remaining, 0); assert('NO save events (smoke has no save)', !st.log.events.some((x: any) => x.type === 'save_fail' || x.type === 'save_success')); assert('weak enemy blinded (no save)', e1.conditions.has('blinded')); assert('strong enemy ALSO blinded (no save — smoke ignores CON)', e2.conditions.has('blinded')); } }
+console.log('\n=== 7. executeSmoke — already-blinded creature skipped ===\n');
+{ const c = makeCaster(); const e = weak('e1', { x: 5, y: 0 }); e.conditions.add('blinded'); const bf = makeBF([c, e]); const st = makeState(bf); const t = shouldCast(c, bf); if (t) { executeSmoke(c, t, st); assert('still blinded', e.conditions.has('blinded')); assert('already-blinded log present', st.log.events.some((x: any) => x.description.includes('already blinded'))); } }
+console.log('\n=== 8. executeFireworks explicit ===\n');
+{ const c = makeCaster(); const e = weak('e1', { x: 5, y: 0 }); const bf = makeBF([c, e]); const st = makeState(bf); const t = shouldCast(c, bf); if (t) { executeFireworks(c, t, st); assert('fireworks blinded (save fail)', e.conditions.has('blinded')); } }
+console.log('\n=== 9. Cleanup no-op ===\n');
 { let ok = true; try { (require('../spells/pyrotechnics') as any).cleanup(makeCaster()); } catch { ok = false; } assert('no throw', ok); }
 console.log(`\n=== Results: ${passed} passed, ${failed} failed ===\n`);
 if (failed > 0) process.exit(1);
