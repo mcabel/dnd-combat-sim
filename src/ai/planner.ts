@@ -3537,9 +3537,14 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
     }
   }
 
-  // --- 12CI. COLOR SPRAY (6d10 HP-pool → unconscious, L1, 15-ft cone, NO conc) ---
-  // PHB p.222: 15-ft cone, 6d10 HP-pool → unconscious (no save), NO concentration.
-  // shouldCast returns Combatant[] (enemies in cone; execute rolls budget + sorts).
+  // --- 12CI. COLOR SPRAY (6d10 HP-pool → BLINDED, L1, 15-ft cone, NO conc) ---
+  // PHB p.222: 15-ft cone, 6d10 HP-pool → BLINDED (canon, no save), NO concentration.
+  // Session 26 canon fix: applies BLINDED (was unconscious in Batch 2 per the plan).
+  // Allies in the cone ARE valid HP-pool targets per canon. Already-blinded /
+  // unconscious / 0-HP creatures are skipped (immune — do NOT reduce the pool).
+  // TEMP HP does NOT count toward pool subtraction (only current HP).
+  // shouldCast returns Combatant[] (all valid creatures in cone; execute rolls
+  // budget + sorts).
   if (!plan.action && self.actions.some(a => a.name === 'Color Spray')) {
     const csTargets = shouldCastColorSpray(self, battlefield);
     if (csTargets) {

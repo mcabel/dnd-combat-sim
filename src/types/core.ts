@@ -1390,7 +1390,7 @@ export interface PlannedAction {
     | 'sleetStorm'        // Sleet Storm — PHB p.276: 120 ft, 20-ft radius AoE, DEX save or prone, concentration (conc-break rider simplified)
     | 'stinkingCloud'     // Stinking Cloud — PHB p.278: 90 ft, 20-ft radius AoE, CON save or poisoned+incapacitated (DUAL), concentration
     | 'pyrotechnics'      // Pyrotechnics — XGE p.162: 60 ft, 10-ft radius AoE, CON save or blinded, NO concentration (fire-source assumed)
-    | 'colorSpray'        // Color Spray — PHB p.222: 15-ft cone, 6d10 HP-pool → unconscious (no save), NO concentration (blinded→unconscious per plan; NEW HP-pool pattern)
+    | 'colorSpray'        // Color Spray — PHB p.222: 15-ft cone, 6d10 HP-pool → BLINDED (canon, no save), NO concentration (Session 26 canon fix: was unconscious in Batch 2 per plan; allies in cone ARE valid targets; temp HP does NOT count)
     | 'command'           // Command — PHB p.223: 60 ft, WIS save or incapacitated, NO concentration (commands simplified; upcast not modelled)
     | 'animalFriendship'  // Animal Friendship — PHB p.212: 30 ft, WIS save or charmed, NO concentration (beast-only + INT<4 NOT enforced)
     | 'causeFear'         // Cause Fear — XGE p.151: 60 ft, WIS save or frightened, NO concentration

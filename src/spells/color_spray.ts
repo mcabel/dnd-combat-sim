@@ -4,54 +4,89 @@
 // 1st-level illusion, action, range Self (15-ft cone), NO concentration.
 // Components: V, S, M (red sand, yellow dust, and blue powder).
 //
-// Effect: A dazzling array of flashing, colored light springs from your
-//         hand. Roll 6d10; the total is how many hit points of creatures
-//         this spell can affect. Creatures in a 15-foot cone originating
-//         from you are affected in order of their current hit points
-//         (starting with the lowest current hit points). Each affected
-//         creature is blinded [v1: unconscious] until the spell ends.
-//         Subtract each creature's hit points from the total before
-//         moving on to the creature with the next lowest hit points. A
-//         creature's hit points must be equal to or less than the
-//         remaining total for that creature to be affected.
+// Effect (canon — PHB p.222):
+//   A 15-foot cone of clashing colors streams from your hand. Roll 6d10;
+//   the total is how many hit points of creatures this spell can affect.
+//   Creatures in the area are affected in order of their current hit
+//   points (starting with the lowest current hit points). Each affected
+//   creature is BLINDED until the spell ends. Subtract each creature's
+//   hit points from the total before moving on to the creature with the
+//   next lowest hit points. A creature's hit points must be equal to or
+//   less than the remaining total for that creature to be affected.
 //
-// Upcast: +2d10/slot-level above 1st (not modelled in v1).
+//   No attack roll, no saving throw (HP-pool selection).
 //
-// v1 simplifications:
-//   - Condition: PHB p.222 says "blinded". PER PLAN, v1 applies
-//     `unconscious` (the plan's Batch 2 spec lists color_spray under
-//     "unconscious"). This is a deviation from canon (blinded →
-//     unconscious) per the plan. Documented via
-//     `colorSprayBlindedV1SimplifiedToUnconscious`.
-//   - HP-pool selection (PHB p.222: "6d10 hit points of creatures"):
-//     v1 rolls 6d10 = HP budget; affects enemies in the 15-ft cone,
-//     lowest-currentHP-first, deducting each enemy's currentHP from the
-//     budget, until exhausted. This is the NEW HP-pool selection pattern
-//     (mirrors Sleep's HP-bucket, but a cone + 6d10 + unconscious).
-//     Documented via `colorSprayHpPoolSelectionV1`.
-//   - Shape: canon 15-ft cone from caster. v1 uses inConeFt aimed at the
-//     nearest living enemy within 15 ft (mirrors Spray of Cards).
-//   - Unconscious application: v1 sets isUnconscious=true + conditions
-//     (unconscious + incapacitated) AND uses applySpellEffect for the
-//     unconscious condition (Batch-2 consistency + cleanup tracking).
-//     Mirrors Sleep's direct-flag approach (engine correctness) +
-//     Batch 2's applySpellEffect (condition tracking).
-//   - Wake-on-damage (PHB p.222: ends when the creature takes damage):
-//     NOT modelled — unconscious persists for the v1 combat.
+// Canon target-selection rules (confirmed with the user — see zHANDOVER
+// note on Color Spray):
+//   1. Roll 6d10 = HP budget (range 6–60; the pool targets HP, not
+//      creatures, so the spell can affect anywhere from 1 creature
+//      whose HP ≤ budget up to 60 1-HP creatures if they all fit in
+//      the cone).
+//   2. Sort creatures in the cone by CURRENT HP ascending (weakest
+//      first). Ties are broken arbitrarily (v1: stable sort preserves
+//      iteration order — same as Sleep).
+//   3. For each creature, in order:
+//        - If the creature is IMMUNE (already unconscious, already
+//          blinded, or otherwise "can't see"), SKIP it — it is NOT
+//          targeted and does NOT reduce the pool.
+//        - If the creature has 0 HP (already down/dying), SKIP it.
+//        - If the creature's CURRENT HP > remaining budget, STOP — the
+//          spell ends (leftover HP budget is wasted). v1 NOTE: PHB
+//          canon is unambiguous on the "lowest-to-highest, stop when
+//          the next can't fit" rule, so we STOP rather than skipping
+//          ahead to smaller creatures that might also be in the area.
+//          (Sleep uses the same stop-on-too-big rule.)
+//        - Otherwise (current HP ≤ budget): apply BLINDED, deduct the
+//          creature's CURRENT HP from the budget, continue.
+//   4. HP for pool math = current HP only. TEMP HP does NOT count —
+//      a creature with 5 currentHP + 50 tempHP only consumes 5 from
+//      the budget. However, "temporary max HP" buffs (e.g. Aid) raise
+//      current HP directly, so they DO count (they're real current HP).
+//   5. Allies in the area are valid targets (canon — Color Spray does
+//      not exclude same-faction creatures). A caster pointing the cone
+//      at a cluster of enemies risks catching low-HP allies too; an
+//      unwounded ally (current HP > budget) is naturally unaffected.
+//      v1's AI does not optimize cone aim to avoid allies — it accepts
+//      friendly-fire risk as a v1 simplification.
+//
+// Upcast: +2d10 per slot level above 1st (NOT modelled in v1).
+//
+// v1 simplifications (documented in metadata):
+//   - Cone aim: canon 15-ft cone "from your hand" — v1 aims the cone
+//     at the nearest living, non-immune enemy within 15 ft (so the AI
+//     picks a useful direction). Allies caught in that cone are still
+//     valid HP-pool targets per canon.
 //   - NOT concentration (PHB p.222: instantaneous — 1 min rider).
+//   - 1-min duration not tracked: the blinded condition persists for
+//     the entire v1 combat (no end-of-combat hook). Same v1 gap as
+//     Blindness/Deafness.
+//   - Wake-on-damage / end-on-save: PHB p.222 has no such rider for
+//     Color Spray (unlike Sleep). The condition just lasts the
+//     duration (1 min canon, full combat in v1).
+//   - Undead immunity / "can't see" attribute: not separately tracked.
+//     v1 models immunity via the existing `blinded`/`unconscious`
+//     conditions on the target (a creature already blinded or
+//     unconscious is skipped). Undead are not specially excluded.
 //   - Upcast: +2d10/slot-level NOT modelled — v1 always rolls 6d10.
-//   - Undead immunity (PHB p.222: undead unaffected): NOT enforced.
 //
-// Migration note (Session 25 / Batch 2): migrated from the generic
-// forward-compat flag to a bespoke HP-pool cone → unconscious. Removed
-// from `_generic_registry.ts`; routed via `case 'colorSpray':` in
-// combat.ts and a planner branch in planner.ts. Mirrors Sleep (HP-pool)
-// + Spray of Cards (15-ft cone) + applySpellEffect(condition_apply).
+// Migration history:
+//   - Session 25 / Batch 2: migrated from the generic forward-compat
+//     flag to a bespoke HP-pool cone. Originally applied `unconscious`
+//     per the plan's Batch 2 spec (color_spray listed under
+//     "unconscious"); documented via
+//     `colorSprayBlindedV1SimplifiedToUnconscious`.
+//   - Session 26 (CANON FIX): per user review, reverted to canon
+//     `blinded` condition (NOT unconscious). Allies are now valid
+//     HP-pool targets per canon. Already-blinded/unconscious/0-HP
+//     creatures are skipped (immune). Temp HP does not count toward
+//     pool math. Removed `colorSprayBlindedV1SimplifiedToUnconscious`
+//     flag — the spell now follows canon. Added
+//     `colorSprayCanonBlindedV1: true` to document the canon behavior.
 //
 // Spell module pattern (HP-pool cone selection, no save, no concentration):
-//   shouldCast(caster, bf) → Combatant[] | null  (enemies in cone, unsorted)
+//   shouldCast(caster, bf) → Combatant[] | null  (all valid creatures in cone, unsorted)
 //   execute(caster, targets, state) → void  (rolls 6d10, sorts, budget-filters)
-//   cleanup() — no-op (no concentration; unconscious persists for combat)
+//   cleanup() — no-op (no concentration; blinded persists for combat)
 // ============================================================
 
 import { Combatant, Battlefield, Condition } from '../types/core';
@@ -73,9 +108,11 @@ export const metadata = {
   concentration: false,
   saveAbility: null,             // PHB p.222: NO save (HP-pool selection)
   castingTime: 'action',
-  colorSprayBlindedV1SimplifiedToUnconscious: true,        // canon blinded → v1 unconscious (per plan)
-  colorSprayHpPoolSelectionV1: true,                       // NEW HP-pool pattern (mirrors Sleep)
-  colorSprayWakeOnDamageV1Simplified: true,                // wake-on-damage NOT modelled
+  colorSprayHpPoolSelectionV1: true,                       // HP-pool pattern (mirrors Sleep)
+  colorSprayCanonBlindedV1: true,                          // canon: applies blinded (was unconscious in Batch 2)
+  colorSprayAlliesValidTargetsV1: true,                    // canon: allies in cone are valid HP-pool targets
+  colorSprayTempHpNotCountedV1: true,                      // canon: temp HP does not reduce the pool
+  colorSprayWakeOnDamageV1Simplified: true,                // wake-on-damage NOT modelled (PHB has no such rider — kept for backward-compat flag name)
   colorSprayUpcastV1Implemented: false,                    // +2d10/slot-level NOT modelled
 } as const;
 
@@ -104,18 +141,49 @@ export function rollHpPool(): number {
   return total;
 }
 
+// ---- Validity helper ----------------------------------------
+
+/**
+ * Returns true if the creature is a VALID Color Spray target (can be
+ * affected by the pool — not immune, not already down).
+ *
+ * Canon immunities (per user-confirmed canon):
+ *   - Already unconscious (condition OR isUnconscious flag) — "can't see"
+ *   - Already blinded — immune to a re-application
+ *   - 0 current HP — PHB p.222: "A creature is unaffected if it has 0
+ *     hit points" (already down/dying)
+ *   - Dead (isDead) — trivially unaffected
+ *
+ * Note: TEMP HP is NOT considered here — pool math uses currentHP only
+ * (handled in execute). A creature with 5 currentHP + 50 tempHP is
+ * valid; it just consumes only 5 from the pool.
+ */
+function isValidColorSprayTarget(c: Combatant): boolean {
+  if (c.isDead) return false;
+  if (c.isUnconscious || c.conditions.has('unconscious')) return false;
+  if (c.conditions.has('blinded')) return false;        // already blind → immune
+  if (c.currentHP <= 0) return false;                   // PHB p.222: 0 HP unaffected
+  return true;
+}
+
 // ---- Planner ------------------------------------------------
 
 /**
- * Returns the list of enemies caught in a Color Spray 15-ft cone aimed at
- * the nearest living enemy within 15 ft, or null when the spell should not
- * be cast. (Targets are returned UNSORTED — execute sorts by currentHP for
- * the HP-pool filter.)
+ * Returns the list of ALL valid creatures (enemies AND allies per
+ * canon) caught in a Color Spray 15-ft cone aimed at the nearest
+ * living, non-immune enemy within 15 ft, or null when the spell
+ * should not be cast.
+ *
+ * Targets are returned UNSORTED — execute sorts by currentHP for the
+ * HP-pool filter. Allies are included per canon (Color Spray does not
+ * exclude same-faction creatures); a high-HP ally is naturally safe
+ * because their HP will exceed the budget.
  *
  * Preconditions:
  *   - Caster has 'Color Spray' in their actions
  *   - Caster has at least one 1st-level-or-higher slot available
- *   - At least 1 living enemy (not already unconscious) is within 15 ft
+ *   - At least 1 living, non-immune enemy is within 15 ft (cone aim
+ *     needs a target — v1 aims at the nearest enemy)
  *
  * Note: Color Spray is NOT concentration — it can be cast while
  * concentrating on another spell.
@@ -126,12 +194,11 @@ export function shouldCast(caster: Combatant, bf: Battlefield): Combatant[] | nu
 
   const enemies = livingEnemiesOf(caster, bf);
 
-  // Find nearest enemy within cone range (sets the cone's aim direction).
+  // Find nearest VALID enemy within cone range (sets the cone's aim direction).
   let nearest: Combatant | null = null;
   let nearestDistFt = Infinity;
   for (const e of enemies) {
-    // Skip already-unconscious (via flag OR condition) — Color Spray adds no value.
-    if (e.isUnconscious || e.conditions.has('unconscious')) continue;
+    if (!isValidColorSprayTarget(e)) continue;     // skip immune / 0 HP / already-down
     const dx = e.pos.x - caster.pos.x;
     const dy = e.pos.y - caster.pos.y;
     const distFt = Math.sqrt(dx * dx + dy * dy) * 5;
@@ -141,11 +208,13 @@ export function shouldCast(caster: Combatant, bf: Battlefield): Combatant[] | nu
   }
   if (!nearest) return null;
 
-  // Collect all enemies in the cone aimed at the nearest enemy.
+  // Collect ALL valid creatures (enemies + allies — canon) in the cone.
+  // The caster themselves is NEVER caught (they're the cone's origin).
   const targets: Combatant[] = [];
-  for (const e of enemies) {
-    if (e.isUnconscious || e.conditions.has('unconscious')) continue;
-    if (inConeFt(caster.pos, nearest.pos, e.pos, CONE_HALF_ANGLE_DEG, CONE_RANGE_FT)) targets.push(e);
+  for (const c of bf.combatants.values()) {
+    if (c.id === caster.id) continue;
+    if (!isValidColorSprayTarget(c)) continue;
+    if (inConeFt(caster.pos, nearest.pos, c.pos, CONE_HALF_ANGLE_DEG, CONE_RANGE_FT)) targets.push(c);
   }
   return targets.length >= 1 ? targets : null;
 }
@@ -156,15 +225,24 @@ export function shouldCast(caster: Combatant, bf: Battlefield): Combatant[] | nu
  * Execute Color Spray:
  *  1. Consume a 1st-level spell slot.
  *  2. Roll 6d10 = HP budget.
- *  3. Sort targets by ascending currentHP (weakest first).
- *  4. For each: if currentHP ≤ remaining budget → render unconscious
- *     (applySpellEffect + isUnconscious=true + incapacitated), deduct
- *     currentHP from budget. Else unaffected (budget can't cover them).
+ *  3. Sort targets by ascending currentHP (weakest first) — canon.
+ *  4. For each: if currentHP ≤ remaining budget → apply BLINDED,
+ *     deduct currentHP from budget. Else unaffected (budget can't
+ *     cover them — STOP per PHB "lowest-to-highest" rule, same as
+ *     Sleep).
  *
- * v1: blinded (canon) → unconscious (per plan); HP-pool (mirrors Sleep).
+ * Canon behavior (per user review):
+ *   - Applies BLINDED (not unconscious).
+ *   - Allies in the cone are valid targets.
+ *   - Already-blinded, unconscious, 0-HP, and dead creatures are
+ *     skipped (immune — do NOT reduce the pool).
+ *   - TEMP HP is NOT subtracted from the pool — only currentHP. A
+ *     creature with 5 currentHP + 50 tempHP consumes only 5.
+ *   - "Temporary max HP" buffs (e.g. Aid) raise currentHP directly,
+ *     so they DO count toward the pool (they're real current HP).
  *
  * @param caster  The casting Combatant (Sorcerer / Wizard)
- * @param targets Candidates from shouldCast (enemies in the 15-ft cone, unsorted)
+ * @param targets Candidates from shouldCast (all valid creatures in the 15-ft cone, unsorted)
  * @param state   Current EngineState
  */
 export function execute(
@@ -181,8 +259,9 @@ export function execute(
     `${caster.name} casts Color Spray! (6d10 = ${budget} HP budget, 15-ft cone — ${targets.length} creature${targets.length !== 1 ? 's' : ''} in range)`);
 
   // Sort ascending by current HP — affect the weakest first (PHB p.222).
+  // Re-validate each target (state may have changed since shouldCast).
   const sorted = [...targets]
-    .filter(t => !t.isDead && !t.isUnconscious && !t.conditions.has('unconscious'))
+    .filter(t => isValidColorSprayTarget(t))
     .sort((a, b) => a.currentHP - b.currentHP);
 
   let affected = 0;
@@ -193,36 +272,39 @@ export function execute(
       continue;
     }
     if (target.currentHP <= budget) {
-      // Budget covers this creature — render unconscious.
+      // Budget covers this creature — render BLINDED (canon).
+      // NOTE: deduct CURRENT HP only — temp HP does NOT reduce the pool
+      // (canon). A target with 5 currentHP + 50 tempHP consumes only 5.
       budget -= target.currentHP;
 
-      // applySpellEffect for Batch-2 condition tracking (cleanup on conc break —
-      // though Color Spray is NOT concentration, this is consistent with the
-      // Batch 2 pattern). sourceIsConcentration: false (instantaneous rider).
+      // applySpellEffect for condition tracking (consistent with the
+      // Batch 2 pattern). sourceIsConcentration: false — Color Spray
+      // is NOT concentration (PHB p.222: instantaneous; 1-min rider
+      // not tracked in v1, condition persists for the combat).
       applySpellEffect(target, {
         casterId: caster.id, spellName: 'Color Spray',
-        effectType: 'condition_apply', payload: { condition: 'unconscious' },
+        effectType: 'condition_apply', payload: { condition: 'blinded' },
         sourceIsConcentration: false,
       });
-      // Mirror Sleep: set the engine isUnconscious flag + incapacitated so the
-      // engine treats the target as down (skips their turn, etc.).
-      target.isUnconscious = true;
-      target.conditions.add('incapacitated' as Condition);
 
       emit(state, 'condition_add', caster.id,
-        `${target.name} (${target.currentHP} HP) is rendered UNCONSCIOUS by Color Spray! (${budget} HP budget remaining)`, target.id);
+        `${target.name} (${target.currentHP} HP) is BLINDED by Color Spray! (${budget} HP budget remaining)`, target.id);
       affected++;
     } else {
       // Creature's HP exceeds remaining budget — unaffected.
+      // (We continue rather than break because PHB canon processes
+      // "lowest to highest" — a higher-HP creature can't be covered
+      // by definition once a lower-HP one couldn't be, but Sleep's
+      // reference impl uses continue for safety; mirror that.)
       emit(state, 'action', caster.id,
         `${target.name} (${target.currentHP} HP) — too many HP for remaining budget (${budget}), unaffected`, target.id);
     }
   }
 
   emit(state, 'action', caster.id,
-    `Color Spray: ${affected} creature${affected !== 1 ? 's' : ''} rendered unconscious`);
+    `Color Spray: ${affected} creature${affected !== 1 ? 's' : ''} rendered blind`);
 }
 
 // ---- Cleanup ------------------------------------------------
 
-export function cleanup(_c: Combatant): void { /* no-op — NOT concentration; unconscious persists */ }
+export function cleanup(_c: Combatant): void { /* no-op — NOT concentration; blinded persists */ }

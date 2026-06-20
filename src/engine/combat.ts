@@ -3314,7 +3314,9 @@ function executePlannedAction(
     }
 
     case 'colorSpray': {
-      // Color Spray — PHB p.222: 15-ft cone, 6d10 HP-pool → unconscious (no save), NO conc.
+      // Color Spray — PHB p.222: 15-ft cone, 6d10 HP-pool → BLINDED (canon, no save), NO conc.
+      // Session 26 canon fix: applies BLINDED (was unconscious in Batch 2 per the plan).
+      // Allies in the cone ARE valid targets per canon (HP-pool may catch low-HP allies).
       const csTargets = shouldCastColorSpray(actor, bf);
       if (csTargets) executeColorSpray(actor, csTargets, state);
       break;
