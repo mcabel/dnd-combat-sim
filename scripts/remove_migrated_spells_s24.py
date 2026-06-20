@@ -24,8 +24,11 @@ import re
 import sys
 from pathlib import Path
 
-# (canonical, snake, alias) tuples for the 8 Session 24 L1 spells.
+# (canonical, snake, alias) tuples for the Session 24 migrated spells.
+# Edit this list per increment and re-run (idempotent per-spell: reports
+# "missing" for already-removed spells without touching them).
 SPELLS = [
+    # L1 (8) — increment 1
     ('Chaos Bolt',      'chaos_bolt',       'ChaosBolt'),
     ('Earth Tremor',    'earth_tremor',     'EarthTremor'),
     ('Frost Fingers',   'frost_fingers',    'FrostFingers'),
@@ -34,6 +37,9 @@ SPELLS = [
     ('Spellfire Flare', 'spellfire_flare',  'SpellfireFlare'),
     ('Wardaway',        'wardaway',         'Wardaway'),
     ('Witch Bolt',      'witch_bolt',       'WitchBolt'),
+    # L2 (2) — increment 2
+    ('Mind Spike',      'mind_spike',       'MindSpike'),
+    ('Spray of Cards',  'spray_of_cards',   'SprayOfCards'),
 ]
 
 REGISTRY = Path('src/spells/_generic_registry.ts')
@@ -88,11 +94,13 @@ def main():
     print(f"Removed {removed_entries}/{len(SPELLS)} map entries")
     print(f"Line count: {orig_len} -> {new_len} (delta {orig_len - new_len})")
     if missing:
-        print("MISSING (not found — investigate):")
+        # Idempotent: "missing" means already removed in a prior run. Report
+        # as a warning, not an error, so the script can be re-run per
+        # increment with a growing SPELLS list.
+        print("Already removed (skipped — idempotent re-run):")
         for m in missing:
             print(f"  - {m}")
-        sys.exit(1)
-    print("All 8 spells removed cleanly.")
+    print(f"Done. {removed_imports} new removal(s) this run.")
 
 if __name__ == '__main__':
     main()

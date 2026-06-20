@@ -115,6 +115,8 @@ import { shouldCast as shouldCastRayOfSickness } from '../spells/ray_of_sickness
 import { shouldCast as shouldCastSpellfireFlare } from '../spells/spellfire_flare';
 import { shouldCast as shouldCastWardaway } from '../spells/wardaway';
 import { shouldCast as shouldCastWitchBolt } from '../spells/witch_bolt';
+import { shouldCast as shouldCastMindSpike } from '../spells/mind_spike';
+import { shouldCast as shouldCastSprayOfCards } from '../spells/spray_of_cards';
 
 // ── Session 19 — bulk-implementation generic dispatch (262 new spells) ────
 import { GENERIC_SPELL_LIST } from '../spells/_generic_registry';
@@ -2326,6 +2328,51 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
       };
       plan.targetId = wbTarget.id;
       plan.bonusAction = planBonusAction(self, wbTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // ── Session 24 — L2 combat damage spells (12W–12X) ──────────────
+  // NOTE on priority: the plan specifies L9 > L8 > ... > L1 ordering.
+  // These L2 branches are appended after the L1 block (12O–12V) for
+  // numbering continuity, so a caster with BOTH a migrated L1 spell
+  // and a migrated L2 spell available would prefer the L1 spell. This
+  // is a minor AI suboptimality in a rare dual-spell scenario; reorder
+  // (place L2+ above L1) once enough L2+ spells exist to justify it.
+
+  // --- 12W. MIND SPIKE (WIS save 3d8 psychic, L2, v1 one-shot) ---
+  // XGE p.162: 60 ft, WIS save 3d8 psychic (half on save), single-target.
+  // v1 simplifies canon concentration to one-shot. Avg 13.5 psychic.
+  if (!plan.action && self.actions.some(a => a.name === 'Mind Spike')) {
+    const msTarget = shouldCastMindSpike(self, battlefield);
+    if (msTarget) {
+      plan.action = {
+        type: 'mindSpike',
+        action: null,
+        targetId: msTarget.id,
+        description: `${self.name} casts Mind Spike at ${msTarget.name}`,
+      };
+      plan.targetId = msTarget.id;
+      plan.bonusAction = planBonusAction(self, msTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12X. SPRAY OF CARDS (DEX save 2d10 slashing + blinded, L2, NO concentration) ---
+  // BMT p.50: Self (15-ft cone), DEX save 2d10 slashing + blinded on fail.
+  // AoE — shouldCast returns Combatant[] (enemies in the cone). Avg 11 slashing + blind.
+  if (!plan.action && self.actions.some(a => a.name === 'Spray of Cards')) {
+    const socTargets = shouldCastSprayOfCards(self, battlefield);
+    if (socTargets) {
+      const names = socTargets.map(t => t.name).join(', ');
+      plan.action = {
+        type: 'sprayOfCards',
+        action: null,
+        targetId: socTargets[0].id,
+        description: `${self.name} casts Spray of Cards, catching ${names}`,
+      };
+      plan.targetId = socTargets[0].id;
+      plan.bonusAction = planBonusAction(self, socTargets[0], battlefield);
       return plan;
     }
   }

@@ -330,6 +330,14 @@ import {
   shouldCast as shouldCastWitchBolt,
   execute as executeWitchBolt,
 } from '../spells/witch_bolt';
+import {
+  shouldCast as shouldCastMindSpike,
+  execute as executeMindSpike,
+} from '../spells/mind_spike';
+import {
+  shouldCast as shouldCastSprayOfCards,
+  execute as executeSprayOfCards,
+} from '../spells/spray_of_cards';
 
 // ── Session 19 — bulk-implementation generic dispatch (262 new spells) ────
 import {
@@ -2453,6 +2461,26 @@ function executePlannedAction(
         ? wbTarget
         : shouldCastWitchBolt(actor, bf);
       if (liveTarget) executeWitchBolt(actor, liveTarget, state);
+      break;
+    }
+
+    case 'mindSpike': {
+      // Mind Spike — XGE p.162: 60 ft, WIS save 3d8 psychic, single-target.
+      // v1 one-shot (canon concentration simplified). shouldCast → single Combatant.
+      const msTargetId = plan.targetId;
+      const msTarget = msTargetId ? bf.combatants.get(msTargetId) ?? null : null;
+      const liveTarget = msTarget && !msTarget.isDead && !msTarget.isUnconscious
+        ? msTarget
+        : shouldCastMindSpike(actor, bf);
+      if (liveTarget) executeMindSpike(actor, liveTarget, state);
+      break;
+    }
+
+    case 'sprayOfCards': {
+      // Spray of Cards — BMT p.50: Self (15-ft cone), DEX save 2d10
+      // slashing + blinded on fail. shouldCast → Combatant[].
+      const socTargets = shouldCastSprayOfCards(actor, bf);
+      if (socTargets) executeSprayOfCards(actor, socTargets, state);
       break;
     }
 

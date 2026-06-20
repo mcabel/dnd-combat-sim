@@ -141,11 +141,12 @@ assert('Registry is non-empty', SPELL_COUNT > 0);
 // Session 23: lowered from 290 to 280 after migrating 7 more high-damage
 // spells (Blight, Cloudkill, Disintegrate, Harm, Finger of Death,
 // Sunburst, Power Word Kill). The registry then had 299 spells (306 − 7).
-// Session 24: lowered from 280 to 270 after migrating 8 L1 combat-damage
+// Session 24: lowered from 280 to 265 after migrating 10 L1+L2 combat-damage
 // spells (Chaos Bolt, Earth Tremor, Frost Fingers, Magnify Gravity, Ray
-// of Sickness, Spellfire Flare, Wardaway, Witch Bolt). The registry now
-// has 291 spells (299 − 8). Cumulative migrated: 22 (7+7+8) → floor 277.
-assert(`Registry has at least 270 spells (got ${SPELL_COUNT})`, SPELL_COUNT >= 270);
+// of Sickness, Spellfire Flare, Wardaway, Witch Bolt [L1]; Mind Spike,
+// Spray of Cards [L2]). The registry now has 289 spells (299 − 10).
+// Cumulative migrated: 24 (7+7+10) → floor 275.
+assert(`Registry has at least 265 spells (got ${SPELL_COUNT})`, SPELL_COUNT >= 265);
 console.log(`  📊 Total bulk-implemented spells: ${SPELL_COUNT}`);
 
 // Sample spells — one per level 1-9. Updated in Session 23 to avoid the
@@ -219,6 +220,7 @@ console.log('\n=== 1d. Session 24 — migrated spells removed from registry ===\
 const MIGRATED_SPELLS_S24 = [
   'Chaos Bolt', 'Earth Tremor', 'Frost Fingers', 'Magnify Gravity',
   'Ray of Sickness', 'Spellfire Flare', 'Wardaway', 'Witch Bolt',
+  'Mind Spike', 'Spray of Cards',
 ];
 for (const migrated of MIGRATED_SPELLS_S24) {
   eq(`  ${migrated} is no longer in the registry (migrated to bespoke)`,

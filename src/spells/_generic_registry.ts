@@ -392,12 +392,6 @@ import {
 } from './maximilians_earthen_grasp';
 
 import {
-  shouldCast as shouldCastMindSpike,
-  execute as executeMindSpike,
-  metadata as metadataMindSpike,
-} from './mind_spike';
-
-import {
   shouldCast as shouldCastNathairsMischief,
   execute as executeNathairsMischief,
   metadata as metadataNathairsMischief,
@@ -438,12 +432,6 @@ import {
   execute as executeSnillocsSnowballSwarm,
   metadata as metadataSnillocsSnowballSwarm,
 } from './snillocs_snowball_swarm';
-
-import {
-  shouldCast as shouldCastSprayOfCards,
-  execute as executeSprayOfCards,
-  metadata as metadataSprayOfCards,
-} from './spray_of_cards';
 
 import {
   shouldCast as shouldCastTashasMindWhip,
@@ -2152,12 +2140,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     shouldCast: shouldCastMaximiliansEarthenGrasp,
     execute: executeMaximiliansEarthenGrasp,
   },
-  'Mind Spike': {
-    name: 'Mind Spike',
-    level: metadataMindSpike.level,
-    shouldCast: shouldCastMindSpike,
-    execute: executeMindSpike,
-  },
   "Nathair's Mischief": {
     name: "Nathair's Mischief",
     level: metadataNathairsMischief.level,
@@ -2199,12 +2181,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     level: metadataSnillocsSnowballSwarm.level,
     shouldCast: shouldCastSnillocsSnowballSwarm,
     execute: executeSnillocsSnowballSwarm,
-  },
-  'Spray of Cards': {
-    name: 'Spray of Cards',
-    level: metadataSprayOfCards.level,
-    shouldCast: shouldCastSprayOfCards,
-    execute: executeSprayOfCards,
   },
   "Tasha's Mind Whip": {
     name: "Tasha's Mind Whip",

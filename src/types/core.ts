@@ -1314,6 +1314,8 @@ export interface PlannedAction {
     | 'spellfireFlare'      // Spellfire Flare — SCAG p.149: 60 ft, AUTO-HIT 2d10+spellcasting mod fire (no save, no attack), NO concentration
     | 'wardaway'            // Wardaway: 60 ft, CON save 2d4 force (half on save), single-target, NO concentration
     | 'witchBolt'           // Witch Bolt — PHB p.289: 30 ft, ranged spell attack 1d12 lightning + concentration per-turn action DoT (auto-hit 1d12), crit doubles initial
+    | 'mindSpike'           // Mind Spike — XGE p.162: 60 ft, WIS save 3d8 psychic (half on save), single-target, v1 one-shot (canon concentration simplified)
+    | 'sprayOfCards'        // Spray of Cards — BMT p.50: Self (15-ft cone), DEX save 2d10 slashing + blinded on fail, NO concentration
     // ── Session 19 — bulk-implementation generic dispatch (262 new spells L2-9) ──
     // All non-blocker in-scope spells from levels 2-9 that have not been
     // implemented as bespoke case branches are routed through 'genericSpell'.
