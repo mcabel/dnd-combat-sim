@@ -1436,12 +1436,6 @@ import {
 } from './control_weather';
 
 import {
-  shouldCast as shouldCastDominateMonster,
-  execute as executeDominateMonster,
-  metadata as metadataDominateMonster,
-} from './dominate_monster';
-
-import {
   shouldCast as shouldCastGlibness,
   execute as executeGlibness,
   metadata as metadataGlibness,
@@ -1464,12 +1458,6 @@ import {
   execute as executeIllusoryDragon,
   metadata as metadataIllusoryDragon,
 } from './illusory_dragon';
-
-import {
-  shouldCast as shouldCastPowerWordStun,
-  execute as executePowerWordStun,
-  metadata as metadataPowerWordStun,
-} from './power_word_stun';
 
 import {
   shouldCast as shouldCastRealityBreak,
@@ -1542,12 +1530,6 @@ import {
   execute as executeTimeStop,
   metadata as metadataTimeStop,
 } from './time_stop';
-
-import {
-  shouldCast as shouldCastWeird,
-  execute as executeWeird,
-  metadata as metadataWeird,
-} from './weird';
 
 // ---- Generic spell descriptor -------------------------------
 
@@ -2980,12 +2962,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     shouldCast: shouldCastControlWeather,
     execute: executeControlWeather,
   },
-  'Dominate Monster': {
-    name: 'Dominate Monster',
-    level: metadataDominateMonster.level,
-    shouldCast: shouldCastDominateMonster,
-    execute: executeDominateMonster,
-  },
   'Glibness': {
     name: 'Glibness',
     level: metadataGlibness.level,
@@ -3009,12 +2985,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     level: metadataIllusoryDragon.level,
     shouldCast: shouldCastIllusoryDragon,
     execute: executeIllusoryDragon,
-  },
-  'Power Word Stun': {
-    name: 'Power Word Stun',
-    level: metadataPowerWordStun.level,
-    shouldCast: shouldCastPowerWordStun,
-    execute: executePowerWordStun,
   },
   'Reality Break': {
     name: 'Reality Break',
@@ -3087,12 +3057,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     level: metadataTimeStop.level,
     shouldCast: shouldCastTimeStop,
     execute: executeTimeStop,
-  },
-  'Weird': {
-    name: 'Weird',
-    level: metadataWeird.level,
-    shouldCast: shouldCastWeird,
-    execute: executeWeird,
   },
 };
 

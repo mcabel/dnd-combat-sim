@@ -475,6 +475,20 @@ import {
   execute as executeRavenousVoid,
 } from '../spells/ravenous_void';
 
+// ── Session 25 — Megabatch batch 2 (save-or-condition spells) ────────────
+import {
+  shouldCast as shouldCastWeird,
+  execute as executeWeird,
+} from '../spells/weird';
+import {
+  shouldCast as shouldCastPowerWordStun,
+  execute as executePowerWordStun,
+} from '../spells/power_word_stun';
+import {
+  shouldCast as shouldCastDominateMonster,
+  execute as executeDominateMonster,
+} from '../spells/dominate_monster';
+
 // ── Session 19 — bulk-implementation generic dispatch (262 new spells) ────
 import {
   lookupGenericSpell,
@@ -2912,6 +2926,44 @@ function executePlannedAction(
       // Ravenous Void — XGE p.159: 1000 ft, AUTO-HIT 5d10 force, 60-ft radius.
       const rvTargets = shouldCastRavenousVoid(actor, bf);
       if (rvTargets) executeRavenousVoid(actor, rvTargets, state);
+      break;
+    }
+
+    // ── Session 25 — Megabatch batch 2 (save-or-condition spells) ──────
+    // Each migrated Batch 2 spell routes to its bespoke shouldCast + execute.
+    // Single-target spells resolve the target from plan.targetId with a
+    // shouldCast fallback (mirrors holdPerson/powerWordKill). AoE spells
+    // re-run shouldCast to collect the target list (mirrors sunburst).
+
+    case 'weird': {
+      // Weird — PHB p.288: 120 ft, WIS save 4d10 psychic (half) + frightened
+      // on fail, 30-ft radius AoE, concentration. shouldCast → Combatant[].
+      const wTargets = shouldCastWeird(actor, bf);
+      if (wTargets) executeWeird(actor, wTargets, state);
+      break;
+    }
+
+    case 'powerWordStun': {
+      // Power Word Stun — PHB p.267: 60 ft, NO save, NO attack — stunned if
+      // currentHP ≤ 150. shouldCast → single Combatant.
+      const pwsTargetId = plan.targetId;
+      const pwsTarget = pwsTargetId ? bf.combatants.get(pwsTargetId) ?? null : null;
+      const liveTarget = pwsTarget && !pwsTarget.isDead && !pwsTarget.isUnconscious
+        ? pwsTarget
+        : shouldCastPowerWordStun(actor, bf);
+      if (liveTarget) executePowerWordStun(actor, liveTarget, state);
+      break;
+    }
+
+    case 'dominateMonster': {
+      // Dominate Monster — PHB p.235: 60 ft, WIS save or charmed (control
+      // simplified), concentration, any creature. shouldCast → single Combatant.
+      const dmTargetId = plan.targetId;
+      const dmTarget = dmTargetId ? bf.combatants.get(dmTargetId) ?? null : null;
+      const liveTarget = dmTarget && !dmTarget.isDead && !dmTarget.isUnconscious
+        ? dmTarget
+        : shouldCastDominateMonster(actor, bf);
+      if (liveTarget) executeDominateMonster(actor, liveTarget, state);
       break;
     }
 

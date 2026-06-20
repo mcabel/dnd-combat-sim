@@ -143,7 +143,9 @@ assert('Registry is non-empty', SPELL_COUNT > 0);
 // Sunburst, Power Word Kill). The registry then had 299 spells (306 − 7).
 // Session 24: Batch 1 COMPLETE. Migrated all 44 L1-L9 combat-damage spells.
 // Registry now has 255 spells (299 − 44). Cumulative migrated: 58 (7+7+44).
-assert(`Registry has at least 245 spells (got ${SPELL_COUNT})`, SPELL_COUNT >= 245);
+// Session 25: Batch 2 in progress (35 save-or-condition spells). Each commit
+// migrates a level-group; the floor lowers to 220 (255 − 35) when complete.
+assert(`Registry has at least 220 spells (got ${SPELL_COUNT})`, SPELL_COUNT >= 220);
 console.log(`  📊 Total bulk-implemented spells: ${SPELL_COUNT}`);
 
 // Sample spells — one per level 1-9. Updated in Session 23 to avoid the
@@ -238,6 +240,27 @@ const MIGRATED_SPELLS_S24 = [
   'Psychic Scream', 'Ravenous Void',
 ];
 for (const migrated of MIGRATED_SPELLS_S24) {
+  eq(`  ${migrated} is no longer in the registry (migrated to bespoke)`,
+    lookupGenericSpell(migrated), null);
+}
+
+// ============================================================
+// 1e. Session 25 — migrated spells are NO LONGER in the registry
+// ============================================================
+// The save-or-condition spells migrated in Session 25 (Batch 2) to bespoke
+// implementations must NOT appear in the generic registry. Their bespoke
+// modules at src/spells/<snake>.ts have a different execute signature
+// (single-target Combatant, or Combatant[] for AoE; some take HP-gate or
+// willing-target patterns) that doesn't fit the generic dispatch shape.
+// This array grows per-commit as spells are migrated.
+console.log('\n=== 1e. Session 25 — migrated spells removed from registry ===\n');
+const MIGRATED_SPELLS_S25 = [
+  // L9 (1)
+  'Weird',
+  // L8 (2)
+  'Power Word Stun', 'Dominate Monster',
+];
+for (const migrated of MIGRATED_SPELLS_S25) {
   eq(`  ${migrated} is no longer in the registry (migrated to bespoke)`,
     lookupGenericSpell(migrated), null);
 }

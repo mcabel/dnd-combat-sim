@@ -81,6 +81,14 @@ SPELLS = [
     # L9 (2) — increment 6
     ('Psychic Scream',  'psychic_scream',   'PsychicScream'),
     ('Ravenous Void',   'ravenous_void',    'RavenousVoid'),
+    # ── Session 25 / Batch 2 (save-or-condition spells) — idempotent ──
+    # Appended per-commit as spells are migrated to bespoke. Re-running is
+    # safe: already-removed spells report "missing" without touching them.
+    # L9 (1)
+    ('Weird',           'weird',            'Weird'),
+    # L8 (2)
+    ('Power Word Stun', 'power_word_stun',  'PowerWordStun'),
+    ('Dominate Monster','dominate_monster', 'DominateMonster'),
 ]
 
 REGISTRY = Path('src/spells/_generic_registry.ts')

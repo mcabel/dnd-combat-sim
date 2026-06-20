@@ -1350,6 +1350,21 @@ export interface PlannedAction {
     | 'maddeningDarkness'   // Maddening Darkness — XGE p.158: 120 ft, WIS save 8d8 psychic (half on save), 60-ft radius AoE, v1 one-shot (canon concentration + darkness rider simplified)
     | 'psychicScream'       // Psychic Scream — XGE p.163: 90 ft, INT save 14d6 psychic + stunned on fail, up to 10 targets (point-targeted), NO concentration
     | 'ravenousVoid'        // Ravenous Void — XGE p.159: 1000 ft, AUTO-HIT 5d10 force (no save per plan), 60-ft radius AoE, v1 one-shot (canon concentration + pull/restrained simplified)
+    // ── Session 25 — Megabatch batch 2 (save-or-condition spells) ──
+    // Migrated from the Session 19/20 generic dispatch registry to bespoke
+    // implementations with real mechanical effects (WIS/CON/DEX/INT/CHA saves
+    // + condition_apply, plus HP-gate conditions, AoE condition loops,
+    // dual-condition, willing-target, HP-pool, and damage+condition patterns).
+    // Mirrors the Session 18/22/23 bespoke save-or-condition patterns
+    // (Blindness/Deafness, Hold Person, Sunburst condition loop).
+    // Each migrated spell:
+    //   - Removed from _generic_registry.ts (no longer dispatched via 'genericSpell')
+    //   - Has its own case branch in combat.ts executePlannedAction
+    //   - Has its own planner branch in planner.ts (12BG+, priority L9→L1)
+    //   - Has its own test file in src/test/<spell>.test.ts
+    | 'weird'              // Weird — PHB p.288: 120 ft, WIS save 4d10 psychic (half on save) + frightened on fail, 30-ft radius AoE, concentration (DoT simplified one-shot)
+    | 'powerWordStun'      // Power Word Stun — PHB p.267: 60 ft, NO save, NO attack — stunned if currentHP ≤ 150, NO concentration
+    | 'dominateMonster'    // Dominate Monster — PHB p.235: 60 ft, WIS save or charmed (control simplified), concentration, any creature
     // ── Session 19 — bulk-implementation generic dispatch (262 new spells L2-9) ──
     // All non-blocker in-scope spells from levels 2-9 that have not been
     // implemented as bespoke case branches are routed through 'genericSpell'.

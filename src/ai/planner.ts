@@ -152,6 +152,11 @@ import { shouldCast as shouldCastMaddeningDarkness } from '../spells/maddening_d
 import { shouldCast as shouldCastPsychicScream } from '../spells/psychic_scream';
 import { shouldCast as shouldCastRavenousVoid } from '../spells/ravenous_void';
 
+// ── Session 25 — Megabatch batch 2 (save-or-condition spells) ────────────
+import { shouldCast as shouldCastWeird } from '../spells/weird';
+import { shouldCast as shouldCastPowerWordStun } from '../spells/power_word_stun';
+import { shouldCast as shouldCastDominateMonster } from '../spells/dominate_monster';
+
 // ── Session 19 — bulk-implementation generic dispatch (262 new spells) ────
 import { GENERIC_SPELL_LIST } from '../spells/_generic_registry';
 import { selectAction, selfPreserveDecision, selectLegendaryAction } from './actions';
@@ -3066,6 +3071,70 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
       };
       plan.targetId = rvTargets[0].id;
       plan.bonusAction = planBonusAction(self, rvTargets[0], battlefield);
+      return plan;
+    }
+  }
+
+  // ── Session 25 — Megabatch batch 2 (save-or-condition spells) ──────
+  // 35 L1-L9 save-or-condition spells. Numbered 12BG–12CO. Tactical
+  // priority (per MEGABATCH-MIGRATION-PLAN.md): L9 > L8 > ... > L1, and
+  // fully-disabling conditions (stunned, paralyzed, unconscious, petrified)
+  // rank above partial (frightened, poisoned, prone). Single-target spells
+  // set plan.targetId to the chosen enemy; AoE spells set it to the first
+  // target (the sphere/cone center).
+
+  // --- 12BG. WEIRD (WIS save 4d10 psychic + frightened, L9, AoE, concentration) ---
+  // PHB p.288: 120 ft, WIS save 4d10 psychic (half on save) + frightened on
+  // fail, 30-ft radius AoE. concentration (DoT simplified one-shot).
+  // shouldCast returns Combatant[]. Avg 22 psychic + frightened per target.
+  if (!plan.action && self.actions.some(a => a.name === 'Weird')) {
+    const wTargets = shouldCastWeird(self, battlefield);
+    if (wTargets) {
+      const names = wTargets.map(t => t.name).join(', ');
+      plan.action = {
+        type: 'weird',
+        action: null,
+        targetId: wTargets[0].id,
+        description: `${self.name} casts Weird, catching ${names}`,
+      };
+      plan.targetId = wTargets[0].id;
+      plan.bonusAction = planBonusAction(self, wTargets[0], battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12BH. POWER WORD STUN (HP-gate ≤150 → stunned, L8, NO save/attack) ---
+  // PHB p.267: 60 ft, NO save, NO attack — stunned if currentHP ≤ 150.
+  // shouldCast returns single Combatant (highest-cur-HP enemy ≤ 150 in range).
+  if (!plan.action && self.actions.some(a => a.name === 'Power Word Stun')) {
+    const pwsTarget = shouldCastPowerWordStun(self, battlefield);
+    if (pwsTarget) {
+      plan.action = {
+        type: 'powerWordStun',
+        action: null,
+        targetId: pwsTarget.id,
+        description: `${self.name} casts Power Word Stun at ${pwsTarget.name}`,
+      };
+      plan.targetId = pwsTarget.id;
+      plan.bonusAction = planBonusAction(self, pwsTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12BI. DOMINATE MONSTER (WIS save or charmed, L8, concentration) ---
+  // PHB p.235: 60 ft, WIS save or charmed (control simplified), any creature.
+  // shouldCast returns single Combatant.
+  if (!plan.action && self.actions.some(a => a.name === 'Dominate Monster')) {
+    const dmTarget = shouldCastDominateMonster(self, battlefield);
+    if (dmTarget) {
+      plan.action = {
+        type: 'dominateMonster',
+        action: null,
+        targetId: dmTarget.id,
+        description: `${self.name} casts Dominate Monster at ${dmTarget.name}`,
+      };
+      plan.targetId = dmTarget.id;
+      plan.bonusAction = planBonusAction(self, dmTarget, battlefield);
       return plan;
     }
   }
