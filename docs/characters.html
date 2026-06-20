@@ -1933,9 +1933,11 @@ function toggleSpellEdit() {
   renderCharDetail();
 }
 
-// Resolve the primary spellcasting class name for a character,
-// returning null for non-spellcasting classes (Barbarian, Fighter, Monk, Rogue).
-function _resolveSpellcastingClass(c: any): string | null {
+// Resolve EVERY spellcasting class name a character has (multiclass-aware),
+// returning [] for non-spellcasting characters (Barbarian, Fighter w/o EK,
+// Monk, Rogue w/o AT). A character with e.g. Cleric 3 / Wizard 5 returns
+// both ['Cleric', 'Wizard'] so spell-datalist suggestions cover both lists.
+function _resolveSpellcastingClasses(c: any): string[] {
   const SPELLCASTERS = new Set([
     'Bard','Cleric','Druid','Paladin','Ranger','Sorcerer','Warlock','Wizard',
   ]);
@@ -1943,38 +1945,49 @@ function _resolveSpellcastingClass(c: any): string | null {
     'Eldritch Knight': 'Wizard',
     'Arcane Trickster': 'Wizard',
   };
-  // Check subclass choices first for archetypes
+  const found = new Set<string>();
+  // Subclass archetypes (EK / AT) grant spellcasting regardless of base class.
   for (const [, sub] of Object.entries((c.subclassChoices || {}) as Record<string, string>)) {
-    if (SUBCLASS_ALIAS[sub]) return SUBCLASS_ALIAS[sub];
+    if (SUBCLASS_ALIAS[sub]) found.add(SUBCLASS_ALIAS[sub]);
   }
-  // Walk class levels to find first spellcasting class
+  // Every base class the character has levels in that's a full/half caster.
   for (const cl of (c.classLevels || []) as { className: string }[]) {
-    if (SPELLCASTERS.has(cl.className)) return cl.className;
+    if (SPELLCASTERS.has(cl.className)) found.add(cl.className);
   }
-  // Fallback to firstClass
-  if (c.firstClass && SPELLCASTERS.has(c.firstClass)) return c.firstClass;
-  return null;
+  // Fallback for legacy characters with no classLevels yet.
+  if (found.size === 0 && c.firstClass && SPELLCASTERS.has(c.firstClass)) {
+    found.add(c.firstClass);
+  }
+  return [...found];
 }
 
 async function populateSpellSuggestions() {
   const c = S.charDetail;
   if (!c?.spellcasting) return;
-  const spellClass = _resolveSpellcastingClass(c);
-  const classParam = spellClass ? `&class=${encodeURIComponent(spellClass)}` : '';
+  const spellClasses = _resolveSpellcastingClasses(c);
+  // One '&class=X' param per spellcasting class, or [''] (unfiltered) if none resolved.
+  const classParams = spellClasses.length
+    ? spellClasses.map((cls: string) => `&class=${encodeURIComponent(cls)}`)
+    : [''];
   try {
-    const [cantripData, spellData] = await Promise.all([
-      fetch(`/api/spells?level=0${classParam}`).then(r => r.json()),
-      fetch(`/api/spells${classParam ? '?' + classParam.slice(1) : ''}`).then(r => r.json()),
-    ]);
+    const cantripResults = await Promise.all(
+      classParams.map((p: string) => fetch(`/api/spells?level=0${p}`).then(r => r.json())),
+    );
+    const spellResults = await Promise.all(
+      classParams.map((p: string) => fetch(`/api/spells${p ? '?' + p.slice(1) : ''}`).then(r => r.json())),
+    );
+    // Union + dedupe across every resolved class so multiclass casters see both lists.
+    const cantrips = [...new Set(cantripResults.flatMap((d: any) => (d.spells as string[]) || []))].sort();
+    const spells   = [...new Set(spellResults.flatMap((d: any) => (d.spells as string[]) || []))].sort();
     const cantripDL = document.getElementById('spell-cantrip-suggestions') as HTMLDataListElement;
     const spellDL   = document.getElementById('spell-suggestions')         as HTMLDataListElement;
     if (cantripDL) {
-      cantripDL.innerHTML = (cantripData.spells as string[] || [])
+      cantripDL.innerHTML = cantrips
         .map((n: string) => `<option value="${n.replace(/"/g,'&quot;')}">`)
         .join('');
     }
     if (spellDL) {
-      spellDL.innerHTML = (spellData.spells as string[] || [])
+      spellDL.innerHTML = spells
         .map((n: string) => `<option value="${n.replace(/"/g,'&quot;')}">`)
         .join('');
     }
