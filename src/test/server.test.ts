@@ -1974,6 +1974,38 @@ async function run() {
     assert(!json.spells.includes('Magic Missile'), 'Ranger lv1 should not include Magic Missile');
   });
 
+  await test('GET /api/spells?class=Artificer&level=0 returns dedicated Artificer cantrips', async () => {
+    const { status, json } = await request(BASE, '/api/spells?class=Artificer&level=0');
+    assert(status === 200, `Expected 200, got ${status}`);
+    assert(json.class === 'Artificer', `class should be "Artificer" (not aliased), got ${json.class}`);
+    assert(json.spells.includes('Booming Blade'), 'Artificer cantrips should include Booming Blade');
+    assert(json.spells.includes('Acid Splash'), 'Artificer cantrips should include Acid Splash');
+    assert(!json.spells.includes('Vicious Mockery'), 'Artificer cantrips should not include Vicious Mockery (Bard-only)');
+  });
+
+  await test('GET /api/spells?class=Artificer&level=1 returns dedicated Artificer lv1 spells', async () => {
+    const { status, json } = await request(BASE, '/api/spells?class=Artificer&level=1');
+    assert(status === 200, `Expected 200, got ${status}`);
+    assert(json.spells.includes('Cure Wounds'), 'Artificer lv1 should include Cure Wounds');
+    assert(json.spells.includes("Tasha's Caustic Brew"), "Artificer lv1 should include Tasha's Caustic Brew");
+    assert(json.spells.includes('Absorb Elements'), 'Artificer lv1 should include Absorb Elements');
+    assert(!json.spells.includes('Magic Missile'), 'Artificer lv1 should not include Magic Missile (Wizard-only)');
+  });
+
+  await test('GET /api/spells?class=Artificer&level=5 returns dedicated Artificer lv5 spells', async () => {
+    const { status, json } = await request(BASE, '/api/spells?class=Artificer&level=5');
+    assert(status === 200, `Expected 200, got ${status}`);
+    assert(json.spells.includes("Bigby's Hand"), "Artificer lv5 should include Bigby's Hand");
+    assert(json.spells.includes('Skill Empowerment'), 'Artificer lv5 should include Skill Empowerment');
+  });
+
+  await test('GET /api/spells?class=Artificer&level=6 returns empty array (half-caster caps at 5th level)', async () => {
+    const { status, json } = await request(BASE, '/api/spells?class=Artificer&level=6');
+    assert(status === 200, `Expected 200, got ${status}`);
+    assert(Array.isArray(json.spells), 'spells should be an array');
+    assert(json.spells.length === 0, `Artificer has no 6th-level spells, got ${json.spells.length}`);
+  });
+
   await test('GET /api/spells?class=Eldritch+Knight resolves to Wizard list', async () => {
     const { status, json } = await request(BASE, '/api/spells?class=Eldritch+Knight&level=1');
     assert(status === 200, `Expected 200, got ${status}`);

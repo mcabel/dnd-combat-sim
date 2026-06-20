@@ -6,16 +6,68 @@
  * at each spell level (0 = cantrips). Spell names match those in
  * testDataSpells/spells-*.json exactly.
  *
- * Artificer, Eldritch Knight (Fighter), and Arcane Trickster (Rogue)
- * use Wizard cantrips/spells and are aliased accordingly.
+ * Eldritch Knight (Fighter) and Arcane Trickster (Rogue) use Wizard
+ * cantrips/spells and are aliased accordingly.
  */
 
 export type SpellcastingClassName =
-  | 'Bard' | 'Cleric' | 'Druid' | 'Paladin'
+  | 'Artificer' | 'Bard' | 'Cleric' | 'Druid' | 'Paladin'
   | 'Ranger' | 'Sorcerer' | 'Warlock' | 'Wizard';
 
 /** Map of class name → spell level (0–9) → spell names. */
 export const CLASS_SPELL_LISTS: Record<SpellcastingClassName, string[][]> = {
+
+  // ── Artificer ───────────────────────────────────────────────────────
+  // Half-caster; spells cap at 5th level (TCE p.11, p.16). Cantrips known
+  // from 1st level, unlike Paladin/Ranger. List per TCE p.20-21.
+  Artificer: [
+    /* 0 */ ['Acid Splash', 'Dancing Lights', 'Fire Bolt', 'Guidance', 'Light',
+             'Mage Hand', 'Mending', 'Message', 'Poison Spray', 'Prestidigitation',
+             'Ray of Frost', 'Resistance', 'Shocking Grasp', 'Spare the Dying',
+             'Thorn Whip',
+             // XGE
+             'Create Bonfire', 'Frostbite', 'Magic Stone', 'Thunderclap',
+             // TCE
+             'Booming Blade', 'Green-Flame Blade', 'Lightning Lure', 'Sword Burst'],
+    /* 1 */ ['Alarm', 'Cure Wounds', 'Detect Magic', 'Disguise Self',
+             'Expeditious Retreat', 'Faerie Fire', 'False Life', 'Feather Fall',
+             'Grease', 'Identify', 'Jump', 'Longstrider', 'Purify Food and Drink',
+             'Sanctuary',
+             // XGE
+             'Absorb Elements', 'Catapult', 'Snare',
+             // TCE
+             "Tasha's Caustic Brew"],
+    /* 2 */ ['Aid', 'Alter Self', 'Arcane Lock', 'Blur', 'Continual Flame',
+             'Darkvision', 'Enhance Ability', 'Enlarge/Reduce', 'Heat Metal',
+             'Invisibility', 'Lesser Restoration', 'Levitate', 'Magic Mouth',
+             'Magic Weapon', 'Protection from Poison', 'Rope Trick',
+             'See Invisibility', 'Spider Climb', 'Web',
+             // XGE
+             'Pyrotechnics', 'Skywrite'],
+    /* 3 */ ['Blink', 'Create Food and Water', 'Dispel Magic', 'Elemental Weapon',
+             'Fly', 'Glyph of Warding', 'Haste', 'Protection from Energy',
+             'Revivify', 'Water Breathing', 'Water Walk',
+             // XGE
+             'Catnap', 'Flame Arrows', 'Tiny Servant',
+             // TCE
+             'Intellect Fortress'],
+    /* 4 */ ['Arcane Eye', 'Fabricate', 'Freedom of Movement',
+             "Leomund's Secret Chest", "Mordenkainen's Faithful Hound",
+             "Mordenkainen's Private Sanctum", "Otiluke's Resilient Sphere",
+             'Stone Shape', 'Stoneskin',
+             // XGE
+             'Elemental Bane',
+             // TCE
+             'Summon Construct'],
+    /* 5 */ ['Animate Objects', "Bigby's Hand", 'Creation', 'Greater Restoration',
+             'Wall of Stone',
+             // XGE
+             'Skill Empowerment', 'Transmute Rock'],
+    /* 6 */ [],
+    /* 7 */ [],
+    /* 8 */ [],
+    /* 9 */ [],
+  ],
 
   // ── Bard ────────────────────────────────────────────────────────────
   Bard: [
@@ -511,9 +563,6 @@ export const CLASS_SPELL_LISTS: Record<SpellcastingClassName, string[][]> = {
 export const CLASS_SPELL_LIST_ALIASES: Record<string, SpellcastingClassName> = {
   'Eldritch Knight': 'Wizard',
   'Arcane Trickster': 'Wizard',
-  // Artificer (TCE) has its own spell list; aliased to Wizard's as a stand-in
-  // until a dedicated Artificer list is built (tracked for a future session).
-  'Artificer': 'Wizard',
 };
 
 /** Spellcasting class names as a string array for validation. */
