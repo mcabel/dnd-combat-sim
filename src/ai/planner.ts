@@ -11,6 +11,8 @@ import {
   shouldRage, activateRagePlan, shouldSecondWind, secondWindPlan,
   shouldLayOnHands, layOnHandsPlan, bardicInspirationTarget, bardicInspirationPlan,
   shouldCastHex, hexPlan,
+  shouldCastCureWounds, spellHealPlan,
+  hasSpellSlot,
 } from './resources';
 import { shouldCast as shouldCastHW } from '../spells/healing_word';
 import { shouldCast as shouldCastCW } from '../spells/cure_wounds';
@@ -238,6 +240,7 @@ import { shouldCast as shouldCastMassHeal } from '../spells/mass_heal';
 import { shouldCast as shouldCastPowerWordHeal } from '../spells/power_word_heal';
 import { shouldCast as shouldCastArmorOfAgathys } from '../spells/armor_of_agathys';
 import { shouldCast as shouldCastFalseLife } from '../spells/false_life';
+import { shouldCast as shouldCastDispelMagic } from '../spells/dispel_magic';
 
 // ── Session 19 — bulk-implementation generic dispatch (262 new spells) ────
 import { GENERIC_SPELL_LIST } from '../spells/_generic_registry';
@@ -3902,6 +3905,275 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
   }
   if (!plan.action && self.actions.some(a => a.name === 'False Life') && shouldCastFalseLife(self, battlefield)) {
     plan.action = { type: 'falseLife', action: null, targetId: self.id, description: `${self.name} casts False Life (1d4+4 temp HP)` }; return plan;
+  }
+
+  // --- DISPEL MAGIC (L3) — remove enemy spell effects ---
+  // PHB p.233: action, 120 ft, auto-dispel concentration effects + ability
+  // check vs DC 13 for non-concentration. Upcast auto-dispels more effects.
+  // Priority: enemy with the most active effects (most value per cast).
+  if (!plan.action && self.actions.some(a => a.name === 'Dispel Magic')) {
+    const dmTarget = shouldCastDispelMagic(self, battlefield);
+    if (dmTarget) {
+      plan.action = {
+        type: 'dispelMagic',
+        action: null,
+        targetId: dmTarget.id,
+        description: `${self.name} casts Dispel Magic at ${dmTarget.name}`,
+      };
+      plan.targetId = dmTarget.id;
+      plan.bonusAction = planBonusAction(self, dmTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // === SESSION 28 — OFFENSIVE CANTRIP PLANNER BRANCHES (9 cantrips) ===
+  // Cantrips that DON'T have explicit planner branches fall through to
+  // selectAction() in actions.ts, which picks from the action list. But many
+  // offensive cantrips have special logic that the generic picker can't handle
+  // (AoE, debuffs, advantage situations, damage-type immunities). These
+  // branches fire BEFORE selectAction() but AFTER all leveled-spell branches
+  // (since using a slot is generally better than a cantrip). Each branch uses
+  // type: 'cast' with the cantrip's Action object — this routes through the
+  // existing case 'cast': in combat.ts, which dispatches via resolveAttack,
+  // resolveCantripAction, or resolveCantripAoE as appropriate.
+
+  // --- 13A. BOOMING BLADE (melee spell attack + thunder rider if target moves) ---
+  // TCE p.106: Self (5 ft), melee spell attack 1d8 thunder + thunder rider
+  // (1d8 extra if target moves willingly before start of caster's next turn).
+  // Planner: prefer when in melee range (5ft) and target is likely to move
+  // (has ranged attack / caster profile — they'll want to escape melee).
+  if (!plan.action && self.actions.some(a => a.name === 'Booming Blade')) {
+    const adjEnemy = [...battlefield.combatants.values()].find(c =>
+      !c.isDead && !c.isUnconscious && c.faction !== self.faction &&
+      chebyshev3D(self.pos, c.pos) <= 1  // within 5ft (1 square)
+    );
+    if (adjEnemy) {
+      // Target likely to move if it has ranged attacks (wants to escape melee)
+      const targetWantsToMove = adjEnemy.actions.some(a =>
+        a.attackType === 'ranged' || (a.attackType === 'spell' && a.range && a.range.normal > 5)
+      );
+      if (targetWantsToMove) {
+        const bbAction = self.actions.find(a => a.name === 'Booming Blade')!;
+        plan.action = {
+          type: 'cast',
+          action: bbAction,
+          targetId: adjEnemy.id,
+          description: `${self.name} casts Booming Blade on ${adjEnemy.name} (target likely to move)`,
+        };
+        plan.targetId = adjEnemy.id;
+        plan.bonusAction = planBonusAction(self, adjEnemy, battlefield);
+        return plan;
+      }
+    }
+  }
+
+  // --- 13B. FROSTBITE (CON save, disadvantage on target's next weapon attack) ---
+  // XGE p.156: 60 ft, CON save 1d6 cold + disadv on next WEAPON attack.
+  // Planner: prefer against high-attack enemies that haven't been debuffed yet.
+  if (!plan.action && self.actions.some(a => a.name === 'Frostbite')) {
+    const enemies = livingEnemiesOf(self, battlefield);
+    const frostTarget = enemies.find(e =>
+      !e._frostbiteDisadvNextWeaponAttack &&  // not already debuffed
+      canReach(self, e, self.actions.find(a => a.name === 'Frostbite')!) &&
+      e.actions.some(a => a.attackType === 'melee' || a.attackType === 'ranged')  // has weapon attacks
+    );
+    if (frostTarget) {
+      const fbAction = self.actions.find(a => a.name === 'Frostbite')!;
+      plan.action = {
+        type: 'cast',
+        action: fbAction,
+        targetId: frostTarget.id,
+        description: `${self.name} casts Frostbite at ${frostTarget.name} (weapon disadv debuff)`,
+      };
+      plan.targetId = frostTarget.id;
+      plan.bonusAction = planBonusAction(self, frostTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 13C. MIND SLIVER (INT save, psychic + save DC penalty for next spell) ---
+  // TCE p.108: 60 ft, INT save 1d6 psychic + -1d4 to target's next save.
+  // Planner: prefer when caster has a follow-up spell with a save
+  // (like a Save-or-Suck coming next turn). If the caster has any
+  // save-based leveled spells available, Mind Sliver sets up the debuff.
+  if (!plan.action && self.actions.some(a => a.name === 'Mind Sliver')) {
+    const msAction = self.actions.find(a => a.name === 'Mind Sliver')!;
+    const enemies = livingEnemiesOf(self, battlefield);
+    const msTarget = enemies.find(e => canReach(self, e, msAction));
+    if (msTarget) {
+      // Check if caster has any save-based leveled spells (setup value)
+      const hasSaveSpell = self.actions.some(a =>
+        a.attackType === 'save' && a.slotLevel && a.slotLevel > 0 && hasSpellSlot(self)
+      );
+      if (hasSaveSpell) {
+        plan.action = {
+          type: 'cast',
+          action: msAction,
+          targetId: msTarget.id,
+          description: `${self.name} casts Mind Sliver at ${msTarget.name} (save debuff setup)`,
+        };
+        plan.targetId = msTarget.id;
+        plan.bonusAction = planBonusAction(self, msTarget, battlefield);
+        return plan;
+      }
+    }
+  }
+
+  // --- 13D. POISON SPRAY (CON save, 1d12 poison) ---
+  // PHB p.266: 10 ft, CON save 1d12 poison. Highest cantrip damage die
+  // but many creatures are immune to poison (undead, constructs, fiends).
+  // Planner: prefer when in 10ft range and no better cantrip available.
+  // Skip if target is undead or construct (immune to poison).
+  if (!plan.action && self.actions.some(a => a.name === 'Poison Spray')) {
+    const psAction = self.actions.find(a => a.name === 'Poison Spray')!;
+    const enemies = livingEnemiesOf(self, battlefield);
+    const psTarget = enemies.find(e =>
+      canReach(self, e, psAction) &&
+      !e.isUndead &&            // undead immune to poison
+      !e.isConstruct            // constructs immune to poison
+    );
+    if (psTarget) {
+      plan.action = {
+        type: 'cast',
+        action: psAction,
+        targetId: psTarget.id,
+        description: `${self.name} casts Poison Spray at ${psTarget.name}`,
+      };
+      plan.targetId = psTarget.id;
+      plan.bonusAction = planBonusAction(self, psTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 13E. SHOCKING GRASP (melee spell attack, advantage vs metal armor) ---
+  // PHB p.275: touch (5 ft), melee spell attack 1d8 lightning + no reaction.
+  // Advantage on targets in metal armor. Planner: prefer against
+  // metal-armored targets (advantage on attack roll → higher hit chance).
+  if (!plan.action && self.actions.some(a => a.name === 'Shocking Grasp')) {
+    const sgAction = self.actions.find(a => a.name === 'Shocking Grasp')!;
+    const enemies = livingEnemiesOf(self, battlefield);
+    // Prioritize metal-armored targets (advantage)
+    const metalTarget = enemies.find(e =>
+      e.hasMetalArmor && canReach(self, e, sgAction)
+    );
+    if (metalTarget) {
+      plan.action = {
+        type: 'cast',
+        action: sgAction,
+        targetId: metalTarget.id,
+        description: `${self.name} casts Shocking Grasp on ${metalTarget.name} (advantage vs metal armor)`,
+      };
+      plan.targetId = metalTarget.id;
+      plan.bonusAction = planBonusAction(self, metalTarget, battlefield);
+      return plan;
+    }
+    // Also use if in melee range and no better option (even without advantage)
+    const adjEnemy = enemies.find(e => canReach(self, e, sgAction));
+    if (adjEnemy) {
+      plan.action = {
+        type: 'cast',
+        action: sgAction,
+        targetId: adjEnemy.id,
+        description: `${self.name} casts Shocking Grasp on ${adjEnemy.name}`,
+      };
+      plan.targetId = adjEnemy.id;
+      plan.bonusAction = planBonusAction(self, adjEnemy, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 13F. SWORD BURST (AoE force damage to all adjacent enemies) ---
+  // TCE p.115: Self (5 ft), DEX save 1d6 force to all creatures within 5 ft.
+  // Planner: prefer when 2+ enemies are adjacent (within 5ft).
+  if (!plan.action && self.actions.some(a => a.name === 'Sword Burst')) {
+    const adjEnemies = [...battlefield.combatants.values()].filter(c =>
+      !c.isDead && !c.isUnconscious && c.faction !== self.faction &&
+      chebyshev3D(self.pos, c.pos) <= 1  // within 5ft (1 square)
+    );
+    if (adjEnemies.length >= 2) {
+      const sbAction = self.actions.find(a => a.name === 'Sword Burst')!;
+      plan.action = {
+        type: 'cast',
+        action: sbAction,
+        targetId: adjEnemies[0].id,
+        description: `${self.name} casts Sword Burst (AoE, ${adjEnemies.length} adjacent enemies)`,
+      };
+      plan.targetId = adjEnemies[0].id;
+      plan.bonusAction = planBonusAction(self, adjEnemies[0], battlefield);
+      return plan;
+    }
+  }
+
+  // --- 13G. THUNDERCLAP (AoE thunder damage to all adjacent enemies) ---
+  // XGE p.168: Self (5 ft), CON save 1d6 thunder to all creatures within 5 ft.
+  // Planner: prefer when 2+ enemies are adjacent (within 5ft).
+  if (!plan.action && self.actions.some(a => a.name === 'Thunderclap')) {
+    const adjEnemies = [...battlefield.combatants.values()].filter(c =>
+      !c.isDead && !c.isUnconscious && c.faction !== self.faction &&
+      chebyshev3D(self.pos, c.pos) <= 1  // within 5ft (1 square)
+    );
+    if (adjEnemies.length >= 2) {
+      const tcAction = self.actions.find(a => a.name === 'Thunderclap')!;
+      plan.action = {
+        type: 'cast',
+        action: tcAction,
+        targetId: adjEnemies[0].id,
+        description: `${self.name} casts Thunderclap (AoE, ${adjEnemies.length} adjacent enemies)`,
+      };
+      plan.targetId = adjEnemies[0].id;
+      plan.bonusAction = planBonusAction(self, adjEnemies[0], battlefield);
+      return plan;
+    }
+  }
+
+  // --- 13H. TRUE STRIKE (self-buff: advantage on next attack) ---
+  // PHB p.284: action, 30 ft (self-target in v1), advantage on next attack.
+  // Planner: use when no good direct-damage option exists and the caster
+  // expects to attack next turn (setup turn). This fires when the caster
+  // has True Strike AND has at least one attack action (melee/ranged/spell)
+  // for next turn, but doesn't have a better cantrip/spell to cast now.
+  if (!plan.action && self.actions.some(a => a.name === 'True Strike')) {
+    // Only use True Strike as setup if the caster has an attack to benefit
+    const hasAttackNextTurn = self.actions.some(a =>
+      !a.isMultiattack && a.costType === 'action' &&
+      (a.attackType === 'melee' || a.attackType === 'ranged' || a.attackType === 'spell')
+    );
+    if (hasAttackNextTurn) {
+      const tsAction = self.actions.find(a => a.name === 'True Strike')!;
+      plan.action = {
+        type: 'cast',
+        action: tsAction,
+        targetId: self.id,
+        description: `${self.name} casts True Strike (advantage on next attack)`,
+      };
+      plan.targetId = self.id;
+      plan.bonusAction = planBonusAction(self, self, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 13I. TOLL THE DEAD (WIS save, d12 if target missing HP) ---
+  // XGE p.169: 60 ft, WIS save 1d8 necrotic (1d12 if target missing any HP).
+  // Planner: prefer against damaged targets — d12 vs d8 makes it better
+  // than other save cantrips when the target is hurt.
+  if (!plan.action && self.actions.some(a => a.name === 'Toll the Dead')) {
+    const ttdAction = self.actions.find(a => a.name === 'Toll the Dead')!;
+    const enemies = livingEnemiesOf(self, battlefield);
+    // Prioritize damaged targets (d12 damage die)
+    const damagedTarget = enemies.find(e =>
+      e.currentHP < e.maxHP && canReach(self, e, ttdAction)
+    );
+    if (damagedTarget) {
+      plan.action = {
+        type: 'cast',
+        action: ttdAction,
+        targetId: damagedTarget.id,
+        description: `${self.name} casts Toll the Dead at ${damagedTarget.name} (d12 — target damaged)`,
+      };
+      plan.targetId = damagedTarget.id;
+      plan.bonusAction = planBonusAction(self, damagedTarget, battlefield);
+      return plan;
+    }
   }
 
   // === SESSION 19 — GENERIC SPELL LOOP (262 bulk-implemented spells) ===

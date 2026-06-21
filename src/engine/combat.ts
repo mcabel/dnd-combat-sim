@@ -674,6 +674,7 @@ import { shouldCast as shouldCastMassHeal,        execute as executeMassHeal }  
 import { shouldCast as shouldCastPowerWordHeal,   execute as executePowerWordHeal }   from '../spells/power_word_heal';
 import { shouldCast as shouldCastArmorOfAgathys,  execute as executeArmorOfAgathys }  from '../spells/armor_of_agathys';
 import { shouldCast as shouldCastFalseLife,       execute as executeFalseLife }       from '../spells/false_life';
+import { shouldCast as shouldCastDispelMagic,    execute as executeDispelMagic }     from '../spells/dispel_magic';
 
 // ── Session 19 — bulk-implementation generic dispatch (262 new spells) ────
 import {
@@ -3707,6 +3708,18 @@ function executePlannedAction(
     // 2 temp-HP self-buffs (boolean signature):
     case 'armorOfAgathys':    if (shouldCastArmorOfAgathys(actor, bf))  executeArmorOfAgathys(actor, state);  break;
     case 'falseLife':         if (shouldCastFalseLife(actor, bf))       executeFalseLife(actor, state);       break;
+
+    case 'dispelMagic': {
+      // Dispel Magic — PHB p.233: action, 120 ft, auto-dispel concentration
+      // effects + ability check vs DC 13 for non-concentration, upcast auto-dispels more.
+      const dmTargetId = plan.targetId;
+      const dmTarget = dmTargetId ? bf.combatants.get(dmTargetId) ?? null : null;
+      const dmLiveTarget = dmTarget && !dmTarget.isDead && !dmTarget.isUnconscious
+        ? dmTarget
+        : shouldCastDispelMagic(actor, bf);
+      if (dmLiveTarget) executeDispelMagic(actor, dmLiveTarget, state);
+      break;
+    }
 
     // ── Session 19 — generic spell dispatch ────────────────────────────
     // Routes any spell in the GENERIC_SPELLS registry (262 bulk-implemented

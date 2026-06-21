@@ -1641,6 +1641,7 @@ export interface PlannedAction {
     | 'powerWordHeal'     // Power Word Heal — XGE: Touch, full HP + remove 5 conditions, NO conc
     | 'armorOfAgathys'    // Armor of Agathys — PHB p.215: self, 5 temp HP, NO conc (retaliation not modelled)
     | 'falseLife'         // False Life — PHB p.239: self, 1d4+4 temp HP, NO conc (1hr not tracked)
+    | 'dispelMagic'      // Dispel Magic — PHB p.233: 120 ft, auto-dispel concentration effects + ability check vs DC 13 for non-concentration, upcast auto-dispels more, NO concentration
     // ── Session 19 — bulk-implementation generic dispatch (262 new spells L2-9) ──
     // All non-blocker in-scope spells from levels 2-9 that have not been
     // implemented as bespoke case branches are routed through 'genericSpell'.
