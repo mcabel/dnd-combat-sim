@@ -197,3 +197,54 @@ export const CONJURE_ELEMENTAL_OPTIONS: readonly { slotLevel: number; maxCR: num
  * flammable targets and lets the elemental move through hostile spaces.
  */
 export const DEFAULT_CE_OPTION = CONJURE_ELEMENTAL_OPTIONS[0]; // L5: CR 5
+
+// ---- Conjure Fey option table --------------------------------
+
+/**
+ * PHB p.226 — Conjure Fey CR/count options.
+ * 6th-level conjuration. Summons a single fey whose CR scales with slot
+ * level: L6 → CR 6, L7 → CR 7, L8 → CR 8, L9 → CR 9.
+ */
+export const CONJURE_FEY_OPTIONS: readonly { slotLevel: number; maxCR: number; label: string }[] = [
+  { slotLevel: 6, maxCR: 6, label: 'L6: one fey of CR 6' },
+  { slotLevel: 7, maxCR: 7, label: 'L7: one fey of CR 7' },
+  { slotLevel: 8, maxCR: 8, label: 'L8: one fey of CR 8' },
+  { slotLevel: 9, maxCR: 9, label: 'L9: one fey of CR 9' },
+] as const;
+
+/**
+ * Default Conjure Fey option for v1: L6 → 1 Green Hag (CR 3).
+ * Green Hag (MM p.177) is the highest-CR fey in the Monster Manual that
+ * fits within the L6 cap (CR ≤ 6). Although the spell allows up to CR 6,
+ * no CR 6 fey exists in the MM 2014 — the Green Hag (CR 3) is the
+ * strongest MM fey and a reasonable v1 default. A future v2 should pull
+ * from a wider bestiary (e.g. Yeth Hound CR 4 from MTF, Korred CR 4 from
+ * VGM, Bard CR 4 from VGM) when bestiary loading is standardised.
+ *
+ * Green Hag stats: AC 17 (natural armor), HP 82, Claws +6 2d8+4 slashing.
+ */
+export const DEFAULT_CF_OPTION = CONJURE_FEY_OPTIONS[0]; // L6: CR 6
+
+// ---- Conjure Celestial option table --------------------------
+
+/**
+ * PHB p.225 — Conjure Celestial CR/count options.
+ * 7th-level conjuration. Summons a single celestial whose CR scales with
+ * slot level: L7 → CR 4, L8 → CR 5, L9 → CR 6. (Note: the CR progression
+ * starts at CR 4 for L7 and increases by 1 per slot level above 7th,
+ * unlike Conjure Fey/Elemental which start at CR = slotLevel.)
+ */
+export const CONJURE_CELESTIAL_OPTIONS: readonly { slotLevel: number; maxCR: number; label: string }[] = [
+  { slotLevel: 7, maxCR: 4, label: 'L7: one celestial of CR 4' },
+  { slotLevel: 8, maxCR: 5, label: 'L8: one celestial of CR 5' },
+  { slotLevel: 9, maxCR: 6, label: 'L9: one celestial of CR 6' },
+] as const;
+
+/**
+ * Default Conjure Celestial option for v1: L7 → 1 Couatl (CR 4).
+ * Couatl (MM p.43) is the only CR 4 celestial in the Monster Manual and
+ * therefore the canonical L7 default — AC 19 (natural armor), HP 97,
+ * Bite +8 1d6+5 piercing + DC 13 CON save or unconscious (poisoned),
+ * Constrict +6 2d6+3 + grapple/restrain (DC 15).
+ */
+export const DEFAULT_CC_OPTION = CONJURE_CELESTIAL_OPTIONS[0]; // L7: CR 4

@@ -263,6 +263,9 @@ import { shouldCast as shouldCastConjureAnimals } from '../spells/conjure_animal
 import { shouldCast as shouldCastConjureWoodlandBeings }  from '../spells/conjure_woodland_beings';
 import { shouldCast as shouldCastConjureMinorElementals } from '../spells/conjure_minor_elementals';
 import { shouldCast as shouldCastConjureElemental }       from '../spells/conjure_elemental';
+// ── TG-006 — PHB Conjure spells (Phase 4 — Session 31) ───────────────────
+import { shouldCast as shouldCastConjureFey }       from '../spells/conjure_fey';
+import { shouldCast as shouldCastConjureCelestial } from '../spells/conjure_celestial';
 // ── TG-006 — PHB/XGE Find spells (Phase 3) ──────────────────────────────
 import { shouldCast as shouldCastFindFamiliar }        from '../spells/find_familiar';
 import { shouldCast as shouldCastFindSteed }           from '../spells/find_steed';
@@ -2283,16 +2286,57 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
     }
   }
 
-  // === TG-006 — PHB CONJURE SPELLS (Phase 4 — Session 30) ===
-  // Three new PHB Conjure spells added in Session 30:
+  // === TG-006 — PHB CONJURE SPELLS (Phase 4 — Session 30 + 31) ===
+  // Five PHB Conjure spells in priority order (higher-level first):
+  //   - Conjure Celestial (L7): 1 Couatl (CR 4), concentration 1 hr.
+  //   - Conjure Fey (L6): 1 Green Hag (CR 3), concentration 1 hr.
   //   - Conjure Elemental (L5): 1 Fire Elemental (CR 5), concentration 1 hr.
-  //     Most powerful single-target summon of the three — prioritised highest.
   //   - Conjure Woodland Beings (L4): 4 Sprites (CR 1/4), concentration 1 hr.
-  //     Sprite shortbow +6 with DC 10 CON poisoned rider — solid ranged DPS.
   //   - Conjure Minor Elementals (L4): 4 Mud Mephits (CR 1/4), concentration 1 hr.
-  //     Mud Mephit Fists +3 1d6+1 bludgeoning — tanky (HP 27) melee.
-  // All three use the same TCE-style initiative insertion (shares caster's
-  // initiative, acts immediately after caster).
+  // All five use the same TCE-style initiative insertion (shares caster's
+  // initiative, acts immediately after caster). Single-creature summons
+  // (Celestial/Fey/Elemental) are prioritised above pack summons because
+  // higher-slot single creatures are typically more impactful than
+  // lower-slot packs.
+
+  // --- Conjure Celestial (7th-level, 1 Couatl, concentration) ---
+  // PHB p.225: action, 90 ft, concentration 1 hr. Spawns 1 Couatl
+  // (CR 4) with HP 97, AC 19, Bite +8 1d6+5 + DC 13 CON or poisoned,
+  // Constrict +6 2d6+3 + DC 15 STR or grappled+restrained.
+  // Priority: highest of all PHB Conjure spells (L7 single powerful celestial).
+  if (!plan.action && self.actions.some(a => a.name === 'Conjure Celestial')) {
+    if (shouldCastConjureCelestial(self, battlefield)) {
+      const action = self.actions.find(a => a.name === 'Conjure Celestial')!;
+      plan.action = {
+        type: 'summonSpell',
+        action,
+        targetId: self.id,
+        description: `${self.name} casts Conjure Celestial`,
+      };
+      plan.targetId = self.id;
+      plan.bonusAction = planBonusAction(self, self, battlefield);
+      return plan;
+    }
+  }
+
+  // --- Conjure Fey (6th-level, 1 Green Hag, concentration) ---
+  // PHB p.226: action, 90 ft, concentration 1 hr. Spawns 1 Green Hag
+  // (CR 3) with HP 82, AC 17, Claws +6 2d8+4 slashing.
+  // Priority: above Conjure Elemental because L6 > L5.
+  if (!plan.action && self.actions.some(a => a.name === 'Conjure Fey')) {
+    if (shouldCastConjureFey(self, battlefield)) {
+      const action = self.actions.find(a => a.name === 'Conjure Fey')!;
+      plan.action = {
+        type: 'summonSpell',
+        action,
+        targetId: self.id,
+        description: `${self.name} casts Conjure Fey`,
+      };
+      plan.targetId = self.id;
+      plan.bonusAction = planBonusAction(self, self, battlefield);
+      return plan;
+    }
+  }
 
   // --- Conjure Elemental (5th-level, 1 Fire Elemental, concentration) ---
   // PHB p.225: action, 90 ft, concentration 1 hr. Spawns 1 Fire Elemental

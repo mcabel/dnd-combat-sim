@@ -697,6 +697,9 @@ import { shouldCast as shouldCastConjureAnimals, execute as executeConjureAnimal
 import { shouldCast as shouldCastConjureWoodlandBeings,    execute as executeConjureWoodlandBeings }    from '../spells/conjure_woodland_beings';
 import { shouldCast as shouldCastConjureMinorElementals,   execute as executeConjureMinorElementals }   from '../spells/conjure_minor_elementals';
 import { shouldCast as shouldCastConjureElemental,         execute as executeConjureElemental }         from '../spells/conjure_elemental';
+// ── TG-006 — PHB Conjure spells (Phase 4 — Session 31) ───────────────────
+import { shouldCast as shouldCastConjureFey,        execute as executeConjureFey }        from '../spells/conjure_fey';
+import { shouldCast as shouldCastConjureCelestial,  execute as executeConjureCelestial }  from '../spells/conjure_celestial';
 // ── TG-006 — PHB/XGE Find spells (Phase 3) ──────────────────────────────
 import { shouldCast as shouldCastFindFamiliar,        execute as executeFindFamiliar }        from '../spells/find_familiar';
 import { shouldCast as shouldCastFindSteed,           execute as executeFindSteed }            from '../spells/find_steed';
@@ -3792,6 +3795,10 @@ function executePlannedAction(
         executeConjureMinorElementals(actor, actor, state);
       } else if (spellName === 'Conjure Elemental') {
         executeConjureElemental(actor, actor, state);
+      } else if (spellName === 'Conjure Fey') {
+        executeConjureFey(actor, actor, state);
+      } else if (spellName === 'Conjure Celestial') {
+        executeConjureCelestial(actor, actor, state);
       } else if (spellName === 'Find Familiar') {
         executeFindFamiliar(actor, actor, state);
       } else if (spellName === 'Find Steed') {
