@@ -358,6 +358,7 @@ tsc --noEmit: 0 errors.
 ## CI Status
 
 - **Before this session:** Latest commit (6c07edb, Session 35 + flaky grapple fix) was green (Test Suite `success`, pages build `success`).
-- **Session 36 commit (b2cfb65):** Test Suite `failure` — a PRE-EXISTING flaky test (`shillelagh.test.ts` test 13c) surfaced. Session 36's changes do NOT touch shillelagh; the flake is a statistical comparison (`dmgWithBuff > dmgNoBuff` between two independent crit rolls, ~5-10% failure rate). The prior green run on 6c07edb got lucky.
-- **Flaky-test fix commit (f283ad5):** Replaced the flaky 13c with a deterministic bludgeoning-component check. Verified 0 failures in 30 local runs (was ~10%).
-- **After the flaky fix:** Test Suite to be re-verified post-push. All 117 protection_from_energy assertions pass locally (3 stable runs), shillelagh now stable (0/30), and 31 baseline test files pass (no regressions). No engine dispatch paths were modified — the `case 'genericSpell':` dispatch is unchanged.
+- **Session 36 commit (b2cfb65):** Test Suite `failure` ❌ — a PRE-EXISTING flaky test (`shillelagh.test.ts` test 13c) surfaced. Session 36's changes do NOT touch shillelagh; the flake is a statistical comparison (`dmgWithBuff > dmgNoBuff` between two independent crit rolls, ~5-10% failure rate). The prior green run on 6c07edb got lucky.
+- **Flaky-test fix commit (f283ad5):** Replaced the flaky 13c with a deterministic bludgeoning-component check. Verified 0 failures in 30 local runs (was ~10%). Test Suite `success` ✅, pages build `success` ✅.
+- **Handover commit (f7f3352 — this file):** Test Suite `success` ✅. No code changes (markdown-only), so the green result from f283ad5 carries forward.
+- **Final state:** All green on the latest commit (f7f3352). The red X on b2cfb65 was a pre-existing flaky test, not a regression from Session 36's changes; it is fixed by f283ad5 and verified green on both f283ad5 and f7f3352.
