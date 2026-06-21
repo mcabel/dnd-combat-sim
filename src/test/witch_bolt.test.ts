@@ -253,12 +253,12 @@ console.log('\n=== 4. execute — fresh cast, guaranteed hit ===\n');
     assert(`Damage in 1d12 OR 2d12 range (1-24): got ${dmgDealt}`,
       dmgDealt >= 1 && dmgDealt <= 24);
     // 4c. Log events — action + (attack_hit OR attack_crit) + damage + condition_add (conc)
-    const actions = state.log.events.filter(e => e.type === 'action');
+    const actions = state.log.events.filter((e: any) => e.type === 'action');
     assert('Action log emitted', actions.length >= 1);
     const hitOrCrit = state.log.events.filter(
-      e => e.type === 'attack_hit' || e.type === 'attack_crit');
+      (e: any) => e.type === 'attack_hit' || e.type === 'attack_crit');
     eq('Exactly 1 attack_hit/attack_crit event emitted', hitOrCrit.length, 1);
-    const dmgLogs = state.log.events.filter(e => e.type === 'damage');
+    const dmgLogs = state.log.events.filter((e: any) => e.type === 'damage');
     eq('Damage log emitted', dmgLogs.length, 1);
     // 4d. KEY: concentration set with spellName 'Witch Bolt' + targetId === enemy.id
     assert('Concentration is active', caster.concentration?.active === true);
@@ -290,11 +290,11 @@ console.log('\n=== 5. execute — fresh cast, guaranteed miss ===\n');
     assert(`Damage in [0, 24] (miss or rare crit): got ${dmgDealt}`,
       dmgDealt >= 0 && dmgDealt <= 24);
     // 5c. No plain attack_hit event (nat 20 → crit path; otherwise miss)
-    const hitEvents = state.log.events.filter(e => e.type === 'attack_hit');
+    const hitEvents = state.log.events.filter((e: any) => e.type === 'attack_hit');
     eq('No plain attack_hit event (miss or crit only)', hitEvents.length, 0);
     // 5d. Either attack_miss OR attack_crit was emitted (1 attack roll total)
-    const missEvents = state.log.events.filter(e => e.type === 'attack_miss');
-    const critEvents = state.log.events.filter(e => e.type === 'attack_crit');
+    const missEvents = state.log.events.filter((e: any) => e.type === 'attack_miss');
+    const critEvents = state.log.events.filter((e: any) => e.type === 'attack_crit');
     eq('Exactly 1 attack event (miss or crit)', missEvents.length + critEvents.length, 1);
     // 5e. KEY: concentration NOT set on miss (clean miss)
     if (critEvents.length === 0) {

@@ -37,7 +37,7 @@ function makeCombatant(id: string, overrides: Partial<Combatant> = {}): Combatan
     pos: { x: 0, y: 0, z: 0, ...((overrides as any).pos || {}) },
   };
 }
-function makeBF(c: Combatant[]) { return { width: 60, height: 60, depth: 1, cells: new Map(), round: 1, combatants: new Map(c.map(x => [x.id, x])), initiativeOrder: c.map(x => x.id) } as any; }
+function makeBF(c: Combatant[]) { return { width: 60, height: 60, depth: 1, cells: new Map(), round: 1, combatants: new Map(c.map((x: any) => [x.id, x])), initiativeOrder: c.map((x: any) => x.id) } as any; }
 function makeState(bf: any): any { return { battlefield: bf, log: { events: [], winner: null, rounds: 0 }, disengagedThisTurn: new Set(), damageThisRound: new Map(), rageDamagedSinceLastTurn: new Set() }; }
 function makeCaster(pos: any = { x: 0, y: 0, z: 0 }, a: Action = MS_ACTION) { return makeCombatant('wiz', { name: 'Caster', pos, actions: [a], resources: withSlots6(1) }); }
 const weak = (id: string, pos: any, o: Partial<Combatant> = {}) => makeCombatant(id, { name: id, faction: 'enemy', wis: 1, pos, ...o });
@@ -87,7 +87,7 @@ console.log('\n=== 5. execute — guaranteed success (no effect) ===\n');
 {
   const c = makeCaster({ x: 0, y: 0, z: 0 }, MS_ACTION_LOW); const e1 = strong('e1', { x: 1, y: 0 });
   const bf = makeBF([c, e1]); const st = makeState(bf); const t = shouldCast(c, bf);
-  if (t) { execute(c, t, st); assert('NOT charmed', !e1.conditions.has('charmed')); const ss = st.log.events.filter(x => x.type === 'save_success'); assert('save_success log', ss.length === 1);
+  if (t) { execute(c, t, st); assert('NOT charmed', !e1.conditions.has('charmed')); const ss = st.log.events.filter((x: any) => x.type === 'save_success'); assert('save_success log', ss.length === 1);
     // NEW: no disadv on attacks when save succeeds
     const e1Adv = e1.advantages.find(a => a.source === 'Mass Suggestion');
     assert('no disadv on attacks after save success', !e1Adv);

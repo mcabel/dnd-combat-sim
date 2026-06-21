@@ -38,7 +38,7 @@ function makeCombatant(id: string, overrides: Partial<Combatant> = {}): Combatan
     pos: { x: 0, y: 0, z: 0, ...((overrides as any).pos || {}) },
   };
 }
-function makeBF(c: Combatant[]) { return { width: 60, height: 60, depth: 1, cells: new Map(), round: 1, combatants: new Map(c.map(x => [x.id, x])), initiativeOrder: c.map(x => x.id) } as any; }
+function makeBF(c: Combatant[]) { return { width: 60, height: 60, depth: 1, cells: new Map(), round: 1, combatants: new Map(c.map((x: any) => [x.id, x])), initiativeOrder: c.map((x: any) => x.id) } as any; }
 function makeState(bf: any): any { return { battlefield: bf, log: { events: [], winner: null, rounds: 0 }, disengagedThisTurn: new Set(), damageThisRound: new Map(), rageDamagedSinceLastTurn: new Set() }; }
 function makeCaster(pos: any = { x: 0, y: 0, z: 0 }, a: Action = EB_ACTION) { return makeCombatant('wiz', { name: 'Caster', pos, actions: [a], resources: withSlots6(1) }); }
 const weak = (id: string, pos: any, o: Partial<Combatant> = {}) => makeCombatant(id, { name: id, faction: 'enemy', wis: 1, pos, ...o });
@@ -198,7 +198,7 @@ console.log('\n=== 9. execute — guaranteed save success ===\n');
     assert('NOT sleeping', !e.conditions.has('sleeping'));
     assert('NOT frightened', !e.conditions.has('frightened'));
     assert('NOT poisoned', !e.conditions.has('poisoned'));
-    const ss = st.log.events.filter(x => x.type === 'save_success');
+    const ss = st.log.events.filter((x: any) => x.type === 'save_success');
     assert('save_success log', ss.length === 1);
   }
 }
@@ -242,9 +242,9 @@ console.log('\n=== 11. execute — log messages ===\n');
   const bf = makeBF([c, e]);
   const st = makeState(bf);
   execute(c, e, st);
-  const descs = st.log.events.map(ev => ev.description);
-  assert('log has "Panicked option"', descs.some(d => d.includes('Panicked option')));
-  assert('log has "PANICKED"', descs.some(d => d.includes('PANICKED')));
+  const descs = st.log.events.map((ev: any) => ev.description);
+  assert('log has "Panicked option"', descs.some((d: any) => d.includes('Panicked option')));
+  assert('log has "PANICKED"', descs.some((d: any) => d.includes('PANICKED')));
 }
 {
   _resetEffectIdCounter();
@@ -253,9 +253,9 @@ console.log('\n=== 11. execute — log messages ===\n');
   const bf = makeBF([c, e]);
   const st = makeState(bf);
   execute(c, e, st);
-  const descs = st.log.events.map(ev => ev.description);
-  assert('log has "Sickened option"', descs.some(d => d.includes('Sickened option')));
-  assert('log has "SICKENED"', descs.some(d => d.includes('SICKENED')));
+  const descs = st.log.events.map((ev: any) => ev.description);
+  assert('log has "Sickened option"', descs.some((d: any) => d.includes('Sickened option')));
+  assert('log has "SICKENED"', descs.some((d: any) => d.includes('SICKENED')));
 }
 {
   _resetEffectIdCounter();
@@ -264,9 +264,9 @@ console.log('\n=== 11. execute — log messages ===\n');
   const bf = makeBF([c, e]);
   const st = makeState(bf);
   execute(c, e, st);
-  const descs = st.log.events.map(ev => ev.description);
-  assert('log has "Asleep option"', descs.some(d => d.includes('Asleep option')));
-  assert('log has "ASLEEP"', descs.some(d => d.includes('ASLEEP')));
+  const descs = st.log.events.map((ev: any) => ev.description);
+  assert('log has "Asleep option"', descs.some((d: any) => d.includes('Asleep option')));
+  assert('log has "ASLEEP"', descs.some((d: any) => d.includes('ASLEEP')));
 }
 
 // =====================================================================

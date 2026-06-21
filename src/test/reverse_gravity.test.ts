@@ -38,7 +38,7 @@ function makeCombatant(id: string, overrides: Partial<Combatant> = {}): Combatan
     pos: { x: 0, y: 0, z: 0, ...((overrides as any).pos || {}) },
   };
 }
-function makeBF(c: Combatant[]) { return { width: 120, height: 120, depth: 1, cells: new Map(), round: 1, combatants: new Map(c.map(x => [x.id, x])), initiativeOrder: c.map(x => x.id) } as any; }
+function makeBF(c: Combatant[]) { return { width: 120, height: 120, depth: 1, cells: new Map(), round: 1, combatants: new Map(c.map((x: any) => [x.id, x])), initiativeOrder: c.map((x: any) => x.id) } as any; }
 function makeState(bf: any): any { return { battlefield: bf, log: { events: [], winner: null, rounds: 0 }, disengagedThisTurn: new Set(), damageThisRound: new Map(), rageDamagedSinceLastTurn: new Set() }; }
 function makeCaster(pos: any = { x: 0, y: 0, z: 0 }, a: Action = RG_ACTION) { return makeCombatant('wiz', { name: 'Caster', pos, actions: [a], resources: withSlots7(1) }); }
 function makeEnemy(id: string, pos: any, o: Partial<Combatant> = {}) { return makeCombatant(id, { name: id, faction: 'enemy', pos, ...o }); }
@@ -104,7 +104,7 @@ console.log('\n=== 3. shouldCast AoE shape ===\n');
   const far = weak('far', { x: 12, y: 0 }, { maxHP: 200 });
   const tooFar = weak('tooFar', { x: 16, y: 0 }, { maxHP: 250 });
   const r = shouldCast(c, makeBF([c, center, near, far, tooFar]));
-  if (r) { const ids = r.map(x => x.id).sort(); eq('catches center+near+far (≤50ft of center), excludes tooFar', ids.join(','), 'center,far,near'); }
+  if (r) { const ids = r.map((x: any) => x.id).sort(); eq('catches center+near+far (≤50ft of center), excludes tooFar', ids.join(','), 'center,far,near'); }
 }
 
 // ============================================================
@@ -136,7 +136,7 @@ console.log('\n=== 5. execute — guaranteed success ===\n');
     execute(c, t, st);
     assert('NOT restrained', !e.conditions.has('restrained'));
     assert('no _fallHeight on success', (e as any)._fallHeight === undefined);
-    const ss = st.log.events.filter(x => x.type === 'save_success');
+    const ss = st.log.events.filter((x: any) => x.type === 'save_success');
     assert('save_success log', ss.length === 1);
   }
 }

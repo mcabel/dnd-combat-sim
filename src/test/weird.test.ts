@@ -200,7 +200,7 @@ console.log('\n=== 4. execute — guaranteed fail ===\n');
     const dmgDealt = hpBefore - enemy.currentHP;
     assert(`Damage in 4d10 range (4-40): got ${dmgDealt}`, dmgDealt >= 4 && dmgDealt <= 40);
     assert('Frightened applied', enemy.conditions.has('frightened'));
-    const saveFails = state.log.events.filter(e => e.type === 'save_fail');
+    const saveFails = state.log.events.filter((e: any) => e.type === 'save_fail');
     assert('Save-fail log emitted', saveFails.length === 1);
   }
 }
@@ -221,7 +221,7 @@ console.log('\n=== 5. execute — guaranteed success ===\n');
     const dmgDealt = hpBefore - enemy.currentHP;
     assert(`Half-damage in 2-20 range: got ${dmgDealt}`, dmgDealt >= 2 && dmgDealt <= 20);
     assert('NOT frightened (save succeeded)', !enemy.conditions.has('frightened'));
-    const saveSuccess = state.log.events.filter(e => e.type === 'save_success');
+    const saveSuccess = state.log.events.filter((e: any) => e.type === 'save_success');
     assert('Save-success log emitted', saveSuccess.length === 1);
   }
 }

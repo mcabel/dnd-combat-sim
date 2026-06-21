@@ -36,7 +36,7 @@ function makeCombatant(id: string, overrides: Partial<Combatant> = {}): Combatan
     pos: { x: 0, y: 0, z: 0, ...((overrides as any).pos || {}) },
   };
 }
-function makeBF(c: Combatant[]) { return { width: 60, height: 60, depth: 1, cells: new Map(), round: 1, combatants: new Map(c.map(x => [x.id, x])), initiativeOrder: c.map(x => x.id) } as any; }
+function makeBF(c: Combatant[]) { return { width: 60, height: 60, depth: 1, cells: new Map(), round: 1, combatants: new Map(c.map((x: any) => [x.id, x])), initiativeOrder: c.map((x: any) => x.id) } as any; }
 function makeState(bf: any): any { return { battlefield: bf, log: { events: [], winner: null, rounds: 0 }, disengagedThisTurn: new Set(), damageThisRound: new Map(), rageDamagedSinceLastTurn: new Set() }; }
 function makeCaster(pos: any = { x: 0, y: 0, z: 0 }) { return makeCombatant('wiz', { name: 'Caster', pos, actions: [PWP_ACTION], resources: withSlots7(1) }); }
 function makeEnemy(id: string, pos: any, o: Partial<Combatant> = {}) { return makeCombatant(id, { name: id, faction: 'enemy', pos, ...o }); }
@@ -73,7 +73,7 @@ console.log('\n=== 5. execute — HP > 60 → no effect ===\n');
 {
   const c = makeCaster(); const e = makeEnemy('e1', { x: 1, y: 0 }, { currentHP: 50, maxHP: 300 });
   const bf = makeBF([c, e]); const st = makeState(bf); const t = shouldCast(c, bf);
-  if (t) { e.currentHP = 100; execute(c, t as Combatant, st); eq('slot consumed', (c.resources as any).spellSlots[7].remaining, 0); assert('NOT restrained', !e.conditions.has('restrained')); const ne = st.log.events.filter(x => x.description.includes('NO EFFECT')); assert('NO EFFECT log', ne.length === 1); }
+  if (t) { e.currentHP = 100; execute(c, t as Combatant, st); eq('slot consumed', (c.resources as any).spellSlots[7].remaining, 0); assert('NOT restrained', !e.conditions.has('restrained')); const ne = st.log.events.filter((x: any) => x.description.includes('NO EFFECT')); assert('NO EFFECT log', ne.length === 1); }
 }
 
 console.log('\n=== 6. Cleanup no-op ===\n');

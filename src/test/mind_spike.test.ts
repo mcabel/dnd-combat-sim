@@ -192,9 +192,9 @@ console.log('\n=== 4. execute — guaranteed fail (full damage) ===\n');
     eq('Slot consumed (2nd level: 2 → 1)', (caster.resources as any).spellSlots[2].remaining, 1);
     const dmgDealt = hpBefore - enemy.currentHP;
     assert(`Damage in 3d8 range (3-24): got ${dmgDealt}`, dmgDealt >= 3 && dmgDealt <= 24);
-    const saveFails = state.log.events.filter(e => e.type === 'save_fail');
+    const saveFails = state.log.events.filter((e: any) => e.type === 'save_fail');
     assert('Save-fail log emitted (WIS 1 vs DC 25)', saveFails.length === 1);
-    const dmgLogs = state.log.events.filter(e => e.type === 'damage');
+    const dmgLogs = state.log.events.filter((e: any) => e.type === 'damage');
     assert('Damage log emitted', dmgLogs.length === 1);
   }
 }
@@ -214,7 +214,7 @@ console.log('\n=== 5. execute — guaranteed success (half damage) ===\n');
     execute(caster, target as Combatant, state);
     const dmgDealt = hpBefore - enemy.currentHP;
     assert(`Half-damage in 1-12 range: got ${dmgDealt}`, dmgDealt >= 1 && dmgDealt <= 12);
-    const saveSuccess = state.log.events.filter(e => e.type === 'save_success');
+    const saveSuccess = state.log.events.filter((e: any) => e.type === 'save_success');
     assert('Save-success log emitted (WIS 30 vs DC 5)', saveSuccess.length === 1);
   }
 }

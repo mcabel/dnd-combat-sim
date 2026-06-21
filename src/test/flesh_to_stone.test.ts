@@ -39,7 +39,7 @@ function makeCombatant(id: string, overrides: Partial<Combatant> = {}): Combatan
     pos: { x: 0, y: 0, z: 0, ...((overrides as any).pos || {}) },
   };
 }
-function makeBF(c: Combatant[]) { return { width: 60, height: 60, depth: 1, cells: new Map(), round: 1, combatants: new Map(c.map(x => [x.id, x])), initiativeOrder: c.map(x => x.id) } as any; }
+function makeBF(c: Combatant[]) { return { width: 60, height: 60, depth: 1, cells: new Map(), round: 1, combatants: new Map(c.map((x: any) => [x.id, x])), initiativeOrder: c.map((x: any) => x.id) } as any; }
 function makeState(bf: any): any { return { battlefield: bf, log: { events: [], winner: null, rounds: 0 }, disengagedThisTurn: new Set(), damageThisRound: new Map(), rageDamagedSinceLastTurn: new Set() }; }
 function makeCaster(pos: any = { x: 0, y: 0, z: 0 }, a: Action = FTS_ACTION) { return makeCombatant('wiz', { name: 'Caster', pos, actions: [a], resources: withSlots6(1) }); }
 const weak = (id: string, pos: any, o: Partial<Combatant> = {}) => makeCombatant(id, { name: id, faction: 'enemy', con: 1, pos, ...o });
@@ -93,7 +93,7 @@ console.log('\n=== 5. execute — guaranteed success ===\n');
 {
   const c = makeCaster({ x: 0, y: 0, z: 0 }, FTS_ACTION_LOW); const e = strong('e1', { x: 5, y: 0 });
   const bf = makeBF([c, e]); const st = makeState(bf); const t = shouldCast(c, bf);
-  if (t) { execute(c, t as Combatant, st); assert('NOT restrained', !e.conditions.has('restrained')); const ss = st.log.events.filter(x => x.type === 'save_success'); assert('save_success log', ss.length === 1); assert('no tracker on success', e._saveFailTracker === undefined); }
+  if (t) { execute(c, t as Combatant, st); assert('NOT restrained', !e.conditions.has('restrained')); const ss = st.log.events.filter((x: any) => x.type === 'save_success'); assert('save_success log', ss.length === 1); assert('no tracker on success', e._saveFailTracker === undefined); }
 }
 
 console.log('\n=== 6. Cleanup no-op ===\n');
