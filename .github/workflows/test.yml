@@ -24,7 +24,12 @@ jobs:
             # Per-file timeout (60s) prevents one hanging test from blocking
             # the entire CI. If a test hangs, the timeout kills it, we log
             # the failure, and move on to the next file.
-            RESULT=$(timeout 60 bash -c "TS_NODE_COMPILER_OPTIONS='{\"lib\":[\"ES2020\",\"DOM\"],\"types\":[\"node\"]}' npx ts-node \"$f\" 2>&1" | grep "Results:" || echo "Results: TIMEOUT or CRASH (no summary line)")
+            # --transpile-only: skip type-checking. The test files are
+            # script-style (console.log assertions, no test framework) and
+            # some have implicit-any TS7006 warnings in test lambdas that
+            # would cause ts-node to exit non-zero without --transpile-only.
+            # Type-checking of the actual source is done separately via tsc.
+            RESULT=$(timeout 60 bash -c "TS_NODE_COMPILER_OPTIONS='{\"lib\":[\"ES2020\",\"DOM\"],\"types\":[\"node\"]}' npx ts-node --transpile-only \"$f\" 2>&1" | grep "Results:" || echo "Results: TIMEOUT or CRASH (no summary line)")
             echo "$BASENAME: $RESULT"
             echo "$RESULT" | grep -q ", 0 failed" || FAILED=1
           done
