@@ -357,13 +357,16 @@ import { planTurn } from '../ai/planner';
   // Deterministic: override rollGrappleContest by giving attacker overwhelming STR
   const attacker = makeC({ str: 30, dex: 10, id: 'att', faction: 'party', aiProfile: 'smart' });
   const defender = makeC({ str: 8,  dex: 8,  id: 'def', faction: 'enemy'  });
-  // rollGrappleContest is probabilistic — run 20 times, expect at least 15 successes
+  // rollGrappleContest is probabilistic — run 50 times.
+  // P(attacker wins) = 88.75% (STR +10 vs STR -1, d20+10 > d20-1).
+  // With 50 iterations, expected ~44 wins. Threshold 35 gives P(fail) < 0.1%
+  // (was 20 iterations with threshold 14 → ~2% flakiness).
   let wins = 0;
-  for (let i = 0; i < 20; i++) {
+  for (let i = 0; i < 50; i++) {
     defender.conditions = new Set(); // reset each time
     if (rollGrappleContest(attacker, defender)) wins++;
   }
-  assert('STR 30 vs STR 8: grapple wins >14/20 runs', wins > 14, `won ${wins}/20`);
+  assert('STR 30 vs STR 8: grapple wins >35/50 runs', wins > 35, `won ${wins}/50`);
 }
 
 {
