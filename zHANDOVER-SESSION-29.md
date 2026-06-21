@@ -2,17 +2,19 @@
 
 **Date:** 2026-06-21  
 **Agent:** Core Engine (Z.ai)  
-**Focus:** TG-006 Summon/Conjure subsystem + 5 high-impact gap fixes  
+**Focus:** TG-006 Summon/Conjure subsystem + 5 high-impact gap fixes + CI/TS cleanup  
 
 ---
 
 ## Session Summary
 
-This was a **two-part** session:
+This was a **three-part** session:
 
 **Part 1:** Completed 5 remaining high-impact gap increments from the Session 28 plan that were described but never committed.
 
 **Part 2:** Deep research + full implementation of TG-006 Summon/Conjure subsystem Phases 1-3, unlocking 16 previously-blocked summon spells.
+
+**Part 3:** Fixed all TypeScript compilation errors (124→0) and CI test failures.
 
 ---
 
@@ -78,6 +80,20 @@ This was a **two-part** session:
 - **Find Greater Steed** (L4): Griffon mount, Large, combat_mount, fly 80ft, Beak+Claws multiattack
 - NOT concentration (instantaneous) — persists until killed or dismissed
 - 197 test assertions
+
+---
+
+## Part 3: CI/TypeScript Cleanup
+
+### TS Compilation Fix (`3833fb5`)
+- **124 → 0 TypeScript errors** after fixes:
+  - Added `: any` type annotations to 123 untyped callback parameters across 27 test files
+  - Fixed pattern: `.filter(e => ...)` → `.filter((e: any) => ...)`
+  - Added missing `exhaustionLevel: 0` to `cure_wounds.test.ts` Combatant factory (from concurrent Session 45)
+
+### CI Compatibility Fix (`1fd12e9`)
+- `moving_zone.test.ts` used custom summary format `"Moving Zone tests: X passed, 0 failed"` instead of the CI-expected `"Results: X passed, 0 failed"`
+- Changed to standard `Results:` format so CI grep matches
 
 ---
 
@@ -150,6 +166,17 @@ After spawning, `mountCreature(caster, steed)` is called from `src/summons/mount
 
 ---
 
+## Build Status
+
+| Check | Status |
+|-------|--------|
+| `tsc --noEmit` | ✅ 0 errors (was 124) |
+| `bun test` | ✅ 0 failures |
+| CI (`ts-node --transpile-only` per-file) | ✅ All new tests pass |
+| Source compilation | ✅ Clean |
+
+---
+
 ## Test Coverage
 
 | Category | New Test Files | Total Assertions |
@@ -158,13 +185,11 @@ After spawning, `mountCreature(caster, steed)` is called from `src/summons/mount
 | Summon spells (Part 2) | 16 files | ~1,324 assertions |
 | **Total** | **20 new files** | **~1,478 assertions** |
 
-All tests pass with 0 failures. TypeScript source compiles clean.
-
 ---
 
 ## Generic Registry Count
 - Before session: 130 spells in `_generic_registry.ts`
-- After session: 129 (Dispel Magic removed) + Conjure Animals may still be in registry (check)
+- After session: 129 (Dispel Magic removed)
 - 16 new bespoke summon spell modules created
 
 ---
@@ -172,6 +197,9 @@ All tests pass with 0 failures. TypeScript source compiles clean.
 ## Commit Log (Session 29)
 
 ```
+1fd12e9 fix: moving_zone.test.ts summary format for CI compatibility
+3833fb5 fix: resolve all TypeScript compilation errors (124→0)
+74efbd5 Add zHANDOVER-SESSION-29.md
 99ee63e Phase 3: Find Familiar + Find Steed + Find Greater Steed (TG-006)
 e508c75 Phase 2: Conjure Animals (PHB) + CR-based picker helper (TG-006)
 1e101b9 Phase 1e: Summon Celestial + Summon Draconic Spirit + Summon Fiend (L5-L6 TCE, TG-006)
