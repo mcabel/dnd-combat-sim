@@ -105,6 +105,7 @@ export type SpellEffectType =
   | 'curse_rider'          // 1d8 necrotic when cursed target attacks the curse caster (Bestow Curse PHB p.214 opt.4)
   | 'dominated'             // charmed + incapacitated (Dominate Beast/Person/Monster PHB p.235 — control-override)
   | 'suggestion'            // charmed + disadv on own attacks (Mass Suggestion PHB p.258 — follow-a-suggestion behaviour)
+  | 'terrain_zone'          // persistent terrain effect on the battlefield (Grease/Sleet Storm/Watery Sphere)
   // ── Session 27 — Batch 3 concentration buffs ────────────────────────
   // bane_die: inverse of bless_die (Bane PHB p.219: -1d4 to attacks/saves).
   // weapon_enchant extended with damageDie/damageDieCount/damageDieType
@@ -210,6 +211,18 @@ export interface ActiveEffect {
     // breaks, the creature falls and takes fall damage (PHB p.183).
     // Read by processFallDamage() in combat.ts.
     fallHeight?: number;                // e.g. 100 for 100-ft Reverse Gravity cylinder
+    // ── terrain_zone (Grease/Sleet Storm/Watery Sphere) ────────────────
+    // Persistent terrain effect that applies a condition to creatures
+    // starting their turn in the zone's radius. The effect is stored on
+    // the CASTER (not the targets). At the start of each creature's turn,
+    // combat.ts checks if they're within the zone's radius and rolls a
+    // save if so. Read by getActiveTerrainZones() in spell_effects.ts.
+    terrainSaveAbility?: 'str' | 'dex' | 'con' | 'wis';  // save type for terrain effect
+    terrainCondition?: Condition;                          // condition on failed save
+    terrainRadiusFt?: number;                             // radius of the terrain zone (ft)
+    terrainCenterX?: number;                              // center position X (grid squares)
+    terrainCenterY?: number;                              // center position Y (grid squares)
+    terrainCenterZ?: number;                              // center position Z (grid squares)
   };
   sourceIsConcentration: boolean;     // if true, removed when caster's concentration ends
 }

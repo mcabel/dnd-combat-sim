@@ -20,7 +20,13 @@
 //     make a CON save or lose concentration"): simplified away. v1 applies
 //     prone only. Documented via `sleetStormConcentrationBreakV1Simplified`.
 //   - Difficult terrain (PHB p.276: "ground is difficult terrain"): NOT
-//     modelled (v1 has no terrain subsystem).
+//     modelled (v1 has no terrain subsystem). Documented via
+//     `sleetStormDifficultTerrainV1Simplified`.
+//   - Persistent terrain: v2 implements start-of-turn terrain zone check.
+//     Canon says creatures entering the sleet also save immediately;
+//     v2 only checks at start of turn (documented via
+//     `sleetStormPersistentTerrainV2StartOfTurnOnly`). On-enter check
+//     requires deeper movement system integration (v3).
 //   - No damage (PHB p.276: no damage roll).
 //   - Concentration: canon 1 min. v1 starts concentration; not enforced
 //     on damage (TG-002). prone is conc-sourced.
@@ -37,7 +43,7 @@
 //   cleanup() — no-op (concentration break handles cleanup)
 // ============================================================
 
-import { Combatant, Battlefield } from '../types/core';
+import { Combatant, Battlefield, Condition } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
 import { applySpellEffect, removeEffectsFromCaster } from '../engine/spell_effects';
 import { startConcentration, rollSave } from '../engine/utils';
@@ -57,6 +63,7 @@ export const metadata = {
   castingTime: 'action',
   sleetStormConcentrationBreakV1Simplified: true,          // conc-break rider simplified away
   sleetStormDifficultTerrainV1Simplified: true,            // terrain NOT modelled
+  sleetStormPersistentTerrainV2StartOfTurnOnly: true,     // start-of-turn check; on-enter deferred to v3
 } as const;
 
 // ---- Local log helper ---------------------------------------
@@ -112,6 +119,32 @@ export function execute(caster: Combatant, targets: Combatant[], state: EngineSt
 
   emit(state, 'action', caster.id,
     `${caster.name} casts Sleet Storm! (DC ${saveDC} DEX, prone on fail, ${metadata.aoeRadiusFt}-ft radius) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} caught!`);
+
+  // Find the center (highest-threat enemy) for the terrain zone position
+  const center = targets.reduce<Combatant | null>((best, t) => {
+    if (t.isDead || t.isUnconscious) return best;
+    if (!best || t.maxHP > best.maxHP) return t;
+    return best;
+  }, null);
+
+  // Apply terrain_zone effect on the CASTER (concentration)
+  // This marks a persistent 20-ft radius zone at the center position
+  if (center) {
+    applySpellEffect(caster, {
+      casterId: caster.id,
+      spellName: 'Sleet Storm',
+      effectType: 'terrain_zone',
+      payload: {
+        terrainSaveAbility: 'dex' as const,
+        terrainCondition: 'prone' as Condition,
+        terrainRadiusFt: 20,
+        terrainCenterX: center.pos.x,
+        terrainCenterY: center.pos.y,
+        terrainCenterZ: center.pos.z,
+      },
+      sourceIsConcentration: true,
+    });
+  }
 
   for (const target of targets) {
     if (target.isDead || target.isUnconscious) continue;

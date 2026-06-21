@@ -20,6 +20,11 @@
 //     (mirrors Sunburst) and collects all enemies within 5 ft (chebyshev).
 //   - Movement rider (PHB p.170: the sphere moves 30 ft/turn, carrying
 //     restrained creatures): NOT modelled. v1 applies restrained only.
+//   - Persistent terrain: v2 implements start-of-turn terrain zone check.
+//     Canon says creatures in the sphere's space must save each turn;
+//     v2 checks at start of turn (documented via
+//     `waterySpherePersistentTerrainV2StartOfTurnOnly`). On-enter check
+//     requires deeper movement system integration (v3).
 //   - Size-based auto-success (Huge+): NOT enforced (no creature-size tag).
 //   - Concentration: canon 1 min. v1 starts concentration; not enforced
 //     on damage (TG-002). restrained is sourceIsConcentration: true.
@@ -38,7 +43,7 @@
 //   cleanup() — no-op (concentration break handles cleanup)
 // ============================================================
 
-import { Combatant, Battlefield } from '../types/core';
+import { Combatant, Battlefield, Condition } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
 import { applySpellEffect, removeEffectsFromCaster } from '../engine/spell_effects';
 import { startConcentration, rollSave } from '../engine/utils';
@@ -58,6 +63,7 @@ export const metadata = {
   castingTime: 'action',
   waterySphereMovementRiderV1Simplified: true,              // moving-sphere NOT modelled
   waterySphereSizeAutoSuccessV1Simplified: true,            // Huge+ auto-success NOT enforced
+  waterySpherePersistentTerrainV2StartOfTurnOnly: true,     // start-of-turn check; on-enter deferred to v3
 } as const;
 
 // ---- Local log helper ---------------------------------------
@@ -118,6 +124,32 @@ export function execute(caster: Combatant, targets: Combatant[], state: EngineSt
 
   emit(state, 'action', caster.id,
     `${caster.name} casts Watery Sphere! (DC ${saveDC} STR, restrained on fail, ${metadata.aoeRadiusFt}-ft radius) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} caught!`);
+
+  // Find the center (highest-threat enemy) for the terrain zone position
+  const center = targets.reduce<Combatant | null>((best, t) => {
+    if (t.isDead || t.isUnconscious) return best;
+    if (!best || t.maxHP > best.maxHP) return t;
+    return best;
+  }, null);
+
+  // Apply terrain_zone effect on the CASTER (concentration)
+  // This marks a persistent 5-ft radius zone at the center position
+  if (center) {
+    applySpellEffect(caster, {
+      casterId: caster.id,
+      spellName: 'Watery Sphere',
+      effectType: 'terrain_zone',
+      payload: {
+        terrainSaveAbility: 'str' as const,
+        terrainCondition: 'restrained' as Condition,
+        terrainRadiusFt: 5,
+        terrainCenterX: center.pos.x,
+        terrainCenterY: center.pos.y,
+        terrainCenterZ: center.pos.z,
+      },
+      sourceIsConcentration: true,
+    });
+  }
 
   for (const target of targets) {
     if (target.isDead || target.isUnconscious) continue;

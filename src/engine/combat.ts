@@ -33,7 +33,8 @@ import { tickAdvantages, grantSelf, grantVulnerability } from './adv_system';
 import { getSummonEntry }                           from '../summons/registry';
 import { rollGrappleContest, rollShoveContest, canGrappleOrShoveTarget } from './utils';
 import { computeLOS } from './los';
-import { removeEffectsFromCaster, removeEffectById, getActiveAcBonus, getActiveAcFloor, getActiveBlessDie, getActiveBaneDie, getActiveHexDie, getActiveDamageZones, getActiveWeaponEnchant, getActiveEnlargeReduce, getActiveTaunt, getActiveCurseAttackDisadv, getActiveCurseRider, applySpellEffect } from './spell_effects';
+import { removeEffectsFromCaster, removeEffectById, getActiveAcBonus, getActiveAcFloor, getActiveBlessDie, getActiveBaneDie, getActiveHexDie, getActiveDamageZones, getActiveWeaponEnchant, getActiveEnlargeReduce, getActiveTaunt, getActiveCurseAttackDisadv, getActiveCurseRider, applySpellEffect, getActiveTerrainZones } from './spell_effects';
+import { TerrainZone } from './spell_effects';
 import { applyCantripEffect, getCantripAttackAdvantage, resolveCantripAction, resolveCantripAoE, resolveCantripTouchEffect } from './cantrip_effects';
 import { execute as executeHex } from '../spells/hex';
 import { execute as executeMagicMissile } from '../spells/magic_missile';
@@ -4161,6 +4162,61 @@ export function runCombat(
                 actor.id);
               delete actor._saveFailTracker;
             }
+          }
+        }
+      }
+
+      // ── Terrain zone start-of-turn check (Grease/Sleet Storm/Watery Sphere) ──
+      // PHB p.245 (Grease): "A creature can also fall prone when it enters
+      //   the grease or ends its turn there."
+      // PHB p.276 (Sleet Storm): "When the grease appears, each creature
+      //   in the area must succeed on a Dexterity saving throw or fall prone."
+      // XGE p.170 (Watery Sphere): "Any creature in the sphere's space must
+      //   make a Strength save... on a failed save, the creature is restrained."
+      //
+      // v1 simplification: we only check at the START of each creature's turn
+      // (like damage_zone ticks). Canon says creatures entering the zone also
+      // save immediately; that requires deeper movement system integration (v2).
+      // A creature that walks into grease on its turn will save at the start of
+      // its NEXT turn — a known deviation documented in the spell metadata.
+      const terrainZones = getActiveTerrainZones(battlefield);
+      if (terrainZones.length > 0 && !actor.isDead && !actor.isUnconscious) {
+        for (const zone of terrainZones) {
+          // Skip if the creature already has the condition
+          if (actor.conditions.has(zone.condition)) continue;
+          // Skip allies of the caster (terrain affects enemies only)
+          const caster = battlefield.combatants.get(zone.casterId);
+          if (caster && actor.faction === caster.faction) continue;
+
+          // Check if creature is within the zone's radius
+          const distFt = chebyshev3D(
+            actor.pos,
+            { x: zone.centerX, y: zone.centerY, z: zone.centerZ } as Vec3
+          ) * 5;
+          if (distFt > zone.radiusFt) continue;
+
+          // Roll the terrain save — get save DC from the caster's action
+          const casterAction = caster?.actions.find(a => a.name === zone.spellName);
+          const saveDC = casterAction?.saveDC ?? 13;
+
+          const save = rollSave(actor, zone.saveAbility, saveDC);
+          log(state,
+            save.success ? 'save_success' : 'save_fail',
+            zone.casterId,
+            `${actor.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} ${zone.saveAbility.toUpperCase()} save vs ${zone.spellName} terrain (${zone.condition} on failed save) (rolled ${save.total})`,
+            actor.id, save.roll);
+
+          if (!save.success) {
+            applySpellEffect(actor, {
+              casterId: zone.casterId,
+              spellName: zone.spellName,
+              effectType: 'condition_apply',
+              payload: { condition: zone.condition },
+              sourceIsConcentration: zone.sourceIsConcentration,
+            });
+            log(state, 'condition_add', zone.casterId,
+              `${actor.name} is affected by ${zone.spellName}'s terrain! (${zone.condition})`,
+              actor.id);
           }
         }
       }

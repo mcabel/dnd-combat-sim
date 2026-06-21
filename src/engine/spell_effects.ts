@@ -23,7 +23,7 @@
 // defer until the first ActiveEffect-using concentration spell is implemented.
 // ============================================================
 
-import { ActiveEffect, Combatant, Battlefield, SpellEffectType, DamageType, AbilityScore } from '../types/core';
+import { ActiveEffect, Combatant, Battlefield, SpellEffectType, DamageType, AbilityScore, Condition, Vec3 } from '../types/core';
 import { grantVulnerability, grantSelf, removeBySource } from './adv_system';
 
 // ---- ID generator -------------------------------------------
@@ -98,9 +98,12 @@ export function applySpellEffect(
     case 'damage_zone':
     case 'weapon_enchant':
     case 'enlarge_reduce':
+    case 'terrain_zone':
       // No immediate side-effect — read at resolution time.
       // (damage_zone: the start-of-turn damage tick is in combat.ts's
       // runCombat loop, right after resetBudget.)
+      // (terrain_zone: the start-of-turn terrain check is in combat.ts's
+      // runCombat loop, after damage_zone ticks.)
       break;
   }
 
@@ -196,6 +199,7 @@ function _undoEffect(target: Combatant, effect: ActiveEffect): void {
     case 'bane_die':
     case 'weapon_enchant':
     case 'enlarge_reduce':
+    case 'terrain_zone':
       // Read-only at resolution — nothing to undo structurally.
       break;
 
@@ -462,6 +466,61 @@ export function hasAbilityDisadvantage(c: Combatant, ability: AbilityScore): boo
   return c.activeEffects.some(
     e => e.effectType === 'ability_disadvantage' && e.payload.ability === ability
   );
+}
+
+// ---- Terrain zone query (Grease/Sleet Storm/Watery Sphere) ----
+
+/**
+ * Represents a persistent terrain zone on the battlefield.
+ * When a creature starts its turn in or enters the zone's radius,
+ * it must make a save or suffer the zone's condition (e.g. prone,
+ * restrained). The zone is stored as a terrain_zone effect on the
+ * CASTER — this interface extracts the zone definition for easy
+ * consumption by combat.ts's start-of-turn terrain check.
+ *
+ * v1 simplification: only start-of-turn check is implemented.
+ * Canon says creatures entering the zone also save immediately;
+ * this requires deeper movement system integration (v2).
+ */
+export interface TerrainZone {
+  casterId: string;
+  spellName: string;
+  condition: Condition;
+  saveAbility: 'str' | 'dex' | 'con' | 'wis';
+  radiusFt: number;
+  centerX: number;
+  centerY: number;
+  centerZ: number;
+  sourceIsConcentration: boolean;
+}
+
+/**
+ * Returns all active terrain zones on the battlefield.
+ * Iterates over all combatants' activeEffects, collects terrain_zone effects,
+ * and extracts them into TerrainZone objects for consumption by combat.ts.
+ *
+ * Called by the start-of-turn terrain check in combat.ts's runCombat loop
+ * (after damage_zone ticks and save-fail tracker processing).
+ */
+export function getActiveTerrainZones(bf: Battlefield): TerrainZone[] {
+  const zones: TerrainZone[] = [];
+  for (const c of bf.combatants.values()) {
+    for (const e of c.activeEffects) {
+      if (e.effectType !== 'terrain_zone') continue;
+      zones.push({
+        casterId: e.casterId,
+        spellName: e.spellName,
+        condition: e.payload.terrainCondition!,
+        saveAbility: e.payload.terrainSaveAbility!,
+        radiusFt: e.payload.terrainRadiusFt!,
+        centerX: e.payload.terrainCenterX!,
+        centerY: e.payload.terrainCenterY!,
+        centerZ: e.payload.terrainCenterZ!,
+        sourceIsConcentration: e.sourceIsConcentration,
+      });
+    }
+  }
+  return zones;
 }
 
 // ---- Curse rider query (Bestow Curse PHB p.214 opt.4) ----
