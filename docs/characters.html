@@ -2150,16 +2150,40 @@ async function setHPDirect(val) {
   } catch(e) { showErr(e.message); }
 }
 
+// Pure damage math (PHB p.198): temporary hit points are lost first when
+// damage is taken, and only the leftover after temp HP is depleted reduces
+// real HP. Temp HP is never healed/added by damage; it only ever decreases
+// here. Extracted as a pure function so it can be unit-validated outside
+// the DOM (see node -e extraction-and-eval pattern in SHEET-HANDOVER-36/37).
+function computeDamageHP(currentHP, maxHP, tempHP, amount) {
+  const curHP  = Math.max(0, Math.min(maxHP, currentHP));
+  const curTHP = Math.max(0, tempHP || 0);
+  const absorbed  = Math.min(curTHP, amount);
+  const newTHP    = curTHP - absorbed;
+  const remaining = amount - absorbed;
+  const newHP     = Math.max(0, curHP - remaining);
+  return { newHP, newTHP, absorbed };
+}
+
 async function applyHPAmt(mode) {
   if (!S.charDetail) return;
   const amtEl = document.getElementById('hp-amt');
   const amt = parseInt(amtEl?.value || '', 10);
   if (isNaN(amt) || amt <= 0) { showErr('Enter a positive amount.'); return; }
   const wasDown = S.charDetail.currentHP <= 0;
-  const newHP = mode === 'dmg'
-    ? Math.max(0, S.charDetail.currentHP - amt)
-    : Math.min(S.charDetail.maxHP, S.charDetail.currentHP + amt);
-  const body = { currentHP: newHP };
+  const body = {};
+  let newHP, absorbed = 0;
+  if (mode === 'dmg') {
+    const curTHP = S.charDetail.temporaryHP || 0;
+    const result = computeDamageHP(S.charDetail.currentHP, S.charDetail.maxHP, curTHP, amt);
+    newHP = result.newHP;
+    absorbed = result.absorbed;
+    body.currentHP = newHP;
+    if (result.newTHP !== curTHP) body.temporaryHP = result.newTHP;
+  } else {
+    newHP = Math.min(S.charDetail.maxHP, S.charDetail.currentHP + amt);
+    body.currentHP = newHP;
+  }
   if (wasDown && newHP > 0) body.deathSaves = { successes: 0, failures: 0 };
   try {
     const data = await api(`/api/characters/${S.charDetail.id}`, {
@@ -2169,7 +2193,9 @@ async function applyHPAmt(mode) {
     });
     S.charDetail = data.character;
     renderCharDetail();
-    const label = mode === 'dmg' ? `Took ${amt} damage` : `Healed ${amt} HP`;
+    const label = mode === 'dmg'
+      ? `Took ${amt} damage${absorbed > 0 ? ` (${absorbed} absorbed by temp HP)` : ''}`
+      : `Healed ${amt} HP`;
     const warn  = mode === 'dmg' && newHP === 0 ? ' — UNCONSCIOUS!' : '';
     showBanner(`${label}. HP: ${newHP}/${S.charDetail.maxHP}${warn}.`, newHP === 0 && mode === 'dmg' ? 'error' : 'ok');
   } catch(e) { showErr(e.message); }
