@@ -42,7 +42,7 @@
 //   cleanup() — no-op (concentration break handles cleanup)
 // ============================================================
 
-import { Combatant, Battlefield } from '../types/core';
+import { Combatant, Battlefield, Condition } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
 import { applySpellEffect, removeEffectsFromCaster } from '../engine/spell_effects';
 import { startConcentration, rollSave } from '../engine/utils';
@@ -63,6 +63,8 @@ export const metadata = {
   stinkingCloudDualConditionV1: true,                       // poisoned AND incapacitated (two calls)
   stinkingCloudEndOfNextTurnV1Simplified: true,             // end-of-next-turn not tracked
   stinkingCloudConcentrationEnforcementV1Implemented: false,
+  stinkingCloudTerrainZoneV2Implemented: true,                      // v2: terrain_zone for persistent cloud
+  stinkingCloudTerrainIncapacitatedV2SimplifiedToPoisonedOnly: true, // terrain zone applies poisoned only; incapacitated is initial-cast-only
 } as const;
 
 // ---- Local log helper ---------------------------------------
@@ -118,6 +120,37 @@ export function execute(caster: Combatant, targets: Combatant[], state: EngineSt
 
   emit(state, 'action', caster.id,
     `${caster.name} casts Stinking Cloud! (DC ${saveDC} CON, poisoned+incapacitated on fail, ${metadata.aoeRadiusFt}-ft radius) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} caught!`);
+
+  // Find the center (highest-threat enemy) for the terrain zone position
+  const center = targets.reduce<Combatant | null>((best, t) => {
+    if (t.isDead || t.isUnconscious) return best;
+    if (!best || t.maxHP > best.maxHP) return t;
+    return best;
+  }, null);
+
+  // Apply terrain_zone effect on the CASTER (concentration)
+  // This marks a persistent 20-ft radius zone at the center position.
+  // On start-of-turn terrain check, creatures in the zone save vs CON or
+  // become poisoned. The incapacitated rider from the initial cast is NOT
+  // applied via terrain_zone (it only supports one condition); this is a
+  // minor simplification — poisoned already gives disadv on attacks/ability
+  // checks. Documented via stinkingCloudTerrainIncapacitatedV2SimplifiedToPoisonedOnly.
+  if (center) {
+    applySpellEffect(caster, {
+      casterId: caster.id,
+      spellName: 'Stinking Cloud',
+      effectType: 'terrain_zone',
+      payload: {
+        terrainSaveAbility: 'con' as const,
+        terrainCondition: 'poisoned' as Condition,
+        terrainRadiusFt: 20,
+        terrainCenterX: center.pos.x,
+        terrainCenterY: center.pos.y,
+        terrainCenterZ: center.pos.z,
+      },
+      sourceIsConcentration: true,
+    });
+  }
 
   for (const target of targets) {
     if (target.isDead || target.isUnconscious) continue;

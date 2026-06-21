@@ -148,8 +148,8 @@ assert('Registry is non-empty', SPELL_COUNT > 0);
 // Session 27: Batch 3 COMPLETE. Migrated all 23 concentration-buff spells.
 // Registry now has 197 spells (220 − 23). Cumulative migrated: 116 (7+7+44+35+23).
 // Session 27: Batch 4 COMPLETE. Migrated all 22 persistent-zone + healing + temp-HP spells.
-// Registry now has 175 spells (197 − 22). Cumulative migrated: 138 (7+7+44+35+23+22).
-assert(`Registry has at least 175 spells (got ${SPELL_COUNT})`, SPELL_COUNT >= 175);
+// Registry now has 173 spells (197 − 24). Cumulative migrated: 140 (7+7+44+35+23+22+2).
+assert(`Registry has at least 173 spells (got ${SPELL_COUNT})`, SPELL_COUNT >= 173);
 console.log(`  📊 Total bulk-implemented spells: ${SPELL_COUNT}`);
 
 // Sample spells — one per level 1-9. Updated in Session 23 to avoid the

@@ -60,6 +60,7 @@ import { rollDiceString as rollBoomingBladeDice } from '../spells/booming_blade'
 import { shouldCast as shouldCastAid, execute as executeAid } from '../spells/aid';
 import { shouldCast as shouldCastBarkskin, execute as executeBarkskin } from '../spells/barkskin';
 import { shouldCast as shouldCastBlur, execute as executeBlur } from '../spells/blur';
+import { shouldCast as shouldCastShadowOfMoil, execute as executeShadowOfMoil } from '../spells/shadow_of_moil';
 import { shouldCast as shouldCastBlindnessDeafness, execute as executeBlindnessDeafness } from '../spells/blindness_deafness';
 import { shouldCast as shouldCastBrandingSmite, execute as executeBrandingSmite } from '../spells/branding_smite';
 import { shouldCast as shouldCastCalmEmotions, execute as executeCalmEmotions } from '../spells/calm_emotions';
@@ -588,6 +589,10 @@ import {
   shouldCast as shouldCastStinkingCloud,
   execute as executeStinkingCloud,
 } from '../spells/stinking_cloud';
+import {
+  shouldCast as shouldCastEvardsBlackTentacles,
+  execute as executeEvardsBlackTentacles,
+} from '../spells/evards_black_tentacles';
 import {
   shouldCast as shouldCastPyrotechnics,
   execute as executePyrotechnics,
@@ -2218,6 +2223,14 @@ function executePlannedAction(
       break;
     }
 
+    case 'shadowOfMoil': {
+      // Shadow of Moil — XGE p.164: action, self, concentration 1 min.
+      // Heavily obscured (disadv on attacks vs caster) + 2d8 necrotic rider
+      // on enemies that hit the caster (curse_rider effect).
+      if (shouldCastShadowOfMoil(actor, bf)) executeShadowOfMoil(actor, state);
+      break;
+    }
+
     case 'blindnessDeafness': {
       // Blindness/Deafness — PHB p.219: action, 30 ft, CON save, NO
       // concentration (1 min duration). On fail: caster picks blinded (v1
@@ -3512,6 +3525,14 @@ function executePlannedAction(
       // poisoned+incapacitated (DUAL), conc. shouldCast → Combatant[].
       const scTargets = shouldCastStinkingCloud(actor, bf);
       if (scTargets) executeStinkingCloud(actor, scTargets, state);
+      break;
+    }
+
+    case 'evardsBlackTentacles': {
+      // Evard's Black Tentacles — PHB p.238: 90 ft, 20-ft square AoE (radius approx),
+      // DEX save 3d6 bludgeoning + restrained, conc. shouldCast → Combatant[].
+      const ebtTargets = shouldCastEvardsBlackTentacles(actor, bf);
+      if (ebtTargets) executeEvardsBlackTentacles(actor, ebtTargets, state);
       break;
     }
 

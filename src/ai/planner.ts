@@ -30,6 +30,7 @@ import { shouldCast as shouldCastShieldOfFaith } from '../spells/shield_of_faith
 import { shouldCast as shouldCastAid } from '../spells/aid';
 import { shouldCast as shouldCastBarkskin } from '../spells/barkskin';
 import { shouldCast as shouldCastBlur } from '../spells/blur';
+import { shouldCast as shouldCastShadowOfMoil } from '../spells/shadow_of_moil';
 import { shouldCast as shouldCastBlindnessDeafness } from '../spells/blindness_deafness';
 import { shouldCast as shouldCastBrandingSmite } from '../spells/branding_smite';
 import { shouldCast as shouldCastCalmEmotions } from '../spells/calm_emotions';
@@ -181,6 +182,7 @@ import { shouldCast as shouldCastHypnoticPattern } from '../spells/hypnotic_patt
 import { shouldCast as shouldCastInciteGreed } from '../spells/incite_greed';
 import { shouldCast as shouldCastSleetStorm } from '../spells/sleet_storm';
 import { shouldCast as shouldCastStinkingCloud } from '../spells/stinking_cloud';
+import { shouldCast as shouldCastEvardsBlackTentacles } from '../spells/evards_black_tentacles';
 import { shouldCast as shouldCastPyrotechnics } from '../spells/pyrotechnics';
 import { shouldCast as shouldCastColorSpray } from '../spells/color_spray';
 import { shouldCast as shouldCastCommand } from '../spells/command';
@@ -1172,6 +1174,24 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
       action: null,
       targetId: self.id,
       description: `${self.name} casts Blur`,
+    };
+    plan.targetId = self.id;
+    plan.bonusAction = planBonusAction(self, target, battlefield);
+    return plan;
+  }
+
+  // --- 11E1. SHADOW OF MOIL (self-buff, concentration, L4) ---
+  // XGE p.164: action, self, concentration 1 min. Heavily obscured (disadv
+  // on attacks vs caster) + 2d8 necrotic rider on melee attackers.
+  // Lower priority than Blur (L4 slot vs L2 slot) — fires only when
+  // no other spell was chosen. The caster must NOT be already concentrating
+  // (shouldCast guards this).
+  if (!plan.action && self.actions.some(a => a.name === 'Shadow of Moil') && shouldCastShadowOfMoil(self, battlefield)) {
+    plan.action = {
+      type: 'shadowOfMoil',
+      action: null,
+      targetId: self.id,
+      description: `${self.name} casts Shadow of Moil`,
     };
     plan.targetId = self.id;
     plan.bonusAction = planBonusAction(self, target, battlefield);
@@ -3588,6 +3608,20 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
       plan.action = { type: 'stinkingCloud', action: null, targetId: scTargets[0].id, description: `${self.name} casts Stinking Cloud, catching ${names}` };
       plan.targetId = scTargets[0].id;
       plan.bonusAction = planBonusAction(self, scTargets[0], battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12CG+1. EVARD'S BLACK TENTACLES (DEX save 3d6 bludgeoning + restrained, L4, conc) ---
+  // PHB p.238: 90 ft, 20-ft square AoE (radius approx), DEX save 3d6 bludgeoning + restrained
+  // on fail, concentration. Persistent terrain_zone + damage_zone. shouldCast returns Combatant[].
+  if (!plan.action && self.actions.some(a => a.name === "Evard's Black Tentacles")) {
+    const ebtTargets = shouldCastEvardsBlackTentacles(self, battlefield);
+    if (ebtTargets) {
+      const names = ebtTargets.map(t => t.name).join(', ');
+      plan.action = { type: 'evardsBlackTentacles', action: null, targetId: ebtTargets[0].id, description: `${self.name} casts Evard's Black Tentacles, catching ${names}` };
+      plan.targetId = ebtTargets[0].id;
+      plan.bonusAction = planBonusAction(self, ebtTargets[0], battlefield);
       return plan;
     }
   }

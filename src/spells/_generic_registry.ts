@@ -524,12 +524,6 @@ import {
 } from './doomtide';
 
 import {
-  shouldCast as shouldCastEvardsBlackTentacles,
-  execute as executeEvardsBlackTentacles,
-  metadata as metadataEvardsBlackTentacles,
-} from './evards_black_tentacles';
-
-import {
   shouldCast as shouldCastFabricate,
   execute as executeFabricate,
   metadata as metadataFabricate,
@@ -612,12 +606,6 @@ import {
   execute as executeRaulothimsPsychicLance,
   metadata as metadataRaulothimsPsychicLance,
 } from './raulothims_psychic_lance';
-
-import {
-  shouldCast as shouldCastShadowOfMoil,
-  execute as executeShadowOfMoil,
-  metadata as metadataShadowOfMoil,
-} from './shadow_of_moil';
 
 import {
   shouldCast as shouldCastSpiritOfDeath,
@@ -1588,12 +1576,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     shouldCast: shouldCastDoomtide,
     execute: executeDoomtide,
   },
-  "Evard's Black Tentacles": {
-    name: "Evard's Black Tentacles",
-    level: metadataEvardsBlackTentacles.level,
-    shouldCast: shouldCastEvardsBlackTentacles,
-    execute: executeEvardsBlackTentacles,
-  },
   'Fabricate': {
     name: 'Fabricate',
     level: metadataFabricate.level,
@@ -1677,12 +1659,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     level: metadataRaulothimsPsychicLance.level,
     shouldCast: shouldCastRaulothimsPsychicLance,
     execute: executeRaulothimsPsychicLance,
-  },
-  'Shadow of Moil': {
-    name: 'Shadow of Moil',
-    level: metadataShadowOfMoil.level,
-    shouldCast: shouldCastShadowOfMoil,
-    execute: executeShadowOfMoil,
   },
   'Spirit of Death': {
     name: 'Spirit of Death',

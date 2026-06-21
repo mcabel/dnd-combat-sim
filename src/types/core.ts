@@ -1378,6 +1378,7 @@ export interface PlannedAction {
     | 'aid'              // Aid — multi-ally HP buff (+5 max & current HP), 8 hr, no concentration (Cleric/Paladin)
     | 'barkskin'         // Barkskin — touch, AC floor 16, concentration 1 hr (Druid/Ranger)
     | 'blur'             // Blur — self, disadv on attacks vs caster, concentration 1 min (Wizard/Sorcerer)
+    | 'shadowOfMoil'     // Shadow of Moil — self, disadv on attacks vs caster + 2d8 necrotic rider, concentration 1 min (Warlock)
     | 'blindnessDeafness'// Blindness/Deafness — CON save or blinded, 1 min, NO concentration (Cleric/Sorcerer/Wizard)
     | 'brandingSmite'    // Branding Smite — bonus action, next weapon hit +2d6 radiant, concentration 1 min (Paladin/Ranger)
     | 'calmEmotions'     // Calm Emotions — 60 ft, removes charmed/frightened from allies, concentration 1 min (Bard/Cleric/Druid/Paladin)
@@ -1552,6 +1553,7 @@ export interface PlannedAction {
     | 'inciteGreed'       // Incite Greed — EGtW p.151: 30-ft cone, WIS save or charmed, concentration
     | 'sleetStorm'        // Sleet Storm — PHB p.276: 120 ft, 20-ft radius AoE, DEX save or prone, concentration (conc-break rider simplified)
     | 'stinkingCloud'     // Stinking Cloud — PHB p.278: 90 ft, 20-ft radius AoE, CON save or poisoned+incapacitated (DUAL), concentration
+    | 'evardsBlackTentacles' // Evard's Black Tentacles — PHB p.238: 90 ft, 20-ft square AoE (radius approx), DEX save 3d6 bludgeoning + restrained, concentration
     | 'pyrotechnics'      // Pyrotechnics — XGE p.162: 60 ft, 10-ft radius AoE, CON save or blinded (fireworks) OR no-save all-blinded (smoke), NO concentration (Session 27: 2-mode picker; fire-source assumed)
     | 'colorSpray'        // Color Spray — PHB p.222: 15-ft cone, 6d10 HP-pool → BLINDED (canon, no save), NO concentration (Session 26 canon fix: was unconscious in Batch 2 per plan; allies in cone ARE valid targets; temp HP does NOT count)
     | 'command'           // Command — PHB p.223: 60 ft, WIS save or incapacitated, NO concentration (commands simplified; upcast not modelled)
