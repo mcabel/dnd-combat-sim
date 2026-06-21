@@ -2844,13 +2844,14 @@ function executePlannedAction(
 
     case 'invisibility': {
       // Invisibility — PHB p.254: action, touch, concentration 1 hr.
-      // Grants invisible condition. v1: ends-on-attack NOT modelled.
-      const invTargetId = plan.targetId;
-      const invTarget = invTargetId ? bf.combatants.get(invTargetId) ?? null : null;
-      const liveTarget = invTarget && !invTarget.isDead && !invTarget.isUnconscious
-        ? invTarget
-        : shouldCastInvisibility(actor, bf);
-      if (liveTarget) executeInvisibility(actor, liveTarget, state);
+      // Grants invisible condition. Session 32: ends-on-attack NOW modelled.
+      // Session 35: upcast NOW modelled — shouldCast returns Combatant[]
+      // (1-N targets based on highest available slot level). The plan.targetId
+      // is the primary target; execute re-queries for all targets.
+      const invTargets = shouldCastInvisibility(actor, bf);
+      if (invTargets && invTargets.length > 0) {
+        executeInvisibility(actor, invTargets, state);
+      }
       break;
     }
 
