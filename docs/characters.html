@@ -1072,11 +1072,11 @@ function renderCharDetail() {
     </div>
     ${(() => {
       const hd = c.hitDice || [];
-      const hdRem = hd.reduce((s: number, d: any) => s + d.remaining, 0);
-      const hdTot = hd.reduce((s: number, d: any) => s + d.total, 0);
+      const hdRem = hd.reduce((s, d) => s + d.remaining, 0);
+      const hdTot = hd.reduce((s, d) => s + d.total, 0);
       const dieLabel = hd.length === 0 ? '' : hd.length === 1
         ? `d${hd[0].dieSides}`
-        : [...new Set(hd.map((d: any) => `d${d.dieSides}`))].join('/');
+        : [...new Set(hd.map((d) => `d${d.dieSides}`))].join('/');
       const hdColor = hdRem === 0 ? 'var(--muted)' : hdRem < hdTot ? '#e6a020' : 'inherit';
       return `<div class="stat-box">
         <div style="font-family:var(--serif);font-size:20px;color:${hdColor}">${hdRem}<span style="font-size:12px;color:var(--muted)">/${hdTot}</span></div>
@@ -1101,7 +1101,7 @@ function renderCharDetail() {
   }).join('');
 
   // Saves & Skills
-  const SKILL_ABILITY: Record<string, string> = {
+  const SKILL_ABILITY = {
     'Athletics': 'str',
     'Acrobatics': 'dex', 'Sleight of Hand': 'dex', 'Stealth': 'dex',
     'Arcana': 'int', 'History': 'int', 'Investigation': 'int', 'Nature': 'int', 'Religion': 'int',
@@ -1112,7 +1112,7 @@ function renderCharDetail() {
   const prof = c.proficiencies || { savingThrows: [], skills: [], expertise: [] };
   const saveMods = ['str','dex','con','int','wis','cha'].map(ab => {
     const base = Math.floor(((c.stats[ab]||10)-10)/2);
-    const isProficient = (prof.savingThrows || []).includes(ab as any);
+    const isProficient = (prof.savingThrows || []).includes(ab);
     const total = base + (isProficient ? profBonus : 0);
     const sign = total >= 0 ? '+' : '';
     const dot = isProficient
@@ -1125,8 +1125,8 @@ function renderCharDetail() {
   }).join('');
   const skillMods = Object.entries(SKILL_ABILITY).map(([sk, ab]) => {
     const base = Math.floor(((c.stats[ab]||10)-10)/2);
-    const isExpert = (prof.expertise || []).includes(sk as any);
-    const isProf   = isExpert || (prof.skills || []).includes(sk as any);
+    const isExpert = (prof.expertise || []).includes(sk);
+    const isProf   = isExpert || (prof.skills || []).includes(sk);
     const mult = isExpert ? 2 : isProf ? 1 : 0;
     const total = base + mult * profBonus;
     const sign = total >= 0 ? '+' : '';
@@ -1254,7 +1254,7 @@ function renderCharDetail() {
       </div>`;
     }
     // Known / prepared / spellbook — editable in edit mode
-    function spellSection(label: string, listKey: string, spells: string[]) {
+    function spellSection(label, listKey, spells) {
       if (spells.length === 0 && !_spellEditMode) return '';
       const topBorder = 'margin-top:6px;border-top:1px solid var(--border);padding-top:6px';
       if (_spellEditMode) {
@@ -1351,7 +1351,7 @@ function renderCharDetail() {
   renderConditions(c);
 
   // Notes
-  const notesTA = document.getElementById('char-notes-input') as HTMLTextAreaElement;
+  const notesTA = document.getElementById('char-notes-input');
   if (notesTA) notesTA.value = c.notes || '';
 }
 
@@ -1742,7 +1742,7 @@ async function saveEquipNotes(charId, idx, rawVal) {
   }
 }
 
-
+function showAddEquipForm(charId) {
   const form = document.getElementById(`add-equip-form-${charId}`);
   const btn  = document.getElementById(`add-equip-btn-${charId}`);
   if (form) form.style.display = 'block';
@@ -1808,14 +1808,14 @@ function toggleNotes() {
   sec.style.display = open ? 'block' : 'none';
   arrow.textContent = open ? '▾' : '▸';
   if (open) {
-    const ta = document.getElementById('char-notes-input') as HTMLTextAreaElement;
+    const ta = document.getElementById('char-notes-input');
     if (ta) ta.focus();
   }
 }
 
 async function saveNotes() {
   if (!S.charDetail) return;
-  const ta = document.getElementById('char-notes-input') as HTMLTextAreaElement;
+  const ta = document.getElementById('char-notes-input');
   if (!ta) return;
   const notes = ta.value;
   if (notes === (S.charDetail.notes || '')) return; // no change
@@ -1871,7 +1871,7 @@ function buildResourceLines(res) {
 }
 
 // ── Resource Spend/Restore ─────────────────────────────────────
-async function spendRes(key: string, field: string, delta: number) {
+async function spendRes(key, field, delta) {
   if (!S.charDetail) return;
   const res = S.charDetail.resources;
   if (!res || !res[key]) return;
@@ -1894,7 +1894,7 @@ async function spendRes(key: string, field: string, delta: number) {
   } catch(e) { showBanner('Failed to update resource', 'error'); }
 }
 
-function onLvlClassChange(val: string) {
+function onLvlClassChange(val) {
   const row = document.getElementById('lvl-newclass-row');
   if (row) row.style.display = val === '__new__' ? 'block' : 'none';
 }
@@ -1904,7 +1904,7 @@ async function doLevelUp() {
   showErr('');
   let className = document.getElementById('lvl-class').value;
   if (className === '__new__') {
-    const inp = document.getElementById('lvl-newclass-input') as HTMLInputElement;
+    const inp = document.getElementById('lvl-newclass-input');
     className = inp?.value?.trim() || '';
     if (!className) { showErr('Enter a class name for multiclass.'); return; }
   }
@@ -1943,21 +1943,21 @@ function toggleSpellEdit() {
 // returning [] for non-spellcasting characters (Barbarian, Fighter w/o EK,
 // Monk, Rogue w/o AT). A character with e.g. Cleric 3 / Wizard 5 returns
 // both ['Cleric', 'Wizard'] so spell-datalist suggestions cover both lists.
-function _resolveSpellcastingClasses(c: any): string[] {
+function _resolveSpellcastingClasses(c) {
   const SPELLCASTERS = new Set([
     'Artificer','Bard','Cleric','Druid','Paladin','Ranger','Sorcerer','Warlock','Wizard',
   ]);
-  const SUBCLASS_ALIAS: Record<string, string> = {
+  const SUBCLASS_ALIAS = {
     'Eldritch Knight': 'Wizard',
     'Arcane Trickster': 'Wizard',
   };
-  const found = new Set<string>();
+  const found = new Set();
   // Subclass archetypes (EK / AT) grant spellcasting regardless of base class.
-  for (const [, sub] of Object.entries((c.subclassChoices || {}) as Record<string, string>)) {
+  for (const [, sub] of Object.entries(c.subclassChoices || {})) {
     if (SUBCLASS_ALIAS[sub]) found.add(SUBCLASS_ALIAS[sub]);
   }
   // Every base class the character has levels in that's a full/half caster.
-  for (const cl of (c.classLevels || []) as { className: string }[]) {
+  for (const cl of (c.classLevels || [])) {
     if (SPELLCASTERS.has(cl.className)) found.add(cl.className);
   }
   // Fallback for legacy characters with no classLevels yet.
@@ -1973,40 +1973,40 @@ async function populateSpellSuggestions() {
   const spellClasses = _resolveSpellcastingClasses(c);
   // One '&class=X' param per spellcasting class, or [''] (unfiltered) if none resolved.
   const classParams = spellClasses.length
-    ? spellClasses.map((cls: string) => `&class=${encodeURIComponent(cls)}`)
+    ? spellClasses.map((cls) => `&class=${encodeURIComponent(cls)}`)
     : [''];
   try {
     const cantripResults = await Promise.all(
-      classParams.map((p: string) => fetch(`/api/spells?level=0${p}`).then(r => r.json())),
+      classParams.map((p) => fetch(`/api/spells?level=0${p}`).then(r => r.json())),
     );
     const spellResults = await Promise.all(
-      classParams.map((p: string) => fetch(`/api/spells${p ? '?' + p.slice(1) : ''}`).then(r => r.json())),
+      classParams.map((p) => fetch(`/api/spells${p ? '?' + p.slice(1) : ''}`).then(r => r.json())),
     );
     // Union + dedupe across every resolved class so multiclass casters see both lists.
-    const cantrips = [...new Set(cantripResults.flatMap((d: any) => (d.spells as string[]) || []))].sort();
-    const spells   = [...new Set(spellResults.flatMap((d: any) => (d.spells as string[]) || []))].sort();
-    const cantripDL = document.getElementById('spell-cantrip-suggestions') as HTMLDataListElement;
-    const spellDL   = document.getElementById('spell-suggestions')         as HTMLDataListElement;
+    const cantrips = [...new Set(cantripResults.flatMap((d) => d.spells || []))].sort();
+    const spells   = [...new Set(spellResults.flatMap((d) => d.spells || []))].sort();
+    const cantripDL = document.getElementById('spell-cantrip-suggestions');
+    const spellDL   = document.getElementById('spell-suggestions');
     if (cantripDL) {
       cantripDL.innerHTML = cantrips
-        .map((n: string) => `<option value="${n.replace(/"/g,'&quot;')}">`)
+        .map((n) => `<option value="${n.replace(/"/g,'&quot;')}">`)
         .join('');
     }
     if (spellDL) {
       spellDL.innerHTML = spells
-        .map((n: string) => `<option value="${n.replace(/"/g,'&quot;')}">`)
+        .map((n) => `<option value="${n.replace(/"/g,'&quot;')}">`)
         .join('');
     }
   } catch { /* non-critical — datalist remains empty */ }
 }
 
-async function addSpell(listKey: string) {
+async function addSpell(listKey) {
   if (!S.charDetail?.spellcasting) return;
-  const input = document.getElementById(`spell-add-input-${listKey}`) as HTMLInputElement;
+  const input = document.getElementById(`spell-add-input-${listKey}`);
   const name = input?.value?.trim();
   if (!name) return;
   const spl = S.charDetail.spellcasting;
-  const list: string[] = [...((spl as any)[listKey] || [])];
+  const list = [...(spl[listKey] || [])];
   if (list.includes(name)) { showBanner('Spell already in list.', 'error'); return; }
   list.push(name);
   try {
@@ -2019,10 +2019,10 @@ async function addSpell(listKey: string) {
   } catch(e) { showBanner('Failed to add spell', 'error'); }
 }
 
-async function removeSpell(listKey: string, name: string) {
+async function removeSpell(listKey, name) {
   if (!S.charDetail?.spellcasting) return;
   const spl = S.charDetail.spellcasting;
-  const list: string[] = ((spl as any)[listKey] || []).filter((n: string) => n !== name);
+  const list = (spl[listKey] || []).filter((n) => n !== name);
   try {
     const data = await api(`/api/characters/${S.charDetail.id}`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
@@ -2034,9 +2034,9 @@ async function removeSpell(listKey: string, name: string) {
 }
 
 // ── Short Rest ────────────────────────────────────────────────
-let _srMode: 'average' | 'random' = 'average';
+let _srMode = 'average';
 
-function setSRMode(mode: 'average' | 'random') {
+function setSRMode(mode) {
   _srMode = mode;
   const avgBtn = document.getElementById('sr-avg-btn');
   const rndBtn = document.getElementById('sr-rnd-btn');
@@ -2046,9 +2046,9 @@ function setSRMode(mode: 'average' | 'random') {
 
 function doShortRest() {
   if (!S.charDetail) return;
-  const hdAvail = (S.charDetail.hitDice || []).reduce((s: number, hd: any) => s + hd.remaining, 0);
+  const hdAvail = (S.charDetail.hitDice || []).reduce((s, hd) => s + hd.remaining, 0);
   if (hdAvail > 0) {
-    const hdInput = document.getElementById('sr-hd-input') as HTMLInputElement;
+    const hdInput = document.getElementById('sr-hd-input');
     const hdAvailEl = document.getElementById('sr-hd-avail');
     if (hdInput)   { hdInput.max = String(hdAvail); hdInput.value = '1'; }
     if (hdAvailEl) hdAvailEl.textContent = `Available: ${hdAvail} hit ${hdAvail === 1 ? 'die' : 'dice'}`;
@@ -2065,15 +2065,15 @@ function cancelShortRest() {
 }
 
 async function confirmShortRest() {
-  const hdInput = document.getElementById('sr-hd-input') as HTMLInputElement;
-  const hdAvail = (S.charDetail.hitDice || []).reduce((s: number, hd: any) => s + hd.remaining, 0);
+  const hdInput = document.getElementById('sr-hd-input');
+  const hdAvail = (S.charDetail.hitDice || []).reduce((s, hd) => s + hd.remaining, 0);
   const hdToSpend = Math.max(0, Math.min(hdAvail, parseInt(hdInput?.value || '0', 10) || 0));
   document.getElementById('short-rest-panel')?.classList.add('hidden');
   await execShortRest(hdToSpend, _srMode);
 }
 
-async function execShortRest(hdToSpend: number, rollMode: string) {
-  const btn = document.getElementById('char-shortrest-btn') as HTMLButtonElement;
+async function execShortRest(hdToSpend, rollMode) {
+  const btn = document.getElementById('char-shortrest-btn');
   btn.disabled = true; btn.textContent = '☀ Resting…';
   try {
     const data = await api(`/api/characters/${S.charDetail.id}/shortrest`, {
@@ -2084,12 +2084,12 @@ async function execShortRest(hdToSpend: number, rollMode: string) {
     S.charDetail = data.character;
     refreshChars();
     renderCharDetail();
-    const parts: string[] = [];
+    const parts = [];
     if (data.hpRegained > 0) parts.push(`+${data.hpRegained} HP${rollMode === 'random' ? ' (rolled)' : ''}`);
     if (data.hdSpent > 0)    parts.push(`${data.hdSpent} HD spent`);
     if ((data.restored || []).length > 0) parts.push(`${data.restored.length} resource${data.restored.length===1?'':'s'} recharged`);
     showBanner(`Short rest: ${parts.length ? parts.join(', ') : 'nothing to restore'}.`, 'ok');
-  } catch(e: any) { showErr(e.message); }
+  } catch(e) { showErr(e.message); }
   finally { btn.disabled = false; btn.textContent = '☀ Short Rest'; }
 }
 
@@ -2131,12 +2131,12 @@ async function doLongRest() {
 }
 
 // ── HP Tracker ────────────────────────────────────────────────
-async function setHPDirect(val: string) {
+async function setHPDirect(val) {
   if (!S.charDetail) return;
   const newHP = Math.max(0, Math.min(S.charDetail.maxHP, parseInt(val, 10) || 0));
   if (newHP === S.charDetail.currentHP) return; // no change
   const wasDown = S.charDetail.currentHP <= 0;
-  const body: any = { currentHP: newHP };
+  const body = { currentHP: newHP };
   if (wasDown && newHP > 0) body.deathSaves = { successes: 0, failures: 0 };
   try {
     const data = await api(`/api/characters/${S.charDetail.id}`, {
@@ -2150,16 +2150,16 @@ async function setHPDirect(val: string) {
   } catch(e) { showErr(e.message); }
 }
 
-async function applyHPAmt(mode: 'dmg' | 'heal') {
+async function applyHPAmt(mode) {
   if (!S.charDetail) return;
-  const amtEl = document.getElementById('hp-amt') as HTMLInputElement;
+  const amtEl = document.getElementById('hp-amt');
   const amt = parseInt(amtEl?.value || '', 10);
   if (isNaN(amt) || amt <= 0) { showErr('Enter a positive amount.'); return; }
   const wasDown = S.charDetail.currentHP <= 0;
   const newHP = mode === 'dmg'
     ? Math.max(0, S.charDetail.currentHP - amt)
     : Math.min(S.charDetail.maxHP, S.charDetail.currentHP + amt);
-  const body: any = { currentHP: newHP };
+  const body = { currentHP: newHP };
   if (wasDown && newHP > 0) body.deathSaves = { successes: 0, failures: 0 };
   try {
     const data = await api(`/api/characters/${S.charDetail.id}`, {
@@ -2178,7 +2178,7 @@ async function applyHPAmt(mode: 'dmg' | 'heal') {
 // ── Temporary HP ───────────────────────────────────────────────
 async function applyTempHP() {
   if (!S.charDetail) return;
-  const amtEl = document.getElementById('thp-amt') as HTMLInputElement;
+  const amtEl = document.getElementById('thp-amt');
   const amount = parseInt(amtEl?.value || '', 10);
   if (isNaN(amount) || amount < 0) { showBanner('Invalid amount', 'error'); return; }
   const current = S.charDetail.temporaryHP || 0;
@@ -2310,7 +2310,7 @@ async function toggleInspiration() {
 // ── Concentration ─────────────────────────────────────────────
 function showConcInput() {
   const panel = document.getElementById('conc-input-panel');
-  const inp   = document.getElementById('conc-spell-input') as HTMLInputElement;
+  const inp   = document.getElementById('conc-spell-input');
   if (!panel) return;
   panel.style.display = 'block';
   panel.classList.remove('hidden');
@@ -2324,7 +2324,7 @@ function cancelConcentration() {
 
 async function confirmConcentration() {
   if (!S.charDetail) return;
-  const inp = document.getElementById('conc-spell-input') as HTMLInputElement;
+  const inp = document.getElementById('conc-spell-input');
   const val = inp?.value?.trim() || null;
   cancelConcentration();
   try {
@@ -3307,7 +3307,7 @@ const CLASS_HIT_DICE = {
   Artificer:8, Bard:8, Cleric:8, Druid:8, Monk:8, Rogue:8, Warlock:8,
   Sorcerer:6, Wizard:6,
 };
-const CLASS_SAVES = {
+const CLASS_SAVES_DISPLAY = {
   Artificer:['CON','INT'], Barbarian:['STR','CON'], Bard:['DEX','CHA'], Cleric:['WIS','CHA'],
   Druid:['INT','WIS'], Fighter:['STR','CON'], Monk:['STR','DEX'],
   Paladin:['WIS','CHA'], Ranger:['STR','DEX'], Rogue:['DEX','INT'],
@@ -3565,7 +3565,7 @@ function wizOnClassChange() {
   wizClearErr();
   const cls = wizState.className;
   const hd  = CLASS_HIT_DICE[cls] || 8;
-  const sv  = (CLASS_SAVES[cls]||[]).join(' & ');
+  const sv  = (CLASS_SAVES_DISPLAY[cls]||[]).join(' & ');
   const info = document.getElementById('wiz-class-info');
   info.innerHTML =
     `<div style="font-family:var(--serif);font-size:12px;color:var(--accent);margin-bottom:6px">${esc(cls)}</div>` +
