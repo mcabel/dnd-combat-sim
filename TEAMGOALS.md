@@ -27,7 +27,16 @@
 
 - TG-006 awaiting Core Engine review since Cantrip-z session 21 (commit
   `b53b622`) — see `docs/TG-006-SUMMON-PLAN.md` for the 4-phase plan Cantrip-z
-  is blocked on.
+  is blocked on. **STALL FLAG (Sheet-37):** checked as of Cantrip-z session 28
+  / Core Engine session 44 — no acknowledgment logged, no `TASK.md` mention,
+  and zero `isSummon`/`summonerId`/`pendingInitiativeInserts` fields in
+  `src/types/core.ts`. The TG-012 2-session timeout has been exceeded by a
+  wide margin (7+ sessions). Per the TG-012 fallback protocol, Cantrip-z may
+  proceed unilaterally on Phase 1 LOW-risk additive sub-phases (new optional
+  type fields, new files under `src/summons/`, `src/spells/summon_*.ts`)
+  without further wait, but still needs explicit Core Engine sign-off before
+  touching `runCombat`/`combat.ts`. Flagged for Ares to route; Sheet has no
+  owned file in this item and is not actioning it further.
 
 ---
 
