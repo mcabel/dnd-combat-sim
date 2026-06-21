@@ -1498,6 +1498,12 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     shouldCast: shouldCastPlantGrowth,
     execute: executePlantGrowth,
   },
+  'Protection from Energy': {
+    name: 'Protection from Energy',
+    level: metadataProtectionFromEnergy.level,
+    shouldCast: shouldCastProtectionFromEnergy,
+    execute: executeProtectionFromEnergy,
+  },
   'Remove Curse': {
     name: 'Remove Curse',
     level: metadataRemoveCurse.level,
@@ -1659,12 +1665,6 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     level: metadataPolymorph.level,
     shouldCast: shouldCastPolymorph,
     execute: executePolymorph,
-  },
-  'Protection from Energy': {
-    name: 'Protection from Energy',
-    level: metadataProtectionFromEnergy.level,
-    shouldCast: shouldCastProtectionFromEnergy,
-    execute: executeProtectionFromEnergy,
   },
   "Raulothim's Psychic Lance": {
     name: "Raulothim's Psychic Lance",
