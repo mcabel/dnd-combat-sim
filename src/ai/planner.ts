@@ -257,6 +257,8 @@ import { shouldCast as shouldCastSummonGreaterDemon }   from '../spells/summon_g
 import { shouldCast as shouldCastSummonCelestial }        from '../spells/summon_celestial';
 import { shouldCast as shouldCastSummonDraconicSpirit }   from '../spells/summon_draconic_spirit';
 import { shouldCast as shouldCastSummonFiend }            from '../spells/summon_fiend';
+// ── TG-006 — PHB Conjure spells (Phase 2) ────────────────────────────────
+import { shouldCast as shouldCastConjureAnimals } from '../spells/conjure_animals';
 
 // ── Session 19 — bulk-implementation generic dispatch (262 new spells) ────
 import { GENERIC_SPELL_LIST } from '../spells/_generic_registry';
@@ -2247,6 +2249,25 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
         action,
         targetId: self.id,
         description: `${self.name} casts Summon Fiend`,
+      };
+      plan.targetId = self.id;
+      plan.bonusAction = planBonusAction(self, self, battlefield);
+      return plan;
+    }
+  }
+
+  // === TG-006 — PHB CONJURE SPELLS (Phase 2) ===
+  // Conjure Animals (PHB p.225): 3rd-level conjuration, action, range 60 ft,
+  // concentration 1 hr. Spawns 2 Wolf combatants (v1: hardcoded most common option).
+  // Unlike TCE summons, PHB Conjure spells pick from the Monster Manual by CR.
+  if (!plan.action && self.actions.some(a => a.name === 'Conjure Animals')) {
+    if (shouldCastConjureAnimals(self, battlefield)) {
+      const action = self.actions.find(a => a.name === 'Conjure Animals')!;
+      plan.action = {
+        type: 'summonSpell',
+        action,
+        targetId: self.id,
+        description: `${self.name} casts Conjure Animals`,
       };
       plan.targetId = self.id;
       plan.bonusAction = planBonusAction(self, self, battlefield);

@@ -691,6 +691,8 @@ import { shouldCast as shouldCastSummonGreaterDemon,   execute as executeSummonG
 import { shouldCast as shouldCastSummonCelestial,        execute as executeSummonCelestial }        from '../spells/summon_celestial';
 import { shouldCast as shouldCastSummonDraconicSpirit,   execute as executeSummonDraconicSpirit }   from '../spells/summon_draconic_spirit';
 import { shouldCast as shouldCastSummonFiend,            execute as executeSummonFiend }            from '../spells/summon_fiend';
+// ── TG-006 — PHB Conjure spells (Phase 2) ────────────────────────────────
+import { shouldCast as shouldCastConjureAnimals, execute as executeConjureAnimals } from '../spells/conjure_animals';
 
 // ── Session 19 — bulk-implementation generic dispatch (262 new spells) ────
 import {
@@ -3774,8 +3776,10 @@ function executePlannedAction(
         executeSummonDraconicSpirit(actor, actor, state);
       } else if (spellName === 'Summon Fiend') {
         executeSummonFiend(actor, actor, state);
+      } else if (spellName === 'Conjure Animals') {
+        executeConjureAnimals(actor, actor, state);
       }
-      // More summon spells can be added here (Phase 1f+)
+      // More summon spells can be added here (Phase 2+)
       break;
     }
 
