@@ -583,6 +583,23 @@ export interface Combatant {
   // the poisoned condition), and other construct-specific interactions.
   isConstruct?: boolean;
 
+  // ---- Summon subsystem (TG-006) ----
+  // True when this combatant was spawned by a Summon/Conjure spell.
+  // Set by spawnSummon() when the summon is created. Used by:
+  //   - removeEffectsFromCaster to despawn on concentration break
+  //   - AI planner to skip summoning creatures that are already summons
+  //   - Combat log to tag summon-related events
+  isSummon?: boolean;
+
+  // The ID of the combatant who summoned this creature.
+  // Used for: (a) concentration-break despawn, (b) faction inheritance,
+  // (c) verbal command routing.
+  summonerId?: string;
+
+  // The spell name that created this summon (e.g. 'Summon Beast').
+  // Used for logging and cleanup identification.
+  summonSpellName?: string;
+
   // ---- Chill Touch (PHB p.221) scratch fields ----
   // Set on the TARGET by Chill Touch's post-hit rider. Cleared by each module's
   // cleanup() called from resetBudget() in utils.ts.
@@ -1367,6 +1384,14 @@ export interface Battlefield {
   // 4.12: Command hook — keyed by minion ID, value is profile to apply this turn
   // Set by a controller before the minion's turn. No action cost per RAW.
   pendingCommands?: Map<string, AIProfile>;
+  // Combatant IDs to be inserted into initiativeOrder mid-combat.
+  // TCE Summon spells: "shares your initiative count, takes turn after yours"
+  // PHB Conjure spells: "roll initiative as a group"
+  // Processed by the runCombat loop after each actor's turn.
+  pendingInitiativeInserts?: Array<{
+    combatantId: string;
+    insertAfterId: string;   // for TCE-style "after caster"
+  }>;
   // No-damage tracking: consecutive rounds each team dealt 0 damage.
   // Reset to 0 whenever a team deals ≥1 damage in a round.
   // At 10 consecutive rounds → team is auto-defeated.
@@ -1662,6 +1687,7 @@ export interface PlannedAction {
     // implemented as bespoke case branches are routed through 'genericSpell'.
     // The dispatch is keyed by `spellName` (see below). Each spell has its
     // own module at src/spells/<snake>.ts that exports shouldCast + execute.
+    | 'summonSpell'       // Summon/Conjure spell — spawns a combatant mid-combat (TG-006)
     | 'genericSpell'
     | 'legendary';
   action: Action | null;

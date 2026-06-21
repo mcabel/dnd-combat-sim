@@ -174,6 +174,27 @@ export function removeEffectsFromCaster(casterId: string, bf: Battlefield): void
   if (caster?._movingZone && spellNames.has(caster._movingZone.spellName)) {
     delete caster._movingZone;
   }
+
+  // ── Despawn summons (TG-006) ──
+  // When a caster's concentration breaks, all their summons are removed.
+  const summonsToDespawn = [...bf.combatants.values()].filter(
+    c => c.isSummon && c.summonerId === casterId
+  );
+  for (const summon of summonsToDespawn) {
+    // Remove the summon from the battlefield
+    bf.combatants.delete(summon.id);
+    // Remove from initiative order
+    const initIdx = bf.initiativeOrder.indexOf(summon.id);
+    if (initIdx !== -1) bf.initiativeOrder.splice(initIdx, 1);
+    // Clean up any pending commands for this summon
+    bf.pendingCommands?.delete(summon.id);
+    // Remove any pending initiative inserts for this summon
+    if (bf.pendingInitiativeInserts) {
+      bf.pendingInitiativeInserts = bf.pendingInitiativeInserts.filter(
+        i => i.combatantId !== summon.id
+      );
+    }
+  }
 }
 
 /**

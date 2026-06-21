@@ -51,6 +51,10 @@ export interface SpawnSummonOptions {
   summonerMaxHP?: number;
   /** Spell slot / item level used to summon */
   casterLevel?:   number;
+  /** ID of the combatant who cast the summon spell */
+  summonerId?:    string;
+  /** Name of the summon spell (e.g. 'Summon Beast') */
+  summonSpellName?: string;
 }
 
 /**
@@ -93,8 +97,9 @@ export function spawnSummon(
   if (faction === 'party') combatant.faction = 'party';
 
   // Tag as summon for engine/reporting purposes
-  (combatant as any).isSummon = true;
-  (combatant as any).summonEntry = entry;
+  combatant.isSummon = true;
+  combatant.summonerId = options.summonerId ?? undefined;
+  combatant.summonSpellName = options.summonSpellName ?? undefined;
 
   return combatant;
 }

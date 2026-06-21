@@ -3725,6 +3725,22 @@ function executePlannedAction(
     // Routes any spell in the GENERIC_SPELLS registry (262 bulk-implemented
     // spells from levels 2-9) to its spell module's shouldCast + execute.
     // The spell name is carried by `plan.spellName` (set by planner.ts).
+    case 'summonSpell': {
+      // Summon/Conjure spell — spawns a combatant mid-combat (TG-006)
+      // The actual spell execution is handled by the spell module's execute(),
+      // which is dispatched via the SUMMON_SPELL_REGISTRY in planner.ts.
+      // The planner sets plan.action to the spell's Action; its name identifies
+      // which summon spell to cast. The case branch ensures the type system
+      // is consistent and no unhandled-type warnings appear.
+      const spellAction = plan.action;
+      if (!spellAction) break;
+      const spellName = spellAction.name;
+      // Dispatch to the appropriate summon spell module
+      // (will be wired in Phase 1b+)
+      void spellName; // used by future dispatch
+      break;
+    }
+
     case 'genericSpell': {
       const spellName = plan.spellName;
       if (!spellName) break;
