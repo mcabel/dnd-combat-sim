@@ -15,10 +15,11 @@
 //
 // v1 simplifications:
 //   - Suggestion effect: canon "pursues the course of action you described"
-//     is a complex behaviour-modification rider. v1 simplifies to
-//     `condition_apply:charmed` (the closest available condition; the
-//     actual suggestion behaviour is NOT modelled). Documented via
-//     `massSuggestionBehaviourV1SimplifiedToCharmed`.
+//     is modelled as `suggestion` effect type: charmed + disadvantage on
+//     the target's own attack rolls ("Don't fight" — the default suggestion
+//     that removes targets as combat threats). This is more canon-faithful
+//     than just charmed (which only prevents attacking the caster).
+//     Documented via `massSuggestionBehaviourV2Implemented`.
 //   - Target cap: canon "up to twelve". v1 caps at 12 highest-threat
 //     enemies within 60 ft. Upcast +1/slot-level NOT modelled.
 //   - Duration: canon 24 hr (no concentration). v1 has no duration tracker
@@ -59,7 +60,7 @@ export const metadata = {
   concentration: false,
   saveAbility: 'wis' as const,
   castingTime: 'action',
-  massSuggestionBehaviourV1SimplifiedToCharmed: true,       // suggestion → charmed
+  massSuggestionBehaviourV2Implemented: true,              // suggestion → charmed + disadv on attacks ("Don't fight")
   massSuggestionDurationV1Simplified: true,                 // 24-hr not tracked
   massSuggestionUpcastV1Implemented: false,                 // +1 target/slot-level NOT modelled
 } as const;
@@ -135,7 +136,8 @@ export function shouldCast(caster: Combatant, bf: Battlefield): Combatant[] | nu
 /**
  * Execute Mass Suggestion:
  *  1. Consume a 6th-level spell slot.
- *  2. For each target: roll WIS save; on fail apply charmed (NOT conc).
+ *  2. For each target: roll WIS save; on fail apply `suggestion` effect
+ *     (charmed + disadvantage on attack rolls — "Don't fight"). NOT conc.
  *
  * @param caster  The casting Combatant (Bard / Sorcerer / Warlock / Wizard)
  * @param targets Candidates from shouldCast (up to 12 enemies in 60 ft)
@@ -153,7 +155,7 @@ export function execute(
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Mass Suggestion! (DC ${saveDC} WIS, charmed on fail, ${targets.length} target${targets.length !== 1 ? 's' : ''})`,
+    `${caster.name} casts Mass Suggestion! (DC ${saveDC} WIS, suggestion on fail, ${targets.length} target${targets.length !== 1 ? 's' : ''})`,
   );
 
   for (const target of targets) {
@@ -164,7 +166,7 @@ export function execute(
       state,
       save.success ? 'save_success' : 'save_fail',
       caster.id,
-      `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} WIS save vs Mass Suggestion (rolled ${save.total})${save.success ? '' : ' + CHARMED'}`,
+      `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} WIS save vs Mass Suggestion (rolled ${save.total})${save.success ? '' : ' + SUGGESTION (charmed + disadv on attacks)'}`,
       target.id, save.roll,
     );
 
@@ -172,13 +174,13 @@ export function execute(
       applySpellEffect(target, {
         casterId: caster.id,
         spellName: 'Mass Suggestion',
-        effectType: 'condition_apply',
-        payload: { condition: 'charmed' },
+        effectType: 'suggestion',
+        payload: {},
         sourceIsConcentration: false,   // PHB p.258: NOT concentration (24-hr)
       });
       emit(
         state, 'condition_add', caster.id,
-        `${target.name} is CHARMED by Mass Suggestion! (v1: suggestion behaviour NOT modelled — charm only)`,
+        `${target.name} is under Mass Suggestion! (charmed + disadv on attacks — "Don't fight")`,
         target.id,
       );
     }

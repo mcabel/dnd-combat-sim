@@ -24,7 +24,7 @@
 // ============================================================
 
 import { ActiveEffect, Combatant, Battlefield, SpellEffectType, DamageType, AbilityScore } from '../types/core';
-import { grantVulnerability, removeBySource } from './adv_system';
+import { grantVulnerability, grantSelf, removeBySource } from './adv_system';
 
 // ---- ID generator -------------------------------------------
 
@@ -77,6 +77,14 @@ export function applySpellEffect(
     case 'dominated':
       target.conditions.add('charmed');
       target.conditions.add('incapacitated');
+      break;
+
+    case 'suggestion':
+      // PHB p.258: target pursues a course of action ("Don't fight").
+      // Modeled as charmed (can't attack the caster) + disadvantage on the
+      // target's own attack rolls (following the suggestion — won't fight effectively).
+      target.conditions.add('charmed');
+      grantSelf(target, 'disadvantage', 'attack', effect.spellName, 'permanent');
       break;
 
     case 'taunt':
@@ -171,6 +179,11 @@ function _undoEffect(target: Combatant, effect: ActiveEffect): void {
     case 'dominated':
       target.conditions.delete('charmed');
       target.conditions.delete('incapacitated');
+      break;
+
+    case 'suggestion':
+      target.conditions.delete('charmed');
+      removeBySource(target, effect.spellName);
       break;
 
     case 'taunt':

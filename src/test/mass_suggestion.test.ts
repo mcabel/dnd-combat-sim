@@ -1,7 +1,8 @@
-// mass_suggestion.test.ts — Mass Suggestion (Session 25 / Batch 2)
-// PHB p.258: L6, 60 ft, WIS save or charmed, up to 12 targets, NO concentration (24 hr).
+// mass_suggestion.test.ts — Mass Suggestion (Session 25 / Batch 2, upgraded Session 28)
+// PHB p.258: L6, 60 ft, WIS save or suggestion (charmed + disadv on attacks), up to 12 targets, NO concentration (24 hr).
 import { shouldCast, execute, metadata } from '../spells/mass_suggestion';
 import { Combatant, Action, PlayerResources, Vec3, Condition } from '../types/core';
+import { removeEffectsFromCaster } from '../engine/spell_effects';
 
 let passed = 0, failed = 0;
 function assert(label: string, cond: boolean, detail = ''): void {
@@ -45,6 +46,8 @@ console.log('\n=== 1. Metadata ===\n');
 eq('Name', metadata.name, 'Mass Suggestion'); eq('Level 6', metadata.level, 6);
 eq('Range 60', metadata.rangeFt, 60); eq('Max targets 12', metadata.maxTargets, 12);
 eq('Save wis', metadata.saveAbility, 'wis'); eq('NOT concentration', metadata.concentration, false);
+assert('V2 behaviour flag', (metadata as any).massSuggestionBehaviourV2Implemented === true);
+assert('V1 behaviour flag removed', !('massSuggestionBehaviourV1SimplifiedToCharmed' in metadata));
 
 console.log('\n=== 2. shouldCast gates ===\n');
 { const c = makeCombatant('wiz', { actions: [], resources: withSlots6(1) }); eq('null: no action', shouldCast(c, makeBF([c, weak('e1', { x: 1, y: 0 })])), null); }
@@ -61,21 +64,54 @@ console.log('\n=== 3. shouldCast 12-target cap ===\n');
   if (r) { eq('caps at 12 targets (15 enemies)', r.length, 12); }
 }
 
-console.log('\n=== 4. execute — guaranteed fail (charmed) ===\n');
+console.log('\n=== 4. execute — guaranteed fail (suggestion: charmed + disadv on attacks) ===\n');
 {
   const c = makeCaster(); const e1 = weak('e1', { x: 1, y: 0 }); const e2 = weak('e2', { x: 2, y: 0 });
   const bf = makeBF([c, e1, e2]); const st = makeState(bf); const t = shouldCast(c, bf);
-  if (t) { execute(c, t, st); eq('slot consumed', (c.resources as any).spellSlots[6].remaining, 0); assert('NOT concentrating', !(c.concentration?.active)); assert('e1 charmed', e1.conditions.has('charmed')); assert('e2 charmed', e2.conditions.has('charmed')); }
+  if (t) { execute(c, t, st); eq('slot consumed', (c.resources as any).spellSlots[6].remaining, 0); assert('NOT concentrating', !(c.concentration?.active)); assert('e1 charmed', e1.conditions.has('charmed')); assert('e2 charmed', e2.conditions.has('charmed'));
+    // NEW: verify suggestion effect applies disadvantage on attack rolls
+    const e1Adv = e1.advantages.find(a => a.source === 'Mass Suggestion');
+    const e2Adv = e2.advantages.find(a => a.source === 'Mass Suggestion');
+    assert('e1 has disadv on attacks (advantages entry)', !!e1Adv);
+    assert('e1 disadv type is disadvantage', e1Adv?.type === 'disadvantage');
+    assert('e1 disadv scope is attack', e1Adv?.scope === 'attack');
+    assert('e2 has disadv on attacks (advantages entry)', !!e2Adv);
+    // NEW: verify effect type is 'suggestion'
+    const e1Effect = e1.activeEffects.find(e => e.spellName === 'Mass Suggestion');
+    assert('e1 effect type is suggestion', e1Effect?.effectType === 'suggestion');
+  }
 }
 
-console.log('\n=== 5. execute — guaranteed success ===\n');
+console.log('\n=== 5. execute — guaranteed success (no effect) ===\n');
 {
   const c = makeCaster({ x: 0, y: 0, z: 0 }, MS_ACTION_LOW); const e1 = strong('e1', { x: 1, y: 0 });
   const bf = makeBF([c, e1]); const st = makeState(bf); const t = shouldCast(c, bf);
-  if (t) { execute(c, t, st); assert('NOT charmed', !e1.conditions.has('charmed')); const ss = st.log.events.filter(x => x.type === 'save_success'); assert('save_success log', ss.length === 1); }
+  if (t) { execute(c, t, st); assert('NOT charmed', !e1.conditions.has('charmed')); const ss = st.log.events.filter(x => x.type === 'save_success'); assert('save_success log', ss.length === 1);
+    // NEW: no disadv on attacks when save succeeds
+    const e1Adv = e1.advantages.find(a => a.source === 'Mass Suggestion');
+    assert('no disadv on attacks after save success', !e1Adv);
+  }
 }
 
-console.log('\n=== 6. Cleanup no-op ===\n');
+console.log('\n=== 6. suggestion effect undo — charmed removed + disadv removed ===\n');
+{
+  const c = makeCaster(); const e1 = weak('e1', { x: 1, y: 0 });
+  const bf = makeBF([c, e1]); const st = makeState(bf); const t = shouldCast(c, bf);
+  if (t) {
+    execute(c, t, st);
+    assert('e1 charmed before undo', e1.conditions.has('charmed'));
+    assert('e1 has disadv before undo', e1.advantages.some(a => a.source === 'Mass Suggestion'));
+
+    // Remove effects from caster (simulates concentration break or dispel)
+    removeEffectsFromCaster(c.id, bf);
+
+    assert('e1 NOT charmed after undo', !e1.conditions.has('charmed'));
+    assert('e1 no disadv after undo', !e1.advantages.some(a => a.source === 'Mass Suggestion'));
+    assert('e1 no active effects after undo', e1.activeEffects.length === 0);
+  }
+}
+
+console.log('\n=== 7. Cleanup no-op ===\n');
 { let ok = true; try { (require('../spells/mass_suggestion') as any).cleanup(makeCaster()); } catch { ok = false; } assert('no throw', ok); }
 
 console.log(`\n=== Results: ${passed} passed, ${failed} failed ===\n`);
