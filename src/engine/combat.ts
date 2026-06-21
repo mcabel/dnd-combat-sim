@@ -33,7 +33,7 @@ import { tickAdvantages, grantSelf, grantVulnerability } from './adv_system';
 import { getSummonEntry }                           from '../summons/registry';
 import { rollGrappleContest, rollShoveContest, canGrappleOrShoveTarget } from './utils';
 import { computeLOS } from './los';
-import { removeEffectsFromCaster, removeEffectById, getActiveAcBonus, getActiveAcFloor, getActiveBlessDie, getActiveBaneDie, getActiveHexDie, getActiveDamageZones, getActiveWeaponEnchant, getActiveEnlargeReduce, applySpellEffect } from './spell_effects';
+import { removeEffectsFromCaster, removeEffectById, getActiveAcBonus, getActiveAcFloor, getActiveBlessDie, getActiveBaneDie, getActiveHexDie, getActiveDamageZones, getActiveWeaponEnchant, getActiveEnlargeReduce, getActiveTaunt, applySpellEffect } from './spell_effects';
 import { applyCantripEffect, getCantripAttackAdvantage, resolveCantripAction, resolveCantripAoE, resolveCantripTouchEffect } from './cantrip_effects';
 import { execute as executeHex } from '../spells/hex';
 import { execute as executeMagicMissile } from '../spells/magic_missile';
@@ -934,7 +934,17 @@ export function resolveAttack(
     log(state, 'action', attacker.id,
       `${attacker.name} attacks ${target.name} with Advantage (True Strike).`, target.id);
   }
-  const disadvantage = baseDisadv || !!protectionRider || losDisadvantage || chillTouchDisadv || viciousMockeryDisadv || frostbiteDisadv;
+  // Taunt (Antagonize EGtW p.150): a taunted creature has disadvantage on
+  // attack rolls against creatures OTHER THAN the taunt caster. The taunt
+  // effect is on the ATTACKER (not the target). If the attacker has an active
+  // taunt and the target is not the taunt caster, apply disadvantage.
+  const tauntCasterId = getActiveTaunt(attacker);
+  const tauntDisadvantage = !!tauntCasterId && target.id !== tauntCasterId;
+  if (tauntDisadvantage) {
+    log(state, 'action', attacker.id,
+      `${attacker.name} attacks ${target.name} with Disadvantage (Taunted — must attack the taunt caster).`, target.id);
+  }
+  const disadvantage = baseDisadv || !!protectionRider || losDisadvantage || chillTouchDisadv || viciousMockeryDisadv || frostbiteDisadv || tauntDisadvantage;
   const advantage = baseAdv || packTacticsAdvantage || attacker.helpedThisTurn || cantripAdv || trueStrikeAdv;
 
   // Shillelagh (PHB p.275): while the self-buff is active, MELEE attacks use

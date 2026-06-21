@@ -12,22 +12,25 @@
 //
 // Upcast: +1d4/slot-level above 1st (not modelled in v1).
 //
-// v1 simplifications:
-//   - Taunt (canon: "disadvantage on attacks vs others"): simplified to
-//     `condition_apply:frightened` (the closest disabling condition —
-//     frightened grants a similar "disadv on attacks" while caster visible).
-//     Documented via `antagonizeTauntV1SimplifiedToFrightened`.
-//   - Duration: canon "until start of your next turn". v1 has no end-of-
-//     turn expiry hook — frightened persists for the v1 combat. NOT
+// v2 (this version):
+//   - Taunt (canon: "disadvantage on attacks vs others"): implemented as
+//     `effectType:'taunt'` with `payload.tauntCasterId`. The taunted
+//     creature has disadvantage on attack rolls against any creature
+//     OTHER THAN the taunt caster. Consumed by getActiveTaunt() in
+//     spell_effects.ts and resolveAttack in combat.ts.
+//     Documented via `antagonizeTauntV2Implemented`.
+// v1 simplifications still remaining:
+//   - Duration: canon "until start of your next turn". v1/v2 has no end-of-
+//     turn expiry hook — taunt persists for the combat. NOT
 //     concentration (sourceIsConcentration: false). Documented via
 //     `antagonizeDurationV1Simplified`.
-//   - Concentration: canon NO concentration (instantaneous effect). v1
+//   - Concentration: canon NO concentration (instantaneous effect). v1/v2
 //     matches (NOT concentration).
-//   - Damage on save: v1 deals HALF damage on a successful save (mirror
-//     Sunburst/Weird), NO frightened. (Canon: save negates damage — v1
+//   - Damage on save: v1/v2 deals HALF damage on a successful save (mirror
+//     Sunburst/Weird), NO taunt. (Canon: save negates damage — v1/v2
 //     half-on-save is a minor deviation for consistency with the
 //     damage+condition pattern.)
-//   - Upcast: +1d4/slot-level NOT modelled — v1 always rolls 4d4.
+//   - Upcast: +1d4/slot-level NOT modelled — v1/v2 always rolls 4d4.
 //
 // Migration note (Session 25 / Batch 2): migrated from the generic
 // forward-compat flag to a bespoke WIS-save + 4d4 psychic + frightened.
@@ -61,7 +64,7 @@ export const metadata = {
   concentration: false,
   saveAbility: 'wis' as const,
   castingTime: 'action',
-  antagonizeTauntV1SimplifiedToFrightened: true,           // taunt → frightened
+  antagonizeTauntV2Implemented: true,                      // taunt → disadvantage on attacks vs non-caster
   antagonizeDurationV1Simplified: true,                    // end-of-next-turn not tracked
   antagonizeUpcastV1Implemented: false,                    // +1d4/slot-level NOT modelled
 } as const;
@@ -91,7 +94,7 @@ export function rollDamage(): number {
 
 /**
  * Returns the single best target for Antagonize (a living enemy within 60 ft,
- * not already frightened), or null when the spell should not be cast.
+ * not already taunted by this caster), or null when the spell should not be cast.
  * Target priority: highest-threat, then lowest current HP (kill-shot bias).
  */
 export function shouldCast(caster: Combatant, bf: Battlefield): Combatant | null {
@@ -105,7 +108,7 @@ export function shouldCast(caster: Combatant, bf: Battlefield): Combatant | null
     if (c.isDead || c.isUnconscious) continue;
     const distFt = chebyshev3D(caster.pos, c.pos) * 5;
     if (distFt > 60) continue;
-    if (c.conditions.has('frightened')) continue;
+    // Skip if already taunted by this caster (prevent double-taunt)
     if (c.activeEffects.some(e => e.casterId === caster.id && e.spellName === 'Antagonize')) continue;
     candidates.push({ c, threat: c.maxHP, curHP: c.currentHP, dist: distFt });
   }
@@ -123,7 +126,7 @@ export function execute(caster: Combatant, target: Combatant, state: EngineState
   consumeSpellSlot(caster, 1);
 
   emit(state, 'action', caster.id,
-    `${caster.name} casts Antagonize at ${target.name}! (DC ${saveDC} WIS — ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType} + frightened on fail)`, target.id);
+    `${caster.name} casts Antagonize at ${target.name}! (DC ${saveDC} WIS — ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType} + taunt on fail)`, target.id);
   if (target.isDead || target.isUnconscious) return;
 
   const save = rollSave(target, 'wis', saveDC);
@@ -132,21 +135,21 @@ export function execute(caster: Combatant, target: Combatant, state: EngineState
   const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);
 
   emit(state, save.success ? 'save_success' : 'save_fail', caster.id,
-    `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} WIS save vs Antagonize (rolled ${save.total}) — ${dealt} ${metadata.damageType}${save.success ? '' : ' + FRIGHTENED'}`, target.id, save.roll);
+    `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} WIS save vs Antagonize (rolled ${save.total}) — ${dealt} ${metadata.damageType}${save.success ? '' : ' + TAUNTED'}`, target.id, save.roll);
   emit(state, 'damage', caster.id,
     `Antagonize: ${target.name} takes ${dealt} ${metadata.damageType} damage`, target.id, dealt);
 
-  if (!save.success && !target.conditions.has('frightened')) {
+  if (!save.success) {
     applySpellEffect(target, {
       casterId: caster.id, spellName: 'Antagonize',
-      effectType: 'condition_apply', payload: { condition: 'frightened' },
+      effectType: 'taunt', payload: { tauntCasterId: caster.id },
       sourceIsConcentration: false,
     });
     emit(state, 'condition_add', caster.id,
-      `${target.name} is FRIGHTENED by the tirade! (taunt simplified; disadv on attacks while caster visible)`, target.id);
+      `${target.name} is TAUNTED! (disadvantage on attacks vs creatures other than ${caster.name})`, target.id);
   }
 }
 
 // ---- Cleanup ------------------------------------------------
 
-export function cleanup(_c: Combatant): void { /* no-op — NOT concentration; frightened persists */ }
+export function cleanup(_c: Combatant): void { /* no-op — NOT concentration; taunt persists */ }

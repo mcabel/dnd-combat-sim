@@ -74,6 +74,7 @@ export function applySpellEffect(
       target.conditions.add(effect.payload.condition!);
       break;
 
+    case 'taunt':
     case 'ac_bonus':
     case 'ac_floor':
     case 'bless_die':
@@ -150,6 +151,7 @@ function _undoEffect(target: Combatant, effect: ActiveEffect): void {
       target.conditions.delete(effect.payload.condition!);
       break;
 
+    case 'taunt':
     case 'ac_bonus':
     case 'ac_floor':
     case 'bless_die':
@@ -333,6 +335,22 @@ export function getActiveWeaponEnchant(c: Combatant): { attackBonus: number; dam
     }
   }
   return { attackBonus, damageBonus, damageDie, damageDieCount, damageDieType };
+}
+
+// ---- Taunt query (Antagonize EGtW p.150) --------------------
+
+/**
+ * Returns the taunt caster ID if the combatant is taunted, or null if not.
+ * A taunted creature has disadvantage on attack rolls against any target
+ * EXCEPT the taunt caster (EGtW p.150: "disadvantage on attack rolls
+ * against creatures other than you"). Consumed in combat.ts resolveAttack.
+ *
+ * If multiple taunt effects are active (rare — would require two casters),
+ * the first one found wins (v1 simplification).
+ */
+export function getActiveTaunt(c: Combatant): string | null {
+  const taunt = c.activeEffects.find(e => e.effectType === 'taunt');
+  return taunt?.payload.tauntCasterId ?? null;
 }
 
 // ---- Enlarge/Reduce query (Session 17 — Enlarge/Reduce PHB p.237) ---

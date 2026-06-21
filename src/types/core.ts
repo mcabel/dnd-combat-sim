@@ -98,6 +98,7 @@ export type SpellEffectType =
   // ── Session 17 — level-2 batch 3 new effect types ───────────────────
   | 'weapon_enchant'    // flat +N to attack rolls AND damage rolls with weapons (Magic Weapon PHB p.257)
   | 'enlarge_reduce'    // enlarge/reduce weapon-damage mod + STR check adv/disadv (Enlarge/Reduce PHB p.237)
+  | 'taunt'             // disadvantage on attacks vs non-caster targets (Antagonize EGtW p.150)
   // ── Session 27 — Batch 3 concentration buffs ────────────────────────
   // bane_die: inverse of bless_die (Bane PHB p.219: -1d4 to attacks/saves).
   // weapon_enchant extended with damageDie/damageDieCount/damageDieType
@@ -171,6 +172,11 @@ export interface ActiveEffect {
     // Read by resolveAttack's damage branch (the attacker's effect) and
     // rollAbilityCheck + rollSave (the creature's own effect for STR).
     enlargeReduceMode?: 'enlarge' | 'reduce';
+    // ── taunt (Antagonize EGtW p.150) ────────────────────────────────────
+    // The taunted combatant has disadvantage on attack rolls against any
+    // creature EXCEPT the one identified by tauntCasterId. Read by
+    // getActiveTaunt() in spell_effects.ts; consumed in combat.ts resolveAttack.
+    tauntCasterId?: string;            // ID of the caster — attacks vs anyone else have disadvantage
   };
   sourceIsConcentration: boolean;     // if true, removed when caster's concentration ends
 }
