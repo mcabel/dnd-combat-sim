@@ -1,0 +1,406 @@
+// ============================================================
+// summon_elemental.test.ts — Summon Elemental spell module (TCE p.112)
+// 4th-level conjuration, action, range 30 ft, concentration 1 hr.
+// Effect: Spawns an Elemental Spirit combatant that shares the caster's
+//         initiative count and takes its turn immediately after.
+//         HP/AC scale with slot level. Disappears on concentration
+//         break or 0 HP. v1: always Fire option.
+//
+// Tests cover: metadata, shouldCast gates, execute combatant creation,
+// summon tags, battlefield addition, initiative insertion, concentration
+// break despawn, HP/AC scaling, Fire stat block, and option variants.
+// ============================================================
+
+import { shouldCast, execute, metadata, createElementalSpirit } from '../spells/summon_elemental';
+import { removeEffectsFromCaster } from '../engine/spell_effects';
+import { Combatant, Action, PlayerResources, Vec3 } from '../types/core';
+
+let passed = 0, failed = 0;
+
+function assert(label: string, cond: boolean, detail = ''): void {
+  if (cond) { console.log(`  ✅ ${label}`); passed++; }
+  else       { console.error(`  ❌ ${label}${detail ? ': ' + detail : ''}`); failed++; }
+}
+function eq<T>(label: string, a: T, b: T): void {
+  assert(label, a === b, `got ${JSON.stringify(a)}, want ${JSON.stringify(b)}`);
+}
+
+// ---- Helpers ------------------------------------------------
+
+function withSlots4(remaining = 2): PlayerResources {
+  return { spellSlots: { 4: { max: 2, remaining } } };
+}
+
+const SUMMON_ELEMENTAL_ACTION: Action = {
+  name: 'Summon Elemental',
+  isMultiattack: false,
+  attackType: 'save',
+  reach: 30,
+  range: { normal: 30, long: 30 },
+  hitBonus: null,
+  damage: null,
+  damageType: null,
+  saveDC: 15,
+  saveAbility: 'wis',
+  isAoE: false,
+  isControl: true,
+  requiresConcentration: true,
+  slotLevel: 4,
+  costType: 'action',
+  legendaryCost: 0,
+  description: 'Summon Elemental (concentration 1 hr)',
+};
+
+function makeCombatant(id: string, overrides: Partial<Combatant> = {}): Combatant {
+  return {
+    id, name: id, isPlayer: false, faction: 'party',
+    maxHP: 100, currentHP: 100, ac: 14, speed: 30,
+    flySpeed: null, swimSpeed: null, burrowSpeed: null,
+    str: 10, dex: 10, con: 10, int: 10, wis: 16, cha: 10,
+    cr: 1,
+    pos: { x: 0, y: 0, z: 0 },
+    actions: [], traits: [], legendaryActions: [], legendaryActionPool: 0,
+    legendaryActionPoolMax: 0,
+    budget: { movementFt: 30, actionUsed: false, bonusActionUsed: false, reactionUsed: false, freeObjectUsed: false },
+    conditions: new Set(),
+    aiProfile: 'smart',
+    perception: { targets: new Map() } as any,
+    concentration: null,
+    deathSaves: null,
+    resources: null,
+    tempHP: 0,
+    exhaustionLevel: 0,
+    mountedOn: null, carriedBy: null, independentMount: false,
+    role: 'regular', bonded: null,
+    usedSneakAttackThisTurn: false, helpedThisTurn: false,
+    isDefender: false, cannotAttack: false, hasHands: true, wearingArmor: false,
+    isDead: false, isUnconscious: false,
+    advantages: [], vulnerabilities: [], resistances: [],
+    bardicInspirationDie: null,
+    wardingBond: null,
+    activeEffects: [],
+    ...overrides,
+  };
+}
+
+function makeBF(combatants: Combatant[]) {
+  return {
+    width: 20, height: 20, depth: 1,
+    cells: new Map(),
+    round: 1,
+    combatants: new Map(combatants.map(c => [c.id, c])),
+    initiativeOrder: combatants.map(c => c.id),
+  } as any;
+}
+
+function makeState(bf: any): any {
+  return {
+    battlefield: bf,
+    log: { events: [], winner: null, rounds: 0 },
+    disengagedThisTurn: new Set(),
+    damageThisRound: new Map(),
+    rageDamagedSinceLastTurn: new Set(),
+  };
+}
+
+function makeCaster(id: string = 'caster1', pos: Vec3 = { x: 0, y: 0, z: 0 }): Combatant {
+  return makeCombatant(id, {
+    name: 'Druid',
+    pos,
+    actions: [SUMMON_ELEMENTAL_ACTION],
+    resources: withSlots4(2),
+  });
+}
+
+function makeEnemy(id: string = 'enemy1', pos: Vec3 = { x: 5, y: 0, z: 0 }): Combatant {
+  return makeCombatant(id, {
+    name: id,
+    faction: 'enemy',
+    pos,
+  });
+}
+
+// ============================================================
+// 1. Metadata
+// ============================================================
+
+console.log('\n=== 1. Metadata ===\n');
+
+eq('name is Summon Elemental', metadata.name, 'Summon Elemental');
+eq('level is 4', metadata.level, 4);
+eq('school is conjuration', metadata.school, 'conjuration');
+eq('range is 30 ft', metadata.rangeFt, 30);
+eq('is concentration', metadata.concentration, true);
+eq('casting time is action', metadata.castingTime, 'action');
+eq('summonElementalV1Implemented is true', metadata.summonElementalV1Implemented, true);
+eq('summonElementalUpcastV1Implemented is true', metadata.summonElementalUpcastV1Implemented, true);
+
+// ============================================================
+// 2. shouldCast — precondition gates
+// ============================================================
+
+console.log('\n=== 2. shouldCast — precondition gates ===\n');
+
+{
+  const caster = makeCaster();
+  caster.actions = [];
+  const enemy = makeEnemy();
+  const bf = makeBF([caster, enemy]);
+  assert('Returns false when caster has no Summon Elemental action', shouldCast(caster, bf) === false);
+}
+
+{
+  const caster = makeCaster();
+  caster.resources = withSlots4(0);
+  const enemy = makeEnemy();
+  const bf = makeBF([caster, enemy]);
+  assert('Returns false when no 4th-level slots', shouldCast(caster, bf) === false);
+}
+
+{
+  const caster = makeCaster();
+  caster.concentration = { active: true, spellName: 'Barkskin', dcIfHit: 10 };
+  const enemy = makeEnemy();
+  const bf = makeBF([caster, enemy]);
+  assert('Returns false when caster is already concentrating', shouldCast(caster, bf) === false);
+}
+
+{
+  const caster = makeCaster();
+  const enemy = makeEnemy();
+  const existingSummon = makeCombatant('existing_summon', {
+    name: 'Elemental Spirit (Druid)',
+    faction: 'party',
+    isSummon: true,
+    summonerId: caster.id,
+    summonSpellName: 'Summon Elemental',
+  });
+  const bf = makeBF([caster, enemy, existingSummon]);
+  assert('Returns false when caster already has a Summon Elemental active', shouldCast(caster, bf) === false);
+}
+
+{
+  const caster = makeCaster();
+  const enemy = makeEnemy();
+  const bf = makeBF([caster, enemy]);
+  assert('Returns true when all conditions are met', shouldCast(caster, bf) === true);
+}
+
+// ============================================================
+// 3. createElementalSpirit — combatant creation (Fire)
+// ============================================================
+
+console.log('\n=== 3. createElementalSpirit — combatant creation (Fire) ===\n');
+
+{
+  const caster = makeCaster();
+  const spirit = createElementalSpirit(caster, 4);
+
+  eq('isSummon is true', spirit.isSummon, true);
+  eq('summonerId matches caster', spirit.summonerId, 'caster1');
+  eq('summonSpellName is Summon Elemental', spirit.summonSpellName, 'Summon Elemental');
+  eq('faction matches caster', spirit.faction, 'party');
+  eq('name includes Elemental Spirit', spirit.name.includes('Elemental Spirit'), true);
+  eq('name includes caster name', spirit.name.includes('Druid'), true);
+  eq('HP at L4 is 40', spirit.maxHP, 40);
+  eq('currentHP equals maxHP', spirit.currentHP, spirit.maxHP);
+  eq('AC at L4 is 15 (11+4)', spirit.ac, 15);
+  eq('aiProfile is attackNearest', spirit.aiProfile, 'attackNearest');
+  eq('speed is 40 (Fire)', spirit.speed, 40);
+  eq('flySpeed is null (Fire)', spirit.flySpeed, null);
+  eq('swimSpeed is null (Fire)', spirit.swimSpeed, null);
+  eq('STR is 16', spirit.str, 16);
+  eq('DEX is 12', spirit.dex, 12);
+  eq('CON is 14', spirit.con, 14);
+  eq('INT is 4', spirit.int, 4);
+  eq('WIS is 10', spirit.wis, 10);
+  eq('CHA is 6', spirit.cha, 6);
+  eq('cr is 0', spirit.cr, 0);
+  eq('has 1 attack action at L4', spirit.actions.length, 1);
+  eq('attack name is Fire Strike (Fire)', spirit.actions[0].name, 'Fire Strike');
+  eq('attack hitBonus is +5', spirit.actions[0].hitBonus, 5);
+  eq('attack damage is 1d8+3', spirit.actions[0].damage?.count === 1 && spirit.actions[0].damage?.sides === 8 && spirit.actions[0].damage?.bonus === 3, true);
+  eq('attack damageType is fire', spirit.actions[0].damageType, 'fire');
+  assert('Position is adjacent to caster', spirit.pos.x === 1 && spirit.pos.y === 0);
+}
+
+// ============================================================
+// 4. createElementalSpirit — option variants
+// ============================================================
+
+console.log('\n=== 4. createElementalSpirit — option variants ===\n');
+
+{
+  const caster = makeCaster();
+
+  const airSpirit = createElementalSpirit(caster, 4, 'air');
+  eq('Air: attack name is Wind Slam', airSpirit.actions[0].name, 'Wind Slam');
+  eq('Air: damageType is bludgeoning', airSpirit.actions[0].damageType, 'bludgeoning');
+  eq('Air: speed is 30', airSpirit.speed, 30);
+  eq('Air: flySpeed is 60', airSpirit.flySpeed, 60);
+
+  const earthSpirit = createElementalSpirit(caster, 4, 'earth');
+  eq('Earth: attack name is Rocky Bludgeon', earthSpirit.actions[0].name, 'Rocky Bludgeon');
+  eq('Earth: damageType is bludgeoning', earthSpirit.actions[0].damageType, 'bludgeoning');
+  eq('Earth: speed is 30', earthSpirit.speed, 30);
+  eq('Earth: flySpeed is null', earthSpirit.flySpeed, null);
+
+  const fireSpirit = createElementalSpirit(caster, 4, 'fire');
+  eq('Fire: attack name is Fire Strike', fireSpirit.actions[0].name, 'Fire Strike');
+  eq('Fire: damageType is fire', fireSpirit.actions[0].damageType, 'fire');
+  eq('Fire: speed is 40', fireSpirit.speed, 40);
+
+  const waterSpirit = createElementalSpirit(caster, 4, 'water');
+  eq('Water: attack name is Water Strike', waterSpirit.actions[0].name, 'Water Strike');
+  eq('Water: damageType is bludgeoning', waterSpirit.actions[0].damageType, 'bludgeoning');
+  eq('Water: swimSpeed is 40', waterSpirit.swimSpeed, 40);
+}
+
+// ============================================================
+// 5. execute — creates summon and adds to battlefield
+// ============================================================
+
+console.log('\n=== 5. execute — creates summon and adds to battlefield ===\n');
+
+{
+  const caster = makeCaster();
+  const enemy = makeEnemy();
+  const bf = makeBF([caster, enemy]);
+  const state = makeState(bf);
+
+  execute(caster, caster, state);
+
+  const summons = [...bf.combatants.values()].filter(c => c.isSummon && c.summonerId === caster.id);
+  eq('1 summon added to battlefield', summons.length, 1);
+
+  if (summons.length === 1) {
+    const summon = summons[0];
+    eq('Summon isSummon is true', summon.isSummon, true);
+    eq('Summon summonerId is caster', summon.summonerId, 'caster1');
+    eq('Summon summonSpellName is Summon Elemental', summon.summonSpellName, 'Summon Elemental');
+    eq('Summon faction matches caster', summon.faction, 'party');
+    eq('Summon HP at L4 is 40', summon.maxHP, 40);
+    eq('Summon AC at L4 is 15', summon.ac, 15);
+  }
+
+  eq('Caster concentrating on Summon Elemental', caster.concentration?.spellName, 'Summon Elemental');
+  eq('Caster concentration is active', caster.concentration?.active, true);
+  eq('Slot consumed (1 remaining)', caster.resources!.spellSlots![4]!.remaining, 1);
+}
+
+// ============================================================
+// 6. execute — pendingInitiativeInserts
+// ============================================================
+
+console.log('\n=== 6. execute — pendingInitiativeInserts ===\n');
+
+{
+  const caster = makeCaster();
+  const enemy = makeEnemy();
+  const bf = makeBF([caster, enemy]);
+  const state = makeState(bf);
+
+  execute(caster, caster, state);
+
+  assert('pendingInitiativeInserts exists', Array.isArray(bf.pendingInitiativeInserts));
+  if (Array.isArray(bf.pendingInitiativeInserts)) {
+    eq('1 pending insert', bf.pendingInitiativeInserts.length, 1);
+    if (bf.pendingInitiativeInserts.length >= 1) {
+      eq('insertAfterId is caster id', bf.pendingInitiativeInserts[0].insertAfterId, 'caster1');
+    }
+  }
+}
+
+// ============================================================
+// 7. Concentration break despawns the summon
+// ============================================================
+
+console.log('\n=== 7. Concentration break despawns the summon ===\n');
+
+{
+  const caster = makeCaster();
+  const enemy = makeEnemy();
+  const bf = makeBF([caster, enemy]);
+  const state = makeState(bf);
+
+  execute(caster, caster, state);
+
+  const summonsBefore = [...bf.combatants.values()].filter(c => c.isSummon && c.summonerId === caster.id);
+  eq('Summon exists before concentration break', summonsBefore.length, 1);
+
+  removeEffectsFromCaster(caster.id, bf);
+
+  const summonsAfter = [...bf.combatants.values()].filter(c => c.isSummon && c.summonerId === caster.id);
+  eq('Summon removed after concentration break', summonsAfter.length, 0);
+}
+
+// ============================================================
+// 8. HP/AC scale with slot level
+// ============================================================
+
+console.log('\n=== 8. HP/AC scale with slot level ===\n');
+
+{
+  const caster = makeCaster();
+
+  const spirit4 = createElementalSpirit(caster, 4);
+  eq('L4: HP = 40', spirit4.maxHP, 40);
+  eq('L4: AC = 15 (11+4)', spirit4.ac, 15);
+
+  const spirit5 = createElementalSpirit(caster, 5);
+  eq('L5: HP = 50', spirit5.maxHP, 50);
+  eq('L5: AC = 16 (11+5)', spirit5.ac, 16);
+  eq('L5: 2 attack actions (Multiattack)', spirit5.actions.length, 2);
+
+  const spirit6 = createElementalSpirit(caster, 6);
+  eq('L6: HP = 60', spirit6.maxHP, 60);
+  eq('L6: AC = 17 (11+6)', spirit6.ac, 17);
+
+  const spirit9 = createElementalSpirit(caster, 9);
+  eq('L9: HP = 90', spirit9.maxHP, 90);
+  eq('L9: AC = 20 (11+9)', spirit9.ac, 20);
+  eq('L9: 2 attack actions (Multiattack)', spirit9.actions.length, 2);
+}
+
+// ============================================================
+// 9. execute — logging
+// ============================================================
+
+console.log('\n=== 9. execute — logging ===\n');
+
+{
+  const caster = makeCaster();
+  const enemy = makeEnemy();
+  const bf = makeBF([caster, enemy]);
+  const state = makeState(bf);
+
+  execute(caster, caster, state);
+
+  const events = state.log.events as any[];
+  const actionEvents = events.filter(e => e.type === 'action');
+
+  assert('At least 1 action event (cast log)', actionEvents.length >= 1);
+  if (actionEvents.length >= 1) {
+    assert('Action event mentions "Summon Elemental"', actionEvents[0].description.includes('Summon Elemental'));
+    assert('Action event mentions "Elemental Spirit"', actionEvents[0].description.includes('Elemental Spirit'));
+    assert('Action event mentions HP', actionEvents[0].description.includes('HP'));
+  }
+}
+
+// ============================================================
+// 10. shouldCast returns true even with no enemies
+// ============================================================
+
+console.log('\n=== 10. shouldCast — no enemy required ===\n');
+
+{
+  const caster = makeCaster();
+  const bf = makeBF([caster]);
+  assert('Returns true even with no enemies (summon does not need target)', shouldCast(caster, bf) === true);
+}
+
+// ---- Results ------------------------------------------------
+
+console.log(`\n${'='.repeat(50)}`);
+console.log(`Results: ${passed} passed, ${failed} failed`);
+if (failed > 0) process.exit(1);

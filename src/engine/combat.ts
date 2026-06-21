@@ -681,6 +681,12 @@ import { shouldCast as shouldCastSummonBeast, execute as executeSummonBeast } fr
 import { shouldCast as shouldCastSummonFey,         execute as executeSummonFey }         from '../spells/summon_fey';
 import { shouldCast as shouldCastSummonUndead,      execute as executeSummonUndead }      from '../spells/summon_undead';
 import { shouldCast as shouldCastSummonShadowspawn, execute as executeSummonShadowspawn } from '../spells/summon_shadowspawn';
+// ── TG-006 — L3-L4 TCE/XGE summon spells (Phase 1d) ────────────────────────
+import { shouldCast as shouldCastSummonLesserDemons,  execute as executeSummonLesserDemons }  from '../spells/summon_lesser_demons';
+import { shouldCast as shouldCastSummonAberration,     execute as executeSummonAberration }     from '../spells/summon_aberration';
+import { shouldCast as shouldCastSummonConstruct,      execute as executeSummonConstruct }      from '../spells/summon_construct';
+import { shouldCast as shouldCastSummonElemental,      execute as executeSummonElemental }      from '../spells/summon_elemental';
+import { shouldCast as shouldCastSummonGreaterDemon,   execute as executeSummonGreaterDemon }   from '../spells/summon_greater_demon';
 
 // ── Session 19 — bulk-implementation generic dispatch (262 new spells) ────
 import {
@@ -3748,8 +3754,18 @@ function executePlannedAction(
         executeSummonUndead(actor, actor, state);
       } else if (spellName === 'Summon Shadowspawn') {
         executeSummonShadowspawn(actor, actor, state);
+      } else if (spellName === 'Summon Lesser Demons') {
+        executeSummonLesserDemons(actor, actor, state);
+      } else if (spellName === 'Summon Aberration') {
+        executeSummonAberration(actor, actor, state);
+      } else if (spellName === 'Summon Construct') {
+        executeSummonConstruct(actor, actor, state);
+      } else if (spellName === 'Summon Elemental') {
+        executeSummonElemental(actor, actor, state);
+      } else if (spellName === 'Summon Greater Demon') {
+        executeSummonGreaterDemon(actor, actor, state);
       }
-      // More summon spells can be added here (Phase 1d+)
+      // More summon spells can be added here (Phase 1e+)
       break;
     }
 

@@ -247,6 +247,12 @@ import { shouldCast as shouldCastSummonBeast } from '../spells/summon_beast';
 import { shouldCast as shouldCastSummonFey }         from '../spells/summon_fey';
 import { shouldCast as shouldCastSummonUndead }      from '../spells/summon_undead';
 import { shouldCast as shouldCastSummonShadowspawn } from '../spells/summon_shadowspawn';
+// ── TG-006 — L3-L4 TCE/XGE summon spells (Phase 1d) ────────────────────────
+import { shouldCast as shouldCastSummonLesserDemons }  from '../spells/summon_lesser_demons';
+import { shouldCast as shouldCastSummonAberration }     from '../spells/summon_aberration';
+import { shouldCast as shouldCastSummonConstruct }      from '../spells/summon_construct';
+import { shouldCast as shouldCastSummonElemental }      from '../spells/summon_elemental';
+import { shouldCast as shouldCastSummonGreaterDemon }   from '../spells/summon_greater_demon';
 
 // ── Session 19 — bulk-implementation generic dispatch (262 new spells) ────
 import { GENERIC_SPELL_LIST } from '../spells/_generic_registry';
@@ -2095,6 +2101,94 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
         action,
         targetId: self.id,
         description: `${self.name} casts Summon Shadowspawn`,
+      };
+      plan.targetId = self.id;
+      plan.bonusAction = planBonusAction(self, self, battlefield);
+      return plan;
+    }
+  }
+
+  // === TG-006 — TCE/XGE SUMMON SPELLS (Phase 1d) ===
+  // Summon Lesser Demons (XGE p.167): 3rd-level conjuration, action, range 60 ft,
+  // concentration 1 min. Spawns 2 Dretches.
+  // Summon Aberration (TCE p.110): 4th-level conjuration, action, range 30 ft,
+  // concentration 1 hr. Spawns an Aberrant Spirit (Slaad).
+  // Summon Construct (TCE p.111): 4th-level conjuration, action, range 30 ft,
+  // concentration 1 hr. Spawns a Construct Spirit.
+  // Summon Elemental (TCE p.112): 4th-level conjuration, action, range 30 ft,
+  // concentration 1 hr. Spawns an Elemental Spirit (Fire).
+  // Summon Greater Demon (XGE p.166): 4th-level conjuration, action, range 60 ft,
+  // concentration 1 min. Spawns a Barlgura.
+  // All follow the same pattern as Phase 1c spells.
+
+  if (!plan.action && self.actions.some(a => a.name === 'Summon Lesser Demons')) {
+    if (shouldCastSummonLesserDemons(self, battlefield)) {
+      const action = self.actions.find(a => a.name === 'Summon Lesser Demons')!;
+      plan.action = {
+        type: 'summonSpell',
+        action,
+        targetId: self.id,
+        description: `${self.name} casts Summon Lesser Demons`,
+      };
+      plan.targetId = self.id;
+      plan.bonusAction = planBonusAction(self, self, battlefield);
+      return plan;
+    }
+  }
+
+  if (!plan.action && self.actions.some(a => a.name === 'Summon Aberration')) {
+    if (shouldCastSummonAberration(self, battlefield)) {
+      const action = self.actions.find(a => a.name === 'Summon Aberration')!;
+      plan.action = {
+        type: 'summonSpell',
+        action,
+        targetId: self.id,
+        description: `${self.name} casts Summon Aberration`,
+      };
+      plan.targetId = self.id;
+      plan.bonusAction = planBonusAction(self, self, battlefield);
+      return plan;
+    }
+  }
+
+  if (!plan.action && self.actions.some(a => a.name === 'Summon Construct')) {
+    if (shouldCastSummonConstruct(self, battlefield)) {
+      const action = self.actions.find(a => a.name === 'Summon Construct')!;
+      plan.action = {
+        type: 'summonSpell',
+        action,
+        targetId: self.id,
+        description: `${self.name} casts Summon Construct`,
+      };
+      plan.targetId = self.id;
+      plan.bonusAction = planBonusAction(self, self, battlefield);
+      return plan;
+    }
+  }
+
+  if (!plan.action && self.actions.some(a => a.name === 'Summon Elemental')) {
+    if (shouldCastSummonElemental(self, battlefield)) {
+      const action = self.actions.find(a => a.name === 'Summon Elemental')!;
+      plan.action = {
+        type: 'summonSpell',
+        action,
+        targetId: self.id,
+        description: `${self.name} casts Summon Elemental`,
+      };
+      plan.targetId = self.id;
+      plan.bonusAction = planBonusAction(self, self, battlefield);
+      return plan;
+    }
+  }
+
+  if (!plan.action && self.actions.some(a => a.name === 'Summon Greater Demon')) {
+    if (shouldCastSummonGreaterDemon(self, battlefield)) {
+      const action = self.actions.find(a => a.name === 'Summon Greater Demon')!;
+      plan.action = {
+        type: 'summonSpell',
+        action,
+        targetId: self.id,
+        description: `${self.name} casts Summon Greater Demon`,
       };
       plan.targetId = self.id;
       plan.bonusAction = planBonusAction(self, self, battlefield);
