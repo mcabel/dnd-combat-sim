@@ -75,7 +75,7 @@ export const metadata = {
   castingTime: 'action',
   alterSelfAquaticAdaptationV1Implemented: false,            // aquatic adaptation NOT modelled
   alterSelfChangeAppearanceV1Implemented: false,             // change appearance NOT modelled
-  alterSelfConcentrationEnforcementV1Implemented: false,     // see TG-002
+  alterSelfConcentrationEnforcementV1Implemented: true,     // TG-002 DONE (Session 34)
 } as const;
 
 // ---- Local log helper ---------------------------------------

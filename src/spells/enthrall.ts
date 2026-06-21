@@ -68,7 +68,7 @@ export const metadata = {
   castingTime: 'action',
   enthrallPerceptionDisadvV1Implemented: false,             // perception subsystem NOT modelled
   enthrallUpcastV1Implemented: false,                       // no At Higher Levels entry — max 3 targets
-  enthrallConcentrationEnforcementV1Implemented: false,     // see TG-002
+  enthrallConcentrationEnforcementV1Implemented: true,     // TG-002 DONE (Session 34)
 } as const;
 
 // ---- Local log helper ---------------------------------------

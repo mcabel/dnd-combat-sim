@@ -86,7 +86,7 @@ export const metadata = {
   webDestructionV1Implemented: false,                  // fire destruction NOT modelled
   webEscapeActionV1Implemented: false,                 // STR-check escape + end-of-turn DEX save NOT modelled
   webUpcastV1Implemented: false,                       // no At Higher Levels entry — single target only
-  webConcentrationEnforcementV1Implemented: false,     // see TG-002
+  webConcentrationEnforcementV1Implemented: true,     // TG-002 DONE (Session 34)
 } as const;
 
 // ---- Local log helper ---------------------------------------

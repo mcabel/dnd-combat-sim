@@ -231,8 +231,8 @@ eq('casting time is action', metadata.castingTime, 'action');
 eq('STR-only simplified flag set (v1: applies to all weapon attacks)',
   metadata.rayOfEnfeeblementStrOnlyV1Simplified, true);
 eq('upcast NOT implemented (v1)', metadata.rayOfEnfeeblementUpcastV1Implemented, false);
-eq('concentration enforcement NOT implemented (v1)',
-  metadata.rayOfEnfeeblementConcentrationEnforcementV1Implemented, false);
+eq('concentration enforcement NOW implemented (Session 34 TG-002)',
+  metadata.rayOfEnfeeblementConcentrationEnforcementV1Implemented, true);
 
 // ============================================================
 // 2. shouldCast — precondition gates

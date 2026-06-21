@@ -166,7 +166,7 @@ eq('save ability is wis', metadata.saveAbility, 'wis');
 eq('casting time is action', metadata.castingTime, 'action');
 eq('perception disadv NOT implemented (v1)', metadata.enthrallPerceptionDisadvV1Implemented, false);
 eq('upcast NOT implemented (v1)', metadata.enthrallUpcastV1Implemented, false);
-eq('concentration enforcement NOT implemented (v1)', metadata.enthrallConcentrationEnforcementV1Implemented, false);
+eq('concentration enforcement NOW implemented (Session 34 TG-002)', metadata.enthrallConcentrationEnforcementV1Implemented, true);
 
 // ============================================================
 // 2. shouldCast — precondition gates (incl. concentration)

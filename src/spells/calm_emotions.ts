@@ -89,7 +89,7 @@ export const metadata = {
   calmEmotionsEnemyTargetingV1Implemented: false,          // enemy targeting skipped
   calmEmotionsConditionRestorationV1Implemented: false,    // concentration-break restoration skipped
   calmEmotionsPositionalAoeV1Implemented: false,           // 20-ft sphere → 60-ft radius around caster
-  calmEmotionsConcentrationEnforcementV1Implemented: false,  // see TG-002
+  calmEmotionsConcentrationEnforcementV1Implemented: true,  // TG-002 DONE (Session 34)
   calmEmotionsHumanoidTypeCheckV1Implemented: false,       // see TG-004
 } as const;
 

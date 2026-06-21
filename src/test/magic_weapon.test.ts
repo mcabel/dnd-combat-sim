@@ -192,8 +192,8 @@ eq('v1: nonmagical-weapon check NOT implemented',
   (metadata as any).magicWeaponNonmagicalCheckV1Implemented, false);
 eq('v1: upcast NOT implemented',
   (metadata as any).magicWeaponUpcastV1Implemented, false);
-eq('v1: concentration enforcement NOT implemented',
-  (metadata as any).magicWeaponConcentrationEnforcementV1Implemented, false);
+eq('v1: concentration enforcement NOW implemented (Session 34 TG-002)',
+  (metadata as any).magicWeaponConcentrationEnforcementV1Implemented, true);
 
 // ============================================================
 // 2. shouldCast — precondition gates + priority

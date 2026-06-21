@@ -57,7 +57,7 @@ export const metadata = {
   castingTime: 'action',
   passWithoutTraceStealthSubsystemV1Implemented: false,    // stealth subsystem NOT implemented
   passWithoutTraceUpcastV1Implemented: false,              // upcast NOT modelled (no At Higher Levels)
-  passWithoutTraceConcentrationEnforcementV1Implemented: false, // concentration break NOT enforced (TG-002)
+  passWithoutTraceConcentrationEnforcementV1Implemented: true, // concentration break NOT enforced (TG-002)
 } as const;
 
 // ---- Local log helper ---------------------------------------

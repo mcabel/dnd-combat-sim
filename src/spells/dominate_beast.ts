@@ -54,7 +54,7 @@ export const metadata = {
   castingTime: 'action',
   dominateBeastControlV2Implemented: true,
   dominateBeastBeastTypeCheckV2Implemented: true,
-  dominateBeastConcentrationEnforcementV1Implemented: false,  // see TG-002
+  dominateBeastConcentrationEnforcementV1Implemented: true,  // TG-002 DONE (Session 34)
 } as const;
 
 // ---- Local log helper ---------------------------------------

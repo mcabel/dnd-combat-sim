@@ -54,7 +54,7 @@ export const metadata = {
   castingTime: 'action',
   greaterInvisibilityEndsOnAttackV1Implemented: false,  // NOT applicable — no ends-on-attack clause
   greaterInvisibilityUpcastV1Implemented: false,        // no upcast in PHB
-  greaterInvisibilityConcentrationEnforcementV1Implemented: false,  // see TG-002
+  greaterInvisibilityConcentrationEnforcementV1Implemented: true,  // TG-002 DONE (Session 34)
 } as const;
 
 // ---- Local log helper ---------------------------------------

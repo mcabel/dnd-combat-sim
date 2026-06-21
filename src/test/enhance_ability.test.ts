@@ -133,7 +133,7 @@ eq('is concentration', metadata.concentration, true);
 eq('casting time is action', metadata.castingTime, 'action');
 eq('Bear\'s Endurance temp HP NOT implemented (v1)', metadata.enhanceAbilityTempHPV1Implemented, false);
 eq('Cat\'s Grace fall immunity NOT implemented (v1)', metadata.enhanceAbilityFallDamageImmunityV1Implemented, false);
-eq('concentration enforcement NOT implemented (v1)', metadata.enhanceAbilityConcentrationEnforcementV1Implemented, false);
+eq('concentration enforcement NOW implemented (Session 34 TG-002)', metadata.enhanceAbilityConcentrationEnforcementV1Implemented, true);
 
 // ============================================================
 // 2. shouldCast — precondition gates

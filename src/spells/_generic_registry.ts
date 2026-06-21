@@ -602,6 +602,12 @@ import {
 } from './polymorph';
 
 import {
+  shouldCast as shouldCastProtectionFromEnergy,
+  execute as executeProtectionFromEnergy,
+  metadata as metadataProtectionFromEnergy,
+} from './protection_from_energy';
+
+import {
   shouldCast as shouldCastRaulothimsPsychicLance,
   execute as executeRaulothimsPsychicLance,
   metadata as metadataRaulothimsPsychicLance,
@@ -1653,6 +1659,12 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     level: metadataPolymorph.level,
     shouldCast: shouldCastPolymorph,
     execute: executePolymorph,
+  },
+  'Protection from Energy': {
+    name: 'Protection from Energy',
+    level: metadataProtectionFromEnergy.level,
+    shouldCast: shouldCastProtectionFromEnergy,
+    execute: executeProtectionFromEnergy,
   },
   "Raulothim's Psychic Lance": {
     name: "Raulothim's Psychic Lance",

@@ -77,7 +77,7 @@ completed by a single agent without coordination.
 
 ### TG-002: Concentration subsystem (Option C)
 
-- **Status:** OPEN
+- **Status:** DONE (Session 34, z-workstream)
 - **Owners:** Core Engine (driving) + Cantrip-z (Dancing Lights is the only
   concentration cantrip)
 - **Source:** `zHANDOVER-SESSION-15.md` Option C; `concentrationSaveDC` already
@@ -98,6 +98,32 @@ completed by a single agent without coordination.
 - **Coordination protocol:** Core Engine announces in its next
   `HANDOVER-SESSION-*.md` that it is picking up TG-002; Cantrip-z then updates
   Dancing Lights to match the new `startConcentration` signature.
+- **Resolution (Session 34):** The concentration enforcement pipeline was
+  ALREADY implemented in earlier sessions (5 damage sites in `combat.ts`
+  calling `rollConcentrationSave` + `removeEffectsFromCaster` + `processFallDamage`),
+  but 40 spell metadata flags (`xxxConcentrationEnforcementV1Implemented: false`)
+  and 22 corresponding test assertions still marked it as "not implemented".
+  Session 34 closed the gap:
+  - Verified the end-to-end pipeline via a NEW integration test
+    `src/test/concentration_enforcement.test.ts` (34 assertions covering all
+    5 damage sites, DC computation, effect cleanup, summon despawn).
+  - Fixed a gap at site E (line 4985, moving-zone damage): added the missing
+    `processFallDamage(state)` call so Reverse Gravity / Fly / Levitate
+    concentration breaks triggered by moving zones (Flaming Sphere, Moonbeam)
+    now correctly process fall damage (matches the other 4 sites).
+  - Flipped all 40 metadata flags from `false` → `true` in spell files
+    (with updated `// TG-002 DONE (Session 34)` comment).
+  - Updated all 22 test assertions from `false` → `true` (label text:
+    "concentration enforcement NOW implemented (Session 34 TG-002)").
+  - All baseline tests still pass (concentration_ai, dispel_magic, mechanics,
+    reaction_registry, shield_reaction, absorb_elements, hellish_rebuke,
+    counterspell, feather_fall, silvery_barbs, engine, combat, plus all 22
+    flipped spells, plus summon/zone tests for reverse_gravity, watery_sphere,
+    spirit_guardians, flaming_sphere, moonbeam, spike_growth, summon_beast,
+    conjure_animals, witch_bolt, hex, bless).
+  - v1 simplifications (War Caster / Resilient feats NOT modelled) are still
+    documented in `rollConcentrationSave`'s comment — those would be a
+    separate task if ever needed.
 
 ### TG-003: AI planner cantrip selection (Option D)
 
@@ -217,7 +243,7 @@ completed by a single agent without coordination.
 
 ### TG-008: Reaction spell subsystem (Session 19 — bulk-deferred blockers)
 
-- **Status:** DONE (Session 33, z-workstream)
+- **Status:** DONE (Session 33 + Session 34, z-workstream)
 - **Owners:** Core Engine (driving — owns `src/engine/combat.ts` reaction window) + Cantrip-z (consumes in spell modules)
 - **Source:** `zHANDOVER-SESSION-19.md` (Session 19 bulk-implementation pass — 5 reaction spells identified)
 - **Summary:** v1 has NO reaction subsystem beyond pre-set reactions in TurnPlan. Several classic spells are reaction-cast (triggered by an incoming attack / spell / fall). 5 in-scope spells blocked.
@@ -237,12 +263,34 @@ completed by a single agent without coordination.
   - 6 reaction spells implemented: Shield (reworked to trigger-aware), Absorb Elements, Hellish Rebuke, Silvery Barbs, Counterspell, Feather Fall
   - 285 new test assertions across 7 test files (reaction_registry, shield_reaction, absorb_elements, hellish_rebuke, counterspell, feather_fall, silvery_barbs)
   - All baseline tests still pass (cure_wounds, healing_spells, healing_word, engine, ai, resources, scenario, combat, shield_simple, shield_of_faith, invisibility, thunderous_smite, booming_blade, green_flame_blade, conjure_fey, dispel_magic, etc.)
+- **Resolution (Session 34):** Closed the 7th in-scope spell:
+  - Implemented Protection from Energy (PHB p.266) as a regular concentration
+    buff spell (L3 abjuration, touch, 10 min concentration, resistance to one
+    damage type: acid/cold/fire/lightning/thunder). NOT a true reaction — the
+    Session 19 categorization was a stretch.
+  - New file `src/spells/protection_from_energy.ts` (~225 lines): metadata,
+    `pickTarget`, `pickDamageType`, `shouldCast`, `execute`,
+    `executeWithTarget`, `cleanup`.
+  - Wired into the generic spell registry (`_generic_registry.ts`) so the AI
+    planner can auto-cast it.
+  - Added `_undoEffect` case for 'Protection from Energy' in
+    `src/engine/spell_effects.ts` — when concentration breaks, removes the
+    resistance from `target.resistances` (reads `payload.damageType` to know
+    which type to remove; only the type we added is removed — innate
+    resistance to other types is preserved).
+  - New test `src/test/protection_from_energy.test.ts` (52 assertions):
+    metadata, pickTarget priority, pickDamageType AI, shouldCast
+    preconditions, execute mechanics, damage halving, concentration-break
+    cleanup, generic-registry end-to-end dispatch.
+  - All baseline tests still pass.
 - **Blocked spells (5):**
   - **Level 1 (3):** Absorb Elements (XGE) ✅, Shield (PHB) ✅, Feather Fall (PHB) ✅.
   - **Level 1 (1):** Hellish Rebuke (XGE) ✅.
   - **Level 1 (1):** Silvery Barbs (SCC) ✅.
   - **Level 3 (1):** Counterspell (PHB) ✅.
-  - **Level 3 (1):** Protection from Energy (PHB) — categorized as reaction because the broader "Protection from *" family overlaps with Shield's reaction model. NOT implemented in Session 33 (it's a buff spell, not a true reaction — the categorization was a stretch. Future work: implement as a regular concentration buff spell.)
+  - **Level 3 (1):** Protection from Energy (PHB) ✅ (Session 34 — implemented
+    as a regular concentration buff spell, NOT a reaction; the Session 19
+    categorization as a reaction was a stretch).
 
 ### TG-009: Antimagic / Dispel subsystem (Session 19 — bulk-deferred blockers)
 

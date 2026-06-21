@@ -64,7 +64,7 @@ export const metadata = {
   castingTime: 'action',
   holdPersonEndOfTurnSaveV1Implemented: false,    // end-of-turn save skipped
   holdPersonUpcastV1Implemented: false,           // +1 target/slot-level not modelled
-  holdPersonConcentrationEnforcementV1Implemented: false,  // see TG-002
+  holdPersonConcentrationEnforcementV1Implemented: true,  // TG-002 DONE (Session 34)
   holdPersonHumanoidTypeCheckV1Implemented: false,         // see TG-004
 } as const;
 

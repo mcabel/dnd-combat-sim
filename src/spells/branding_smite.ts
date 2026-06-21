@@ -58,7 +58,7 @@ export const metadata = {
   concentration: true,
   castingTime: 'bonusAction',
   brandingsmiteDurationV1Simplified: true,                  // 1-min → 1-round
-  brandingsmiteConcentrationEnforcementV1Implemented: false,// see TG-002
+  brandingsmiteConcentrationEnforcementV1Implemented: true,// TG-002 DONE (Session 34)
   brandingsmiteInvisibilitySuppressionV1Implemented: false, // no invisibility subsystem
   brandingsmiteUpcastV1Implemented: false,                  // +1d6/slot-level not modelled
 } as const;

@@ -67,7 +67,7 @@ export const metadata = {
   zoneOfTruthLieSubsystemV1Implemented: false,             // lie/speech subsystem NOT modelled
   zoneOfTruthAoEMultiTargetV1Implemented: false,           // single-target simplification
   zoneOfTruthUpcastV1Implemented: false,                   // no At Higher Levels entry — single target
-  zoneOfTruthConcentrationEnforcementV1Implemented: false, // see TG-002
+  zoneOfTruthConcentrationEnforcementV1Implemented: true, // TG-002 DONE (Session 34)
 } as const;
 
 // ---- Local log helper ---------------------------------------

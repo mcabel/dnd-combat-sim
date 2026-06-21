@@ -4985,6 +4985,11 @@ export function runCombat(
               const maintained = rollConcentrationSave(e, dealt);
               if (!maintained) {
                 removeEffectsFromCaster(e.id, battlefield);
+                // Session 34 (TG-002): also process fall damage if the
+                // concentration break ends Reverse Gravity / Fly / Levitate
+                // on a creature that was lifted. Matches the other 4
+                // concentration-break sites (lines ~998, ~1041, ~1723, ~4610).
+                processFallDamage(state);
                 log(state, 'condition_remove', e.id,
                   `${e.name} loses concentration on ${e.concentration?.spellName ?? 'spell'} (damaged by ${mz.spellName} moving zone)!`, undefined);
               }

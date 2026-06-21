@@ -58,7 +58,7 @@ export const metadata = {
   castingTime: 'action',
   dominateMonsterControlV2Implemented: true,                 // dominated effect = charmed + incapacitated
   dominateMonsterCombatAdvSaveV1Simplified: true,             // in-combat adv on save NOT modelled
-  dominateMonsterConcentrationEnforcementV1Implemented: false, // see TG-002
+  dominateMonsterConcentrationEnforcementV1Implemented: true, // TG-002 DONE (Session 34)
 } as const;
 
 // ---- Local log helper ---------------------------------------

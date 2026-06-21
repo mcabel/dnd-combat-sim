@@ -68,7 +68,7 @@ export const metadata = {
   castingTime: 'action',
   rayOfEnfeeblementStrOnlyV1Simplified: true,                     // v1: applies to ALL weapon attacks (canon: STR-only)
   rayOfEnfeeblementUpcastV1Implemented: false,                    // (no upcast entry — placeholder)
-  rayOfEnfeeblementConcentrationEnforcementV1Implemented: false,  // see TG-002
+  rayOfEnfeeblementConcentrationEnforcementV1Implemented: true,  // TG-002 DONE (Session 34)
 } as const;
 
 // ---- Local log helper ---------------------------------------

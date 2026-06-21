@@ -62,7 +62,7 @@ export const metadata = {
   castingTime: 'action',
   stinkingCloudDualConditionV1: true,                       // poisoned AND incapacitated (two calls)
   stinkingCloudEndOfNextTurnV1Simplified: true,             // end-of-next-turn not tracked
-  stinkingCloudConcentrationEnforcementV1Implemented: false,
+  stinkingCloudConcentrationEnforcementV1Implemented: true,
   stinkingCloudTerrainZoneV2Implemented: true,                      // v2: terrain_zone for persistent cloud
   stinkingCloudTerrainIncapacitatedV2SimplifiedToPoisonedOnly: true, // terrain zone applies poisoned only; incapacitated is initial-cast-only
 } as const;

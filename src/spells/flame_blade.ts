@@ -61,7 +61,7 @@ export const metadata = {
   flameBladeAsWeaponRiderV1Simplified: true,                  // canon: new melee weapon; v1: +3d6 fire rider
   flameBladeReEvokeV1Implemented: false,                     // bonus-action re-evoke NOT modelled
   flameBladeUpcastV1Implemented: false,                      // +1d6/slot-level NOT modelled
-  flameBladeConcentrationEnforcementV1Implemented: false,    // see TG-002
+  flameBladeConcentrationEnforcementV1Implemented: true,    // TG-002 DONE (Session 34)
 } as const;
 
 // ---- Local log helper ---------------------------------------

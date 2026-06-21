@@ -330,6 +330,20 @@ function _undoEffect(target: Combatant, effect: ActiveEffect): void {
           case 'Eyebite':
             delete target._eyebiteActive;
             break;
+          // ── Session 34 — Protection from Energy resistance removal ──
+          // When the sentinel (damage_zone dieCount=0 on the target, with
+          // payload.damageType set) is removed (concentration break), remove
+          // the resistance we added to target.resistances. Only the type we
+          // added is removed — innate resistance to the same type is left
+          // intact.
+          case 'Protection from Energy': {
+            const dt = effect.payload.damageType;
+            if (dt) {
+              const idx = target.resistances.indexOf(dt);
+              if (idx >= 0) target.resistances.splice(idx, 1);
+            }
+            break;
+          }
         }
       }
       break;

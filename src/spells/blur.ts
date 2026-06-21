@@ -45,7 +45,7 @@ export const metadata = {
   rangeFt: 0,       // self
   concentration: true,
   castingTime: 'action',
-  blurConcentrationEnforcementV1Implemented: false,  // see TG-002
+  blurConcentrationEnforcementV1Implemented: true,  // TG-002 DONE (Session 34)
   blurSightDependencyV1Implemented: false,           // blindsight/truesight immunity
 } as const;
 

@@ -164,7 +164,7 @@ eq('casting time is action', metadata.castingTime, 'action');
 eq('lie subsystem NOT implemented (v1)', metadata.zoneOfTruthLieSubsystemV1Implemented, false);
 eq('AoE multi-target NOT implemented (v1)', metadata.zoneOfTruthAoEMultiTargetV1Implemented, false);
 eq('upcast NOT implemented (v1)', metadata.zoneOfTruthUpcastV1Implemented, false);
-eq('concentration enforcement NOT implemented (v1)', metadata.zoneOfTruthConcentrationEnforcementV1Implemented, false);
+eq('concentration enforcement NOW implemented (Session 34 TG-002)', metadata.zoneOfTruthConcentrationEnforcementV1Implemented, true);
 
 // ============================================================
 // 2. shouldCast — precondition gates (incl. concentration)

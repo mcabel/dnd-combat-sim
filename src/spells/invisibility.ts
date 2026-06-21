@@ -52,7 +52,7 @@ export const metadata = {
   castingTime: 'action',
   invisibilityEndsOnAttackV1Implemented: true,                // ends-on-attack NOW modelled (Session 32)
   invisibilityUpcastV1Implemented: false,                     // +1 target/slot-level NOT modelled
-  invisibilityConcentrationEnforcementV1Implemented: false,   // see TG-002
+  invisibilityConcentrationEnforcementV1Implemented: true,   // TG-002 DONE (Session 34)
 } as const;
 
 // ---- Local log helper ---------------------------------------

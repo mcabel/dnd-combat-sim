@@ -51,7 +51,7 @@ export const metadata = {
   name: 'Compelled Duel', level: 1, school: 'enchantment', rangeFt: 30,
   concentration: true, saveAbility: 'wis' as const, castingTime: 'action',
   compelledDuelTauntV2Implemented: true,                   // taunt via effectType (disadv vs non-caster)
-  compelledDuelConcentrationEnforcementV1Implemented: false,
+  compelledDuelConcentrationEnforcementV1Implemented: true,
 } as const;
 
 function emit(state: EngineState, type: CombatEvent['type'], actorId: string, desc: string, targetId?: string, value?: number): void {

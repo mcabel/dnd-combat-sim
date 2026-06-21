@@ -56,7 +56,7 @@ export const metadata = {
   castingTime: 'action',
   dominatePersonControlV2Implemented: true,
   dominatePersonHumanoidTypeCheckV2Implemented: true,
-  dominatePersonConcentrationEnforcementV1Implemented: false,  // see TG-002
+  dominatePersonConcentrationEnforcementV1Implemented: true,  // TG-002 DONE (Session 34)
   dominatePersonCombatAdvSaveV1Simplified: true,               // in-combat adv on save NOT modelled
 } as const;
 

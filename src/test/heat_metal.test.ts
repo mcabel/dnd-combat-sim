@@ -163,7 +163,7 @@ eq('drop-object mechanic NOT implemented (v1)', metadata.heatMetalDropObjectV1Im
 eq('holding-disadvantage rider NOT implemented (v1)', metadata.heatMetalHoldingDisadvantageV1Implemented, false);
 eq('metal-object check NOT implemented (v1)', metadata.heatMetalMetalObjectCheckV1Implemented, false);
 eq('upcast NOT implemented (v1)', metadata.heatMetalUpcastV1Implemented, false);
-eq('concentration enforcement NOT implemented (v1)', metadata.heatMetalConcentrationEnforcementV1Implemented, false);
+eq('concentration enforcement NOW implemented (Session 34 TG-002)', metadata.heatMetalConcentrationEnforcementV1Implemented, true);
 
 // ============================================================
 // 2. shouldCast — precondition gates + target priority

@@ -48,7 +48,7 @@ export const metadata = {
   castingTime: 'action',
   holdMonsterEndOfTurnSaveV1Implemented: false,
   holdMonsterUpcastV1Implemented: false,
-  holdMonsterConcentrationEnforcementV1Implemented: false,
+  holdMonsterConcentrationEnforcementV1Implemented: true,
 } as const;
 
 // ---- Local log helper ---------------------------------------

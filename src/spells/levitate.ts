@@ -70,7 +70,7 @@ export const metadata = {
   levitateEndOfTurnSaveV1Implemented: false,                  // end-of-turn CON save NOT modelled
   levitateVerticalMovementV1Implemented: false,               // vertical movement NOT modelled
   levitateObjectTargetingV1Implemented: false,                // objects NOT targeted
-  levitateConcentrationEnforcementV1Implemented: false,       // see TG-002
+  levitateConcentrationEnforcementV1Implemented: true,       // TG-002 DONE (Session 34)
 } as const;
 
 // ---- Local log helper ---------------------------------------

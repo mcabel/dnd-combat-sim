@@ -66,7 +66,7 @@ export const metadata = {
   castingTime: 'action',
   enhanceAbilityTempHPV1Implemented: false,                  // Bear's Endurance 2d6 temp HP skipped
   enhanceAbilityFallDamageImmunityV1Implemented: false,      // Cat's Grace fall immunity skipped
-  enhanceAbilityConcentrationEnforcementV1Implemented: false, // see TG-002
+  enhanceAbilityConcentrationEnforcementV1Implemented: true, // TG-002 DONE (Session 34)
 } as const;
 
 // ---- Local log helper ---------------------------------------

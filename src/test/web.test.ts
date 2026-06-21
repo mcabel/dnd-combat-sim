@@ -163,7 +163,7 @@ eq('difficult terrain IS implemented (v1)', metadata.webDifficultTerrainV1Implem
 eq('destruction NOT implemented (v1)', metadata.webDestructionV1Implemented, false);
 eq('escape action NOT implemented (v1)', metadata.webEscapeActionV1Implemented, false);
 eq('upcast NOT implemented (v1)', metadata.webUpcastV1Implemented, false);
-eq('concentration enforcement NOT implemented (v1)', metadata.webConcentrationEnforcementV1Implemented, false);
+eq('concentration enforcement NOW implemented (Session 34 TG-002)', metadata.webConcentrationEnforcementV1Implemented, true);
 
 // ============================================================
 // 2. shouldCast — precondition gates (incl. concentration)

@@ -160,7 +160,7 @@ eq('casting time is action', metadata.castingTime, 'action');
 eq('as-weapon-rider v1 simplification IS active', metadata.flameBladeAsWeaponRiderV1Simplified, true);
 eq('re-evoke (bonus action) NOT implemented (v1)', metadata.flameBladeReEvokeV1Implemented, false);
 eq('upcast NOT implemented (v1)', metadata.flameBladeUpcastV1Implemented, false);
-eq('concentration enforcement NOT implemented (v1)', metadata.flameBladeConcentrationEnforcementV1Implemented, false);
+eq('concentration enforcement NOW implemented (Session 34 TG-002)', metadata.flameBladeConcentrationEnforcementV1Implemented, true);
 
 // ============================================================
 // 2. shouldCast — precondition gates

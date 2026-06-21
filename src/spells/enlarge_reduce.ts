@@ -55,7 +55,7 @@ export const metadata = {
   // v1 simplification flags:
   enlargeReduceSizeCategoryV1Implemented: false,            // size change not modelled
   enlargeReduceObjectTargetingV1Implemented: false,         // objects not targeted
-  enlargeReduceConcentrationEnforcementV1Implemented: false, // see TG-002
+  enlargeReduceConcentrationEnforcementV1Implemented: true, // TG-002 DONE (Session 34)
 } as const;
 
 export type EnlargeReduceMode = 'enlarge' | 'reduce';

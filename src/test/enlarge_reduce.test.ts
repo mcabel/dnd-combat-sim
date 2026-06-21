@@ -188,7 +188,7 @@ eq('casting time is action', metadata.castingTime, 'action');
 eq('enlarge damage die sides is 8 (+1d8 weapon dmg)', metadata.enlargeDamageDieSides, 8);
 eq('size category change NOT implemented (v1)', metadata.enlargeReduceSizeCategoryV1Implemented, false);
 eq('object targeting NOT implemented (v1)', metadata.enlargeReduceObjectTargetingV1Implemented, false);
-eq('concentration enforcement NOT implemented (v1)', metadata.enlargeReduceConcentrationEnforcementV1Implemented, false);
+eq('concentration enforcement NOW implemented (Session 34 TG-002)', metadata.enlargeReduceConcentrationEnforcementV1Implemented, true);
 
 // ============================================================
 // 2. shouldCast — precondition gates
