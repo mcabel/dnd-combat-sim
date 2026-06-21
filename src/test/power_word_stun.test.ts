@@ -64,6 +64,7 @@ function makeCombatant(id: string, overrides: Partial<Combatant> = {}): Combatan
     deathSaves: null,
     resources: null,
     tempHP: 0,
+    exhaustionLevel: 0,
     mountedOn: null, carriedBy: null, independentMount: false,
     role: 'regular', bonded: null,
     usedSneakAttackThisTurn: false, helpedThisTurn: false,
@@ -181,7 +182,7 @@ console.log('\n=== 4. execute — HP ≤ 150 → stunned ===\n');
     eq('Slot consumed (8th level: 1 → 0)', (caster.resources as any).spellSlots[8].remaining, 0);
     assert('Stunned applied', enemy.conditions.has('stunned'));
     eq('Enemy HP unchanged (no damage)', enemy.currentHP, 120);
-    const condLogs = state.log.events.filter(e => e.type === 'condition_add');
+    const condLogs = state.log.events.filter((e: any) => e.type === 'condition_add');
     assert('condition_add log emitted', condLogs.length >= 1);
   }
 }
@@ -202,7 +203,7 @@ console.log('\n=== 5. execute — HP > 150 → no effect ===\n');
     execute(caster, target as Combatant, state);
     eq('Slot still consumed', (caster.resources as any).spellSlots[8].remaining, 0);
     assert('NOT stunned (HP > 150)', !enemy.conditions.has('stunned'));
-    const noEffect = state.log.events.filter(e => e.description.includes('NO EFFECT'));
+    const noEffect = state.log.events.filter((e: any) => e.description.includes('NO EFFECT'));
     assert('NO EFFECT log emitted', noEffect.length === 1);
   }
 }

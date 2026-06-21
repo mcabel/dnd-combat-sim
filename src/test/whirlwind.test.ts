@@ -27,6 +27,7 @@ function makeCombatant(id: string, overrides: Partial<Combatant> = {}): Combatan
     budget: { movementFt: 30, actionUsed: false, bonusActionUsed: false, reactionUsed: false, freeObjectUsed: false },
     conditions: new Set() as Set<Condition>, aiProfile: 'smart', perception: { targets: new Map() } as any,
     concentration: null, deathSaves: null, resources: null, tempHP: 0,
+    exhaustionLevel: 0,
     mountedOn: null, carriedBy: null, independentMount: false, role: 'regular', bonded: null,
     usedSneakAttackThisTurn: false, helpedThisTurn: false, isDefender: false, cannotAttack: false,
     hasHands: true, wearingArmor: false, isDead: false, isUnconscious: false,
@@ -35,7 +36,7 @@ function makeCombatant(id: string, overrides: Partial<Combatant> = {}): Combatan
     pos: { x: 0, y: 0, z: 0, ...((overrides as any).pos || {}) },
   };
 }
-function makeBF(c: Combatant[]) { return { width: 60, height: 60, depth: 1, cells: new Map(), round: 1, combatants: new Map(c.map(x => [x.id, x])), initiativeOrder: c.map(x => x.id) } as any; }
+function makeBF(c: Combatant[]) { return { width: 60, height: 60, depth: 1, cells: new Map(), round: 1, combatants: new Map(c.map((x: any) => [x.id, x])), initiativeOrder: c.map((x: any) => x.id) } as any; }
 function makeState(bf: any): any { return { battlefield: bf, log: { events: [], winner: null, rounds: 0 }, disengagedThisTurn: new Set(), damageThisRound: new Map(), rageDamagedSinceLastTurn: new Set() }; }
 function makeCaster(pos: any = { x: 0, y: 0, z: 0 }, a: Action = WH_ACTION) { return makeCombatant('wiz', { name: 'Caster', pos, actions: [a], resources: withSlots7(1) }); }
 function makeEnemy(id: string, pos: any, o: Partial<Combatant> = {}) { return makeCombatant(id, { name: id, faction: 'enemy', pos, ...o }); }
@@ -63,21 +64,21 @@ console.log('\n=== 3. shouldCast cone shape ===\n');
   const inCone = weak('inCone', { x: 3, y: 0 });  // on-axis, in cone
   const outCone = weak('outCone', { x: 0, y: 3 }); // 90° off-axis, NOT in cone
   const r = shouldCast(c, makeBF([c, aim, inCone, outCone]));
-  if (r) { const ids = r.map(x => x.id).sort(); eq('catches aim+inCone, excludes outCone', ids.join(','), 'aim,inCone'); }
+  if (r) { const ids = r.map((x: any) => x.id).sort(); eq('catches aim+inCone, excludes outCone', ids.join(','), 'aim,inCone'); }
 }
 
 console.log('\n=== 4. execute — guaranteed fail (7d8 damage + restrained) ===\n');
 {
   const c = makeCaster(); const e = weak('e1', { x: 1, y: 0 }, { maxHP: 1000, currentHP: 1000 });
   const bf = makeBF([c, e]); const st = makeState(bf); const t = shouldCast(c, bf);
-  if (t) { execute(c, t, st); eq('slot consumed', (c.resources as any).spellSlots[7].remaining, 0); assert('concentration started', c.concentration?.active === true); assert('restrained', e.conditions.has('restrained')); assert('damage dealt (HP reduced)', e.currentHP < 1000); assert('damage in 7d8 range [7..56]', e.currentHP >= 1000 - 56 && e.currentHP <= 1000 - 7); const dmg = st.log.events.filter(x => x.type === 'damage'); assert('damage log emitted', dmg.length === 1); assert('restrained is conc-sourced', e.activeEffects.some(x => x.casterId === c.id && x.spellName === 'Whirlwind' && x.sourceIsConcentration === true)); }
+  if (t) { execute(c, t, st); eq('slot consumed', (c.resources as any).spellSlots[7].remaining, 0); assert('concentration started', c.concentration?.active === true); assert('restrained', e.conditions.has('restrained')); assert('damage dealt (HP reduced)', e.currentHP < 1000); assert('damage in 7d8 range [7..56]', e.currentHP >= 1000 - 56 && e.currentHP <= 1000 - 7); const dmg = st.log.events.filter((x: any) => x.type === 'damage'); assert('damage log emitted', dmg.length === 1); assert('restrained is conc-sourced', e.activeEffects.some((x: any) => x.casterId === c.id && x.spellName === 'Whirlwind' && x.sourceIsConcentration === true)); }
 }
 
 console.log('\n=== 5. execute — guaranteed success (half damage, NOT restrained) ===\n');
 {
   const c = makeCaster({ x: 0, y: 0, z: 0 }, WH_ACTION_LOW); const e = strong('e1', { x: 1, y: 0 }, { maxHP: 1000, currentHP: 1000 });
   const bf = makeBF([c, e]); const st = makeState(bf); const t = shouldCast(c, bf);
-  if (t) { execute(c, t, st); assert('NOT restrained', !e.conditions.has('restrained')); assert('half damage dealt (HP reduced)', e.currentHP < 1000); assert('half-damage in [3..28] range', e.currentHP >= 1000 - 28 && e.currentHP <= 1000 - 3); const ss = st.log.events.filter(x => x.type === 'save_success'); assert('save_success log', ss.length === 1); }
+  if (t) { execute(c, t, st); assert('NOT restrained', !e.conditions.has('restrained')); assert('half damage dealt (HP reduced)', e.currentHP < 1000); assert('half-damage in [3..28] range', e.currentHP >= 1000 - 28 && e.currentHP <= 1000 - 3); const ss = st.log.events.filter((x: any) => x.type === 'save_success'); assert('save_success log', ss.length === 1); }
 }
 
 console.log('\n=== 6. rollDamage range ===\n');

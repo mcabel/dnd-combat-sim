@@ -87,6 +87,7 @@ function makeCombatant(id: string, overrides: Partial<Combatant> = {}): Combatan
     deathSaves: null,
     resources: null,
     tempHP: 0,
+    exhaustionLevel: 0,
     mountedOn: null, carriedBy: null, independentMount: false,
     role: 'regular', bonded: null,
     usedSneakAttackThisTurn: false, helpedThisTurn: false,
@@ -702,6 +703,7 @@ console.log('\n--- 30. robust to undefined optional fields ---');
     wardingBond: null,
     bardicInspirationDie: null,
     tempHP: 0,
+    exhaustionLevel: 0,
   });
   const bf = makeBF([caster]);
   const state = makeState(bf);

@@ -75,6 +75,7 @@ function makeCombatant(id: string, overrides: Partial<Combatant> = {}): Combatan
     deathSaves: null,
     resources: null,
     tempHP: 0,
+    exhaustionLevel: 0,
     mountedOn: null, carriedBy: null, independentMount: false,
     role: 'regular', bonded: null,
     usedSneakAttackThisTurn: false, helpedThisTurn: false,
@@ -181,8 +182,8 @@ console.log('\n--- 3. isTouchEffect ---');
 // ============================================================
 console.log('\n--- 4. v1 simplification flags ---');
 {
-  eq('4a. spareTheDyingTypeExclusionV1Implemented = false (canon: no undead/constructs; v1: no exclusion)',
-    metadata.spareTheDyingTypeExclusionV1Implemented, false);
+  eq('4a. spareTheDyingTypeExclusionV1Implemented = true (canon: no undead/constructs; now implemented)',
+    metadata.spareTheDyingTypeExclusionV1Implemented, true);
   eq('4b. spareTheDyingRangeEnforcementV1Simplified = true (canon: Touch; v1: no adjacency check)',
     metadata.spareTheDyingRangeEnforcementV1Simplified, true);
 }
@@ -632,15 +633,14 @@ console.log('\n--- 19. stabilize persists on TARGET ---');
 // ============================================================
 console.log('\n--- 20. canon text documented ---');
 {
-  // Verify the metadata flag is set (forward-compat TODO acknowledged).
-  eq('20a. spareTheDyingTypeExclusionV1Implemented = false (TODO acknowledged)',
-    metadata.spareTheDyingTypeExclusionV1Implemented, false);
+  // Verify the metadata flag is set (type exclusion now implemented).
+  eq('20a. spareTheDyingTypeExclusionV1Implemented = true (implemented)',
+    metadata.spareTheDyingTypeExclusionV1Implemented, true);
 
   // Verify the canon text is documented in the module header (visual check).
   // The canon text: "This spell has no effect on undead or constructs." (PHB p.277)
-  // The handler doesn't check isUndead or isConstruct (the latter doesn't exist
-  // on Combatant yet). Future work: a creature-type subsystem.
-  // For now, the handler stabilizes any PC at 0 HP (no type exclusion).
+  // The handler now checks isUndead and isConstruct — the type exclusion is
+  // implemented (spareTheDyingTypeExclusionV1Implemented = true).
   const caster = makeCombatant('cleric', { isPlayer: true });
   const undeadAlly = makeCombatant('undead_fighter', {
     isPlayer: true,
@@ -654,10 +654,16 @@ console.log('\n--- 20. canon text documented ---');
 
   applyTouchEffect(caster, undeadAlly, state);
 
-  // v1 does NOT model the type exclusion — the undead ally IS stabilized
-  // (this is a known v1 simplification, documented via the flag).
-  eq('20b. v1 DOES stabilize undead ally (TODO acknowledged via flag)',
-    undeadAlly._isStabilized, true);
+  // The type exclusion IS now implemented — the undead ally is NOT stabilized.
+  eq('20b. Spare the Dying fizzles on undead ally (type exclusion implemented)',
+    undeadAlly._isStabilized, undefined);
+
+  const fizzleLog = state.log.events.find(
+    (e: CombatEvent) => e.type === 'action' && e.description.toLowerCase().includes('no effect'),
+  );
+  assert('20c. fizzle log mentions undead',
+    fizzleLog !== undefined && fizzleLog.description.toLowerCase().includes('undead'),
+    `got: ${fizzleLog?.description}`);
 }
 
 // ============================================================

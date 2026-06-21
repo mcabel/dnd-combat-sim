@@ -28,7 +28,7 @@
 import { Combatant, Battlefield, Vec3 } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
 import { rollSave, rollDie, applyDamage } from '../engine/utils';
-import { chebyshev3D } from '../engine/movement';
+import { chebyshev3D, pushAway } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 
 // ---- Metadata -----------------------------------------------
@@ -64,31 +64,7 @@ function emit(
   });
 }
 
-// ---- Push helper --------------------------------------------
-
-/**
- * Push `target` exactly `distCells` grid cells directly away from `caster`.
- * If they share the same position, push in +x as a fallback direction.
- * Mutates target.pos in-place.
- */
-function pushAway(caster: Combatant, target: Combatant, distCells: number): void {
-  const dx = target.pos.x - caster.pos.x;
-  const dy = target.pos.y - caster.pos.y;
-  const dz = target.pos.z - caster.pos.z;
-  const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
-
-  if (len === 0) {
-    // Same cell — push +x by default
-    target.pos = { ...target.pos, x: target.pos.x + distCells };
-    return;
-  }
-
-  target.pos = {
-    x: target.pos.x + Math.round((dx / len) * distCells),
-    y: target.pos.y + Math.round((dy / len) * distCells),
-    z: target.pos.z + Math.round((dz / len) * distCells),
-  };
-}
+// ---- Push helper removed — now uses pushAway() from movement.ts ----
 
 // ---- Planner ------------------------------------------------
 
@@ -182,9 +158,9 @@ export function execute(
     );
 
     if (!save.success) {
-      // Push 10 ft (2 grid cells) away from caster
+      // Push 10 ft away from caster (PHB p.283)
       const oldPos: Vec3 = { ...target.pos };
-      pushAway(caster, target, 2);
+      pushAway(target, caster.pos, 10);
       emit(
         state, 'move', caster.id,
         `${target.name} is pushed 10 ft away from ${caster.name} (${oldPos.x},${oldPos.y}) → (${target.pos.x},${target.pos.y})`,

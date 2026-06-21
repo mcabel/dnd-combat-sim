@@ -106,6 +106,8 @@ export type SpellEffectType =
   | 'dominated'             // charmed + incapacitated (Dominate Beast/Person/Monster PHB p.235 — control-override)
   | 'suggestion'            // charmed + disadv on own attacks (Mass Suggestion PHB p.258 — follow-a-suggestion behaviour)
   | 'terrain_zone'          // persistent terrain effect on the battlefield (Grease/Sleet Storm/Watery Sphere)
+  | 'exhaustion_level'      // increment exhaustion level (Sickening Radiance XGE p.164, future spells)
+  | 'invisible'             // true invisibility: attacks vs creature have disadv + own attacks have adv (PHB p.194)
   // ── Session 27 — Batch 3 concentration buffs ────────────────────────
   // bane_die: inverse of bless_die (Bane PHB p.219: -1d4 to attacks/saves).
   // weapon_enchant extended with damageDie/damageDieCount/damageDieType
@@ -211,6 +213,11 @@ export interface ActiveEffect {
     // breaks, the creature falls and takes fall damage (PHB p.183).
     // Read by processFallDamage() in combat.ts.
     fallHeight?: number;                // e.g. 100 for 100-ft Reverse Gravity cylinder
+    // ── exhaustion_level (Sickening Radiance XGE p.164, future spells) ───
+    // How many exhaustion levels to add (e.g. 1 for Sickening Radiance).
+    // Exhaustion is a 7-level graduated state (PHB p.291): level 6 = death.
+    // NOT auto-removed on effect dispel — persists until rest/spell removal.
+    exhaustionLevels?: number;
     // ── terrain_zone (Grease/Sleet Storm/Watery Sphere) ────────────────
     // Persistent terrain effect that applies a condition to creatures
     // starting their turn in the zone's radius. The effect is stored on
@@ -223,8 +230,27 @@ export interface ActiveEffect {
     terrainCenterX?: number;                              // center position X (grid squares)
     terrainCenterY?: number;                              // center position Y (grid squares)
     terrainCenterZ?: number;                              // center position Z (grid squares)
+    terrainDifficulty?: boolean;                          // if true, this terrain_zone marks cells as difficult terrain (PHB p.182)
   };
   sourceIsConcentration: boolean;     // if true, removed when caster's concentration ends
+  /**
+   * PHB p.254 (Invisibility) / p.254 (Greater Invisibility):
+   * "The spell ends for a target that attacks or casts a spell."
+   *
+   * If true, this effect is automatically removed from the target when
+   * the target makes an attack roll or casts a spell. Set by the
+   * Invisibility spell (PHB p.254) but NOT by Greater Invisibility
+   * (PHB p.254: Greater Invisibility has no ends-on-attack clause —
+   * the caster stays invisible for the full duration regardless of
+   * their actions).
+   *
+   * Implementation: combat.ts resolveAttack checks the ATTACKER's
+   * activeEffects for any effect with breaksOnAttackOrCast=true and
+   * removes it AFTER the attack resolves. The spell-casting path
+   * (case 'summonSpell' / case 'genericSpell' in executePlannedAction)
+   * does the same for the caster.
+   */
+  breaksOnAttackOrCast?: boolean;
 }
 
 // ---- Action -------------------------------------------------
@@ -451,6 +477,10 @@ export interface Combatant {
   // Temporary HP (absorbs damage before real HP)
   tempHP: number;
 
+  // Exhaustion level (PHB p.291): 0 = none, 1–6 graduated effects.
+  // Separate from conditions Set — exhaustion is a 7-level graduated state.
+  exhaustionLevel: number;  // 0–6, default 0
+
   // Mount state (PHB p.198)
   // A combatant can be a controlled mount OR a rider — never both simultaneously.
   mountedOn: string | null;    // ID of the mount this rider is on
@@ -463,7 +493,7 @@ export interface Combatant {
   independentMount: boolean;   // false = controlled (default); true = acts independently
 
   // Familiar / companion bonding
-  role: 'familiar' | 'mount' | 'companion' | 'regular';  // creature type/role
+  role: 'familiar' | 'mount' | 'combat_mount' | 'companion' | 'regular';  // creature type/role
   bonded: string | null;       // ID of bonded caster (for familiars) or bonded companion owner
 
   // Creature type (MM p.6) — e.g. 'beast', 'humanoid', 'undead', 'fiend'.
@@ -524,6 +554,21 @@ export interface Combatant {
   // Use addResistance() / removeResistance() helpers to avoid duplicates.
   resistances: DamageType[];
 
+  // Damage immunities (PHB p.197): incoming damage of listed types is reduced to 0.
+  // Populated by racial traits (e.g. Tiefling fire resistance is a resistance, not
+  // immunity; construct undead are typically immune to poison), monster stat blocks
+  // (e.g. Fire Elemental immune to fire, Couatl immune to radiant/psychic), and
+  // spells/items (e.g. Potion of Fire Resistance gives resistance, not immunity).
+  // Use addImmunity() / removeImmunity() helpers to avoid duplicates.
+  // Immunity takes precedence over resistance and vulnerability — an immune creature
+  // takes 0 damage regardless of any resistance/vulnerability entries.
+  //
+  // OPTIONAL: undefined is treated as "no immunities" (equivalent to []) for
+  // backwards compatibility with existing Combatant factories that pre-date the
+  // immunities field. New code should set this explicitly to [] when constructing
+  // a Combatant.
+  immunities?: DamageType[];
+
   // Bardic Inspiration die granted by a Bard (PHB p.54).
   // Die size (e.g. 6 for d6). Consumed on the next attack roll or saving throw.
   // null = no inspiration die held.
@@ -564,10 +609,29 @@ export interface Combatant {
   isUndead?: boolean;
 
   // ---- Creature type flag (for spells like Spare the Dying, PHB p.277) ----
-  // True when the creature is a Construct. Optional — undefined is treated as
-  // "not a construct". Populated by the parser from the monster `type` field.
-  // Tests may set it directly. (TG-004)
+  // True when the creature is a Construct. Optional — undefined is treated as "not
+  // a construct". Populated by the parser from the monster `type` field when
+  // available; tests may set it directly. Used by Spare the Dying (constructs are
+  // excluded), poison-based spells (constructs are immune to poison damage and
+  // the poisoned condition), and other construct-specific interactions.
   isConstruct?: boolean;
+
+  // ---- Summon subsystem (TG-006) ----
+  // True when this combatant was spawned by a Summon/Conjure spell.
+  // Set by spawnSummon() when the summon is created. Used by:
+  //   - removeEffectsFromCaster to despawn on concentration break
+  //   - AI planner to skip summoning creatures that are already summons
+  //   - Combat log to tag summon-related events
+  isSummon?: boolean;
+
+  // The ID of the combatant who summoned this creature.
+  // Used for: (a) concentration-break despawn, (b) faction inheritance,
+  // (c) verbal command routing.
+  summonerId?: string;
+
+  // The spell name that created this summon (e.g. 'Summon Beast').
+  // Used for logging and cleanup identification.
+  summonSpellName?: string;
 
   // ---- Chill Touch (PHB p.221) scratch fields ----
   // Set on the TARGET by Chill Touch's post-hit rider. Cleared by each module's
@@ -980,7 +1044,34 @@ export interface Combatant {
     count: number;
     damageType: DamageType;
     condition?: Condition;     // optional: applied to the target hit (conc-sourced)
+    /** Optional forced movement on hit (PHB p.282: Thunderous Smite pushes 10 ft).
+     *  The target is pushed directly away from the attacker by this many feet
+     *  (rounded to grid cells). Ignored on a miss. v1 does NOT model the
+     *  "Large or smaller" size restriction (PHB p.282) — the push applies to
+     *  any target on a hit. */
+    pushFt?: number;
   } | null;
+
+  // ---- Absorb Elements (TG-008, XGE p.150) scratch fields ----
+  // Set on the CASTER when it casts Absorb Elements as a reaction to taking
+  // acid/cold/fire/lightning/poison/thunder damage. Two fields:
+  //
+  //   _absorbElementsResistance — the damage type the caster now has
+  //   resistance to (until the start of their next turn). Added to
+  //   `resistances` on cast; removed by `cleanupAbsorbElements` in
+  //   `resetBudget`. PHB-style: "you have resistance to that damage type
+  //   until the start of your next turn."
+  //
+  //   _absorbElementsRider — the extra damage to add to the caster's next
+  //   melee weapon attack (1d6 of the triggering type, +1d6 per slot level
+  //   above 1st). Consumed by `resolveAttack`'s damage branch on the next
+  //   melee hit, then cleared. PHB: "the first time you hit with a melee
+  //   attack on your next turn, the target takes an additional 1d6 damage
+  //   of the triggering type." v1 simplification: the rider applies on the
+  //   next melee hit regardless of whose turn it is (so an OA melee hit
+  //   would also consume it) — this matches the "first time you hit" wording.
+  _absorbElementsResistance?: DamageType | null;
+  _absorbElementsRider?: { damageType: DamageType; diceCount: number } | null;
 
   // ---- Mirror Image (PHB p.260) scratch field ----
   // Set on the CASTER when it casts Mirror Image (2nd-level illusion,
@@ -1280,6 +1371,21 @@ export interface Combatant {
   // in combat.ts after concentration break removes the effect.
   _fallHeight?: number;
 
+  // ---- Moving Zone scratch field (Flaming Sphere / Moonbeam / Call Lightning / Cloudkill) ----
+  // Tracks the position of a movable damage_zone. At the start of the caster's
+  // turn, the zone moves toward the highest-threat enemy and re-applies damage
+  // to creatures in its new position.
+  // v1 simplification: movement is automatic (no action cost), always toward
+  // the highest-threat enemy. Canon requires an action/bonus action to move.
+  _movingZone?: {
+    spellName: string;
+    centerX: number;
+    centerY: number;
+    centerZ: number;
+    radiusFt: number;     // radius of the zone in feet
+    movePerTurn: number;  // how far the zone can move each turn (ft)
+  };
+
   // ---- Short-rest subsystem (PHB p.186) -------------------------
   // Hit Dice: a character has hit dice equal to their level. On a short
   // rest, they can spend one or more Hit Dice to regain HP. For each Hit
@@ -1338,6 +1444,14 @@ export interface Battlefield {
   // 4.12: Command hook — keyed by minion ID, value is profile to apply this turn
   // Set by a controller before the minion's turn. No action cost per RAW.
   pendingCommands?: Map<string, AIProfile>;
+  // Combatant IDs to be inserted into initiativeOrder mid-combat.
+  // TCE Summon spells: "shares your initiative count, takes turn after yours"
+  // PHB Conjure spells: "roll initiative as a group"
+  // Processed by the runCombat loop after each actor's turn.
+  pendingInitiativeInserts?: Array<{
+    combatantId: string;
+    insertAfterId: string;   // for TCE-style "after caster"
+  }>;
   // No-damage tracking: consecutive rounds each team dealt 0 damage.
   // Reset to 0 whenever a team deals ≥1 damage in a round.
   // At 10 consecutive rounds → team is auto-defeated.
@@ -1345,6 +1459,12 @@ export interface Battlefield {
   // LOS/Cover: static obstacles on the map (walls, pillars, doors, fog, etc.)
   // Optional — absent means open terrain (no cover calculations).
   obstacles?: Obstacle[];
+  // Difficult terrain cells from terrain_zone spells (Grease, Sleet Storm, etc.)
+  // Keyed by "x,y,z" — matches posKey() format from movement.ts.
+  // Added/removed when terrain_zone effects with terrainDifficulty:true are
+  // applied/removed. Checked by the terrainFn passed to estimateMoveCostFt
+  // in executeMove().
+  difficultTerrainCells?: Set<string>;
 }
 
 // ---- TurnPlan (output of AI) --------------------------------
@@ -1403,6 +1523,7 @@ export interface PlannedAction {
     | 'melfsAcidArrow'     // Melf's Acid Arrow — ranged spell attack, 4d4 acid + 2d4 delayed, 90 ft
     | 'mistyStep'          // Misty Step — BONUS ACTION, self teleport 30 ft, no concentration
     | 'invisibility'       // Invisibility — touch, grants invisible condition, concentration 1 hr
+    | 'greaterInvisibility' // Greater Invisibility — self, grants invisible condition (no ends-on-attack), concentration 1 min
     | 'gustOfWind'         // Gust of Wind — line 60 ft, STR save or pushed 15 ft, concentration 1 min
     | 'levitate'           // Levitate — 60 ft, CON save or restrained (v1), concentration 10 min
     | 'lesserRestoration'  // Lesser Restoration — touch, ends blinded/deafened/poisoned/paralyzed, no concentration
@@ -1621,11 +1742,13 @@ export interface PlannedAction {
     | 'powerWordHeal'     // Power Word Heal — XGE: Touch, full HP + remove 5 conditions, NO conc
     | 'armorOfAgathys'    // Armor of Agathys — PHB p.215: self, 5 temp HP, NO conc (retaliation not modelled)
     | 'falseLife'         // False Life — PHB p.239: self, 1d4+4 temp HP, NO conc (1hr not tracked)
+    | 'dispelMagic'      // Dispel Magic — PHB p.233: 120 ft, auto-dispel concentration effects + ability check vs DC 13 for non-concentration, upcast auto-dispels more, NO concentration
     // ── Session 19 — bulk-implementation generic dispatch (262 new spells L2-9) ──
     // All non-blocker in-scope spells from levels 2-9 that have not been
     // implemented as bespoke case branches are routed through 'genericSpell'.
     // The dispatch is keyed by `spellName` (see below). Each spell has its
     // own module at src/spells/<snake>.ts that exports shouldCast + execute.
+    | 'summonSpell'       // Summon/Conjure spell — spawns a combatant mid-combat (TG-006)
     | 'genericSpell'
     | 'legendary';
   action: Action | null;
@@ -1642,3 +1765,96 @@ export interface PlannedAction {
   // branches for the Session 19 bulk-implementation pass.
   spellName?: string;
 }
+
+// ============================================================
+// TG-008: Reaction spell subsystem
+//
+// Reactions fire OUTSIDE the reactor's own turn, in response to a
+// triggering event on another creature's turn. The engine emits a
+// `ReactionTrigger` at each trigger point (incoming attack hit,
+// incoming damage, incoming spell cast, falling). The
+// `triggerReactions` helper in combat.ts iterates candidate
+// reactors (the target itself for incoming_attack_hit /
+// incoming_damage; all enemies within range for incoming_spell;
+// all falling creatures for falling) and fires the first matching
+// reaction spell from the `REACTION_SPELLS` registry.
+//
+// PHB p.190: each creature gets ONE reaction per round, refreshed
+// at the start of its own turn. The `ActionBudget.reactionUsed`
+// flag tracks this (reset by `resetBudget` in utils.ts).
+// ============================================================
+
+/**
+ * Discriminated union describing the event that triggered a reaction.
+ * Passed to a reaction spell's `shouldCast` and `execute` so it can
+ * make trigger-aware decisions (e.g. Shield only fires on an attack
+ * that +5 AC would flip to a miss; Absorb Elements only fires on
+ * acid/cold/fire/lightning/poison/thunder damage).
+ */
+export type ReactionTrigger =
+  | {
+      kind: 'incoming_attack_hit';
+      /** The creature making the triggering attack. */
+      attacker: Combatant;
+      /** The attacking action (weapon or spell with an attack roll). */
+      action: Action;
+      /** The raw d20 roll (1-20) of the triggering attack. */
+      attackRoll: number;
+      /** The total attack roll (d20 + hit bonus + modifiers). */
+      attackTotal: number;
+      /** The target's effective AC at the time of the hit decision
+       *  (includes Shield's +5 if already active, cover, Warding Bond, etc.). */
+      effectiveAC: number;
+      /** True if the attack was a critical hit (nat 20 or forced crit). */
+      isCrit: boolean;
+    }
+  | {
+      kind: 'incoming_damage';
+      /** The creature that dealt the triggering damage. */
+      attacker: Combatant;
+      /** The creature that took the damage (potential reactor). */
+      target: Combatant;
+      /** Net damage dealt (after resistance / immunity / temp HP). */
+      amount: number;
+      /** The damage type, or null if untyped. */
+      damageType: DamageType | null;
+      /** The action that caused the damage, if any. */
+      action?: Action;
+    }
+  | {
+      kind: 'incoming_spell';
+      /** The creature in the process of casting the triggering spell. */
+      caster: Combatant;
+      /** Canonical spell name (e.g. 'Fireball', 'Cure Wounds'). */
+      spellName: string;
+      /** The spell's level (1-9). 0 = cantrip (Counterspell still works on cantrips per Sage Advice, but v1 skips cantrips). */
+      level: number;
+    }
+  | {
+      kind: 'falling';
+      /** IDs of all creatures currently falling (Feather Fall can affect up to 5). */
+      fallerIds: string[];
+      /** Fall height in feet. */
+      fallHeightFt: number;
+    };
+
+/**
+ * Outcome of a reaction spell execution. The engine uses this to decide
+ * whether to abort the triggering action (e.g. Counterspell negates the
+ * spell cast; Shield flips the hit to a miss).
+ */
+export type ReactionOutcome =
+  /** The reaction fired but did NOT change the triggering action's outcome.
+   *  Example: Absorb Elements grants resistance + a rider but the damage
+   *  still applies. Hellish Rebuke deals damage to the attacker but the
+   *  attacker's action still resolves. */
+  | { kind: 'no_effect' }
+  /** The reaction NEGATED the triggering action. The caller MUST abort
+   *  the triggering action (skip damage application, skip spell execution,
+   *  flip the hit to a miss, zero out fall damage, etc.).
+   *  Example: Shield's +5 AC flips the hit to a miss. Counterspell
+   *  succeeds on the ability check. Silvery Barbs forces a reroll that misses. */
+  | { kind: 'negated'; detail?: string }
+  /** The reaction fired but FAILED to negate. The triggering action
+   *  resolves normally. Example: Counterspell's ability check failed. */
+  | { kind: 'failed'; detail?: string };

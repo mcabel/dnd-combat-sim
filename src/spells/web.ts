@@ -65,9 +65,9 @@
 //   cleanup() — no-op (concentration break handled by removeEffectsFromCaster)
 // ============================================================
 
-import { Combatant, Battlefield } from '../types/core';
+import { Combatant, Battlefield, Condition } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
-import { applySpellEffect, removeEffectsFromCaster } from '../engine/spell_effects';
+import { applySpellEffect, removeEffectsFromCaster, applyTerrainDifficulty } from '../engine/spell_effects';
 import { startConcentration, rollSave } from '../engine/utils';
 import { chebyshev3D } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
@@ -82,7 +82,7 @@ export const metadata = {
   concentration: true,
   saveAbility: 'dex' as const,
   castingTime: 'action',
-  webDifficultTerrainV1Implemented: false,             // cube/difficult-terrain NOT modelled
+  webDifficultTerrainV1Implemented: true,              // PHB p.287: webs are difficult terrain
   webDestructionV1Implemented: false,                  // fire destruction NOT modelled
   webEscapeActionV1Implemented: false,                 // STR-check escape + end-of-turn DEX save NOT modelled
   webUpcastV1Implemented: false,                       // no At Higher Levels entry — single target only
@@ -205,6 +205,28 @@ export function execute(
   );
 
   if (target.isDead || target.isUnconscious) return;
+
+  // Apply terrain_zone effect on the CASTER for difficult terrain.
+  // PHB p.287: "The webs are difficult terrain and lightly obscure their area."
+  // The terrain zone also carries the DEX save → restrained mechanic for
+  // start-of-turn terrain checks (creatures starting their turn in the webs
+  // must save or become restrained).
+  const terrainEffect = applySpellEffect(caster, {
+    casterId: caster.id,
+    spellName: 'Web',
+    effectType: 'terrain_zone',
+    payload: {
+      terrainSaveAbility: 'dex' as const,
+      terrainCondition: 'restrained' as Condition,
+      terrainRadiusFt: 20,
+      terrainCenterX: target.pos.x,
+      terrainCenterY: target.pos.y,
+      terrainCenterZ: target.pos.z,
+      terrainDifficulty: true,
+    },
+    sourceIsConcentration: true,
+  });
+  applyTerrainDifficulty(state.battlefield, terrainEffect);
 
   const save = rollSave(target, 'dex', saveDC);
   emit(

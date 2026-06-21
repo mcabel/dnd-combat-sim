@@ -22,9 +22,9 @@
 //   metadata → spell stats
 // ============================================================
 
-import { Combatant, Battlefield } from '../types/core';
+import { Combatant, Battlefield, Condition } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
-import { applySpellEffect, removeEffectsFromCaster } from '../engine/spell_effects';
+import { applySpellEffect, removeEffectsFromCaster, applyTerrainDifficulty } from '../engine/spell_effects';
 import { startConcentration, rollSave } from '../engine/utils';
 import { chebyshev3D } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
@@ -40,6 +40,7 @@ export const metadata = {
   concentration: true,
   saveAbility: 'str' as const,
   castingTime: 'action',
+  entangleDifficultTerrainV1Implemented: true,  // PHB p.238: area becomes difficult terrain
 } as const;
 
 // ---- Local log helper ---------------------------------------
@@ -137,6 +138,31 @@ export function execute(
     state, 'action', caster.id,
     `${caster.name} casts Entangle (DC ${saveDC} STR) targeting ${targets.length} creature${targets.length !== 1 ? 's' : ''}!`,
   );
+
+  // Apply terrain_zone effect on the CASTER for difficult terrain.
+  // PHB p.238: "grasping plants sprout... area becomes difficult terrain."
+  // Center on the first target's position (zone center approximation).
+  // The terrain zone also carries the STR save → restrained mechanic for
+  // start-of-turn terrain checks.
+  const zoneCenter = targets.find(t => !t.isDead && !t.isUnconscious);
+  if (zoneCenter) {
+    const terrainEffect = applySpellEffect(caster, {
+      casterId: caster.id,
+      spellName: 'Entangle',
+      effectType: 'terrain_zone',
+      payload: {
+        terrainSaveAbility: 'str' as const,
+        terrainCondition: 'restrained' as Condition,
+        terrainRadiusFt: 20,
+        terrainCenterX: zoneCenter.pos.x,
+        terrainCenterY: zoneCenter.pos.y,
+        terrainCenterZ: zoneCenter.pos.z,
+        terrainDifficulty: true,
+      },
+      sourceIsConcentration: true,
+    });
+    applyTerrainDifficulty(bf, terrainEffect);
+  }
 
   let restrained = 0;
   for (const target of targets) {

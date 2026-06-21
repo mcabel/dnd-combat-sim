@@ -2,15 +2,14 @@
 // sickening_radiance.test.ts — Sickening Radiance bespoke spell module (Session 24)
 // XGE p.164: 4th-level evocation, action, range 120 ft. Canon: concentration
 // up to 10 min. v1: concentration simplified to one-shot.
-// Effect: AoE CON save. On fail: 4d10 radiant + poisoned (exhaustion
-// simplified to poisoned). On success: half, no poisoned. 30-ft-radius
-// sphere centered on the highest-threat enemy within 120 ft.
-// (v1 simplifications: concentration one-shot; exhaustion→poisoned; upcast
-// NOT modelled.)
+// Effect: AoE CON save. On fail: 4d10 radiant + exhaustion (+1 level).
+// On success: half, no exhaustion. 30-ft-radius sphere centered on the
+// highest-threat enemy within 120 ft.
+// (v1 simplifications: concentration one-shot; upcast NOT modelled.)
 //
 // Migrated from the Session 20 generic dispatch registry in Session 24.
-// Mirrors sunburst.test.ts structure (AoE save + condition_apply) but with
-// Sickening Radiance's stats (L4, CON save, 4d10 radiant + poisoned on fail,
+// Mirrors sunburst.test.ts structure (AoE save + exhaustion_level) but with
+// Sickening Radiance's stats (L4, CON save, 4d10 radiant + exhaustion on fail,
 // 120-ft range, 30-ft radius). Uses withSlots4.
 //
 // Probabilistic save outcomes use deterministic save DCs:
@@ -87,6 +86,7 @@ function makeCombatant(id: string, overrides: Partial<Combatant> = {}): Combatan
     deathSaves: null,
     resources: null,
     tempHP: 0,
+    exhaustionLevel: 0,
     mountedOn: null, carriedBy: null, independentMount: false,
     role: 'regular', bonded: null,
     usedSneakAttackThisTurn: false, helpedThisTurn: false,
@@ -262,9 +262,9 @@ console.log('\n=== 3. shouldCast AoE targeting ===\n');
   eq('Returns null when all enemies beyond 120 ft', shouldCast(caster, bf), null);
 }
 
-// ---- 4. execute — guaranteed fail (full damage + poisoned) ------
+// ---- 4. execute — guaranteed fail (full damage + exhaustion) ------
 
-console.log('\n=== 4. execute — guaranteed fail (full damage + poisoned) ===\n');
+console.log('\n=== 4. execute — guaranteed fail (full damage + exhaustion) ===\n');
 
 {
   const caster = makeCaster({ x: 0, y: 0, z: 0 });
@@ -286,17 +286,17 @@ console.log('\n=== 4. execute — guaranteed fail (full damage + poisoned) ===\n
       dmgDealt >= 4 && dmgDealt <= 40);
     const saveFails = state.log.events.filter((e: any) => e.type === 'save_fail');
     assert('Save-fail log emitted (CON 1 vs DC 25)', saveFails.length === 1);
-    // KEY: poisoned condition applied on failed save
-    assert('Enemy is poisoned (condition_apply fired)', enemy.conditions.has('poisoned'));
+    // KEY: exhaustion level incremented on failed save
+    eq('Enemy exhaustion level is 1 (was 0)', enemy.exhaustionLevel, 1);
     // Condition-add log emitted
     const condAdds = state.log.events.filter((e: any) => e.type === 'condition_add');
-    assert('Condition-add log emitted (poisoned)', condAdds.length >= 1);
-    // ActiveEffect recorded (condition_apply sourceIsConcentration: true — v2 concentration)
+    assert('Condition-add log emitted (exhaustion)', condAdds.length >= 1);
+    // ActiveEffect recorded (exhaustion_level sourceIsConcentration: true — v2 concentration)
     const srEffects = enemy.activeEffects.filter((e: any) => e.spellName === 'Sickening Radiance');
     assert('ActiveEffect recorded with spellName Sickening Radiance', srEffects.length === 1);
     if (srEffects.length === 1) {
-      eq('Effect type is condition_apply', srEffects[0].effectType, 'condition_apply');
-      eq('Effect payload condition is poisoned', srEffects[0].payload.condition, 'poisoned');
+      eq('Effect type is exhaustion_level', srEffects[0].effectType, 'exhaustion_level');
+      eq('Effect payload exhaustionLevels is 1', srEffects[0].payload.exhaustionLevels, 1);
       eq('Effect IS concentration-sourced (v2)', srEffects[0].sourceIsConcentration, true);
     }
     // Concentration started on caster
@@ -305,9 +305,9 @@ console.log('\n=== 4. execute — guaranteed fail (full damage + poisoned) ===\n
   }
 }
 
-// ---- 5. execute — guaranteed success (half damage, NO poisoned) --
+// ---- 5. execute — guaranteed success (half damage, NO exhaustion) --
 
-console.log('\n=== 5. execute — guaranteed success (half damage, no poisoned) ===\n');
+console.log('\n=== 5. execute — guaranteed success (half damage, no exhaustion) ===\n');
 
 {
   const caster = makeCaster({ x: 0, y: 0, z: 0 }, SR_ACTION_LOW_DC);
@@ -326,17 +326,17 @@ console.log('\n=== 5. execute — guaranteed success (half damage, no poisoned) 
       dmgDealt >= 2 && dmgDealt <= 20);
     const saveSuccess = state.log.events.filter((e: any) => e.type === 'save_success');
     assert('Save-success log emitted (CON 30 vs DC 5)', saveSuccess.length === 1);
-    // KEY: NOT poisoned on successful save
-    assert('Enemy is NOT poisoned on successful save', !enemy.conditions.has('poisoned'));
+    // KEY: NOT exhausted on successful save
+    eq('Enemy exhaustion level is still 0 on successful save', enemy.exhaustionLevel, 0);
     // No condition_add log for this target
     const condAdds = state.log.events.filter((e: any) => e.type === 'condition_add');
     eq('No condition-add log on successful save', condAdds.length, 0);
   }
 }
 
-// ---- 6. execute — multi-target AoE + multi-poisoned --------
+// ---- 6. execute — multi-target AoE + multi-exhaustion --------
 
-console.log('\n=== 6. execute — multi-target AoE + multi-poisoned ===\n');
+console.log('\n=== 6. execute — multi-target AoE + multi-exhaustion ===\n');
 
 {
   const caster = makeCaster({ x: 0, y: 0, z: 0 });
@@ -354,10 +354,10 @@ console.log('\n=== 6. execute — multi-target AoE + multi-poisoned ===\n');
     targets !== null && (targets as Combatant[]).length === 3);
   if (targets) {
     execute(caster, targets as Combatant[], state);
-    // All 3 fail save → all poisoned
-    assert('e1 (CON 1, failed save) IS poisoned', e1.conditions.has('poisoned'));
-    assert('e2 (CON 1, failed save) IS poisoned', e2.conditions.has('poisoned'));
-    assert('e3 (CON 1, failed save) IS poisoned', e3.conditions.has('poisoned'));
+    // All 3 fail save → all gain exhaustion
+    eq('e1 (CON 1, failed save) exhaustion level is 1', e1.exhaustionLevel, 1);
+    eq('e2 (CON 1, failed save) exhaustion level is 1', e2.exhaustionLevel, 1);
+    eq('e3 (CON 1, failed save) exhaustion level is 1', e3.exhaustionLevel, 1);
     // All 3 took damage (all CON 1, guaranteed fail vs DC 25)
     const e1Lost = 1000 - e1.currentHP;
     const e2Lost = 500 - e2.currentHP;
@@ -370,36 +370,36 @@ console.log('\n=== 6. execute — multi-target AoE + multi-poisoned ===\n');
     const dmgLogs = state.log.events.filter((e: any) => e.type === 'damage');
     eq('3 damage logs emitted (one per target)', dmgLogs.length, 3);
     const condAdds = state.log.events.filter((e: any) => e.type === 'condition_add');
-    eq('3 condition-add logs (one per poisoned target)', condAdds.length, 3);
+    eq('3 condition-add logs (one per exhausted target)', condAdds.length, 3);
   }
 }
 
-// ---- 7. execute — already-poisoned target (no double-apply) ----
+// ---- 7. execute — already-exhausted target (stacks exhaustion) ----
 
-console.log('\n=== 7. execute — already-poisoned target ===\n');
+console.log('\n=== 7. execute — already-exhausted target (stacks) ===\n');
 
 {
   const caster = makeCaster({ x: 0, y: 0, z: 0 });
   const enemy = makeWeakEnemy('e1', { x: 1, y: 0, z: 0 }, { maxHP: 1000, currentHP: 1000 });
-  // Pre-poison the enemy
-  enemy.conditions.add('poisoned' as Condition);
+  // Pre-exhaust the enemy (level 2)
+  enemy.exhaustionLevel = 2;
   const bf = makeBF([caster, enemy]);
   const state = makeState(bf);
 
   const targets = shouldCast(caster, bf);
   if (targets) {
     execute(caster, targets as Combatant[], state);
-    // Still poisoned (was already)
-    assert('Enemy still poisoned after re-cast', enemy.conditions.has('poisoned'));
-    // No SECOND activeEffect added (skip-if-already-poisoned guard)
+    // Exhaustion stacks: level 2 → level 3
+    eq('Enemy exhaustion level increased from 2 to 3', enemy.exhaustionLevel, 3);
+    // ActiveEffect added (exhaustion_level stacks, unlike poisoned which was skip-if-present)
     const srEffects = enemy.activeEffects.filter((e: any) => e.spellName === 'Sickening Radiance');
-    eq('No Sickening Radiance activeEffect added (already poisoned)', srEffects.length, 0);
+    eq('Sickening Radiance activeEffect added (exhaustion stacks)', srEffects.length, 1);
     // Damage still applied
     const dmgLogs = state.log.events.filter((e: any) => e.type === 'damage');
-    eq('Damage still applied to already-poisoned target', dmgLogs.length, 1);
-    // No condition_add log (skip-if-already-poisoned guard)
+    eq('Damage still applied to already-exhausted target', dmgLogs.length, 1);
+    // condition_add log emitted (exhaustion stacks)
     const condAdds = state.log.events.filter((e: any) => e.type === 'condition_add');
-    eq('No condition-add log for already-poisoned target', condAdds.length, 0);
+    eq('Condition-add log emitted for exhaustion stack', condAdds.length, 1);
   }
 }
 

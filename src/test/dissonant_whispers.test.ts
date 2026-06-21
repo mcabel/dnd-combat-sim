@@ -51,7 +51,7 @@ function makeC(id: string, overrides: Partial<Combatant> = {}): Combatant {
     aiProfile: 'smart' as any,
     perception: { targets: new Map() } as any,
     concentration: null, deathSaves: null, resources: null,
-    tempHP: 0, mountedOn: null, carriedBy: null, independentMount: false,
+    tempHP: 0, exhaustionLevel: 0, mountedOn: null, carriedBy: null, independentMount: false,
     role: 'regular', bonded: null,
     usedSneakAttackThisTurn: false, helpedThisTurn: false,
     isDefender: false, cannotAttack: false, hasHands: true, wearingArmor: false,

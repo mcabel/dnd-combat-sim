@@ -131,15 +131,13 @@ export const metadata = {
   /**
    * v1 simplification flag: PHB p.277 canonically excludes undead
    * and constructs ("This spell has no effect on undead or
-   * constructs."). v1 does NOT model the type exclusion — the
-   * handler stabilizes any PC at 0 HP. The handler still fizzles
-   * on monsters (PHB p.197: monsters die at 0 HP — Spare the Dying
-   * has no effect). Future work: a creature-type subsystem that
-   * checks `isUndead` / `isConstruct` flags (parser tech debt —
-   * `isUndead` exists on Combatant but isn't populated by the
-   * parser; `isConstruct` doesn't exist yet).
+   * constructs."). Now implemented — the handler checks
+   * `target.isUndead` and `target.isConstruct` and fizzles if
+   * either is true. The handler still fizzles on monsters
+   * (PHB p.197: monsters die at 0 HP — Spare the Dying has no
+   * effect).
    */
-  spareTheDyingTypeExclusionV1Implemented: false as const,
+  spareTheDyingTypeExclusionV1Implemented: true as const,
   /**
    * v1 simplification flag: PHB p.277 canonically has Touch range
    * (the caster must be adjacent to the downed ally). v1 does NOT
@@ -248,7 +246,18 @@ export function applyTouchEffect(
     return true;
   }
 
-  // 4. Stabilize the downed PC ally (PHB p.277: "The creature
+  // 4. Fizzle: target is undead or construct (PHB p.277: "This spell has
+  //    no effect on undead or constructs.").
+  if (target.isUndead || target.isConstruct) {
+    emit(
+      state, 'action', caster.id,
+      `${caster.name} casts Spare the Dying on ${target.name} — no effect (${target.isUndead ? 'undead' : 'construct'}, PHB p.277)!`,
+      target.id,
+    );
+    return true;
+  }
+
+  // 5. Stabilize the downed PC ally (PHB p.277: "The creature
   //    becomes stable"). Mirror rollDeathSave's "stable" outcome:
   //    set the flag + reset deathSaves. Target STAYS at 0 HP and
   //    STAYS unconscious.

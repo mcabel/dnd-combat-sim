@@ -109,6 +109,7 @@ function makeCombatant(id: string, overrides: Partial<Combatant> = {}): Combatan
     deathSaves: null,
     resources: null,
     tempHP: 0,
+    exhaustionLevel: 0,
     mountedOn: null, carriedBy: null, independentMount: false,
     role: 'regular', bonded: null,
     usedSneakAttackThisTurn: false, helpedThisTurn: false,
@@ -319,17 +320,17 @@ console.log('\n=== 4. execute — pierce hit + cold explosion (full damage) ===\
     assert(`Damage in pierce+cold range (3-32): got ${dmgDealt}`,
       dmgDealt >= 3 && dmgDealt <= 32);
     // 4c. Action log emitted
-    const actions = state.log.events.filter(e => e.type === 'action');
+    const actions = state.log.events.filter((e: any) => e.type === 'action');
     assert('Action log emitted', actions.length === 1);
     // 4d. Phase 1 (pierce): exactly 1 attack_hit OR attack_crit event
     const hitOrCrit = state.log.events.filter(
-      e => e.type === 'attack_hit' || e.type === 'attack_crit');
+      (e: any) => e.type === 'attack_hit' || e.type === 'attack_crit');
     eq('Exactly 1 pierce attack_hit/attack_crit event', hitOrCrit.length, 1);
     // 4e. Phase 2 (cold): exactly 1 save_fail event (DEX 1 vs DC 25)
-    const saveFails = state.log.events.filter(e => e.type === 'save_fail');
+    const saveFails = state.log.events.filter((e: any) => e.type === 'save_fail');
     eq('Exactly 1 cold save_fail event (DEX 1 vs DC 25)', saveFails.length, 1);
     // 4f. Damage events: 1 pierce + 1 cold = 2 total
-    const dmgLogs = state.log.events.filter(e => e.type === 'damage');
+    const dmgLogs = state.log.events.filter((e: any) => e.type === 'damage');
     eq('2 damage logs (1 pierce + 1 cold)', dmgLogs.length, 2);
   }
 }
@@ -357,22 +358,22 @@ console.log('\n=== 5. execute — pierce MISS, cold explosion STILL fires ===\n'
     assert(`Damage in [2, 32] (miss+full cold OR rare crit+full cold): got ${dmgDealt}`,
       dmgDealt >= 2 && dmgDealt <= 32);
     // 5c. Phase 1 (pierce): exactly 1 attack event (miss OR crit, never plain hit)
-    const hitEvents = state.log.events.filter(e => e.type === 'attack_hit');
+    const hitEvents = state.log.events.filter((e: any) => e.type === 'attack_hit');
     eq('No plain pierce attack_hit (nat 20 → crit path)', hitEvents.length, 0);
-    const missEvents = state.log.events.filter(e => e.type === 'attack_miss');
-    const critEvents = state.log.events.filter(e => e.type === 'attack_crit');
+    const missEvents = state.log.events.filter((e: any) => e.type === 'attack_miss');
+    const critEvents = state.log.events.filter((e: any) => e.type === 'attack_crit');
     eq('Exactly 1 pierce attack event (miss or crit)',
       missEvents.length + critEvents.length, 1);
     // 5d. Phase 2 (cold): ALWAYS fires — 1 save_fail event (DEX 1 vs DC 25)
-    const saveFails = state.log.events.filter(e => e.type === 'save_fail');
+    const saveFails = state.log.events.filter((e: any) => e.type === 'save_fail');
     eq('Cold save_fail STILL emitted (explosion fires on miss)', saveFails.length, 1);
     // 5e. Cold damage log ALWAYS emitted (1)
-    const dmgLogs = state.log.events.filter(e => e.type === 'damage');
+    const dmgLogs = state.log.events.filter((e: any) => e.type === 'damage');
     // Either 1 damage (cold only, pierce missed) OR 2 damage (rare crit pierce + cold)
     assert(`1 or 2 damage logs (cold always, pierce only on crit): got ${dmgLogs.length}`,
       dmgLogs.length === 1 || dmgLogs.length === 2);
     // 5f. The cold explosion announcement (condition_add) ALWAYS fires
-    const explodeAnnounce = state.log.events.filter(e => e.type === 'condition_add');
+    const explodeAnnounce = state.log.events.filter((e: any) => e.type === 'condition_add');
     eq('Cold explosion announcement ALWAYS emitted (condition_add)',
       explodeAnnounce.length, 1);
   }
@@ -394,7 +395,7 @@ console.log('\n=== 6. execute — cold-save success (half cold damage) ===\n');
     execute(caster, plan as IceKnifePlan, state);
 
     // 6a. Cold save_success emitted (DEX 30 vs DC 5)
-    const saveSuccess = state.log.events.filter(e => e.type === 'save_success');
+    const saveSuccess = state.log.events.filter((e: any) => e.type === 'save_success');
     eq('Cold save_success emitted (DEX 30 vs DC 5)', saveSuccess.length, 1);
     // 6b. Cold damage: half of 2d6 = 1-6 (rounded down)
     //     Pierce damage: 1d10 (1-10) on hit OR 2d10 (2-20) on crit
@@ -433,10 +434,10 @@ console.log('\n=== 7. execute — multi-target cold explosion (cluster) ===\n');
     assert(`Neighbour took cold damage (2-12): got ${neiDmg}`,
       neiDmg >= 2 && neiDmg <= 12);
     // 7b. 2 cold save_fail events (one per explosion member)
-    const saveFails = state.log.events.filter(e => e.type === 'save_fail');
+    const saveFails = state.log.events.filter((e: any) => e.type === 'save_fail');
     eq('2 cold save_fail events (one per explosion member)', saveFails.length, 2);
     // 7c. Damage events: 1 pierce (primary hit) + 2 cold = 3 total
-    const dmgLogs = state.log.events.filter(e => e.type === 'damage');
+    const dmgLogs = state.log.events.filter((e: any) => e.type === 'damage');
     eq('3 damage logs (1 pierce + 2 cold)', dmgLogs.length, 3);
   }
 }

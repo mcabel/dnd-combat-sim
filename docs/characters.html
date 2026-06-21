@@ -641,12 +641,17 @@ button.full { width: 100%; padding: 11px; font-size: 13px; }
 
     <!-- ASI Application -->
     <div class="card hidden" id="asi-form-card" style="margin-top:10px;background:var(--bg);">
-      <div class="card-title" style="color:var(--warn)">Apply Ability Score Improvement</div>
+      <div class="card-title" style="color:var(--warn)">Ability Score Improvement</div>
       <div style="font-size:12px;color:var(--muted);margin-bottom:10px">
         Pending: <span id="asi-pending-count" style="color:var(--warn)"></span> ASI(s)
         · Half-pts: <span id="asi-half-pts" style="color:var(--muted)"></span>
       </div>
-      <div class="inline-row">
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <button type="button" class="sm primary" id="asi-mode-score-btn" onclick="setASIMode('score')">Raise a Score</button>
+        <button type="button" class="sm secondary" id="asi-mode-feat-btn" onclick="setASIMode('feat')">Take a Feat instead</button>
+      </div>
+
+      <div id="asi-score-panel" class="inline-row">
         <div>
           <label>Ability</label>
           <select id="asi-ability">
@@ -666,6 +671,22 @@ button.full { width: 100%; padding: 11px; font-size: 13px; }
           </select>
         </div>
         <button onclick="doApplyASI()" class="primary" style="margin-top:17px">Apply</button>
+      </div>
+
+      <div id="asi-feat-panel" class="hidden">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">
+          A feat instead of an ASI uses one full pending ASI (PHB p.165). Combat-only
+          feat effects aren't applied by the sheet — see the feat description.
+        </div>
+        <div>
+          <label>Feat</label>
+          <select id="feat-select" onchange="onFeatSelectChange()">
+            <option value="">— choose —</option>
+          </select>
+        </div>
+        <div id="feat-detail" style="font-size:12px;color:var(--muted);margin:8px 0 4px"></div>
+        <div id="feat-extra-inputs"></div>
+        <button onclick="doApplyFeat()" class="primary" style="margin-top:10px">Apply Feat</button>
       </div>
     </div>
 
@@ -907,6 +928,7 @@ const S = {
   trials: 100,
   monsters: [],
   lastSimEnemies: [],   // enemies from most recent simulate call, for XP award
+  feats: null,           // cached /api/feats result (fetched lazily, once)
 };
 
 // ── Boot ──────────────────────────────────────────────────────
@@ -2150,16 +2172,40 @@ async function setHPDirect(val) {
   } catch(e) { showErr(e.message); }
 }
 
+// Pure damage math (PHB p.198): temporary hit points are lost first when
+// damage is taken, and only the leftover after temp HP is depleted reduces
+// real HP. Temp HP is never healed/added by damage; it only ever decreases
+// here. Extracted as a pure function so it can be unit-validated outside
+// the DOM (see node -e extraction-and-eval pattern in SHEET-HANDOVER-36/37).
+function computeDamageHP(currentHP, maxHP, tempHP, amount) {
+  const curHP  = Math.max(0, Math.min(maxHP, currentHP));
+  const curTHP = Math.max(0, tempHP || 0);
+  const absorbed  = Math.min(curTHP, amount);
+  const newTHP    = curTHP - absorbed;
+  const remaining = amount - absorbed;
+  const newHP     = Math.max(0, curHP - remaining);
+  return { newHP, newTHP, absorbed };
+}
+
 async function applyHPAmt(mode) {
   if (!S.charDetail) return;
   const amtEl = document.getElementById('hp-amt');
   const amt = parseInt(amtEl?.value || '', 10);
   if (isNaN(amt) || amt <= 0) { showErr('Enter a positive amount.'); return; }
   const wasDown = S.charDetail.currentHP <= 0;
-  const newHP = mode === 'dmg'
-    ? Math.max(0, S.charDetail.currentHP - amt)
-    : Math.min(S.charDetail.maxHP, S.charDetail.currentHP + amt);
-  const body = { currentHP: newHP };
+  const body = {};
+  let newHP, absorbed = 0;
+  if (mode === 'dmg') {
+    const curTHP = S.charDetail.temporaryHP || 0;
+    const result = computeDamageHP(S.charDetail.currentHP, S.charDetail.maxHP, curTHP, amt);
+    newHP = result.newHP;
+    absorbed = result.absorbed;
+    body.currentHP = newHP;
+    if (result.newTHP !== curTHP) body.temporaryHP = result.newTHP;
+  } else {
+    newHP = Math.min(S.charDetail.maxHP, S.charDetail.currentHP + amt);
+    body.currentHP = newHP;
+  }
   if (wasDown && newHP > 0) body.deathSaves = { successes: 0, failures: 0 };
   try {
     const data = await api(`/api/characters/${S.charDetail.id}`, {
@@ -2169,7 +2215,9 @@ async function applyHPAmt(mode) {
     });
     S.charDetail = data.character;
     renderCharDetail();
-    const label = mode === 'dmg' ? `Took ${amt} damage` : `Healed ${amt} HP`;
+    const label = mode === 'dmg'
+      ? `Took ${amt} damage${absorbed > 0 ? ` (${absorbed} absorbed by temp HP)` : ''}`
+      : `Healed ${amt} HP`;
     const warn  = mode === 'dmg' && newHP === 0 ? ' — UNCONSCIOUS!' : '';
     showBanner(`${label}. HP: ${newHP}/${S.charDetail.maxHP}${warn}.`, newHP === 0 && mode === 'dmg' ? 'error' : 'ok');
   } catch(e) { showErr(e.message); }
@@ -2508,6 +2556,118 @@ async function doApplyASI() {
     refreshChars();
     renderCharDetail();
     showBanner(`${ability.toUpperCase()} ${data.oldScore} → ${data.newScore}`, 'ok');
+  } catch(e) { showErr(e.message); }
+}
+
+// ── ASI vs Feat mode toggle ─────────────────────────────────────
+const ABILITY_LABELS = { str:'Strength', dex:'Dexterity', con:'Constitution', int:'Intelligence', wis:'Wisdom', cha:'Charisma' };
+const SKILL_NAMES_UI = [
+  'Athletics', 'Acrobatics', 'Sleight of Hand', 'Stealth',
+  'Arcana', 'History', 'Investigation', 'Nature', 'Religion',
+  'Animal Handling', 'Insight', 'Medicine', 'Perception', 'Survival',
+  'Deception', 'Intimidation', 'Performance', 'Persuasion',
+];
+
+function setASIMode(mode) {
+  const scorePanel = document.getElementById('asi-score-panel');
+  const featPanel   = document.getElementById('asi-feat-panel');
+  const scoreBtn    = document.getElementById('asi-mode-score-btn');
+  const featBtn     = document.getElementById('asi-mode-feat-btn');
+  if (mode === 'feat') {
+    scorePanel.classList.add('hidden');
+    featPanel.classList.remove('hidden');
+    scoreBtn.classList.replace('primary', 'secondary');
+    featBtn.classList.replace('secondary', 'primary');
+    ensureFeatsLoaded();
+  } else {
+    scorePanel.classList.remove('hidden');
+    featPanel.classList.add('hidden');
+    scoreBtn.classList.replace('secondary', 'primary');
+    featBtn.classList.replace('primary', 'secondary');
+  }
+}
+
+async function ensureFeatsLoaded() {
+  if (S.feats) { populateFeatSelect(); return; }
+  try {
+    const data = await api('/api/feats');
+    S.feats = data.feats || [];
+    populateFeatSelect();
+  } catch(e) { showErr('Failed to load feat list: ' + e.message); }
+}
+
+function populateFeatSelect() {
+  const sel = document.getElementById('feat-select');
+  if (!sel || sel.dataset.populated) return;
+  sel.innerHTML = '<option value="">— choose —</option>' +
+    (S.feats || []).map(f => `<option value="${esc(f.name)}">${esc(f.name)}</option>`).join('');
+  sel.dataset.populated = '1';
+}
+
+function onFeatSelectChange() {
+  const name = document.getElementById('feat-select').value;
+  const detailEl = document.getElementById('feat-detail');
+  const extraEl  = document.getElementById('feat-extra-inputs');
+  const feat = (S.feats || []).find(f => f.name === name);
+  if (!feat) { detailEl.textContent = ''; extraEl.innerHTML = ''; return; }
+
+  detailEl.innerHTML = (feat.prerequisite ? `<strong>Prerequisite:</strong> ${esc(feat.prerequisite)}<br>` : '') +
+    esc(feat.description);
+
+  let extra = '';
+  if (feat.abilityChoice && feat.abilityChoice.options.length > 1) {
+    extra += `<div style="margin-top:6px"><label>Ability (+${feat.abilityChoice.amount})</label>
+      <select id="feat-ability-choice">
+        ${feat.abilityChoice.options.map(o => `<option value="${o}">${ABILITY_LABELS[o] || o}</option>`).join('')}
+      </select></div>`;
+  }
+  if (feat.skillOrToolChoiceCount) {
+    extra += `<div style="margin-top:6px"><label>Skills (select up to ${feat.skillOrToolChoiceCount})</label>
+      <select id="feat-skill-choices" multiple size="6">
+        ${SKILL_NAMES_UI.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('')}
+      </select></div>
+      <div style="margin-top:6px"><label>Tool/instrument names (comma-separated, fills remaining picks)</label>
+      <input id="feat-tool-choices" type="text" placeholder="e.g. Thieves' Tools, Smith's Tools"></div>`;
+  }
+  if (feat.languageChoiceCount) {
+    extra += `<div style="margin-top:6px"><label>Languages (comma-separated, ${feat.languageChoiceCount})</label>
+      <input id="feat-language-choices" type="text" placeholder="e.g. Elvish, Dwarvish"></div>`;
+  }
+  extraEl.innerHTML = extra;
+}
+
+async function doApplyFeat() {
+  if (!S.charDetail) return;
+  showErr('');
+  const featName = document.getElementById('feat-select').value;
+  if (!featName) { showErr('Choose a feat first.'); return; }
+
+  const body = { featName };
+  const abilEl = document.getElementById('feat-ability-choice');
+  if (abilEl) body.abilityChoice = abilEl.value;
+
+  const skillEl = document.getElementById('feat-skill-choices');
+  if (skillEl) body.skillChoices = Array.from(skillEl.selectedOptions).map(o => o.value);
+  const toolEl = document.getElementById('feat-tool-choices');
+  if (toolEl && toolEl.value.trim()) {
+    body.toolChoices = toolEl.value.split(',').map(s => s.trim()).filter(Boolean);
+  }
+  const langEl = document.getElementById('feat-language-choices');
+  if (langEl && langEl.value.trim()) {
+    body.languageChoices = langEl.value.split(',').map(s => s.trim()).filter(Boolean);
+  }
+
+  try {
+    const data = await api(`/api/characters/${S.charDetail.id}/applyfeat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    S.charDetail = data.character;
+    refreshChars();
+    renderCharDetail();
+    setASIMode('score'); // reset to default mode for next time
+    showBanner(`Feat taken: ${featName}`, 'ok');
   } catch(e) { showErr(e.message); }
 }
 

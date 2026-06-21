@@ -69,6 +69,7 @@ function makeCombatant(id: string, overrides: Partial<Combatant> = {}): Combatan
     deathSaves: null,
     resources: null,
     tempHP: 0,
+    exhaustionLevel: 0,
     mountedOn: null, carriedBy: null, independentMount: false,
     role: 'regular', bonded: null,
     usedSneakAttackThisTurn: false, helpedThisTurn: false,
@@ -200,10 +201,10 @@ console.log('\n=== 4. execute — guaranteed fail (full damage + blinded) ===\n'
     eq('Slot consumed (2nd level: 2 → 1)', (caster.resources as any).spellSlots[2].remaining, 1);
     const dmgDealt = hpBefore - enemy.currentHP;
     assert(`Damage in 2d10 range (2-20): got ${dmgDealt}`, dmgDealt >= 2 && dmgDealt <= 20);
-    const saveFails = state.log.events.filter(e => e.type === 'save_fail');
+    const saveFails = state.log.events.filter((e: any) => e.type === 'save_fail');
     assert('Save-fail log emitted (DEX 1 vs DC 25)', saveFails.length === 1);
     assert('Enemy is blinded on failed save', enemy.conditions.has('blinded'));
-    const condAdds = state.log.events.filter(e => e.type === 'condition_add');
+    const condAdds = state.log.events.filter((e: any) => e.type === 'condition_add');
     assert('condition_add log emitted for blinded', condAdds.length === 1);
   }
 }
@@ -223,7 +224,7 @@ console.log('\n=== 5. execute — guaranteed success (half damage, no blinded) =
     execute(caster, targets as Combatant[], state);
     const dmgDealt = hpBefore - enemy.currentHP;
     assert(`Half-damage in 1-10 range: got ${dmgDealt}`, dmgDealt >= 1 && dmgDealt <= 10);
-    const saveSuccess = state.log.events.filter(e => e.type === 'save_success');
+    const saveSuccess = state.log.events.filter((e: any) => e.type === 'save_success');
     assert('Save-success log emitted (DEX 30 vs DC 5)', saveSuccess.length === 1);
     assert('Enemy is NOT blinded on successful save', !enemy.conditions.has('blinded'));
   }
@@ -251,7 +252,7 @@ console.log('\n=== 6. execute — multi-target cone ===\n');
     assert('e1 blinded', e1.conditions.has('blinded'));
     assert('e2 blinded', e2.conditions.has('blinded'));
     assert('e3 blinded', e3.conditions.has('blinded'));
-    const saveFails = state.log.events.filter(e => e.type === 'save_fail');
+    const saveFails = state.log.events.filter((e: any) => e.type === 'save_fail');
     eq('3 save-fail logs (one per target)', saveFails.length, 3);
   }
 }

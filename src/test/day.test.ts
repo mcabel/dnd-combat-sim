@@ -56,6 +56,7 @@ function makeC(o: Partial<Combatant> = {}): Combatant {
     legendaryActions: [], legendaryActionPool: 0, legendaryActionPoolMax: 0,
     budget: { movementFt: speed, actionUsed: false, bonusActionUsed: false, reactionUsed: false, freeObjectUsed: false },
     conditions: new Set(), concentration: null, deathSaves: null, tempHP: 0,
+    exhaustionLevel: 0,
     resources: null, usedSneakAttackThisTurn: false, helpedThisTurn: false,
     isDefender: false, cannotAttack: false, hasHands: true, wearingArmor: false,
     aiProfile: 'attackNearest', perception: { targets: new Map() },

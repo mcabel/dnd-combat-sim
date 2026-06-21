@@ -63,6 +63,7 @@ function makeCombatant(id: string, overrides: Partial<Combatant> = {}): Combatan
     deathSaves: null,
     resources: null,
     tempHP: 0,
+    exhaustionLevel: 0,
     mountedOn: null, carriedBy: null, independentMount: false,
     role: 'regular', bonded: null,
     usedSneakAttackThisTurn: false, helpedThisTurn: false,
@@ -220,7 +221,7 @@ console.log('\n=== 5. execute — dominated effect ===\n');
     assert('Concentration started', caster.concentration?.active === true);
     assert('Charmed applied', enemy.conditions.has('charmed'));
     assert('Incapacitated applied', enemy.conditions.has('incapacitated'));
-    const saveFails = state.log.events.filter(e => e.type === 'save_fail');
+    const saveFails = state.log.events.filter((e: any) => e.type === 'save_fail');
     assert('Save-fail log emitted', saveFails.length === 1);
     // Check activeEffects has dominated type
     const domEffect = enemy.activeEffects.find(eff => eff.effectType === 'dominated');
@@ -248,7 +249,7 @@ console.log('\n=== 6. execute — guaranteed success ===\n');
     eq('Slot consumed', (caster.resources as any).spellSlots[8].remaining, 0);
     assert('NOT charmed (save succeeded)', !enemy.conditions.has('charmed'));
     assert('NOT incapacitated (save succeeded)', !enemy.conditions.has('incapacitated'));
-    const saveSuccess = state.log.events.filter(e => e.type === 'save_success');
+    const saveSuccess = state.log.events.filter((e: any) => e.type === 'save_success');
     assert('Save-success log emitted', saveSuccess.length === 1);
   }
 }

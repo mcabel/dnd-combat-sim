@@ -43,7 +43,7 @@ function makeCombatant(id = 'c1'): Combatant {
     budget: freshBudget(), conditions: new Set(),
     aiProfile: 'attackNearest', perception: { targets: new Map() },
     concentration: null, deathSaves: null, resources: null,
-    tempHP: 0, mountedOn: null, carriedBy: null, independentMount: false,
+    tempHP: 0, exhaustionLevel: 0, mountedOn: null, carriedBy: null, independentMount: false,
     role: 'regular', bonded: null,
     usedSneakAttackThisTurn: false, helpedThisTurn: false,
     isDefender: false, cannotAttack: false, hasHands: true, wearingArmor: false,

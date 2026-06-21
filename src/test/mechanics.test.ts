@@ -46,6 +46,7 @@ function makeC(o: Partial<Combatant> = {}): Combatant {
     bonded: null,
     resources: null,
     tempHP: 0,
+    exhaustionLevel: 0,
     usedSneakAttackThisTurn: false,
     helpedThisTurn: false,
     isDefender: false,

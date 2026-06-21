@@ -11,6 +11,8 @@ import {
   shouldRage, activateRagePlan, shouldSecondWind, secondWindPlan,
   shouldLayOnHands, layOnHandsPlan, bardicInspirationTarget, bardicInspirationPlan,
   shouldCastHex, hexPlan,
+  shouldCastCureWounds, spellHealPlan,
+  hasSpellSlot,
 } from './resources';
 import { shouldCast as shouldCastHW } from '../spells/healing_word';
 import { shouldCast as shouldCastCW } from '../spells/cure_wounds';
@@ -48,6 +50,7 @@ import { shouldCast as shouldCastHeatMetal } from '../spells/heat_metal';
 import { shouldCast as shouldCastMelfsAcidArrow } from '../spells/melf_s_acid_arrow';
 import { shouldCast as shouldCastMistyStep } from '../spells/misty_step';
 import { shouldCast as shouldCastInvisibility } from '../spells/invisibility';
+import { shouldCast as shouldCastGreaterInvisibility } from '../spells/greater_invisibility';
 import { shouldCast as shouldCastGustOfWind } from '../spells/gust_of_wind';
 import { shouldCast as shouldCastLevitate } from '../spells/levitate';
 import { shouldCast as shouldCastLesserRestoration } from '../spells/lesser_restoration';
@@ -238,6 +241,36 @@ import { shouldCast as shouldCastMassHeal } from '../spells/mass_heal';
 import { shouldCast as shouldCastPowerWordHeal } from '../spells/power_word_heal';
 import { shouldCast as shouldCastArmorOfAgathys } from '../spells/armor_of_agathys';
 import { shouldCast as shouldCastFalseLife } from '../spells/false_life';
+import { shouldCast as shouldCastDispelMagic } from '../spells/dispel_magic';
+// ── TG-006 — Summon Beast bespoke summon spell (Phase 1b) ────────────────
+import { shouldCast as shouldCastSummonBeast } from '../spells/summon_beast';
+// ── TG-006 — L3 TCE summon spells (Phase 1c) ──────────────────────────────
+import { shouldCast as shouldCastSummonFey }         from '../spells/summon_fey';
+import { shouldCast as shouldCastSummonUndead }      from '../spells/summon_undead';
+import { shouldCast as shouldCastSummonShadowspawn } from '../spells/summon_shadowspawn';
+// ── TG-006 — L3-L4 TCE/XGE summon spells (Phase 1d) ────────────────────────
+import { shouldCast as shouldCastSummonLesserDemons }  from '../spells/summon_lesser_demons';
+import { shouldCast as shouldCastSummonAberration }     from '../spells/summon_aberration';
+import { shouldCast as shouldCastSummonConstruct }      from '../spells/summon_construct';
+import { shouldCast as shouldCastSummonElemental }      from '../spells/summon_elemental';
+import { shouldCast as shouldCastSummonGreaterDemon }   from '../spells/summon_greater_demon';
+// ── TG-006 — L5+ TCE/FTD summon spells (Phase 1e) ────────────────────────
+import { shouldCast as shouldCastSummonCelestial }        from '../spells/summon_celestial';
+import { shouldCast as shouldCastSummonDraconicSpirit }   from '../spells/summon_draconic_spirit';
+import { shouldCast as shouldCastSummonFiend }            from '../spells/summon_fiend';
+// ── TG-006 — PHB Conjure spells (Phase 2) ────────────────────────────────
+import { shouldCast as shouldCastConjureAnimals } from '../spells/conjure_animals';
+// ── TG-006 — PHB Conjure spells (Phase 4 — Session 30) ───────────────────
+import { shouldCast as shouldCastConjureWoodlandBeings }  from '../spells/conjure_woodland_beings';
+import { shouldCast as shouldCastConjureMinorElementals } from '../spells/conjure_minor_elementals';
+import { shouldCast as shouldCastConjureElemental }       from '../spells/conjure_elemental';
+// ── TG-006 — PHB Conjure spells (Phase 4 — Session 31) ───────────────────
+import { shouldCast as shouldCastConjureFey }       from '../spells/conjure_fey';
+import { shouldCast as shouldCastConjureCelestial } from '../spells/conjure_celestial';
+// ── TG-006 — PHB/XGE Find spells (Phase 3) ──────────────────────────────
+import { shouldCast as shouldCastFindFamiliar }        from '../spells/find_familiar';
+import { shouldCast as shouldCastFindSteed }           from '../spells/find_steed';
+import { shouldCast as shouldCastFindGreaterSteed }    from '../spells/find_greater_steed';
 
 // ── Session 19 — bulk-implementation generic dispatch (262 new spells) ────
 import { GENERIC_SPELL_LIST } from '../spells/_generic_registry';
@@ -1521,6 +1554,26 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
     }
   }
 
+  // --- 11Q-bis. GREATER INVISIBILITY (self, invisible, no ends-on-attack, L4) ---
+  // PHB p.254: action, self, concentration 1 min. Grants invisible condition.
+  // Unlike L2 Invisibility, does NOT end on attack/cast — the caster stays
+  // invisible for the full duration. Priority: above Invisibility (L4 > L2)
+  // because the no-ends-on-attack clause makes it strictly better for martial
+  // casters who want invisible-advantage on every attack.
+  if (!plan.action && self.actions.some(a => a.name === 'Greater Invisibility')) {
+    if (shouldCastGreaterInvisibility(self, battlefield)) {
+      plan.action = {
+        type: 'greaterInvisibility',
+        action: null,
+        targetId: self.id,
+        description: `${self.name} casts Greater Invisibility`,
+      };
+      plan.targetId = self.id;
+      plan.bonusAction = planBonusAction(self, self, battlefield);
+      return plan;
+    }
+  }
+
   // --- 11R. MAGIC WEAPON (touch, weapon +1, concentration) ---
   // PHB p.257: action, touch, concentration 1 hr. +1 to attack and damage
   // rolls with weapon attacks. Priority: offensive buff for weapon-attack
@@ -2014,6 +2067,409 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
       };
       plan.targetId = self.id;
       plan.bonusAction = planBonusAction(self, target, battlefield);
+      return plan;
+    }
+  }
+
+  // === TG-006 — TCE SUMMON SPELLS (Phase 1b) ===
+  // Summon Beast (TCE p.111): 2nd-level conjuration, action, range 30 ft,
+  // concentration 1 hr. Spawns a Bestial Spirit combatant that shares the
+  // caster's initiative count and takes its turn immediately after.
+  // Priority: above Session 21 damage spells — adding a body to the fight
+  // is tactically more valuable than a single damage cast when the caster
+  // has no current summon.
+  if (!plan.action && self.actions.some(a => a.name === 'Summon Beast')) {
+    if (shouldCastSummonBeast(self, battlefield)) {
+      const sbAction = self.actions.find(a => a.name === 'Summon Beast')!;
+      plan.action = {
+        type: 'summonSpell',
+        action: sbAction,
+        targetId: self.id,  // self-targeting (summon appears near caster)
+        description: `${self.name} casts Summon Beast`,
+      };
+      plan.targetId = self.id;
+      plan.bonusAction = planBonusAction(self, self, battlefield);
+      return plan;
+    }
+  }
+
+  // === TG-006 — TCE SUMMON SPELLS (Phase 1c) ===
+  // Summon Fey (TCE p.112): 3rd-level conjuration, action, range 30 ft,
+  // concentration 1 hr. Spawns a Fey Spirit combatant.
+  // Summon Undead (TCE p.113): 3rd-level necromancy, action, range 30 ft,
+  // concentration 1 hr. Spawns an Undead Spirit combatant.
+  // Summon Shadowspawn (TCE p.113): 3rd-level conjuration, action, range 30 ft,
+  // concentration 1 hr. Spawns a Shadow Spirit combatant.
+  // All three follow the same pattern as Summon Beast but at 3rd level.
+  if (!plan.action && self.actions.some(a => a.name === 'Summon Fey')) {
+    if (shouldCastSummonFey(self, battlefield)) {
+      const action = self.actions.find(a => a.name === 'Summon Fey')!;
+      plan.action = {
+        type: 'summonSpell',
+        action,
+        targetId: self.id,
+        description: `${self.name} casts Summon Fey`,
+      };
+      plan.targetId = self.id;
+      plan.bonusAction = planBonusAction(self, self, battlefield);
+      return plan;
+    }
+  }
+
+  if (!plan.action && self.actions.some(a => a.name === 'Summon Undead')) {
+    if (shouldCastSummonUndead(self, battlefield)) {
+      const action = self.actions.find(a => a.name === 'Summon Undead')!;
+      plan.action = {
+        type: 'summonSpell',
+        action,
+        targetId: self.id,
+        description: `${self.name} casts Summon Undead`,
+      };
+      plan.targetId = self.id;
+      plan.bonusAction = planBonusAction(self, self, battlefield);
+      return plan;
+    }
+  }
+
+  if (!plan.action && self.actions.some(a => a.name === 'Summon Shadowspawn')) {
+    if (shouldCastSummonShadowspawn(self, battlefield)) {
+      const action = self.actions.find(a => a.name === 'Summon Shadowspawn')!;
+      plan.action = {
+        type: 'summonSpell',
+        action,
+        targetId: self.id,
+        description: `${self.name} casts Summon Shadowspawn`,
+      };
+      plan.targetId = self.id;
+      plan.bonusAction = planBonusAction(self, self, battlefield);
+      return plan;
+    }
+  }
+
+  // === TG-006 — TCE/XGE SUMMON SPELLS (Phase 1d) ===
+  // Summon Lesser Demons (XGE p.167): 3rd-level conjuration, action, range 60 ft,
+  // concentration 1 min. Spawns 2 Dretches.
+  // Summon Aberration (TCE p.110): 4th-level conjuration, action, range 30 ft,
+  // concentration 1 hr. Spawns an Aberrant Spirit (Slaad).
+  // Summon Construct (TCE p.111): 4th-level conjuration, action, range 30 ft,
+  // concentration 1 hr. Spawns a Construct Spirit.
+  // Summon Elemental (TCE p.112): 4th-level conjuration, action, range 30 ft,
+  // concentration 1 hr. Spawns an Elemental Spirit (Fire).
+  // Summon Greater Demon (XGE p.166): 4th-level conjuration, action, range 60 ft,
+  // concentration 1 min. Spawns a Barlgura.
+  // All follow the same pattern as Phase 1c spells.
+
+  if (!plan.action && self.actions.some(a => a.name === 'Summon Lesser Demons')) {
+    if (shouldCastSummonLesserDemons(self, battlefield)) {
+      const action = self.actions.find(a => a.name === 'Summon Lesser Demons')!;
+      plan.action = {
+        type: 'summonSpell',
+        action,
+        targetId: self.id,
+        description: `${self.name} casts Summon Lesser Demons`,
+      };
+      plan.targetId = self.id;
+      plan.bonusAction = planBonusAction(self, self, battlefield);
+      return plan;
+    }
+  }
+
+  if (!plan.action && self.actions.some(a => a.name === 'Summon Aberration')) {
+    if (shouldCastSummonAberration(self, battlefield)) {
+      const action = self.actions.find(a => a.name === 'Summon Aberration')!;
+      plan.action = {
+        type: 'summonSpell',
+        action,
+        targetId: self.id,
+        description: `${self.name} casts Summon Aberration`,
+      };
+      plan.targetId = self.id;
+      plan.bonusAction = planBonusAction(self, self, battlefield);
+      return plan;
+    }
+  }
+
+  if (!plan.action && self.actions.some(a => a.name === 'Summon Construct')) {
+    if (shouldCastSummonConstruct(self, battlefield)) {
+      const action = self.actions.find(a => a.name === 'Summon Construct')!;
+      plan.action = {
+        type: 'summonSpell',
+        action,
+        targetId: self.id,
+        description: `${self.name} casts Summon Construct`,
+      };
+      plan.targetId = self.id;
+      plan.bonusAction = planBonusAction(self, self, battlefield);
+      return plan;
+    }
+  }
+
+  if (!plan.action && self.actions.some(a => a.name === 'Summon Elemental')) {
+    if (shouldCastSummonElemental(self, battlefield)) {
+      const action = self.actions.find(a => a.name === 'Summon Elemental')!;
+      plan.action = {
+        type: 'summonSpell',
+        action,
+        targetId: self.id,
+        description: `${self.name} casts Summon Elemental`,
+      };
+      plan.targetId = self.id;
+      plan.bonusAction = planBonusAction(self, self, battlefield);
+      return plan;
+    }
+  }
+
+  if (!plan.action && self.actions.some(a => a.name === 'Summon Greater Demon')) {
+    if (shouldCastSummonGreaterDemon(self, battlefield)) {
+      const action = self.actions.find(a => a.name === 'Summon Greater Demon')!;
+      plan.action = {
+        type: 'summonSpell',
+        action,
+        targetId: self.id,
+        description: `${self.name} casts Summon Greater Demon`,
+      };
+      plan.targetId = self.id;
+      plan.bonusAction = planBonusAction(self, self, battlefield);
+      return plan;
+    }
+  }
+
+  // === TG-006 — L5+ TCE/FTD SUMMON SPELLS (Phase 1e) ===
+  // Summon Celestial (TCE p.111): 5th-level conjuration, action, range 30 ft,
+  // concentration 1 hr. Spawns a Celestial Spirit (Defender) combatant.
+  // Summon Draconic Spirit (FTD p.21): 5th-level conjuration, action, range 30 ft,
+  // concentration 1 hr. Spawns a Draconic Spirit (Red/fire) combatant.
+  // Summon Fiend (TCE p.112): 6th-level conjuration, action, range 30 ft,
+  // concentration 1 hr. Spawns a Fiendish Spirit (Devil) combatant.
+  // All follow the same pattern as earlier summon spells.
+
+  if (!plan.action && self.actions.some(a => a.name === 'Summon Celestial')) {
+    if (shouldCastSummonCelestial(self, battlefield)) {
+      const action = self.actions.find(a => a.name === 'Summon Celestial')!;
+      plan.action = {
+        type: 'summonSpell',
+        action,
+        targetId: self.id,
+        description: `${self.name} casts Summon Celestial`,
+      };
+      plan.targetId = self.id;
+      plan.bonusAction = planBonusAction(self, self, battlefield);
+      return plan;
+    }
+  }
+
+  if (!plan.action && self.actions.some(a => a.name === 'Summon Draconic Spirit')) {
+    if (shouldCastSummonDraconicSpirit(self, battlefield)) {
+      const action = self.actions.find(a => a.name === 'Summon Draconic Spirit')!;
+      plan.action = {
+        type: 'summonSpell',
+        action,
+        targetId: self.id,
+        description: `${self.name} casts Summon Draconic Spirit`,
+      };
+      plan.targetId = self.id;
+      plan.bonusAction = planBonusAction(self, self, battlefield);
+      return plan;
+    }
+  }
+
+  if (!plan.action && self.actions.some(a => a.name === 'Summon Fiend')) {
+    if (shouldCastSummonFiend(self, battlefield)) {
+      const action = self.actions.find(a => a.name === 'Summon Fiend')!;
+      plan.action = {
+        type: 'summonSpell',
+        action,
+        targetId: self.id,
+        description: `${self.name} casts Summon Fiend`,
+      };
+      plan.targetId = self.id;
+      plan.bonusAction = planBonusAction(self, self, battlefield);
+      return plan;
+    }
+  }
+
+  // === TG-006 — PHB CONJURE SPELLS (Phase 2) ===
+  // Conjure Animals (PHB p.225): 3rd-level conjuration, action, range 60 ft,
+  // concentration 1 hr. Spawns 2 Wolf combatants (v1: hardcoded most common option).
+  // Unlike TCE summons, PHB Conjure spells pick from the Monster Manual by CR.
+  if (!plan.action && self.actions.some(a => a.name === 'Conjure Animals')) {
+    if (shouldCastConjureAnimals(self, battlefield)) {
+      const action = self.actions.find(a => a.name === 'Conjure Animals')!;
+      plan.action = {
+        type: 'summonSpell',
+        action,
+        targetId: self.id,
+        description: `${self.name} casts Conjure Animals`,
+      };
+      plan.targetId = self.id;
+      plan.bonusAction = planBonusAction(self, self, battlefield);
+      return plan;
+    }
+  }
+
+  // === TG-006 — PHB CONJURE SPELLS (Phase 4 — Session 30 + 31) ===
+  // Five PHB Conjure spells in priority order (higher-level first):
+  //   - Conjure Celestial (L7): 1 Couatl (CR 4), concentration 1 hr.
+  //   - Conjure Fey (L6): 1 Green Hag (CR 3), concentration 1 hr.
+  //   - Conjure Elemental (L5): 1 Fire Elemental (CR 5), concentration 1 hr.
+  //   - Conjure Woodland Beings (L4): 4 Sprites (CR 1/4), concentration 1 hr.
+  //   - Conjure Minor Elementals (L4): 4 Mud Mephits (CR 1/4), concentration 1 hr.
+  // All five use the same TCE-style initiative insertion (shares caster's
+  // initiative, acts immediately after caster). Single-creature summons
+  // (Celestial/Fey/Elemental) are prioritised above pack summons because
+  // higher-slot single creatures are typically more impactful than
+  // lower-slot packs.
+
+  // --- Conjure Celestial (7th-level, 1 Couatl, concentration) ---
+  // PHB p.225: action, 90 ft, concentration 1 hr. Spawns 1 Couatl
+  // (CR 4) with HP 97, AC 19, Bite +8 1d6+5 + DC 13 CON or poisoned,
+  // Constrict +6 2d6+3 + DC 15 STR or grappled+restrained.
+  // Priority: highest of all PHB Conjure spells (L7 single powerful celestial).
+  if (!plan.action && self.actions.some(a => a.name === 'Conjure Celestial')) {
+    if (shouldCastConjureCelestial(self, battlefield)) {
+      const action = self.actions.find(a => a.name === 'Conjure Celestial')!;
+      plan.action = {
+        type: 'summonSpell',
+        action,
+        targetId: self.id,
+        description: `${self.name} casts Conjure Celestial`,
+      };
+      plan.targetId = self.id;
+      plan.bonusAction = planBonusAction(self, self, battlefield);
+      return plan;
+    }
+  }
+
+  // --- Conjure Fey (6th-level, 1 Green Hag, concentration) ---
+  // PHB p.226: action, 90 ft, concentration 1 hr. Spawns 1 Green Hag
+  // (CR 3) with HP 82, AC 17, Claws +6 2d8+4 slashing.
+  // Priority: above Conjure Elemental because L6 > L5.
+  if (!plan.action && self.actions.some(a => a.name === 'Conjure Fey')) {
+    if (shouldCastConjureFey(self, battlefield)) {
+      const action = self.actions.find(a => a.name === 'Conjure Fey')!;
+      plan.action = {
+        type: 'summonSpell',
+        action,
+        targetId: self.id,
+        description: `${self.name} casts Conjure Fey`,
+      };
+      plan.targetId = self.id;
+      plan.bonusAction = planBonusAction(self, self, battlefield);
+      return plan;
+    }
+  }
+
+  // --- Conjure Elemental (5th-level, 1 Fire Elemental, concentration) ---
+  // PHB p.225: action, 90 ft, concentration 1 hr. Spawns 1 Fire Elemental
+  // (CR 5) with HP 102, Touch +6 2d6+3 fire × 2 via Multiattack.
+  // Priority: highest of the 3 new spells (single powerful creature > pack).
+  if (!plan.action && self.actions.some(a => a.name === 'Conjure Elemental')) {
+    if (shouldCastConjureElemental(self, battlefield)) {
+      const action = self.actions.find(a => a.name === 'Conjure Elemental')!;
+      plan.action = {
+        type: 'summonSpell',
+        action,
+        targetId: self.id,
+        description: `${self.name} casts Conjure Elemental`,
+      };
+      plan.targetId = self.id;
+      plan.bonusAction = planBonusAction(self, self, battlefield);
+      return plan;
+    }
+  }
+
+  // --- Conjure Woodland Beings (4th-level, 4 Sprites, concentration) ---
+  // PHB p.228: action, 60 ft, concentration 1 hr. Spawns 4 Sprites
+  // (CR 1/4) with AC 15, HP 2, Shortbow +6 1 piercing + DC 10 CON poisoned.
+  // Priority: above Conjure Minor Elementals because of the ranged poison.
+  if (!plan.action && self.actions.some(a => a.name === 'Conjure Woodland Beings')) {
+    if (shouldCastConjureWoodlandBeings(self, battlefield)) {
+      const action = self.actions.find(a => a.name === 'Conjure Woodland Beings')!;
+      plan.action = {
+        type: 'summonSpell',
+        action,
+        targetId: self.id,
+        description: `${self.name} casts Conjure Woodland Beings`,
+      };
+      plan.targetId = self.id;
+      plan.bonusAction = planBonusAction(self, self, battlefield);
+      return plan;
+    }
+  }
+
+  // --- Conjure Minor Elementals (4th-level, 4 Mud Mephits, concentration) ---
+  // PHB p.226: action, 90 ft, concentration 1 hr. Spawns 4 Mud Mephits
+  // (CR 1/4) with AC 11, HP 27, Fists +3 1d6+1 bludgeoning.
+  if (!plan.action && self.actions.some(a => a.name === 'Conjure Minor Elementals')) {
+    if (shouldCastConjureMinorElementals(self, battlefield)) {
+      const action = self.actions.find(a => a.name === 'Conjure Minor Elementals')!;
+      plan.action = {
+        type: 'summonSpell',
+        action,
+        targetId: self.id,
+        description: `${self.name} casts Conjure Minor Elementals`,
+      };
+      plan.targetId = self.id;
+      plan.bonusAction = planBonusAction(self, self, battlefield);
+      return plan;
+    }
+  }
+
+  // === TG-006 — PHB/XGE FIND SPELLS (Phase 3) ===
+  // Find Familiar (PHB p.240): 1st-level conjuration, action, range 10 ft,
+  // NOT concentration (Instantaneous). Spawns an Owl Familiar (Tiny, Help action).
+  // Find Steed (PHB p.240): 2nd-level conjuration, action, range 30 ft,
+  // NOT concentration (Instantaneous). Spawns a Warhorse mount (Large, combat_mount).
+  // Find Greater Steed (XGE p.156): 4th-level conjuration, action, range 30 ft,
+  // NOT concentration (Instantaneous). Spawns a Griffon mount (Large, combat_mount).
+  // Priority: Find Greater Steed > Find Steed > Find Familiar (higher-level
+  // summons are more impactful). All three are NOT concentration — they
+  // persist until killed or dismissed.
+
+  // --- Find Greater Steed (4th-level, Griffon, NOT concentration) ---
+  if (!plan.action && self.actions.some(a => a.name === 'Find Greater Steed')) {
+    if (shouldCastFindGreaterSteed(self, battlefield)) {
+      const action = self.actions.find(a => a.name === 'Find Greater Steed')!;
+      plan.action = {
+        type: 'summonSpell',
+        action,
+        targetId: self.id,
+        description: `${self.name} casts Find Greater Steed`,
+      };
+      plan.targetId = self.id;
+      plan.bonusAction = planBonusAction(self, self, battlefield);
+      return plan;
+    }
+  }
+
+  // --- Find Steed (2nd-level, Warhorse, NOT concentration) ---
+  if (!plan.action && self.actions.some(a => a.name === 'Find Steed')) {
+    if (shouldCastFindSteed(self, battlefield)) {
+      const action = self.actions.find(a => a.name === 'Find Steed')!;
+      plan.action = {
+        type: 'summonSpell',
+        action,
+        targetId: self.id,
+        description: `${self.name} casts Find Steed`,
+      };
+      plan.targetId = self.id;
+      plan.bonusAction = planBonusAction(self, self, battlefield);
+      return plan;
+    }
+  }
+
+  // --- Find Familiar (1st-level, Owl, NOT concentration) ---
+  if (!plan.action && self.actions.some(a => a.name === 'Find Familiar')) {
+    if (shouldCastFindFamiliar(self, battlefield)) {
+      const action = self.actions.find(a => a.name === 'Find Familiar')!;
+      plan.action = {
+        type: 'summonSpell',
+        action,
+        targetId: self.id,
+        description: `${self.name} casts Find Familiar`,
+      };
+      plan.targetId = self.id;
+      plan.bonusAction = planBonusAction(self, self, battlefield);
       return plan;
     }
   }
@@ -3902,6 +4358,275 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
   }
   if (!plan.action && self.actions.some(a => a.name === 'False Life') && shouldCastFalseLife(self, battlefield)) {
     plan.action = { type: 'falseLife', action: null, targetId: self.id, description: `${self.name} casts False Life (1d4+4 temp HP)` }; return plan;
+  }
+
+  // --- DISPEL MAGIC (L3) — remove enemy spell effects ---
+  // PHB p.233: action, 120 ft, auto-dispel concentration effects + ability
+  // check vs DC 13 for non-concentration. Upcast auto-dispels more effects.
+  // Priority: enemy with the most active effects (most value per cast).
+  if (!plan.action && self.actions.some(a => a.name === 'Dispel Magic')) {
+    const dmTarget = shouldCastDispelMagic(self, battlefield);
+    if (dmTarget) {
+      plan.action = {
+        type: 'dispelMagic',
+        action: null,
+        targetId: dmTarget.id,
+        description: `${self.name} casts Dispel Magic at ${dmTarget.name}`,
+      };
+      plan.targetId = dmTarget.id;
+      plan.bonusAction = planBonusAction(self, dmTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // === SESSION 28 — OFFENSIVE CANTRIP PLANNER BRANCHES (9 cantrips) ===
+  // Cantrips that DON'T have explicit planner branches fall through to
+  // selectAction() in actions.ts, which picks from the action list. But many
+  // offensive cantrips have special logic that the generic picker can't handle
+  // (AoE, debuffs, advantage situations, damage-type immunities). These
+  // branches fire BEFORE selectAction() but AFTER all leveled-spell branches
+  // (since using a slot is generally better than a cantrip). Each branch uses
+  // type: 'cast' with the cantrip's Action object — this routes through the
+  // existing case 'cast': in combat.ts, which dispatches via resolveAttack,
+  // resolveCantripAction, or resolveCantripAoE as appropriate.
+
+  // --- 13A. BOOMING BLADE (melee spell attack + thunder rider if target moves) ---
+  // TCE p.106: Self (5 ft), melee spell attack 1d8 thunder + thunder rider
+  // (1d8 extra if target moves willingly before start of caster's next turn).
+  // Planner: prefer when in melee range (5ft) and target is likely to move
+  // (has ranged attack / caster profile — they'll want to escape melee).
+  if (!plan.action && self.actions.some(a => a.name === 'Booming Blade')) {
+    const adjEnemy = [...battlefield.combatants.values()].find(c =>
+      !c.isDead && !c.isUnconscious && c.faction !== self.faction &&
+      chebyshev3D(self.pos, c.pos) <= 1  // within 5ft (1 square)
+    );
+    if (adjEnemy) {
+      // Target likely to move if it has ranged attacks (wants to escape melee)
+      const targetWantsToMove = adjEnemy.actions.some(a =>
+        a.attackType === 'ranged' || (a.attackType === 'spell' && a.range && a.range.normal > 5)
+      );
+      if (targetWantsToMove) {
+        const bbAction = self.actions.find(a => a.name === 'Booming Blade')!;
+        plan.action = {
+          type: 'cast',
+          action: bbAction,
+          targetId: adjEnemy.id,
+          description: `${self.name} casts Booming Blade on ${adjEnemy.name} (target likely to move)`,
+        };
+        plan.targetId = adjEnemy.id;
+        plan.bonusAction = planBonusAction(self, adjEnemy, battlefield);
+        return plan;
+      }
+    }
+  }
+
+  // --- 13B. FROSTBITE (CON save, disadvantage on target's next weapon attack) ---
+  // XGE p.156: 60 ft, CON save 1d6 cold + disadv on next WEAPON attack.
+  // Planner: prefer against high-attack enemies that haven't been debuffed yet.
+  if (!plan.action && self.actions.some(a => a.name === 'Frostbite')) {
+    const enemies = livingEnemiesOf(self, battlefield);
+    const frostTarget = enemies.find(e =>
+      !e._frostbiteDisadvNextWeaponAttack &&  // not already debuffed
+      canReach(self, e, self.actions.find(a => a.name === 'Frostbite')!) &&
+      e.actions.some(a => a.attackType === 'melee' || a.attackType === 'ranged')  // has weapon attacks
+    );
+    if (frostTarget) {
+      const fbAction = self.actions.find(a => a.name === 'Frostbite')!;
+      plan.action = {
+        type: 'cast',
+        action: fbAction,
+        targetId: frostTarget.id,
+        description: `${self.name} casts Frostbite at ${frostTarget.name} (weapon disadv debuff)`,
+      };
+      plan.targetId = frostTarget.id;
+      plan.bonusAction = planBonusAction(self, frostTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 13C. MIND SLIVER (INT save, psychic + save DC penalty for next spell) ---
+  // TCE p.108: 60 ft, INT save 1d6 psychic + -1d4 to target's next save.
+  // Planner: prefer when caster has a follow-up spell with a save
+  // (like a Save-or-Suck coming next turn). If the caster has any
+  // save-based leveled spells available, Mind Sliver sets up the debuff.
+  if (!plan.action && self.actions.some(a => a.name === 'Mind Sliver')) {
+    const msAction = self.actions.find(a => a.name === 'Mind Sliver')!;
+    const enemies = livingEnemiesOf(self, battlefield);
+    const msTarget = enemies.find(e => canReach(self, e, msAction));
+    if (msTarget) {
+      // Check if caster has any save-based leveled spells (setup value)
+      const hasSaveSpell = self.actions.some(a =>
+        a.attackType === 'save' && a.slotLevel && a.slotLevel > 0 && hasSpellSlot(self)
+      );
+      if (hasSaveSpell) {
+        plan.action = {
+          type: 'cast',
+          action: msAction,
+          targetId: msTarget.id,
+          description: `${self.name} casts Mind Sliver at ${msTarget.name} (save debuff setup)`,
+        };
+        plan.targetId = msTarget.id;
+        plan.bonusAction = planBonusAction(self, msTarget, battlefield);
+        return plan;
+      }
+    }
+  }
+
+  // --- 13D. POISON SPRAY (CON save, 1d12 poison) ---
+  // PHB p.266: 10 ft, CON save 1d12 poison. Highest cantrip damage die
+  // but many creatures are immune to poison (undead, constructs, fiends).
+  // Planner: prefer when in 10ft range and no better cantrip available.
+  // Skip if target is undead or construct (immune to poison).
+  if (!plan.action && self.actions.some(a => a.name === 'Poison Spray')) {
+    const psAction = self.actions.find(a => a.name === 'Poison Spray')!;
+    const enemies = livingEnemiesOf(self, battlefield);
+    const psTarget = enemies.find(e =>
+      canReach(self, e, psAction) &&
+      !e.isUndead &&            // undead immune to poison
+      !e.isConstruct            // constructs immune to poison
+    );
+    if (psTarget) {
+      plan.action = {
+        type: 'cast',
+        action: psAction,
+        targetId: psTarget.id,
+        description: `${self.name} casts Poison Spray at ${psTarget.name}`,
+      };
+      plan.targetId = psTarget.id;
+      plan.bonusAction = planBonusAction(self, psTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 13E. SHOCKING GRASP (melee spell attack, advantage vs metal armor) ---
+  // PHB p.275: touch (5 ft), melee spell attack 1d8 lightning + no reaction.
+  // Advantage on targets in metal armor. Planner: prefer against
+  // metal-armored targets (advantage on attack roll → higher hit chance).
+  if (!plan.action && self.actions.some(a => a.name === 'Shocking Grasp')) {
+    const sgAction = self.actions.find(a => a.name === 'Shocking Grasp')!;
+    const enemies = livingEnemiesOf(self, battlefield);
+    // Prioritize metal-armored targets (advantage)
+    const metalTarget = enemies.find(e =>
+      e.hasMetalArmor && canReach(self, e, sgAction)
+    );
+    if (metalTarget) {
+      plan.action = {
+        type: 'cast',
+        action: sgAction,
+        targetId: metalTarget.id,
+        description: `${self.name} casts Shocking Grasp on ${metalTarget.name} (advantage vs metal armor)`,
+      };
+      plan.targetId = metalTarget.id;
+      plan.bonusAction = planBonusAction(self, metalTarget, battlefield);
+      return plan;
+    }
+    // Also use if in melee range and no better option (even without advantage)
+    const adjEnemy = enemies.find(e => canReach(self, e, sgAction));
+    if (adjEnemy) {
+      plan.action = {
+        type: 'cast',
+        action: sgAction,
+        targetId: adjEnemy.id,
+        description: `${self.name} casts Shocking Grasp on ${adjEnemy.name}`,
+      };
+      plan.targetId = adjEnemy.id;
+      plan.bonusAction = planBonusAction(self, adjEnemy, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 13F. SWORD BURST (AoE force damage to all adjacent enemies) ---
+  // TCE p.115: Self (5 ft), DEX save 1d6 force to all creatures within 5 ft.
+  // Planner: prefer when 2+ enemies are adjacent (within 5ft).
+  if (!plan.action && self.actions.some(a => a.name === 'Sword Burst')) {
+    const adjEnemies = [...battlefield.combatants.values()].filter(c =>
+      !c.isDead && !c.isUnconscious && c.faction !== self.faction &&
+      chebyshev3D(self.pos, c.pos) <= 1  // within 5ft (1 square)
+    );
+    if (adjEnemies.length >= 2) {
+      const sbAction = self.actions.find(a => a.name === 'Sword Burst')!;
+      plan.action = {
+        type: 'cast',
+        action: sbAction,
+        targetId: adjEnemies[0].id,
+        description: `${self.name} casts Sword Burst (AoE, ${adjEnemies.length} adjacent enemies)`,
+      };
+      plan.targetId = adjEnemies[0].id;
+      plan.bonusAction = planBonusAction(self, adjEnemies[0], battlefield);
+      return plan;
+    }
+  }
+
+  // --- 13G. THUNDERCLAP (AoE thunder damage to all adjacent enemies) ---
+  // XGE p.168: Self (5 ft), CON save 1d6 thunder to all creatures within 5 ft.
+  // Planner: prefer when 2+ enemies are adjacent (within 5ft).
+  if (!plan.action && self.actions.some(a => a.name === 'Thunderclap')) {
+    const adjEnemies = [...battlefield.combatants.values()].filter(c =>
+      !c.isDead && !c.isUnconscious && c.faction !== self.faction &&
+      chebyshev3D(self.pos, c.pos) <= 1  // within 5ft (1 square)
+    );
+    if (adjEnemies.length >= 2) {
+      const tcAction = self.actions.find(a => a.name === 'Thunderclap')!;
+      plan.action = {
+        type: 'cast',
+        action: tcAction,
+        targetId: adjEnemies[0].id,
+        description: `${self.name} casts Thunderclap (AoE, ${adjEnemies.length} adjacent enemies)`,
+      };
+      plan.targetId = adjEnemies[0].id;
+      plan.bonusAction = planBonusAction(self, adjEnemies[0], battlefield);
+      return plan;
+    }
+  }
+
+  // --- 13H. TRUE STRIKE (self-buff: advantage on next attack) ---
+  // PHB p.284: action, 30 ft (self-target in v1), advantage on next attack.
+  // Planner: use when no good direct-damage option exists and the caster
+  // expects to attack next turn (setup turn). This fires when the caster
+  // has True Strike AND has at least one attack action (melee/ranged/spell)
+  // for next turn, but doesn't have a better cantrip/spell to cast now.
+  if (!plan.action && self.actions.some(a => a.name === 'True Strike')) {
+    // Only use True Strike as setup if the caster has an attack to benefit
+    const hasAttackNextTurn = self.actions.some(a =>
+      !a.isMultiattack && a.costType === 'action' &&
+      (a.attackType === 'melee' || a.attackType === 'ranged' || a.attackType === 'spell')
+    );
+    if (hasAttackNextTurn) {
+      const tsAction = self.actions.find(a => a.name === 'True Strike')!;
+      plan.action = {
+        type: 'cast',
+        action: tsAction,
+        targetId: self.id,
+        description: `${self.name} casts True Strike (advantage on next attack)`,
+      };
+      plan.targetId = self.id;
+      plan.bonusAction = planBonusAction(self, self, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 13I. TOLL THE DEAD (WIS save, d12 if target missing HP) ---
+  // XGE p.169: 60 ft, WIS save 1d8 necrotic (1d12 if target missing any HP).
+  // Planner: prefer against damaged targets — d12 vs d8 makes it better
+  // than other save cantrips when the target is hurt.
+  if (!plan.action && self.actions.some(a => a.name === 'Toll the Dead')) {
+    const ttdAction = self.actions.find(a => a.name === 'Toll the Dead')!;
+    const enemies = livingEnemiesOf(self, battlefield);
+    // Prioritize damaged targets (d12 damage die)
+    const damagedTarget = enemies.find(e =>
+      e.currentHP < e.maxHP && canReach(self, e, ttdAction)
+    );
+    if (damagedTarget) {
+      plan.action = {
+        type: 'cast',
+        action: ttdAction,
+        targetId: damagedTarget.id,
+        description: `${self.name} casts Toll the Dead at ${damagedTarget.name} (d12 — target damaged)`,
+      };
+      plan.targetId = damagedTarget.id;
+      plan.bonusAction = planBonusAction(self, damagedTarget, battlefield);
+      return plan;
+    }
   }
 
   // === SESSION 19 — GENERIC SPELL LOOP (262 bulk-implemented spells) ===

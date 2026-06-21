@@ -77,6 +77,7 @@ function makeCombatant(id: string, overrides: Partial<Combatant> = {}): Combatan
     deathSaves: null,
     resources: null,
     tempHP: 0,
+    exhaustionLevel: 0,
     mountedOn: null, carriedBy: null, independentMount: false,
     role: 'regular', bonded: null,
     usedSneakAttackThisTurn: false, helpedThisTurn: false,
@@ -261,11 +262,11 @@ console.log('\n=== 4. execute — guaranteed fail (full damage) ===\n');
     const dmgDealt = hpBefore - enemy.currentHP;
     assert(`Damage in 8d8 range (8-64): got ${dmgDealt}`, dmgDealt >= 8 && dmgDealt <= 64);
     // 4c. Log events
-    const actions = state.log.events.filter(e => e.type === 'action');
+    const actions = state.log.events.filter((e: any) => e.type === 'action');
     assert('Action log emitted', actions.length === 1);
-    const saveFails = state.log.events.filter(e => e.type === 'save_fail');
+    const saveFails = state.log.events.filter((e: any) => e.type === 'save_fail');
     assert('Save-fail log emitted (CON 1 vs DC 25)', saveFails.length === 1);
-    const dmgLogs = state.log.events.filter(e => e.type === 'damage');
+    const dmgLogs = state.log.events.filter((e: any) => e.type === 'damage');
     assert('Damage log emitted', dmgLogs.length === 1);
   }
 }
@@ -289,7 +290,7 @@ console.log('\n=== 5. execute — guaranteed success (half damage) ===\n');
     const dmgDealt = hpBefore - enemy.currentHP;
     assert(`Half-damage in 4-32 range: got ${dmgDealt}`, dmgDealt >= 4 && dmgDealt <= 32);
     // 5b. Save-success log
-    const saveSuccess = state.log.events.filter(e => e.type === 'save_success');
+    const saveSuccess = state.log.events.filter((e: any) => e.type === 'save_success');
     assert('Save-success log emitted (CON 30 vs DC 5)', saveSuccess.length === 1);
   }
 }
@@ -315,9 +316,9 @@ console.log('\n=== 6. execute — multi-target cone AoE ===\n');
   if (targets) {
     const hpBehindBefore = behind.currentHP;
     execute(caster, targets, state);
-    const saveFails = state.log.events.filter(e => e.type === 'save_fail');
+    const saveFails = state.log.events.filter((e: any) => e.type === 'save_fail');
     eq('3 save-fail logs emitted (one per in-cone target)', saveFails.length, 3);
-    const dmgLogs = state.log.events.filter(e => e.type === 'damage');
+    const dmgLogs = state.log.events.filter((e: any) => e.type === 'damage');
     eq('3 damage logs emitted (one per in-cone target)', dmgLogs.length, 3);
     // Behind-caster enemy took no damage (not in cone)
     eq('Behind-caster enemy took no damage', behind.currentHP, hpBehindBefore);

@@ -64,6 +64,7 @@ function makeCombatant(id: string, overrides: Partial<Combatant> = {}): Combatan
     deathSaves: null,
     resources: null,
     tempHP: 0,
+    exhaustionLevel: 0,
     mountedOn: null, carriedBy: null, independentMount: false,
     role: 'regular', bonded: null,
     usedSneakAttackThisTurn: false, helpedThisTurn: false,
@@ -137,6 +138,8 @@ eq('canon flag set (bolt radius simplified to 10 ft)',
   (metadata as any).callLightningBoltRadiusV1SimplifiedTo10Ft, true);
 eq('canon flag set (dex save simplified to none)',
   (metadata as any).callLightningDexSaveV1SimplifiedToNone, true);
+eq('moving zone IS implemented (v1)',
+  (metadata as any).callLightningMovingZoneV1Implemented, true);
 
 // ============================================================
 // 2. shouldCast — precondition gates

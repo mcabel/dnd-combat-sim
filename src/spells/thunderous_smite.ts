@@ -18,8 +18,10 @@
 //     resolveAttack's damage branch on the next weapon hit. Documented
 //     via `thunderousSmiteCanonV1Implemented: true`.
 //   - Push 10 ft rider (PHB p.282: target pushed 10 ft if Large or
-//     smaller) NOT modelled — v1 only applies the bonus 2d6 thunder
-//     damage. Documented via `thunderousSmiteRidersV1Simplified: true`.
+//     smaller) NOW MODELLED — the rider carries a `pushFt: 10` field
+//     that combat.ts applies via pushAway() on hit. v1 simplification:
+//     the "Large or smaller" size restriction is NOT enforced (any
+//     target on hit is pushed).
 //   - Upcast: not applicable (PHB has no per-slot-level scaling; v1
 //     always rolls 2d6 thunder).
 //
@@ -54,7 +56,7 @@ export const metadata = {
   count: 2,
   damageType: 'thunder' as const,
   thunderousSmiteCanonV1Implemented: true,
-  thunderousSmiteRidersV1Simplified: true,    // 10-ft push rider simplified
+  thunderousSmiteRidersV1Simplified: false,    // 10-ft push rider now modelled
 } as const;
 
 // ---- Local log helper ---------------------------------------
@@ -129,6 +131,9 @@ export function execute(caster: Combatant, state: EngineState): void {
     dieSides: metadata.dieSides,
     count: metadata.count,
     damageType: metadata.damageType as DamageType,
+    // PHB p.282: "pushes the target 10 feet away if it is Large or smaller".
+    // v1 simplification: ignores the size restriction (pushes any target on hit).
+    pushFt: 10,
   };
 
   emit(

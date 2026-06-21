@@ -72,6 +72,7 @@ function makeCombatant(id: string, overrides: Partial<Combatant> = {}): Combatan
     deathSaves: null,
     resources: null,
     tempHP: 0,
+    exhaustionLevel: 0,
     mountedOn: null, carriedBy: null, independentMount: false,
     role: 'regular', bonded: null,
     usedSneakAttackThisTurn: false, helpedThisTurn: false,
@@ -131,7 +132,8 @@ eq('school is illusion', metadata.school, 'illusion');
 eq('range is 5 ft (touch)', metadata.rangeFt, 5);
 eq('is concentration', metadata.concentration, true);
 eq('casting time is action', metadata.castingTime, 'action');
-eq('ends-on-attack NOT implemented (v1)', metadata.invisibilityEndsOnAttackV1Implemented, false);
+// Session 32: ends-on-attack NOW IMPLEMENTED (flag flipped from false to true)
+eq('ends-on-attack NOW implemented (Session 32)', metadata.invisibilityEndsOnAttackV1Implemented, true);
 eq('upcast NOT implemented (v1)', metadata.invisibilityUpcastV1Implemented, false);
 eq('concentration enforcement NOT implemented (v1)', metadata.invisibilityConcentrationEnforcementV1Implemented, false);
 
@@ -222,7 +224,7 @@ console.log('\n=== 3. shouldCast — target priority ===\n');
   const invEffAlly = makeAlly('inveff', { x: 1, y: 0, z: 0 }, { currentHP: 10 });
   invEffAlly.activeEffects.push({
     id: 'eff_inv', casterId: caster.id, spellName: 'Invisibility',
-    effectType: 'condition_apply', payload: { condition: 'invisible' },
+    effectType: 'invisible', payload: {},
     sourceIsConcentration: true,
   });
   const freshAlly = makeAlly('fresh', { x: 0, y: 1, z: 0 }, { currentHP: 50 });
@@ -251,9 +253,9 @@ console.log('\n=== 4. execute — condition application + effect + slot + concen
 
   assert('invisible condition applied to target', ally.conditions.has('invisible'));
   const invEff = ally.activeEffects.find(e =>
-    e.effectType === 'condition_apply' && e.payload.condition === 'invisible'
+    e.effectType === 'invisible'
   );
-  assert('Active effect attached (condition_apply:invisible)', invEff !== undefined);
+  assert('Active effect attached (invisible)', invEff !== undefined);
   if (invEff) {
     eq('Effect sourceIsConcentration is true', invEff.sourceIsConcentration, true);
     eq('Effect spellName is Invisibility', invEff.spellName, 'Invisibility');

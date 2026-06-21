@@ -33,7 +33,7 @@
 //       5 ft of the primary target (also scales).
 //
 // For v1, this module models the spell as:
-//   - A melee spell attack (attackType='spell', reach=5) dealing
+//   - A melee weapon attack (attackType='spell', reach=5) dealing
 //     1d8 fire damage on hit (simplification — at low levels
 //     the on-hit damage should be 0d8 fire + weapon damage,
 //     but v1 ignores weapon damage and gives a flat 1d8 fire

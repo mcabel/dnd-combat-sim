@@ -64,6 +64,7 @@ function makeCombatant(id: string, overrides: Partial<Combatant> = {}): Combatan
     deathSaves: null,
     resources: null,
     tempHP: 0,
+    exhaustionLevel: 0,
     mountedOn: null, carriedBy: null, independentMount: false,
     role: 'regular', bonded: null,
     usedSneakAttackThisTurn: false, helpedThisTurn: false,
@@ -261,8 +262,11 @@ console.log('\n=== 3. execute — heal pipeline ===\n');
 
 {
   // 3c. Heal capped at maxHP
+  // Ally starts 1 HP short of max so ANY heal roll (1d6, min 1) exceeds the
+  // gap and caps at maxHP. (Previously started 2 HP short, which meant a
+  // heal roll of 1 would land at 29 instead of 30 — flaky ~17% of the time.)
   const caster = makeCaster();
-  const ally = makeWoundedAlly('ally1', { x: 1, y: 0, z: 0 }, 28, 30);   // 2 HP short of max
+  const ally = makeWoundedAlly('ally1', { x: 1, y: 0, z: 0 }, 29, 30);   // 1 HP short of max
   const bf = makeBF([caster, ally]);
   const state = makeState(bf);
 

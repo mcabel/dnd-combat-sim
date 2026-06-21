@@ -23,6 +23,8 @@ import { cleanup as cleanupFriends } from '../spells/friends';
 import { cleanup as cleanupLight } from '../spells/light';
 import { cleanup as cleanupMending } from '../spells/mending';
 import { cleanup as cleanupBrandingSmite } from '../spells/branding_smite';
+// TG-008: Reaction spell cleanups
+import { cleanup as cleanupAbsorbElements } from '../spells/absorb_elements';
 
 // Damage types resisted by Blade Ward (PHB p.218) — bludgeoning/piercing/slashing.
 const BLADE_WARD_PHYSICAL_TYPES: DamageType[] = ['bludgeoning', 'piercing', 'slashing'];
@@ -38,22 +40,6 @@ export function rollDie(sides: number): number {
 export function rollDice(expr: DiceExpression): number {
   let total = expr.bonus;
   for (let i = 0; i < expr.count; i++) total += rollDie(expr.sides);
-  return total;
-}
-
-/**
- * Parse an "NdM" string and roll it, returning the total.
- * Returns 0 for unrecognised expressions.
- * Exported here (canonical location) so engine code can call it without
- * importing from a spell module. (TG-013)
- */
-export function rollDiceString(expr: string): number {
-  const m = expr.match(/^(\d+)d(\d+)$/);
-  if (!m) return 0;
-  const count = parseInt(m[1], 10);
-  const sides = parseInt(m[2], 10);
-  let total = 0;
-  for (let i = 0; i < count; i++) total += rollDie(sides);
   return total;
 }
 
@@ -161,7 +147,8 @@ export function rollSave(
   const hasAdvantage   = selfSave.advantage   || allSave.advantage   || rageStrAdvantage    || enlargeStrAdvantage;
   const hasDisadvantage = combatant.conditions.has('poisoned') // PHB Appendix A: poisoned → disadv on saves
     || selfSave.disadvantage || allSave.disadvantage
-    || enlargeStrDisadvantage || abilityDisadvantage;
+    || enlargeStrDisadvantage || abilityDisadvantage
+    || combatant.exhaustionLevel >= 3;  // Exhaustion level 3: disadvantage on saving throws (PHB p.291)
 
   let roll: number;
   if (hasAdvantage && !hasDisadvantage) roll = rollWithAdvantage();
@@ -339,7 +326,8 @@ export function rollAbilityCheck(
   const abilityDisadvCheck = hasAbilityDisadvantage(combatant, ability);
 
   const hasAdvantage    = friendsAdv || selfCheck.advantage   || allCheck.advantage   || rageStrAdvantage || enlargeStrAdvantage || enhanceAbilityAdv;
-  const hasDisadvantage = poisonedDisadv || selfCheck.disadvantage || allCheck.disadvantage || enlargeStrDisadvantage || abilityDisadvCheck;
+  const hasDisadvantage = poisonedDisadv || selfCheck.disadvantage || allCheck.disadvantage || enlargeStrDisadvantage || abilityDisadvCheck
+    || combatant.exhaustionLevel >= 1;  // Exhaustion level 1: disadvantage on ability checks (PHB p.291)
 
   let roll: number;
   if (hasAdvantage && !hasDisadvantage) {
@@ -453,7 +441,8 @@ export function applyHeal(target: Combatant, amount: number): number {
   if (target.isDead) return 0; // Dead = no heal (stabilise is separate)
   if (target._chillTouchNoHealing) return 0; // Chill Touch heal-block rider
   const was = target.currentHP;
-  target.currentHP = Math.min(target.maxHP, target.currentHP + amount);
+  const cap = effectiveMaxHP(target);
+  target.currentHP = Math.min(cap, target.currentHP + amount);
 
   if (was === 0 && target.currentHP > 0) {
     // Regained consciousness
@@ -470,6 +459,12 @@ export function isBloodied(c: Combatant): boolean {
   return c.currentHP < c.maxHP * 0.5;
 }
 
+/** Returns the effective max HP considering exhaustion level 4 (PHB p.291). */
+export function effectiveMaxHP(c: Combatant): number {
+  if (c.exhaustionLevel >= 4) return Math.floor(c.maxHP / 2);
+  return c.maxHP;
+}
+
 // ---- Conditions ---------------------------------------------
 
 export function addCondition(target: Combatant, condition: Condition): void {
@@ -477,6 +472,16 @@ export function addCondition(target: Combatant, condition: Condition): void {
   // Cascade: incapacitated implies can't take actions
   if (condition === 'paralyzed' || condition === 'stunned' || condition === 'petrified') {
     target.conditions.add('incapacitated');
+  }
+  // Auto-break concentration on incapacitated (PHB p.203: "You lose concentration
+  // on a spell if you are incapacitated"). Note: this only nulls the concentration
+  // flag — conc-sourced effects (conditions, terrain zones) remain until
+  // removeEffectsFromCaster is called. The caller (combat.ts) should call
+  // removeEffectsFromCaster after addCondition to fully clean up. v1 limitation:
+  // effects may briefly persist without concentration anchor.
+  if (condition === 'incapacitated' && target.concentration?.active) {
+    target.concentration.active = false;
+    target.concentration.spellName = null;
   }
 }
 
@@ -594,6 +599,12 @@ export function resetBudget(c: Combatant): void {
   // singular). Cleanup is a safety net (clears the flag if the caster
   // makes no weapon attack before their next turn).
   cleanupBrandingSmite(c);
+  // TG-008: Absorb Elements resistance expires at start of caster's next
+  // turn (XGE p.150: "you have resistance to that damage type until the
+  // start of your next turn"). The melee rider is NOT cleared here — it
+  // persists until consumed by the next melee hit (PHB: "the first time
+  // you hit with a melee attack on your next turn").
+  cleanupAbsorbElements(c);
 
   const speed = effectiveSpeed(c);
   c.budget = {
@@ -626,7 +637,12 @@ export function effectiveSpeed(c: Combatant): number {
   if (c.conditions.has('stunned')) return 0;
   if (c.conditions.has('unconscious')) return 0;
   if (c.conditions.has('restrained')) return 0;
-  return c.speed;
+  // Exhaustion level 5 (PHB p.291): speed reduced to 0
+  if (c.exhaustionLevel >= 5) return 0;
+  let speed = c.speed;
+  // Exhaustion level 2 (PHB p.291): speed halved
+  if (c.exhaustionLevel >= 2) speed = Math.floor(speed / 2);
+  return speed;
 }
 
 // ---- Initiative --------------------------------------------
@@ -866,6 +882,22 @@ export function breakConcentration(caster: Combatant): void {
 }
 
 /**
+ * Voluntarily end concentration (PHB p.203: "You can end concentration at any
+ * time"). This sets the concentration flag to null. The CALLER is responsible
+ * for calling removeEffectsFromCaster(caster.id, bf) afterwards to clean up
+ * any conc-sourced effects (conditions, terrain zones, etc.).
+ *
+ * Why not call removeEffectsFromCaster here? Because it lives in
+ * spell_effects.ts and importing it from utils.ts would create a circular
+ * dependency (spell_effects already imports from utils). The separation is
+ * intentional: combat.ts orchestrates both this function and the cleanup.
+ */
+export function voluntaryEndConcentration(caster: Combatant): void {
+  if (!caster.concentration?.active) return;
+  caster.concentration = null;
+}
+
+/**
  * Roll a concentration save after taking damage.
  * DC = max(10, floor(damageTaken / 2)). PHB p.203.
  * Returns true if concentration is maintained.
@@ -950,6 +982,13 @@ export function applyDamageWithTempHP(
   amount: number,
   damageType?: DamageType | null,
 ): number {
+  // PHB p.197: immunity reduces damage to 0. Checked FIRST — before resistance,
+  // temp HP, or any other mitigation. An immune creature takes 0 damage regardless
+  // of any resistance/vulnerability entries (immunity overrides everything).
+  if (damageType != null && (target.immunities?.includes(damageType) ?? false)) {
+    return 0;
+  }
+
   // PHB p.197: resistance halves damage (rounded down) before temp HP absorption.
   // Warding Bond (PHB p.287) grants resistance to ALL damage types.
   // Blade Ward (PHB p.218) grants resistance to bludgeoning/piercing/slashing.
@@ -986,6 +1025,51 @@ export function addResistance(c: Combatant, type: DamageType): void {
 /** Remove a damage-type resistance from a combatant (no-op if not present). */
 export function removeResistance(c: Combatant, type: DamageType): void {
   c.resistances = c.resistances.filter(r => r !== type);
+}
+
+// ---- Immunity helpers ---------------------------------------
+
+/**
+ * Grant a damage-type immunity to a combatant (idempotent — no duplicates).
+ * Immunity overrides resistance (PHB p.197): an immune creature takes 0 damage
+ * of that type regardless of any resistance/vulnerability entries.
+ */
+export function addImmunity(c: Combatant, type: DamageType): void {
+  if (!c.immunities) c.immunities = [];
+  if (!c.immunities.includes(type)) c.immunities.push(type);
+}
+
+/** Remove a damage-type immunity from a combatant (no-op if not present). */
+export function removeImmunity(c: Combatant, type: DamageType): void {
+  if (!c.immunities) return;
+  c.immunities = c.immunities.filter(r => r !== type);
+}
+
+// ---- Dice string parsing ------------------------------------
+
+/**
+ * Roll a dice expression like '1d8' or '2d8' and return the sum.
+ * Used by executeMove in combat.ts when the Booming Blade rider detonates,
+ * and by any other caller that needs to roll an arbitrary NdM expression.
+ *
+ * Returns 0 for unparseable inputs (e.g. 'invalid', '').
+ *
+ * Originally lived in `src/spells/booming_blade.ts` and was imported
+ * from there by combat.ts. Moved to utils.ts (TG-013 housekeeping) so
+ * the engine doesn't depend on a specific cantrip module for a generic
+ * helper. The original location re-exports this function for backwards
+ * compatibility.
+ */
+export function rollDiceString(expr: string): number {
+  const m = expr.match(/^(\d+)d(\d+)$/);
+  if (!m) return 0;
+  const count = parseInt(m[1], 10);
+  const sides = parseInt(m[2], 10);
+  let total = 0;
+  for (let i = 0; i < count; i++) {
+    total += Math.floor(Math.random() * sides) + 1;
+  }
+  return total;
 }
 
 // ---- Bardic Inspiration helpers ----------------------------
@@ -1125,7 +1209,7 @@ export function spendHitDiceOnRest(c: Combatant, targetFraction = 0.75): number 
   while (hd.remaining > 0 && c.currentHP < c.maxHP * targetFraction) {
     const roll = rollDie(hd.dieSides);
     const recovered = Math.max(0, roll + conMod);
-    c.currentHP = Math.min(c.maxHP, c.currentHP + recovered);
+    c.currentHP = Math.min(effectiveMaxHP(c), c.currentHP + recovered);
     hd.remaining--;
     spent++;
   }
@@ -1140,11 +1224,14 @@ export function spendHitDiceOnRest(c: Combatant, targetFraction = 0.75): number 
  * Also restores HP to max and clears conditions/effects.
  */
 export function longRest(c: Combatant): void {
-  c.currentHP    = c.maxHP;
-  c.tempHP       = 0;
-  c.conditions   = new Set();
-  c.concentration = null;
-  c.activeEffects = [];      // all spell effects end on a long rest
+  c.currentHP      = c.maxHP;  // long rest restores to full maxHP (exhaustion may reduce effective cap)
+  c.tempHP         = 0;
+  c.conditions     = new Set();
+  c.concentration  = null;
+  c.activeEffects  = [];      // all spell effects end on a long rest
+  // PHB p.291: "Finishing a long rest reduces a creature's exhaustion level by 1,
+  // provided that the creature has also ingested some food and drink."
+  if (c.exhaustionLevel > 0) c.exhaustionLevel--;
   c.deathSaves   = c.isPlayer ? { successes: 0, failures: 0 } : null;
 
   const r = c.resources;

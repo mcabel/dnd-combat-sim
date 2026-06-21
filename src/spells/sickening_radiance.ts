@@ -20,24 +20,23 @@
 //     damage_zone + per-turn re-save riders are NOT modelled. One-shot
 //     4d10 radiant + poisoned on fail. Documented via
 //     `sickeningRadianceConcentrationV1Simplified: true`.
-//   - Exhaustion (XGE p.164: "one level of exhaustion"): v1 has NO
-//     exhaustion subsystem (6 levels is too complex for v1). v1 applies
-//     the POISONED condition as a conservative simplification
-//     (poisoned ≈ "sickened" — disadvantage on attacks/ability checks,
-//     a reasonable mechanical proxy). Documented via
-//     `sickeningRadianceExhaustionToPoisonedV1: true`.
+//   - Exhaustion (XGE p.164: "one level of exhaustion"): NOW IMPLEMENTED
+//     using the exhaustion subsystem (PHB p.291). The `poisoned`
+//     simplification has been replaced with proper exhaustion_level
+//     increments. Documented via `sickeningRadianceExhaustionImplemented: true`.
 //   - AoE shape: canon 30-ft radius sphere at a point within 120 ft.
 //     v1 targets the highest-threat enemy within 120 ft as the sphere's
 //     centre and applies to ALL enemies within 30 ft (chebyshev3D approx).
 //     30-ft radius is larger than Shatter's 10-ft — bigger AoE.
 //   - Upcast: NOT modelled.
 //
-// Migration note (Session 24): Mirrors Sunburst (Session 23) for the
-// AoE save + condition_apply, but with poisoned (exhaustion simplified)
-// instead of blinded, 4d10 radiant instead of 12d6, 30-ft radius
-// instead of 60-ft, L4 slot.
+// Migration note (Session 24→28): Mirrors Sunburst (Session 23) for the
+// AoE save + condition_apply, but now uses exhaustion_level (PHB p.291)
+// instead of the poisoned simplification. The terrain_zone still applies
+// poisoned as a secondary effect for creatures starting their turn in the
+// zone, but the primary on-cast effect is now exhaustion.
 //
-// Spell module pattern (AoE save + condition — mirrors sunburst.ts):
+// Spell module pattern (AoE save + exhaustion — mirrors sunburst.ts):
 //   shouldCast(caster, bf) → Combatant[] | null
 //   execute(caster, targets, state) → void
 //   cleanup() — no-op (concentration break handles cleanup)
@@ -63,7 +62,7 @@ export const metadata = {
   saveAbility: 'con' as const,
   castingTime: 'action',
   sickeningRadiancePersistentV2Implemented: true,                    // v2: terrain_zone + concentration (was v1 one-shot)
-  sickeningRadianceExhaustionToPoisonedV1: true,                     // exhaustion simplified to poisoned
+  sickeningRadianceExhaustionImplemented: true,                      // exhaustion subsystem (PHB p.291)
   sickeningRadianceUpcastV1Implemented: false,                       // +1d10/slot-level NOT modelled
 } as const;
 
@@ -115,7 +114,7 @@ export function execute(caster: Combatant, targets: Combatant[], state: EngineSt
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Sickening Radiance! (DC ${saveDC} CON, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}, ${metadata.aoeRadiusFt}-ft radius AoE + poisoned [exhaustion simplified] on fail, concentration) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} caught!`,
+    `${caster.name} casts Sickening Radiance! (DC ${saveDC} CON, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}, ${metadata.aoeRadiusFt}-ft radius AoE + exhaustion on fail, concentration) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} caught!`,
   );
 
   // Find the center (highest-threat enemy) for the terrain zone position
@@ -126,7 +125,9 @@ export function execute(caster: Combatant, targets: Combatant[], state: EngineSt
   }, null);
 
   // Apply terrain_zone effect on the CASTER (concentration)
-  // This marks a persistent 30-ft radius zone at the center position
+  // This marks a persistent 30-ft radius zone at the center position.
+  // Creatures starting their turn in the zone get poisoned (secondary effect)
+  // AND gain 1 level of exhaustion (XGE p.164 canon).
   if (center) {
     applySpellEffect(caster, {
       casterId: caster.id,
@@ -156,23 +157,25 @@ export function execute(caster: Combatant, targets: Combatant[], state: EngineSt
       state,
       save.success ? 'save_success' : 'save_fail',
       caster.id,
-      `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} CON save vs Sickening Radiance (rolled ${save.total}) — ${dealt} ${metadata.damageType} damage (${metadata.dieCount}d${metadata.dieSides}=${fullDmg}${save.success ? ', halved' : ''})${save.success ? '' : ' + POISONED (exhaustion simplified)'}`,
+      `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} CON save vs Sickening Radiance (rolled ${save.total}) — ${dealt} ${metadata.damageType} damage (${metadata.dieCount}d${metadata.dieSides}=${fullDmg}${save.success ? ', halved' : ''})${save.success ? '' : ' + EXHAUSTION (+1 level)'}`,
       target.id, save.roll,
     );
     emit(state, 'damage', caster.id, `Sickening Radiance: ${target.name} takes ${dealt} ${metadata.damageType} damage`, target.id, dealt);
 
-    // On failed save: apply poisoned (exhaustion simplified to poisoned).
-    if (!save.success && !target.conditions.has('poisoned')) {
+    // On failed save: apply exhaustion_level (+1 level) per XGE p.164.
+    // Exhaustion is the canon effect (replaces previous poisoned simplification).
+    if (!save.success) {
+      const prevLevel = target.exhaustionLevel;
       applySpellEffect(target, {
         casterId: caster.id,
         spellName: 'Sickening Radiance',
-        effectType: 'condition_apply',
-        payload: { condition: 'poisoned' },
+        effectType: 'exhaustion_level',
+        payload: { exhaustionLevels: 1 },
         sourceIsConcentration: true,    // v2: concentration-sourced
       });
       emit(
         state, 'condition_add', caster.id,
-        `${target.name} is SICKENED (poisoned, v1 simplification of exhaustion) by the radiance! (disadvantage on attacks and ability checks)`,
+        `${target.name} gains 1 level of EXHAUSTION from Sickening Radiance! (level ${prevLevel} → ${target.exhaustionLevel})`,
         target.id,
       );
     }

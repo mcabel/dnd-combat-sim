@@ -28,7 +28,7 @@
 //   (2) a MOVEMENT-TRIGGERED thunder damage rider (also scales).
 //
 // For v1, this module models the spell as:
-//   - A melee spell attack (attackType='spell', reach=5) dealing
+//   - A melee weapon attack (attackType='spell', reach=5) dealing
 //     1d8 thunder damage on hit (simplification — at low levels
 //     the on-hit damage should be 0d8 thunder + weapon damage,
 //     but v1 ignores weapon damage and gives a flat 1d8 thunder
@@ -199,17 +199,11 @@ export function cleanup(combatant: Combatant): void {
  * Roll a dice expression like '1d8' or '2d8' and return the sum.
  * Used by executeMove in combat.ts when the rider detonates.
  *
- * Exported so the movement hook can call it without duplicating
- * the dice-parsing logic.
+ * DEPRECATED (TG-013 housekeeping): this function now re-exports
+ * `rollDiceString` from `src/engine/utils.ts`. The canonical
+ * implementation lives there; this re-export is kept for backwards
+ * compatibility with any caller that still imports from this module.
+ *
+ * New callers should import directly from `../engine/utils`.
  */
-export function rollDiceString(expr: string): number {
-  const m = expr.match(/^(\d+)d(\d+)$/);
-  if (!m) return 0;
-  const count = parseInt(m[1], 10);
-  const sides = parseInt(m[2], 10);
-  let total = 0;
-  for (let i = 0; i < count; i++) {
-    total += Math.floor(Math.random() * sides) + 1;
-  }
-  return total;
-}
+export { rollDiceString } from '../engine/utils';

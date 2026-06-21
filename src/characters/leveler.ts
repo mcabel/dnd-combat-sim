@@ -31,6 +31,7 @@ import {
   totalLevel,
   abilityModifier,
 } from './types';
+import { getFeat } from './feat_data';
 
 // ---- Public types -------------------------------------------
 
@@ -705,6 +706,15 @@ export function applyLevelUp(
     ? hitDie + conMod
     : Math.floor(hitDie / 2) + 1 + conMod;
   hpGained = Math.max(1, hpGained);   // minimum 1 HP per level
+
+  // Tough (PHB p.170): "Whenever you gain a level thereafter, your hit
+  // point maximum increases by an additional 2 hit points." Folded into
+  // hpGained (rather than applied separately) so the existing popLevel
+  // reversal — which simply subtracts record.hpGained — undoes it too.
+  for (const fn of sheet.feats || []) {
+    const fd = getFeat(fn);
+    if (fd?.hpPerLevel) hpGained += fd.hpPerLevel;
+  }
 
   updated.maxHP     += hpGained;
   updated.currentHP += hpGained;

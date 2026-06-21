@@ -60,7 +60,7 @@
 
 import { Combatant, Battlefield } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
-import { applySpellEffect, removeEffectsFromCaster } from '../engine/spell_effects';
+import { applySpellEffect, removeEffectsFromCaster, applyTerrainDifficulty } from '../engine/spell_effects';
 import { startConcentration, rollDie } from '../engine/utils';
 import { chebyshev3D } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
@@ -78,7 +78,7 @@ export const metadata = {
   damageType: 'piercing' as const,
   concentration: true,
   castingTime: 'action',
-  spikeGrowthDifficultTerrainV1Implemented: false,                // no terrain hook
+  spikeGrowthDifficultTerrainV1Implemented: true,                 // PHB p.277: area becomes difficult terrain
   spikeGrowthMovementTriggerV1Implemented: false,                  // per-5-ft movement damage NOT modelled
   spikeGrowthUpcastV1Implemented: false,                           // (no upcast entry — placeholder)
   spikeGrowthConcentrationEnforcementV1Implemented: false,         // see TG-002
@@ -214,7 +214,27 @@ export function execute(
 
   if (target.isDead || target.isUnconscious) return;
 
-  // Apply damage_zone effect for persistent start-of-turn damage.
+  // Apply terrain_zone effect on the CASTER for difficult terrain.
+  // PHB p.277: "The area becomes difficult terrain."
+  // No terrainCondition/terrainSaveAbility — the terrain zone only marks cells
+  // as difficult terrain; the save-or-condition mechanic does not apply.
+  // The damage is handled separately by the damage_zone effect on the target.
+  const terrainEffect = applySpellEffect(caster, {
+    casterId: caster.id,
+    spellName: 'Spike Growth',
+    effectType: 'terrain_zone',
+    payload: {
+      terrainRadiusFt: 20,
+      terrainCenterX: target.pos.x,
+      terrainCenterY: target.pos.y,
+      terrainCenterZ: target.pos.z,
+      terrainDifficulty: true,
+    },
+    sourceIsConcentration: true,
+  });
+  applyTerrainDifficulty(state.battlefield, terrainEffect);
+
+  // Apply damage_zone effect on the TARGET for persistent start-of-turn damage.
   // NO saveDC / saveAbility — the damage is automatic (no save per PHB p.277).
   applySpellEffect(target, {
     casterId: caster.id,
@@ -230,7 +250,7 @@ export function execute(
 
   emit(
     state, 'condition_add', caster.id,
-    `${target.name} is surrounded by spikes! (will take ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType} at the start of each of its turns, no save)`,
+    `${target.name} is surrounded by spikes! (difficult terrain, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}/turn, no save)`,
     target.id,
   );
 }

@@ -85,6 +85,7 @@ function makeCombatant(id: string, overrides: Partial<Combatant> = {}): Combatan
     deathSaves: null,
     resources: null,
     tempHP: 0,
+    exhaustionLevel: 0,
     mountedOn: null, carriedBy: null, independentMount: false,
     role: 'regular', bonded: null,
     usedSneakAttackThisTurn: false, helpedThisTurn: false,
@@ -275,11 +276,11 @@ console.log('\n=== 4. execute — guaranteed fail (full damage) ===\n');
     assert(`Damage in 2d6 range (2-12): got ${dmgDealt}`,
       dmgDealt >= 2 && dmgDealt <= 12);
     // 4c. Log events
-    const actions = state.log.events.filter(e => e.type === 'action');
+    const actions = state.log.events.filter((e: any) => e.type === 'action');
     assert('Action log emitted', actions.length === 1);
-    const saveFails = state.log.events.filter(e => e.type === 'save_fail');
+    const saveFails = state.log.events.filter((e: any) => e.type === 'save_fail');
     assert('Save-fail log emitted (WIS 1 vs DC 25)', saveFails.length === 1);
-    const dmgLogs = state.log.events.filter(e => e.type === 'damage');
+    const dmgLogs = state.log.events.filter((e: any) => e.type === 'damage');
     assert('Damage log emitted', dmgLogs.length === 1);
     // No condition rider for Elemental Bane
     const condAdds = state.log.events.filter((e: any) => e.type === 'condition_add');
@@ -307,7 +308,7 @@ console.log('\n=== 5. execute — guaranteed success (half damage) ===\n');
     assert(`Half-damage in 1-6 range: got ${dmgDealt}`,
       dmgDealt >= 1 && dmgDealt <= 6);
     // 5b. Save-success log
-    const saveSuccess = state.log.events.filter(e => e.type === 'save_success');
+    const saveSuccess = state.log.events.filter((e: any) => e.type === 'save_success');
     assert('Save-success log emitted (WIS 30 vs DC 5)', saveSuccess.length === 1);
   }
 }
@@ -339,9 +340,9 @@ console.log('\n=== 6. execute — single-target (no spillover) ===\n');
     const dmg3 = hpBeforeE3 - e3.currentHP;
     const damagedCount = [dmg1, dmg2, dmg3].filter(d => d > 0).length;
     eq('Exactly 1 enemy took damage (single-target spell)', damagedCount, 1);
-    const saveFails = state.log.events.filter(e => e.type === 'save_fail');
+    const saveFails = state.log.events.filter((e: any) => e.type === 'save_fail');
     eq('Only 1 save-fail log (single target)', saveFails.length, 1);
-    const dmgLogs = state.log.events.filter(e => e.type === 'damage');
+    const dmgLogs = state.log.events.filter((e: any) => e.type === 'damage');
     eq('Only 1 damage log (single target)', dmgLogs.length, 1);
   }
 }

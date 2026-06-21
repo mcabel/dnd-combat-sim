@@ -6,7 +6,8 @@
 // ============================================================
 
 import {
-  Combatant, Battlefield, TurnPlan, PlannedAction, Action, Vec3
+  Combatant, Battlefield, TurnPlan, PlannedAction, Action, Vec3,
+  ReactionTrigger, ReactionOutcome,
 } from '../types/core';
 import {
   rollAttack, rollDamage, rollSave, applyDamage, applyHeal,
@@ -18,22 +19,26 @@ import {
   addResistance, removeResistance,
   parseDieSides, consumeBardicInspiration,
   teamHasNoAttackCapability, canDealDamage, makeImprovisedUnarmed, makeImprovisedWeapon,
-  effectiveSpeed, rollDie, abilityMod, proficiencyBonus
+  effectiveSpeed, rollDie, abilityMod, proficiencyBonus,
+  rollDiceString as rollBoomingBladeDice,
 } from './utils';
 import {
   chebyshev3D, distanceFt, euclideanDistFt, canReach, estimateMoveCostFt,
   opportunityAttackTriggered, selectOAAction,
-  livingEnemiesOf, livingAlliesOf, posKey
+  livingEnemiesOf, livingAlliesOf, posKey, pushAway
 } from './movement';
 import { planTurn, planLegendaryAction, shouldTakeOpportunityAttack } from '../ai/planner';
-import { shouldSmite, applyDivineSmite, tickRage, consumeSpellSlot } from '../ai/resources';
+import { shouldSmite, applyDivineSmite, tickRage, consumeSpellSlot, hasSpellSlot } from '../ai/resources';
+// TG-008: Reaction spell subsystem
+import { REACTION_SPELLS, ReactionSpellDescriptor } from '../spells/_reaction_registry';
+import { consumeRider as consumeAbsorbElementsRider } from '../spells/absorb_elements';
 import { isControlledMount, mountDeathRiderCheck, isIndependentMount } from '../summons/mount';
 import { checkMountedCombatant, checkProtectionStyle, checkInterceptionReduction } from './mount_redirect';
 import { tickAdvantages, grantSelf, grantVulnerability } from './adv_system';
 import { getSummonEntry }                           from '../summons/registry';
 import { rollGrappleContest, rollShoveContest, canGrappleOrShoveTarget, rollDiceString } from './utils';
 import { computeLOS } from './los';
-import { removeEffectsFromCaster, removeEffectById, getActiveAcBonus, getActiveAcFloor, getActiveBlessDie, getActiveBaneDie, getActiveHexDie, getActiveDamageZones, getActiveWeaponEnchant, getActiveEnlargeReduce, getActiveTaunt, getActiveCurseAttackDisadv, getActiveCurseRider, applySpellEffect, getActiveTerrainZones } from './spell_effects';
+import { removeEffectsFromCaster, removeEffectById, getActiveAcBonus, getActiveAcFloor, getActiveBlessDie, getActiveBaneDie, getActiveHexDie, getActiveDamageZones, getActiveWeaponEnchant, getActiveEnlargeReduce, getActiveTaunt, getActiveCurseAttackDisadv, getActiveCurseRider, applySpellEffect, getActiveTerrainZones, makeTerrainFn } from './spell_effects';
 import { TerrainZone } from './spell_effects';
 import { applyCantripEffect, getCantripAttackAdvantage, resolveCantripAction, resolveCantripAoE, resolveCantripTouchEffect } from './cantrip_effects';
 import { execute as executeHex } from '../spells/hex';
@@ -57,12 +62,20 @@ import {
 } from '../spells/guiding_bolt';
 import { execute as executeHealingWord } from '../spells/healing_word';
 import { execute as executeCureWounds } from '../spells/cure_wounds';
-// rollDiceString is imported from './utils' (see above) — TG-013
+// rollDiceString (formerly rollBoomingBladeDice) now imported from ./utils above (TG-013)
 import { shouldCast as shouldCastAid, execute as executeAid } from '../spells/aid';
 import { shouldCast as shouldCastBarkskin, execute as executeBarkskin } from '../spells/barkskin';
 import { shouldCast as shouldCastBlur, execute as executeBlur } from '../spells/blur';
 import { shouldCast as shouldCastShadowOfMoil, execute as executeShadowOfMoil } from '../spells/shadow_of_moil';
 import { shouldCast as shouldCastBlindnessDeafness, execute as executeBlindnessDeafness } from '../spells/blindness_deafness';
+import {
+  shouldCast as shouldCastInvisibility,
+  execute as executeInvisibility,
+} from '../spells/invisibility';
+import {
+  shouldCast as shouldCastGreaterInvisibility,
+  execute as executeGreaterInvisibility,
+} from '../spells/greater_invisibility';
 import { shouldCast as shouldCastBrandingSmite, execute as executeBrandingSmite } from '../spells/branding_smite';
 import { shouldCast as shouldCastCalmEmotions, execute as executeCalmEmotions } from '../spells/calm_emotions';
 import { shouldCast as shouldCastCloudOfDaggers, execute as executeCloudOfDaggers } from '../spells/cloud_of_daggers';
@@ -98,10 +111,7 @@ import {
   shouldCast as shouldCastMistyStep,
   execute as executeMistyStep,
 } from '../spells/misty_step';
-import {
-  shouldCast as shouldCastInvisibility,
-  execute as executeInvisibility,
-} from '../spells/invisibility';
+// Invisibility imports moved up next to Greater Invisibility (Session 32)
 import {
   shouldCast as shouldCastGustOfWind,
   execute as executeGustOfWind,
@@ -674,6 +684,36 @@ import { shouldCast as shouldCastMassHeal,        execute as executeMassHeal }  
 import { shouldCast as shouldCastPowerWordHeal,   execute as executePowerWordHeal }   from '../spells/power_word_heal';
 import { shouldCast as shouldCastArmorOfAgathys,  execute as executeArmorOfAgathys }  from '../spells/armor_of_agathys';
 import { shouldCast as shouldCastFalseLife,       execute as executeFalseLife }       from '../spells/false_life';
+import { shouldCast as shouldCastDispelMagic,    execute as executeDispelMagic }     from '../spells/dispel_magic';
+// ── TG-006 — Summon Beast bespoke summon spell (Phase 1b) ────────────────
+import { shouldCast as shouldCastSummonBeast, execute as executeSummonBeast } from '../spells/summon_beast';
+// ── TG-006 — L3 TCE summon spells (Phase 1c) ──────────────────────────────
+import { shouldCast as shouldCastSummonFey,         execute as executeSummonFey }         from '../spells/summon_fey';
+import { shouldCast as shouldCastSummonUndead,      execute as executeSummonUndead }      from '../spells/summon_undead';
+import { shouldCast as shouldCastSummonShadowspawn, execute as executeSummonShadowspawn } from '../spells/summon_shadowspawn';
+// ── TG-006 — L3-L4 TCE/XGE summon spells (Phase 1d) ────────────────────────
+import { shouldCast as shouldCastSummonLesserDemons,  execute as executeSummonLesserDemons }  from '../spells/summon_lesser_demons';
+import { shouldCast as shouldCastSummonAberration,     execute as executeSummonAberration }     from '../spells/summon_aberration';
+import { shouldCast as shouldCastSummonConstruct,      execute as executeSummonConstruct }      from '../spells/summon_construct';
+import { shouldCast as shouldCastSummonElemental,      execute as executeSummonElemental }      from '../spells/summon_elemental';
+import { shouldCast as shouldCastSummonGreaterDemon,   execute as executeSummonGreaterDemon }   from '../spells/summon_greater_demon';
+// ── TG-006 — L5+ TCE/FTD summon spells (Phase 1e) ────────────────────────
+import { shouldCast as shouldCastSummonCelestial,        execute as executeSummonCelestial }        from '../spells/summon_celestial';
+import { shouldCast as shouldCastSummonDraconicSpirit,   execute as executeSummonDraconicSpirit }   from '../spells/summon_draconic_spirit';
+import { shouldCast as shouldCastSummonFiend,            execute as executeSummonFiend }            from '../spells/summon_fiend';
+// ── TG-006 — PHB Conjure spells (Phase 2) ────────────────────────────────
+import { shouldCast as shouldCastConjureAnimals, execute as executeConjureAnimals } from '../spells/conjure_animals';
+// ── TG-006 — PHB Conjure spells (Phase 4 — Session 30) ───────────────────
+import { shouldCast as shouldCastConjureWoodlandBeings,    execute as executeConjureWoodlandBeings }    from '../spells/conjure_woodland_beings';
+import { shouldCast as shouldCastConjureMinorElementals,   execute as executeConjureMinorElementals }   from '../spells/conjure_minor_elementals';
+import { shouldCast as shouldCastConjureElemental,         execute as executeConjureElemental }         from '../spells/conjure_elemental';
+// ── TG-006 — PHB Conjure spells (Phase 4 — Session 31) ───────────────────
+import { shouldCast as shouldCastConjureFey,        execute as executeConjureFey }        from '../spells/conjure_fey';
+import { shouldCast as shouldCastConjureCelestial,  execute as executeConjureCelestial }  from '../spells/conjure_celestial';
+// ── TG-006 — PHB/XGE Find spells (Phase 3) ──────────────────────────────
+import { shouldCast as shouldCastFindFamiliar,        execute as executeFindFamiliar }        from '../spells/find_familiar';
+import { shouldCast as shouldCastFindSteed,           execute as executeFindSteed }            from '../spells/find_steed';
+import { shouldCast as shouldCastFindGreaterSteed,    execute as executeFindGreaterSteed }     from '../spells/find_greater_steed';
 
 // ── Session 19 — bulk-implementation generic dispatch (262 new spells) ────
 import {
@@ -753,6 +793,136 @@ function makeState(battlefield: Battlefield): EngineState {
 
 // ---- Attack resolution --------------------------------------
 
+
+// ============================================================
+// TG-008: Reaction spell subsystem — trigger dispatch
+//
+// `triggerReactions` is the central entry point for all reaction spells.
+// It checks whether `reactor` can cast any reaction spell in response to
+// `trigger`, and fires the FIRST matching one (a creature can only cast
+// one reaction per round — PHB p.190).
+//
+// Pre-conditions checked here:
+//   - reactor's reaction budget is unused
+//   - reactor is alive, conscious, not incapacitated
+//   - reactor has the spell in their actions
+//   - reactor has a spell slot of the required level
+//   - trigger is not self-caused (reactor != attacker/caster)
+//
+// The spell module's `shouldCast` is then called for tactical gating
+// (e.g. Shield only fires if +5 AC will flip the hit to a miss).
+//
+// Returns the outcome of the fired reaction, or null if no reaction fired.
+// ============================================================
+
+/**
+ * Attempt to fire a reaction spell on `reactor` in response to `trigger`.
+ * Returns the outcome of the fired reaction (negated / no_effect / failed),
+ * or null if no reaction was fired.
+ *
+ * The caller is responsible for:
+ *   - Passing the correct reactor (the target for incoming_attack_hit /
+ *     incoming_damage; an enemy for incoming_spell; a nearby caster for falling)
+ *   - Handling the outcome (e.g. flip hit to miss on 'negated', abort spell
+ *     cast on 'negated', skip fall damage on 'negated')
+ */
+function triggerReactions(
+  state: EngineState,
+  reactor: Combatant,
+  trigger: ReactionTrigger,
+): ReactionOutcome | null {
+  // Pre-condition checks
+  if (reactor.budget.reactionUsed) return null;
+  if (reactor.isDead || reactor.isUnconscious) return null;
+  if (reactor.conditions.has('incapacitated')) return null;
+
+  // Self-trigger guard: don't react to our own actions.
+  if (trigger.kind === 'incoming_attack_hit' && trigger.attacker.id === reactor.id) return null;
+  if (trigger.kind === 'incoming_damage' && trigger.attacker.id === reactor.id) return null;
+  if (trigger.kind === 'incoming_spell' && trigger.caster.id === reactor.id) return null;
+
+  // Iterate the registry in order; fire the first matching spell.
+  for (const spell of REACTION_SPELLS) {
+    if (!spell.triggerKinds.includes(trigger.kind)) continue;
+    // The reactor must have this spell in their actions list.
+    if (!reactor.actions.some(a => a.name === spell.name)) continue;
+    // The reactor must have a spell slot of the required level.
+    if (!hasSpellSlot(reactor, spell.level)) continue;
+    // Tactical gating — the spell module decides if it's worth casting.
+    if (!spell.shouldCast(reactor, state.battlefield, trigger)) continue;
+    // Fire the reaction.
+    return spell.execute(reactor, state, trigger);
+  }
+  return null;
+}
+
+// ============================================================
+// TG-008: Helper — extract spell name + level from a PlannedAction
+//
+// Returns null for non-spell plans (attack with a weapon, dash, rage, etc.).
+// For spell plans:
+//   - 'genericSpell' → uses plan.spellName + lookupGenericSpell for level
+//   - 'cast' / 'attack' → uses plan.action.name + plan.action.slotLevel
+//     (only if slotLevel >= 1 — cantrips have slotLevel 0/undefined)
+//   - Bespoke spell cases ('fireball', 'cureWounds', etc.) → uses plan.type
+//     as the name; level is unknown, default to 1 (auto-success for
+//     Counterspell with a L3 slot)
+//
+// v1 simplification: bespoke spell case branches don't carry the slot level
+// on the plan, so we default to L1. This means Counterspell auto-succeeds
+// against them (L1-3 spells are auto-countered by a L3 slot). Future work:
+// add a `slotLevel?` field to PlannedAction for bespoke cases.
+// ============================================================
+
+/** Plan types that are NOT spells (class features, movement, etc.). */
+const NON_SPELL_PLAN_TYPES = new Set<string>([
+  'attack',          // weapon attack (spell attacks use 'cast')
+  'dash', 'disengage', 'dodge', 'help', 'hide', 'ready',
+  'shove', 'grapple', 'escapeGrapple',
+  'secondWind',      // Fighter class feature
+  'rage',            // Barbarian class feature
+  'layOnHands',      // Paladin class feature
+  'bardicInspiration', // Bard class feature
+  'legendary',       // legendary action (not a spell cast)
+]);
+
+/**
+ * If `plan` represents a leveled spell cast, return its name + level.
+ * Returns null otherwise (non-spell plans, cantrips, or unknown types).
+ *
+ * Used by the Counterspell trigger to decide whether to fire.
+ */
+function getSpellInfoFromPlan(
+  plan: PlannedAction,
+  _bf: Battlefield,
+): { name: string; level: number } | null {
+  // 'genericSpell' — always a spell; level from the registry.
+  if (plan.type === 'genericSpell') {
+    if (!plan.spellName) return null;
+    const desc = lookupGenericSpell(plan.spellName);
+    if (!desc) return null;
+    return { name: plan.spellName, level: desc.level };
+  }
+  // 'cast' — handles cantrips AND leveled attack-roll spells.
+  // Only count as a leveled spell if slotLevel >= 1.
+  if (plan.type === 'cast') {
+    if (plan.action && plan.action.slotLevel && plan.action.slotLevel >= 1) {
+      return { name: plan.action.name, level: plan.action.slotLevel };
+    }
+    return null;  // cantrip or unknown
+  }
+  // Non-spell plan types.
+  if (NON_SPELL_PLAN_TYPES.has(plan.type)) return null;
+  // 'attack' is in NON_SPELL_PLAN_TYPES, so we don't reach here for weapon attacks.
+  // Bespoke spell case ('fireball', 'cureWounds', 'magicMissile', etc.):
+  // these are always spells. The level is unknown on the plan (v1), so default
+  // to 1 (Counterspell auto-succeeds with a L3 slot for L1-3 spells).
+  // The spell name is the plan type (camelCase) — we convert to the action
+  // name if available, else use the plan type directly.
+  const name = plan.action?.name ?? plan.type;
+  return { name, level: 1 };
+}
+
 /**
  * Resolve a single attack action against a target.
  * Handles: attack roll, hit check, damage roll, crit, death.
@@ -807,6 +977,20 @@ export function resolveAttack(
       const dmg = rollDamage(action.damage, false);
       const actual = save.success ? Math.floor(dmg / 2) : dmg; // half on save success
       const dealt = applyDamageWithTempHP(target, actual, action.damageType);
+      // TG-008: Absorb Elements / Hellish Rebuke reaction trigger (XGE p.150 / PHB p.249)
+      // These fire AFTER damage is applied. The triggering damage still applies
+      // (resistance from Absorb Elements protects against FUTURE damage of
+      // that type, not the triggering hit — PHB timing).
+      if (dealt > 0 && !target.isDead && !target.isUnconscious) {
+        triggerReactions(state, target, {
+          kind: 'incoming_damage',
+          attacker,
+          target,
+          amount: dealt,
+          damageType: action.damageType,
+          action,
+        });
+      }
       // Concentration check if target was concentrating
       if (target.concentration?.active && dealt > 0) {
         const maintained = rollConcentrationSave(target, dealt);
@@ -838,6 +1022,19 @@ export function resolveAttack(
     if (action.damage) {
       const dmg = rollDamage(action.damage, false);
       const dealt = applyDamageWithTempHP(target, dmg, action.damageType);
+      // TG-008: Absorb Elements / Hellish Rebuke reaction trigger.
+      // (Shield's "blocks Magic Missile" is NOT modelled in v1 — the auto-hit
+      //  branch bypasses the hit decision where Shield fires. Future work.)
+      if (dealt > 0 && !target.isDead && !target.isUnconscious) {
+        triggerReactions(state, target, {
+          kind: 'incoming_damage',
+          attacker,
+          target,
+          amount: dealt,
+          damageType: action.damageType,
+          action,
+        });
+      }
       if (target.concentration?.active && dealt > 0) {
         const maintained = rollConcentrationSave(target, dealt);
         if (!maintained) {
@@ -967,7 +1164,8 @@ export function resolveAttack(
     log(state, 'action', attacker.id,
       `${attacker.name} attacks ${target.name} with Disadvantage (Bestow Curse — disadvantaged vs curse caster).`, target.id);
   }
-  const disadvantage = baseDisadv || !!protectionRider || losDisadvantage || chillTouchDisadv || viciousMockeryDisadv || frostbiteDisadv || tauntDisadvantage || curseAttackDisadv;
+  const disadvantage = baseDisadv || !!protectionRider || losDisadvantage || chillTouchDisadv || viciousMockeryDisadv || frostbiteDisadv || tauntDisadvantage || curseAttackDisadv
+    || attacker.exhaustionLevel >= 3;  // Exhaustion level 3: disadvantage on attack rolls (PHB p.291)
   const advantage = baseAdv || packTacticsAdvantage || attacker.helpedThisTurn || cantripAdv || trueStrikeAdv;
 
   // Shillelagh (PHB p.275): while the self-buff is active, MELEE attacks use
@@ -1104,7 +1302,52 @@ export function resolveAttack(
     const naturalAC = acFloor > 0 ? Math.max(target.ac, acFloor) : target.ac;
     effectiveAC = naturalAC + (target.wardingBond ? 1 : 0) + (los?.coverACBonus ?? 0) + getActiveAcBonus(target);
   }
-  const hits = isCritOverride ?? attackHits(result.roll, result.total, effectiveAC);
+  let hits = isCritOverride ?? attackHits(result.roll, result.total, effectiveAC);
+
+  // ── TG-008: Shield / Silvery Barbs reaction trigger (PHB p.275 / SCC p.38) ──
+  // When the attack HITS, the target may react with Shield (+5 AC, can flip
+  // the hit to a miss "including against the triggering attack" — PHB p.275)
+  // or Silvery Barbs (force a reroll, use the lower — SCC p.38). Both return
+  // `{ kind: 'negated' }` if they flip the hit to a miss; the engine then
+  // re-evaluates `hits` with the new AC / lower roll.
+  //
+  // The trigger fires BEFORE the Mirror Image duplicate resolution and the
+  // miss-return, so a Shield that flips the hit to a miss skips both. Mirror
+  // Image retargeting is excluded (Shield only protects the real caster, not
+  // duplicates — PHB p.260: duplicates "ignore all other damage and effects").
+  if (hits && !mirrorRetargeted && !target.isDead && !target.isUnconscious) {
+    const isCrit = isCritOverride === true || result.isCrit;
+    const outcome = triggerReactions(state, target, {
+      kind: 'incoming_attack_hit',
+      attacker,
+      action,
+      attackRoll: result.roll,
+      attackTotal: result.total,
+      effectiveAC,
+      isCrit,
+    });
+    if (outcome && outcome.kind === 'negated') {
+      // Shield may have applied +5 AC; Silvery Barbs may have computed a
+      // lower roll. The spell module already logged the details — we just
+      // need to flip the hit to a miss.
+      //
+      // For Shield: the +5 AC effect is now active (applied by executeReaction
+      // via applySpellEffect), so getActiveAcBonus(target) would return +5
+      // more if we re-read it. We don't need to recompute — the spell module
+      // already gated on "the +5 WILL flip the hit to a miss" in shouldCastReaction.
+      //
+      // For Silvery Barbs: the spell module rolled a new d20 and checked if
+      // the lower of (original, new) would miss. If it reported 'negated',
+      // the lower roll missed.
+      //
+      // v1: trust the spell module's outcome. If it says 'negated', flip the
+      // hit to a miss.
+      hits = false;
+      log(state, 'action', target.id,
+        `${target.name}'s reaction NEGATES ${attacker.name}'s ${action.name}! (original ${result.total} vs AC ${effectiveAC})`,
+        attacker.id);
+    }
+  }
 
   // ── Mirror Image duplicate resolution (PHB p.260) ────────────────────
   // If the attack was retargeted to a duplicate, resolve it now: on hit,
@@ -1272,6 +1515,16 @@ export function resolveAttack(
           log(state, 'condition_add', attacker.id,
             `${target.name} is ${rider.condition.toUpperCase()} by ${rider.spellName}!`, target.id);
         }
+        // PHB p.282: Thunderous Smite pushes the target 10 ft away if Large or
+        // smaller. v1 ignores the size restriction and pushes any target on hit.
+        // The pushFt field is optional — only Thunderous Smite sets it currently.
+        if (rider.pushFt && rider.pushFt > 0) {
+          const oldPos: Vec3 = { ...target.pos };
+          pushAway(target, attacker.pos, rider.pushFt);
+          log(state, 'move', attacker.id,
+            `${target.name} is pushed ${rider.pushFt} ft away by ${rider.spellName} (${oldPos.x},${oldPos.y}) → (${target.pos.x},${target.pos.y})`,
+            target.id);
+        }
         attacker._nextHitRider = null;   // one-shot consumed
       }
     }
@@ -1434,7 +1687,36 @@ export function resolveAttack(
         target.id, interceptReduction);
     }
 
+    // TG-008: Absorb Elements rider consumption (XGE p.150).
+    // "The first time you hit with a melee attack on your next turn, the
+    // target takes an additional 1d6 damage of the triggering type."
+    // v1: applies on ANY melee weapon hit (not just the caster's next turn).
+    // The rider is one-shot — consumed on the first melee hit.
+    if (attacker._absorbElementsRider && action.attackType === 'melee') {
+      const rider = consumeAbsorbElementsRider(attacker);
+      if (rider && rider.damage > 0) {
+        dmg += rider.damage;
+        log(state, 'action', attacker.id,
+          `${attacker.name}'s Absorb Elements rider deals +${rider.damage} ${rider.damageType} damage!`,
+          target.id, rider.damage);
+      }
+    }
+
     const dealt = applyDamageWithTempHP(target, dmg, action.damageType);
+    // TG-008: Absorb Elements / Hellish Rebuke reaction trigger (XGE p.150 / PHB p.249)
+    // These fire AFTER damage is applied. The triggering damage still applies
+    // (resistance from Absorb Elements protects against FUTURE damage of
+    // that type, not the triggering hit — PHB timing).
+    if (dealt > 0 && !target.isDead && !target.isUnconscious) {
+      triggerReactions(state, target, {
+        kind: 'incoming_damage',
+        attacker,
+        target,
+        amount: dealt,
+        damageType: action.damageType,
+        action,
+      });
+    }
     if (target.concentration?.active && dealt > 0) {
       const maintained = rollConcentrationSave(target, dealt);
       if (!maintained) {
@@ -1458,6 +1740,44 @@ export function resolveAttack(
     applyCantripEffect(attacker, target, action.name, state);
     applyWardingBondRedirect(target, dealt, state);
     checkDeath(target, state);
+  }
+
+  // ── PHB p.254: "The spell ends for a target that attacks or casts a spell."
+  // Session 32: Invisibility ends on attack. Check the ATTACKER's activeEffects
+  // for any effect with breaksOnAttackOrCast=true and remove it AFTER the attack
+  // resolves (so the attack still gets invisible-advantage, but the invisibility
+  // ends immediately after). Greater Invisibility does NOT set this flag.
+  //
+  // We only break on attacks that involve an attack roll (melee/ranged/spell).
+  // Save-based spells (e.g., Sacred Flame) don't trigger the ends-on-attack
+  // clause per PHB p.254 ("attacks or casts a spell" — the "casts a spell" half
+  // is handled separately in the spell-casting path).
+  if (action.attackType === 'melee' || action.attackType === 'ranged' || action.attackType === 'spell') {
+    breakInvisibilityOnAction(attacker, state);
+  }
+}
+
+/**
+ * Remove any active effects on the combatant that have `breaksOnAttackOrCast: true`.
+ * Called from resolveAttack (for attacks) and executePlannedAction (for spell casts).
+ *
+ * PHB p.254 Invisibility: "The spell ends for a target that attacks or casts a spell."
+ * This implements the "attacks" half; the "casts a spell" half is handled by calling
+ * this function from the spell-casting path.
+ *
+ * Logs a condition_remove event for each effect removed.
+ */
+function breakInvisibilityOnAction(actor: Combatant, state: EngineState): void {
+  const breakingEffects = actor.activeEffects.filter(e => e.breaksOnAttackOrCast === true);
+  if (breakingEffects.length === 0) return;
+
+  for (const effect of breakingEffects) {
+    // Remove the effect's mechanical impact (condition, adv/disadv entries, etc.)
+    // via removeEffectById, which calls _undoEffect internally.
+    removeEffectById(actor.id, effect.id, state.battlefield);
+    log(state, 'condition_remove', actor.id,
+      `${actor.name}'s ${effect.spellName} ends (${actor.name} attacked or cast a spell)!`,
+      actor.id);
   }
 }
 
@@ -1577,6 +1897,58 @@ function checkDeath(target: Combatant, state: EngineState, attacker?: Combatant)
  */
 function processFallDamage(state: EngineState): void {
   const bf = state.battlefield;
+
+  // ── TG-008: Feather Fall reaction trigger (PHB p.239) ──────────────
+  // Before applying fall damage, gather all fallers and check if any
+  // creature wants to cast Feather Fall. The trigger fires once for ALL
+  // fallers (Feather Fall can affect up to 5). If the reaction fires and
+  // negates, affected fallers are marked with `_featherFallActive = true`
+  // and skipped in the damage loop below.
+  const fallerIds: string[] = [];
+  let maxFallHeight = 0;
+  for (const c of bf.combatants.values()) {
+    if (!c._fallHeight || c._fallHeight <= 0) continue;
+    if (c.isDead) { delete c._fallHeight; continue; }
+    // Check if the Reverse Gravity effect is still active on this target.
+    const hasRGEffect = c.activeEffects.some(e => e.spellName === 'Reverse Gravity');
+    if (hasRGEffect) continue;
+    fallerIds.push(c.id);
+    if (c._fallHeight > maxFallHeight) maxFallHeight = c._fallHeight;
+  }
+  if (fallerIds.length > 0 && maxFallHeight > 0) {
+    // Find a candidate Feather Fall caster: any creature (typically an
+    // ally of the fallers) with Feather Fall known, slot available,
+    // reaction unused. The triggerReactions helper iterates the registry
+    // and fires the first matching spell.
+    //
+    // v1: iterate all combatants (allies of the fallers first, since
+    // they'd want to save them). The first one whose shouldCast returns
+    // true fires. PHB p.239: "you or a creature within 60 feet of you
+    // falls" — the caster can be a faller themselves (self-cast).
+    const fallerSet = new Set(fallerIds);
+    // Sort candidates: fallers first (they'd want to save themselves),
+    // then non-fallers (allies who'd save the fallers).
+    const candidates = [...bf.combatants.values()].sort((a, b) => {
+      const aFaller = fallerSet.has(a.id) ? 0 : 1;
+      const bFaller = fallerSet.has(b.id) ? 0 : 1;
+      return aFaller - bFaller;
+    });
+    for (const candidate of candidates) {
+      const outcome = triggerReactions(state, candidate, {
+        kind: 'falling',
+        fallerIds,
+        fallHeightFt: maxFallHeight,
+      });
+      if (outcome && outcome.kind === 'negated') {
+        // Feather Fall fired — affected fallers are now marked with
+        // `_featherFallActive = true`. The damage loop below will skip them.
+        break;  // Only one Feather Fall needed.
+      }
+      // If outcome is null, this candidate didn't cast Feather Fall —
+      // continue to the next candidate.
+    }
+  }
+
   for (const c of bf.combatants.values()) {
     if (!c._fallHeight || c._fallHeight <= 0) continue;
     if (c.isDead) { delete c._fallHeight; continue; }
@@ -1585,6 +1957,17 @@ function processFallDamage(state: EngineState): void {
     // If it is, concentration hasn't broken for this target yet — skip.
     const hasRGEffect = c.activeEffects.some(e => e.spellName === 'Reverse Gravity');
     if (hasRGEffect) continue;
+
+    // TG-008: Feather Fall check — if this faller was affected by Feather
+    // Fall (marked by executeFeatherFall), skip the fall damage entirely.
+    if ((c as any)._featherFallActive) {
+      log(state, 'action', c.id,
+        `${c.name} falls ${c._fallHeight} ft but Feather Fall negates all damage — lands safely!`,
+        c.id, 0);
+      delete (c as any)._featherFallActive;
+      delete c._fallHeight;
+      continue;
+    }
 
     // Fall damage! PHB p.183: 1d6 per 10 feet fallen, max 20d6.
     const fallHeight = c._fallHeight;
@@ -1647,7 +2030,8 @@ export function executeMove(
   const cost = estimateMoveCostFt(
     mover.pos, dest,
     mover.burrowSpeed !== null,
-    mover.swimSpeed !== null
+    mover.swimSpeed !== null,
+    makeTerrainFn(bf)
   );
 
   if (!spendMovement(mover, cost)) {
@@ -1748,6 +2132,60 @@ function executePlannedAction(
       `${actor.name}'s Witch Bolt ends — they used their action for something else!`,
       undefined);
     actor.concentration = null;
+  }
+
+  // ── TG-008: Counterspell reaction trigger (PHB p.228) ──────────────
+  // Before executing a spell-cast plan, check if any enemy within 60 ft
+  // wants to cast Counterspell. If they do and it succeeds (auto-success
+  // for L1-3 spells with a L3 slot, or ability check vs DC 10+level for
+  // higher-level spells), the spell is negated — consume the actor's
+  // spell slot and return without executing the spell.
+  //
+  // v1 scope:
+  //   - Only LEVELED spells trigger Counterspell (cantrips are excluded —
+  //     wasting a L3 slot on a cantrip is a bad trade).
+  //   - Only the FIRST eligible enemy (in battlefield iteration order)
+  //     attempts Counterspell. Multiple enemies could each try per PHB,
+  //     but v1 simplifies to one attempt.
+  //   - The actor's spell slot is consumed even if Counterspelled (PHB
+  //     p.228: "the spell fails and has no effect, but resources used
+  //     to cast it are consumed").
+  const spellInfo = getSpellInfoFromPlan(plan, bf);
+  if (spellInfo && !actor.isDead && !actor.isUnconscious) {
+    let countered = false;
+    for (const enemy of livingEnemiesOf(actor, bf)) {
+      const outcome = triggerReactions(state, enemy, {
+        kind: 'incoming_spell',
+        caster: actor,
+        spellName: spellInfo.name,
+        level: spellInfo.level,
+      });
+      if (outcome && outcome.kind === 'negated') {
+        // Counterspell succeeded — consume the actor's spell slot and abort.
+        // PHB p.228: the countered spell's slot IS consumed.
+        if (spellInfo.level >= 1) {
+          consumeSpellSlot(actor, spellInfo.level);
+        }
+        actor.budget.actionUsed = true;
+        log(state, 'action', actor.id,
+          `${actor.name}'s ${spellInfo.name} was COUNTERSPELLED — spell slot consumed, action wasted!`,
+          enemy.id);
+        countered = true;
+        break;  // Only one Counterspell needed to negate.
+      }
+      // If outcome is 'failed', the Counterspell attempt failed — the spell
+      // still goes off. Could another enemy try? v1: no, only one attempt.
+      if (outcome && outcome.kind === 'failed') {
+        // The enemy's Counterspell failed — log it but continue with the spell.
+        // (The spell module already logged the failure.)
+        break;  // v1: only one attempt.
+      }
+      // If outcome is null or 'no_effect', no Counterspell fired — continue
+      // to the next enemy.
+    }
+    if (countered) {
+      return;  // Spell was negated — don't execute.
+    }
   }
 
   switch (plan.type) {
@@ -2413,6 +2851,15 @@ function executePlannedAction(
         ? invTarget
         : shouldCastInvisibility(actor, bf);
       if (liveTarget) executeInvisibility(actor, liveTarget, state);
+      break;
+    }
+
+    case 'greaterInvisibility': {
+      // Greater Invisibility — PHB p.254: action, self, concentration 1 min.
+      // Grants invisible condition. Does NOT end on attack/cast (unlike L2 Invisibility).
+      if (shouldCastGreaterInvisibility(actor, bf)) {
+        executeGreaterInvisibility(actor, actor, state);
+      }
       break;
     }
 
@@ -3706,10 +4153,78 @@ function executePlannedAction(
     case 'armorOfAgathys':    if (shouldCastArmorOfAgathys(actor, bf))  executeArmorOfAgathys(actor, state);  break;
     case 'falseLife':         if (shouldCastFalseLife(actor, bf))       executeFalseLife(actor, state);       break;
 
+    case 'dispelMagic': {
+      // Dispel Magic — PHB p.233: action, 120 ft, auto-dispel concentration
+      // effects + ability check vs DC 13 for non-concentration, upcast auto-dispels more.
+      const dmTargetId = plan.targetId;
+      const dmTarget = dmTargetId ? bf.combatants.get(dmTargetId) ?? null : null;
+      const dmLiveTarget = dmTarget && !dmTarget.isDead && !dmTarget.isUnconscious
+        ? dmTarget
+        : shouldCastDispelMagic(actor, bf);
+      if (dmLiveTarget) executeDispelMagic(actor, dmLiveTarget, state);
+      break;
+    }
+
     // ── Session 19 — generic spell dispatch ────────────────────────────
     // Routes any spell in the GENERIC_SPELLS registry (262 bulk-implemented
     // spells from levels 2-9) to its spell module's shouldCast + execute.
     // The spell name is carried by `plan.spellName` (set by planner.ts).
+    case 'summonSpell': {
+      // Summon/Conjure spell — spawns a combatant mid-combat (TG-006)
+      // The actual spell execution is handled by the spell module's execute(),
+      // which is dispatched via this case branch. The planner sets plan.action
+      // to the spell's Action; its name identifies which summon spell to cast.
+      const spellAction = plan.action;
+      if (!spellAction) break;
+      const spellName = spellAction.name;
+      // Dispatch to the appropriate summon spell module
+      if (spellName === 'Summon Beast') {
+        executeSummonBeast(actor, actor, state);
+      } else if (spellName === 'Summon Fey') {
+        executeSummonFey(actor, actor, state);
+      } else if (spellName === 'Summon Undead') {
+        executeSummonUndead(actor, actor, state);
+      } else if (spellName === 'Summon Shadowspawn') {
+        executeSummonShadowspawn(actor, actor, state);
+      } else if (spellName === 'Summon Lesser Demons') {
+        executeSummonLesserDemons(actor, actor, state);
+      } else if (spellName === 'Summon Aberration') {
+        executeSummonAberration(actor, actor, state);
+      } else if (spellName === 'Summon Construct') {
+        executeSummonConstruct(actor, actor, state);
+      } else if (spellName === 'Summon Elemental') {
+        executeSummonElemental(actor, actor, state);
+      } else if (spellName === 'Summon Greater Demon') {
+        executeSummonGreaterDemon(actor, actor, state);
+      } else if (spellName === 'Summon Celestial') {
+        executeSummonCelestial(actor, actor, state);
+      } else if (spellName === 'Summon Draconic Spirit') {
+        executeSummonDraconicSpirit(actor, actor, state);
+      } else if (spellName === 'Summon Fiend') {
+        executeSummonFiend(actor, actor, state);
+      } else if (spellName === 'Conjure Animals') {
+        executeConjureAnimals(actor, actor, state);
+      } else if (spellName === 'Conjure Woodland Beings') {
+        executeConjureWoodlandBeings(actor, actor, state);
+      } else if (spellName === 'Conjure Minor Elementals') {
+        executeConjureMinorElementals(actor, actor, state);
+      } else if (spellName === 'Conjure Elemental') {
+        executeConjureElemental(actor, actor, state);
+      } else if (spellName === 'Conjure Fey') {
+        executeConjureFey(actor, actor, state);
+      } else if (spellName === 'Conjure Celestial') {
+        executeConjureCelestial(actor, actor, state);
+      } else if (spellName === 'Find Familiar') {
+        executeFindFamiliar(actor, actor, state);
+      } else if (spellName === 'Find Steed') {
+        executeFindSteed(actor, actor, state);
+      } else if (spellName === 'Find Greater Steed') {
+        executeFindGreaterSteed(actor, actor, state);
+      }
+      // More summon spells can be added here (Phase 2+)
+      break;
+    }
+
     case 'genericSpell': {
       const spellName = plan.spellName;
       if (!spellName) break;
@@ -3722,6 +4237,28 @@ function executePlannedAction(
       }
       break;
     }
+  }
+
+  // ── PHB p.254: "The spell ends for a target that attacks or casts a spell."
+  // Session 32: Invisibility ends on spell cast. The "casts a spell" half.
+  // Triggered AFTER the spell executes (so any attack-roll spells like Firebolt
+  // or spell-attacks like Inflict Wounds would have already triggered the
+  // "attacks" half via resolveAttack — but calling here is idempotent: if the
+  // effect was already removed, the filter returns empty and we no-op).
+  //
+  // We use a deny-list of NON-spell action types. Anything not in this list
+  // is treated as a spell cast (or spell-like action) and triggers the break.
+  // The 'attack' case is handled separately by resolveAttack above (the
+  // "attacks" half of the clause) — including it here is harmless because
+  // breakInvisibilityOnAction is idempotent.
+  const NON_SPELL_ACTIONS = new Set([
+    'attack', 'dash', 'disengage', 'dodge', 'help', 'hide', 'ready',
+    'shove', 'grapple', 'escapeGrapple',
+    'secondWind', 'rage', 'layOnHands', 'bardicInspiration',
+    'move',  // movement-only actions don't break invisibility
+  ]);
+  if (!NON_SPELL_ACTIONS.has(plan.type)) {
+    breakInvisibilityOnAction(actor, state);
   }
 }
 
@@ -4228,6 +4765,8 @@ export function runCombat(
       const terrainZones = getActiveTerrainZones(battlefield);
       if (terrainZones.length > 0 && !actor.isDead && !actor.isUnconscious) {
         for (const zone of terrainZones) {
+          // Skip zones that have no save/condition mechanic (pure difficult terrain)
+          if (!zone.condition || !zone.saveAbility) continue;
           // Skip if the creature already has the condition
           if (actor.conditions.has(zone.condition)) continue;
           // Skip allies of the caster (terrain affects enemies only)
@@ -4264,6 +4803,200 @@ export function runCombat(
               `${actor.name} is affected by ${zone.spellName}'s terrain! (${zone.condition})`,
               actor.id);
           }
+        }
+      }
+
+      // ── Moving zone start-of-turn processing (Flaming Sphere / Moonbeam / Call Lightning / Cloudkill) ──
+      // PHB p.242 (Flaming Sphere): bonus action to move sphere up to 30 ft.
+      // PHB p.261 (Moonbeam): action to move beam up to 60 ft.
+      // PHB p.220 (Call Lightning): action to call down another bolt within 60 ft.
+      // PHB p.222 (Cloudkill): cloud moves 10 ft away from caster at start of each turn.
+      //
+      // v1 simplification: the zone moves AUTOMATICALLY at the start of the
+      // caster's turn (no action cost). It moves toward the highest-threat
+      // enemy and re-applies damage to creatures in its new position. Old
+      // targets no longer in the zone have their damage_zone effects removed.
+      if (actor._movingZone && actor.concentration?.active &&
+          actor.concentration.spellName === actor._movingZone.spellName &&
+          !actor.isDead && !actor.isUnconscious) {
+        const mz = actor._movingZone;
+
+        // Find the highest-threat enemy within a generous range
+        const enemies = livingEnemiesOf(actor, battlefield);
+        let bestTarget: Combatant | null = null;
+        let bestThreat = -1;
+        let bestDist = Infinity;
+        for (const e of enemies) {
+          const distFt = chebyshev3D(
+            { x: mz.centerX, y: mz.centerY, z: mz.centerZ } as Vec3,
+            e.pos,
+          ) * 5;
+          // Only consider enemies within a reasonable range (movePerTurn + radiusFt * 2)
+          // so the zone can actually reach them
+          if (distFt > mz.movePerTurn + mz.radiusFt * 2 + 60) continue;
+          if (e.maxHP > bestThreat || (e.maxHP === bestThreat && distFt < bestDist)) {
+            bestTarget = e;
+            bestThreat = e.maxHP;
+            bestDist = distFt;
+          }
+        }
+
+        if (bestTarget) {
+          // Move the zone toward the best target (up to movePerTurn ft)
+          const oldCenter: Vec3 = { x: mz.centerX, y: mz.centerY, z: mz.centerZ };
+          const targetPos = bestTarget.pos;
+
+          // Calculate direction from zone center to target
+          const dx = targetPos.x - mz.centerX;
+          const dy = targetPos.y - mz.centerY;
+          const dz = targetPos.z - mz.centerZ;
+          const distSquares = Math.max(Math.abs(dx), Math.abs(dy), Math.abs(dz));
+          const moveSquares = Math.floor(mz.movePerTurn / 5);
+
+          if (distSquares > 0 && moveSquares > 0) {
+            const actualMove = Math.min(moveSquares, distSquares);
+            // Chebyshev movement: move each axis by sign * actualMove (capped at target)
+            const stepX = dx === 0 ? 0 : (Math.abs(dx) <= actualMove ? dx : Math.sign(dx) * actualMove);
+            const stepY = dy === 0 ? 0 : (Math.abs(dy) <= actualMove ? dy : Math.sign(dy) * actualMove);
+            const stepZ = dz === 0 ? 0 : (Math.abs(dz) <= actualMove ? dz : Math.sign(dz) * actualMove);
+
+            mz.centerX += stepX;
+            mz.centerY += stepY;
+            mz.centerZ += stepZ;
+
+            const movedFt = chebyshev3D(oldCenter, { x: mz.centerX, y: mz.centerY, z: mz.centerZ } as Vec3) * 5;
+            log(state, 'action', actor.id,
+              `${actor.name}'s ${mz.spellName} zone moves ${movedFt} ft toward ${bestTarget.name}! (new center: ${mz.centerX},${mz.centerY},${mz.centerZ}, radius: ${mz.radiusFt} ft)`,
+              bestTarget.id);
+          }
+
+          const newCenter: Vec3 = { x: mz.centerX, y: mz.centerY, z: mz.centerZ };
+
+          // ── Find all enemies in the new zone position ──
+          const enemiesInNewZone: Combatant[] = [];
+          for (const e of enemies) {
+            const distFt = chebyshev3D(newCenter, e.pos) * 5;
+            if (distFt <= mz.radiusFt) {
+              enemiesInNewZone.push(e);
+            }
+          }
+
+          // ── Remove damage_zone effects from enemies no longer in the zone ──
+          for (const c of battlefield.combatants.values()) {
+            if (c.faction === actor.faction) continue;  // skip allies
+            const distFt = chebyshev3D(newCenter, c.pos) * 5;
+            if (distFt > mz.radiusFt) {
+              // This creature is outside the new zone — remove damage_zone effects
+              // from this caster for this spell
+              const zoneEffects = c.activeEffects.filter(
+                e => e.casterId === actor.id && e.spellName === mz.spellName && e.effectType === 'damage_zone'
+              );
+              for (const eff of zoneEffects) {
+                removeEffectById(c.id, eff.id, battlefield);
+                log(state, 'condition_remove', actor.id,
+                  `${c.name} is no longer in ${mz.spellName}'s zone! (damage_zone effect removed)`,
+                  c.id);
+              }
+            }
+          }
+
+          // ── Apply damage to enemies in the new zone that don't already have a damage_zone effect ──
+          for (const e of enemiesInNewZone) {
+            if (e.isDead || e.isUnconscious) continue;
+
+            // Check if already affected by this caster's damage_zone for this spell
+            const alreadyAffected = e.activeEffects.some(
+              eff => eff.casterId === actor.id && eff.spellName === mz.spellName && eff.effectType === 'damage_zone'
+            );
+            if (alreadyAffected) continue;  // already in the zone — damage will tick on their turn
+
+            // Get the spell's action to find saveDC and damage parameters
+            const spellAction = actor.actions.find(a => a.name === mz.spellName);
+            const saveDC = spellAction?.saveDC ?? 13;
+
+            // Determine spell parameters based on spell name
+            let dieCount = 0;
+            let dieSides = 0;
+            let damageType: import('../types/core').DamageType = 'fire';
+            let saveAbility: import('../types/core').AbilityScore | undefined;
+
+            switch (mz.spellName) {
+              case 'Flaming Sphere':
+                dieCount = 2; dieSides = 6; damageType = 'fire'; saveAbility = 'dex';
+                break;
+              case 'Moonbeam':
+                dieCount = 2; dieSides = 10; damageType = 'radiant'; saveAbility = 'con';
+                break;
+              case 'Call Lightning':
+                dieCount = 3; dieSides = 10; damageType = 'lightning';
+                // Call Lightning: no save in v1 (callLightningDexSaveV1SimplifiedToNone)
+                break;
+              case 'Cloudkill':
+                dieCount = 5; dieSides = 8; damageType = 'poison'; saveAbility = 'con';
+                break;
+            }
+
+            // Roll damage
+            let dmgRoll = 0;
+            for (let i = 0; i < dieCount; i++) dmgRoll += rollDie(dieSides);
+
+            let actualDmg = dmgRoll;
+            let saveDesc = '';
+
+            // Save for half (if applicable)
+            if (saveAbility) {
+              const save = rollSave(e, saveAbility, saveDC);
+              if (save.success) {
+                actualDmg = Math.floor(dmgRoll / 2);
+              }
+              saveDesc = ` (DC ${saveDC} ${saveAbility.toUpperCase()} save: ${save.success ? 'SUCCESS — half damage' : 'FAIL — full damage'} (rolled ${save.total}))`;
+              log(state,
+                save.success ? 'save_success' : 'save_fail',
+                actor.id,
+                `${e.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} ${saveAbility.toUpperCase()} save vs ${mz.spellName} (moving zone damage)${saveDesc}`,
+                e.id, save.roll);
+            }
+
+            const dealt = applyDamageWithTempHP(e, actualDmg, damageType);
+            log(state, 'damage', actor.id,
+              `${e.name} takes ${dealt} ${damageType} damage from ${mz.spellName} (moving zone entered: ${dieCount}d${dieSides}=${dmgRoll}${actualDmg !== dmgRoll ? `, halved to ${actualDmg}` : ''})`,
+              e.id, dealt);
+
+            // Apply a damage_zone effect so the enemy takes start-of-turn damage
+            applySpellEffect(e, {
+              casterId: actor.id,
+              spellName: mz.spellName,
+              effectType: 'damage_zone',
+              payload: {
+                dieCount,
+                dieSides,
+                damageType,
+                ...(saveAbility ? { saveDC, saveAbility } : {}),
+              },
+              sourceIsConcentration: true,
+            });
+
+            log(state, 'condition_add', actor.id,
+              `${e.name} is caught in ${mz.spellName}'s zone! (will take ${dieCount}d${dieSides} ${damageType} at the start of each of its turns${saveAbility ? `, ${saveAbility.toUpperCase()} save for half` : ''})`,
+              e.id);
+
+            // Concentration check if the enemy was concentrating
+            if (e.concentration?.active && dealt > 0) {
+              const maintained = rollConcentrationSave(e, dealt);
+              if (!maintained) {
+                removeEffectsFromCaster(e.id, battlefield);
+                log(state, 'condition_remove', e.id,
+                  `${e.name} loses concentration on ${e.concentration?.spellName ?? 'spell'} (damaged by ${mz.spellName} moving zone)!`, undefined);
+              }
+            }
+
+            // Death check
+            checkDeath(e, state);
+          }
+        } else {
+          // No valid enemy found — zone stays in place
+          log(state, 'action', actor.id,
+            `${actor.name}'s ${mz.spellName} zone has no target to move toward — stays in place.`);
         }
       }
 
@@ -4373,6 +5106,28 @@ export function runCombat(
       // Update perception for all observers
       const target = plan.targetId ? battlefield.combatants.get(plan.targetId) ?? null : null;
       updatePerception(actor, target, plan, battlefield);
+
+      // ── Process pending initiative inserts (summon spells, TG-006) ──────
+      // TCE Summon spells: "shares your initiative count, takes turn after
+      // yours." After each actor's turn, insert any pending summons that
+      // should go after this actor. The summon will then get its own turn
+      // later in this round (or next round if the round has already passed
+      // its position).
+      if (battlefield.pendingInitiativeInserts && battlefield.pendingInitiativeInserts.length > 0) {
+        const toInsert = battlefield.pendingInitiativeInserts.filter(
+          i => i.insertAfterId === actor.id
+        );
+        for (const insert of toInsert) {
+          const afterIdx = battlefield.initiativeOrder.indexOf(insert.insertAfterId);
+          if (afterIdx !== -1 && !battlefield.initiativeOrder.includes(insert.combatantId)) {
+            battlefield.initiativeOrder.splice(afterIdx + 1, 0, insert.combatantId);
+          }
+        }
+        // Remove processed inserts
+        battlefield.pendingInitiativeInserts = battlefield.pendingInitiativeInserts.filter(
+          i => i.insertAfterId !== actor.id
+        );
+      }
 
       // Legendary action window: after each creature's turn,
       // legendary creatures get to act (design doc §6, §5.3.5)

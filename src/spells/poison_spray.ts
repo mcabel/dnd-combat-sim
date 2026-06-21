@@ -20,6 +20,14 @@
 //   - This module provides `metadata` only.
 //   - Range is 10 ft (very short for a cantrip). The AI/parser
 //     must enforce this when building the Action (range: { normal: 10, long: 10 }).
+//
+//   NOTE on poison immunity: Constructs and undead are typically immune
+//   to poison damage (MM p.6 Construct immunities, MM p.7 Undead
+//   immunities). The combat engine handles this via the target's
+//   `resistances` array (or a future `immunities` field) — this
+//   metadata-only module does NOT enforce poison immunity at the
+//   spell level. The parser should set poison immunity on constructs
+//   and undead when building their Combatant objects.
 // ============================================================
 
 // ---- Metadata -----------------------------------------------

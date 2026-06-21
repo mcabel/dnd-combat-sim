@@ -116,8 +116,9 @@ if (fly) {
   eq('AC = 11', fly.ac, 11);
   eq('Fly speed = 60', fly.flySpeed, 60);
   eq('Ground speed = 30', fly.speed, 30);
-  assert('Tagged as summon', (fly as any).isSummon === true);
-  assert('summonEntry attached', (fly as any).summonEntry?.name === 'Giant Fly');
+  assert('Tagged as summon', fly.isSummon === true);
+  assert('summonerId undefined when not provided', fly.summonerId === undefined);
+  assert('summonSpellName undefined when not provided', fly.summonSpellName === undefined);
 }
 
 // Party faction + profile override

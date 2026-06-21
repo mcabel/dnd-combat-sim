@@ -34,6 +34,7 @@ function makeBase(overrides: Partial<Combatant> = {}): Combatant {
     conditions: new Set(), aiProfile: 'aggressive' as any,
     perception: { targets: new Map() } as any,
     concentration: null, deathSaves: null, tempHP: 0,
+    exhaustionLevel: 0,
     mountedOn: null, carriedBy: null, independentMount: false,
     role: 'regular', bonded: null,
     usedSneakAttackThisTurn: false, helpedThisTurn: false,

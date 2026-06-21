@@ -70,6 +70,7 @@ function makeCombatant(id: string, overrides: Partial<Combatant> = {}): Combatan
     deathSaves: null,
     resources: null,
     tempHP: 0,
+    exhaustionLevel: 0,
     mountedOn: null, carriedBy: null, independentMount: false,
     role: 'regular', bonded: null,
     usedSneakAttackThisTurn: false, helpedThisTurn: false,
@@ -128,7 +129,8 @@ eq('1d: dieSides 6', metadata.dieSides, 6);
 eq('1e: count 2', metadata.count, 2);
 eq('1f: damageType thunder', metadata.damageType, 'thunder');
 eq('1g: canon flag true', metadata.thunderousSmiteCanonV1Implemented, true);
-eq('1h: riders-simplified flag true', metadata.thunderousSmiteRidersV1Simplified, true);
+// Session 32: 10-ft push rider now modelled — flag flipped to false.
+eq('1h: riders-simplified flag false (push now modelled)', metadata.thunderousSmiteRidersV1Simplified, false);
 
 // =============================================================
 // Section 2 — shouldCast gates
@@ -214,6 +216,8 @@ console.log('\n--- Section 3: execute pipeline ---');
   eq('3f: rider.count', caster._nextHitRider!.count, 2);
   eq('3g: rider.damageType', caster._nextHitRider!.damageType, 'thunder');
   assert('3h: no condition (push rider simplified)', caster._nextHitRider!.condition === undefined);
+  // Session 32: 10-ft push rider now modelled via pushFt field
+  eq('3h-bis: rider.pushFt is 10 (PHB p.282)', caster._nextHitRider!.pushFt, 10);
 }
 
 {
@@ -251,6 +255,7 @@ console.log('\n--- Section 4: cleanup ---');
   caster._nextHitRider = {
     spellName: 'Thunderous Smite',
     dieSides: 6, count: 2, damageType: 'thunder',
+    pushFt: 10,
   };
   caster.concentration = null;
   cleanup(caster);
@@ -263,6 +268,7 @@ console.log('\n--- Section 4: cleanup ---');
   caster._nextHitRider = {
     spellName: 'Thunderous Smite',
     dieSides: 6, count: 2, damageType: 'thunder',
+    pushFt: 10,
   };
   caster.concentration = { active: true, spellName: 'Thunderous Smite', dcIfHit: 10 };
   cleanup(caster);

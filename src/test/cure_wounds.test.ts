@@ -75,6 +75,7 @@ function makeCombatant(id: string, overrides: Partial<Combatant> = {}): Combatan
     bardicInspirationDie: null,
     wardingBond: null,
     activeEffects: [],
+    exhaustionLevel: 0,
     ...overrides,
   };
 }

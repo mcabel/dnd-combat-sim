@@ -557,6 +557,7 @@ export function monsterToCombatant(
     spellcastingMod: parseSpellcastingMod(raw), // TG-004 — GFB splash, etc.
     casterLevel:     parseCasterLevel(raw),      // TG-004 — cantrip scaling
     tempHP: 0,
+    exhaustionLevel: 0,
     resources: null,
     usedSneakAttackThisTurn: false,
     helpedThisTurn: false,
