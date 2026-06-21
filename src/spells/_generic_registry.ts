@@ -2129,7 +2129,8 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
 // Ordered by (level, name) — lowest level first, then alphabetical.
 // The planner iterates this list and picks the first spell whose
 // shouldCast returns true.
-export const GENERIC_SPELL_LIST: GenericSpellDescriptor[] = Object.values(GENERIC_SPELLS);
+export const GENERIC_SPELL_LIST: GenericSpellDescriptor[] = Object.values(GENERIC_SPELLS)
+  .sort((a, b) => a.level !== b.level ? a.level - b.level : a.name.localeCompare(b.name));
 
 // ---- Lookup helper ------------------------------------------
 
