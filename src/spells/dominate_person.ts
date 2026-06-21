@@ -11,16 +11,25 @@
 //
 // Upcast: +1 hour per slot-level above 5th (not modelled in v1).
 //
-// v1 simplifications: same as Dominate Monster — control/telepathy
-// simplified to charmed; combat-advantage-on-save not modelled;
-// concentration not enforced (TG-002); humanoid restriction not enforced
-// (TG-004); repeat-save-on-damage not modelled.
+// v2 implementation:
+//   - Control-override: 'dominated' effect applies charmed + incapacitated.
+//     The dominated creature can't take independent actions (incapacitated).
+//     The caster could control the creature's actions by spending their own
+//     action, but v1 has no mechanism for controlling another creature's
+//     turn — so dominated = removed from combat (charmed + incapacitated).
+//   - Creature-type enforcement: target must be a humanoid. If the target's
+//     creatureType is set and is not 'humanoid', the spell skips them.
+//     If creatureType is undefined (unknown), we allow (be permissive).
+//   - Concentration: sourceIsConcentration: true — both conditions removed
+//     when concentration breaks.
 //
-// Migration note (Session 25 / Batch 2): migrated from the generic
-// forward-compat flag to a bespoke WIS-save-or-charmed (concentration).
-// Removed from `_generic_registry.ts`; routed via `case 'dominatePerson':`
-// in combat.ts and a planner branch in planner.ts. Mirrors Hold Person
-// (single-target concentration save-or-condition) but with charmed + L5.
+// NOT modelled:
+//   - Repeat save on damage (PHB p.235: target can repeat save each time
+//     it takes damage).
+//   - Combat advantage on save (PHB p.235: "If you or creatures that are
+//     friendly to you are fighting it, it has advantage on the saving
+//     throw" — v1's rollSave has no adv-from-combat hook).
+//   - Upcast duration extension (+1 hour per slot-level above 5th).
 //
 // Spell module pattern (single-target save-or-condition, concentration):
 //   shouldCast(caster, bf) → Combatant | null
@@ -45,10 +54,10 @@ export const metadata = {
   concentration: true,
   saveAbility: 'wis' as const,
   castingTime: 'action',
-  dominatePersonControlV1Simplified: true,
-  dominatePersonCombatAdvSaveV1Simplified: true,
-  dominatePersonConcentrationEnforcementV1Implemented: false,
-  dominatePersonHumanoidTypeCheckV1Implemented: false,
+  dominatePersonControlV2Implemented: true,
+  dominatePersonHumanoidTypeCheckV2Implemented: true,
+  dominatePersonConcentrationEnforcementV1Implemented: false,  // see TG-002
+  dominatePersonCombatAdvSaveV1Simplified: true,               // in-combat adv on save NOT modelled
 } as const;
 
 // ---- Local log helper ---------------------------------------
@@ -68,8 +77,12 @@ function emit(
 
 /**
  * Returns the single best target for Dominate Person (a living enemy
- * within 60 ft, not already charmed/incapacitated), or null when the
- * spell should not be cast. Target priority: highest-threat, then closest.
+ * humanoid within 60 ft, not already charmed/incapacitated), or null when
+ * the spell should not be cast. Target priority: highest-threat, then closest.
+ *
+ * Creature-type enforcement (PHB p.235): only humanoids are valid targets.
+ * If creatureType is set and is not 'humanoid', the candidate is skipped.
+ * If creatureType is undefined (unknown type), we allow — be permissive.
  */
 export function shouldCast(caster: Combatant, bf: Battlefield): Combatant | null {
   if (caster.concentration?.active) return null;
@@ -81,6 +94,8 @@ export function shouldCast(caster: Combatant, bf: Battlefield): Combatant | null
     if (c.id === caster.id) continue;
     if (c.faction === caster.faction) continue;
     if (c.isDead || c.isUnconscious) continue;
+    // Creature-type enforcement: target must be a humanoid
+    if (c.creatureType && c.creatureType !== 'humanoid') continue;
     const distFt = chebyshev3D(caster.pos, c.pos) * 5;
     if (distFt > 60) continue;
     if (c.conditions.has('charmed') || c.conditions.has('incapacitated')) continue;
@@ -110,17 +125,18 @@ export function execute(caster: Combatant, target: Combatant, state: EngineState
     `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} WIS save vs Dominate Person (rolled ${save.total})`, target.id, save.roll);
 
   if (save.success) {
-    emit(state, 'action', caster.id, `${target.name} resists Dominate Person — not charmed!`, target.id);
+    emit(state, 'action', caster.id, `${target.name} resists Dominate Person!`, target.id);
     return;
   }
 
+  // v2: dominated effect = charmed + incapacitated (control-override)
   applySpellEffect(target, {
     casterId: caster.id, spellName: 'Dominate Person',
-    effectType: 'condition_apply', payload: { condition: 'charmed' },
+    effectType: 'dominated', payload: {},
     sourceIsConcentration: true,
   });
   emit(state, 'condition_add', caster.id,
-    `${target.name} is CHARMED by Dominate Person! (v1: control rider NOT modelled — charm only)`, target.id);
+    `${target.name} is DOMINATED by Dominate Person! (charmed + incapacitated)`, target.id);
 }
 
 // ---- Cleanup ------------------------------------------------

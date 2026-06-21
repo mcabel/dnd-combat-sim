@@ -14,33 +14,24 @@
 //
 // Upcast: none (8th-level spell — no upcast).
 //
-// v1 simplifications:
-//   - Control/telepathy: canon lets the caster command the target's
-//     actions via a telepathic link. v1 simplifies this to a pure
-//     `condition_apply:charmed` (the control rider is NOT modelled —
-//     v1 has no "control enemy action" subsystem). Documented via
-//     `dominateMonsterControlV1Simplified: true`.
-//   - Range: canon 60 ft. v1 uses chebyshev3D * 5 (square approx).
-//   - Duration: canon 1 hr concentration → v1 starts concentration via
-//     startConcentration(), but the engine does NOT enforce concentration
-//     checks on damage taken (TG-002). The charmed condition persists
-//     until removeEffectsFromCaster() is called (concentration break).
-//   - Combat advantage on save (PHB p.235: "If you or creatures that
-//     are friendly to you are fighting it, it has advantage on the
-//     saving throw"): NOT modelled — v1's rollSave has no adv-from-combat
-//     hook. Documented via `dominateMonsterCombatAdvSaveV1Simplified: true`.
-//   - Creature type: any creature (unlike Dominate Person which is
-//     humanoid-only). v1 does NOT verify creature type (parser tech
-//     debt — TG-004). All living enemies are valid targets.
-//   - NOT modelled: the saving throw to resist after taking damage
-//     (PHB p.235: target can repeat the save each time it takes damage).
+// v2 implementation:
+//   - Control-override: 'dominated' effect applies charmed + incapacitated.
+//     The dominated creature can't take independent actions (incapacitated).
+//     The caster could control the creature's actions by spending their own
+//     action, but v1 has no mechanism for controlling another creature's
+//     turn — so dominated = removed from combat (charmed + incapacitated).
+//   - No creature-type restriction (any creature — unlike Dominate Person
+//     which is humanoid-only or Dominate Beast which is beast-only).
+//   - Concentration: sourceIsConcentration: true — both conditions removed
+//     when concentration breaks.
 //
-// Migration note (Session 25 / Batch 2): migrated from the generic
-// forward-compat flag to a bespoke WIS-save-or-charmed (concentration).
-// Removed from `_generic_registry.ts`; routed via `case 'dominateMonster':`
-// in combat.ts and a planner branch in planner.ts. Mirrors Hold Person
-// (single-target concentration save-or-condition) but with charmed + any
-// creature + L8 slot.
+// NOT modelled:
+//   - Repeat save on damage (PHB p.235: target can repeat save each time
+//     it takes damage).
+//   - Combat advantage on save (PHB p.235: "If you or creatures that are
+//     friendly to you are fighting it, it has advantage on the saving
+//     throw" — v1's rollSave has no adv-from-combat hook).
+//     Documented via `dominateMonsterCombatAdvSaveV1Simplified: true`.
 //
 // Spell module pattern (single-target save-or-condition, concentration):
 //   shouldCast(caster, bf) → Combatant | null
@@ -65,9 +56,9 @@ export const metadata = {
   concentration: true,
   saveAbility: 'wis' as const,
   castingTime: 'action',
-  dominateMonsterControlV1Simplified: true,               // telepathic control NOT modelled
-  dominateMonsterCombatAdvSaveV1Simplified: true,         // in-combat adv on save NOT modelled
-  dominateMonsterConcentrationEnforcementV1Implemented: false,  // see TG-002
+  dominateMonsterControlV2Implemented: true,                 // dominated effect = charmed + incapacitated
+  dominateMonsterCombatAdvSaveV1Simplified: true,             // in-combat adv on save NOT modelled
+  dominateMonsterConcentrationEnforcementV1Implemented: false, // see TG-002
 } as const;
 
 // ---- Local log helper ---------------------------------------
@@ -98,10 +89,13 @@ function emit(
  * null when the spell should not be cast.
  *
  * Target priority:
- *   1. Highest-threat enemy (maxHP) within 60 ft — charming the biggest
- *      attacker removes their action economy (v1: charmed only; control
- *      rider NOT modelled).
+ *   1. Highest-threat enemy (maxHP) within 60 ft — dominating the
+ *      biggest attacker removes their action economy entirely.
  *   2. Tie-break: closest enemy.
+ *
+ * No creature-type restriction — any creature is a valid target
+ * (unlike Dominate Person which is humanoid-only, or Dominate Beast
+ * which is beast-only).
  *
  * Preconditions:
  *   - Caster has 'Dominate Monster' in their actions
@@ -124,7 +118,7 @@ export function shouldCast(caster: Combatant, bf: Battlefield): Combatant | null
     const distFt = chebyshev3D(caster.pos, c.pos) * 5;
     if (distFt > 60) continue;
 
-    // Skip if already charmed or incapacitated — charm adds no value.
+    // Skip if already charmed or incapacitated — domination adds no value.
     if (c.conditions.has('charmed') || c.conditions.has('incapacitated')) continue;
 
     // Skip if already Dominate-Monster'd by this caster.
@@ -153,7 +147,7 @@ export function shouldCast(caster: Combatant, bf: Battlefield): Combatant | null
  *  2. Break any existing concentration (safety net — planner prevents this).
  *  3. Start concentration on Dominate Monster.
  *  4. Roll the target's WIS save vs the caster's saveDC.
- *  5. On fail: apply charmed (condition_apply, sourceIsConcentration: true).
+ *  5. On fail: apply dominated (charmed + incapacitated, sourceIsConcentration: true).
  *  6. On success: log the save, no effect applied.
  *
  * @param caster  The casting Combatant (Bard / Sorcerer / Warlock / Wizard)
@@ -196,23 +190,24 @@ export function execute(
   if (save.success) {
     emit(
       state, 'action', caster.id,
-      `${target.name} resists Dominate Monster — not charmed!`,
+      `${target.name} resists Dominate Monster!`,
       target.id,
     );
     return;
   }
 
+  // v2: dominated effect = charmed + incapacitated (control-override)
   applySpellEffect(target, {
     casterId: caster.id,
     spellName: 'Dominate Monster',
-    effectType: 'condition_apply',
-    payload: { condition: 'charmed' },
+    effectType: 'dominated',
+    payload: {},
     sourceIsConcentration: true,
   });
 
   emit(
     state, 'condition_add', caster.id,
-    `${target.name} is CHARMED by Dominate Monster! (v1: control rider NOT modelled — charm only)`,
+    `${target.name} is DOMINATED by Dominate Monster! (charmed + incapacitated)`,
     target.id,
   );
 }

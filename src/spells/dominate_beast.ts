@@ -10,15 +10,24 @@
 //
 // Upcast: +1 min per slot-level above 4th (not modelled in v1).
 //
-// v1 simplifications: same as Dominate Monster — control simplified to
-// charmed; concentration not enforced (TG-002); beast-type restriction
-// not enforced (TG-004); repeat-save-on-damage not modelled.
+// v2 implementation:
+//   - Control-override: 'dominated' effect applies charmed + incapacitated.
+//     The dominated creature can't take independent actions (incapacitated).
+//     The caster could control the creature's actions by spending their own
+//     action, but v1 has no mechanism for controlling another creature's
+//     turn — so dominated = removed from combat (charmed + incapacitated).
+//   - Creature-type enforcement: target must be a beast. If the target's
+//     creatureType is set and is not 'beast', the spell skips them.
+//     If creatureType is undefined (unknown), we allow (be permissive).
+//   - Concentration: sourceIsConcentration: true — both conditions removed
+//     when concentration breaks.
 //
-// Migration note (Session 25 / Batch 2): migrated from the generic
-// forward-compat flag to a bespoke WIS-save-or-charmed (concentration).
-// Removed from `_generic_registry.ts`; routed via `case 'dominateBeast':`
-// in combat.ts and a planner branch in planner.ts. Mirrors Hold Person
-// (single-target concentration save-or-condition) but with charmed + L4.
+// NOT modelled:
+//   - Repeat save on damage (PHB p.235: target can repeat save each time
+//     it takes damage).
+//   - Combat advantage on save (N/A for Dominate Beast — only Dominate
+//     Person/Monster have this clause).
+//   - Upcast duration extension (+1 min per slot-level above 4th).
 //
 // Spell module pattern (single-target save-or-condition, concentration):
 //   shouldCast(caster, bf) → Combatant | null
@@ -43,9 +52,9 @@ export const metadata = {
   concentration: true,
   saveAbility: 'wis' as const,
   castingTime: 'action',
-  dominateBeastControlV1Simplified: true,
-  dominateBeastConcentrationEnforcementV1Implemented: false,
-  dominateBeastBeastTypeCheckV1Implemented: false,
+  dominateBeastControlV2Implemented: true,
+  dominateBeastBeastTypeCheckV2Implemented: true,
+  dominateBeastConcentrationEnforcementV1Implemented: false,  // see TG-002
 } as const;
 
 // ---- Local log helper ---------------------------------------
@@ -65,8 +74,12 @@ function emit(
 
 /**
  * Returns the single best target for Dominate Beast (a living enemy
- * within 60 ft, not already charmed/incapacitated), or null when the
- * spell should not be cast. Target priority: highest-threat, then closest.
+ * beast within 60 ft, not already charmed/incapacitated), or null when
+ * the spell should not be cast. Target priority: highest-threat, then closest.
+ *
+ * Creature-type enforcement (PHB p.235): only beasts are valid targets.
+ * If creatureType is set and is not 'beast', the candidate is skipped.
+ * If creatureType is undefined (unknown type), we allow — be permissive.
  */
 export function shouldCast(caster: Combatant, bf: Battlefield): Combatant | null {
   if (caster.concentration?.active) return null;
@@ -78,6 +91,8 @@ export function shouldCast(caster: Combatant, bf: Battlefield): Combatant | null
     if (c.id === caster.id) continue;
     if (c.faction === caster.faction) continue;
     if (c.isDead || c.isUnconscious) continue;
+    // Creature-type enforcement: target must be a beast
+    if (c.creatureType && c.creatureType !== 'beast') continue;
     const distFt = chebyshev3D(caster.pos, c.pos) * 5;
     if (distFt > 60) continue;
     if (c.conditions.has('charmed') || c.conditions.has('incapacitated')) continue;
@@ -107,17 +122,18 @@ export function execute(caster: Combatant, target: Combatant, state: EngineState
     `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} WIS save vs Dominate Beast (rolled ${save.total})`, target.id, save.roll);
 
   if (save.success) {
-    emit(state, 'action', caster.id, `${target.name} resists Dominate Beast — not charmed!`, target.id);
+    emit(state, 'action', caster.id, `${target.name} resists Dominate Beast!`, target.id);
     return;
   }
 
+  // v2: dominated effect = charmed + incapacitated (control-override)
   applySpellEffect(target, {
     casterId: caster.id, spellName: 'Dominate Beast',
-    effectType: 'condition_apply', payload: { condition: 'charmed' },
+    effectType: 'dominated', payload: {},
     sourceIsConcentration: true,
   });
   emit(state, 'condition_add', caster.id,
-    `${target.name} is CHARMED by Dominate Beast! (v1: control rider NOT modelled — charm only)`, target.id);
+    `${target.name} is DOMINATED by Dominate Beast! (charmed + incapacitated)`, target.id);
 }
 
 // ---- Cleanup ------------------------------------------------

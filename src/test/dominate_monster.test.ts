@@ -1,13 +1,11 @@
 // ============================================================
-// dominate_monster.test.ts — Dominate Monster bespoke spell module
-// (Session 25 / Batch 2)
+// dominate_monster.test.ts — Dominate Monster v2 (Session 28)
 // PHB p.235: 8th-level enchantment, action, range 60 ft, concentration.
-// WIS save or charmed. Any creature (not humanoid-restricted).
-//
-// Mirrors hold_person.test.ts (single-target save-or-condition, conc).
+// WIS save or dominated (charmed + incapacitated). Any creature (no type restriction).
 // ============================================================
 
 import { shouldCast, execute, metadata } from '../spells/dominate_monster';
+import { removeEffectsFromCaster } from '../engine/spell_effects';
 import { Combatant, Action, PlayerResources, Vec3, Condition } from '../types/core';
 
 let passed = 0, failed = 0;
@@ -43,7 +41,7 @@ const DM_ACTION: Action = {
   slotLevel: 8,
   costType: 'action',
   legendaryCost: 0,
-  description: 'Dominate Monster (WIS save or charmed, 60-ft range, concentration)',
+  description: 'Dominate Monster (WIS save or dominated, 60-ft range, concentration)',
 };
 
 const DM_ACTION_LOW_DC: Action = { ...DM_ACTION, saveDC: 5 };
@@ -107,15 +105,17 @@ function makeStrongEnemy(id: string, pos: Vec3, overrides: Partial<Combatant> = 
   return makeCombatant(id, { name: id, faction: 'enemy', wis: 30, pos, ...overrides });
 }
 
-// ---- 1. Metadata -----------------------------------------------
+// ---- 1. Metadata v2 -------------------------------------------
 
-console.log('\n=== 1. Metadata ===\n');
+console.log('\n=== 1. Metadata v2 ===\n');
 eq('Name is Dominate Monster', metadata.name, 'Dominate Monster');
 eq('Level is 8', metadata.level, 8);
 eq('School is enchantment', metadata.school, 'enchantment');
 eq('Range is 60 ft', metadata.rangeFt, 60);
 eq('Save ability is wis', metadata.saveAbility, 'wis');
 eq('Is concentration', metadata.concentration, true);
+assert('v2 control flag', (metadata as any).dominateMonsterControlV2Implemented === true);
+assert('v1 control flag removed', !(metadata as any).dominateMonsterControlV1Simplified);
 
 // ---- 2. shouldCast gates --------------------------------------
 
@@ -170,9 +170,43 @@ console.log('\n=== 3. shouldCast target selection ===\n');
   if (result) eq('Skips already-charmed enemy', (result as Combatant).id, 'fresh');
 }
 
-// ---- 4. execute — guaranteed fail (charmed) -------------------
+// ---- 4. No creature-type restriction ----
 
-console.log('\n=== 4. execute — guaranteed fail ===\n');
+console.log('\n=== 4. No creature-type restriction ===\n');
+
+{
+  // Beast — valid target
+  const caster = makeCaster({ x: 0, y: 0, z: 0 });
+  const beast = makeWeakEnemy('beast', { x: 1, y: 0, z: 0 }, { creatureType: 'beast' } as any);
+  const result = shouldCast(caster, makeBF([caster, beast]));
+  assert('Beast is valid target for Dominate Monster', result !== null);
+  if (result) eq('Beast id', (result as Combatant).id, 'beast');
+}
+{
+  // Humanoid — valid target
+  const caster = makeCaster({ x: 0, y: 0, z: 0 });
+  const humanoid = makeWeakEnemy('hum', { x: 1, y: 0, z: 0 }, { creatureType: 'humanoid' } as any);
+  const result = shouldCast(caster, makeBF([caster, humanoid]));
+  assert('Humanoid is valid target for Dominate Monster', result !== null);
+}
+{
+  // Undead — valid target
+  const caster = makeCaster({ x: 0, y: 0, z: 0 });
+  const undead = makeWeakEnemy('und', { x: 1, y: 0, z: 0 }, { creatureType: 'undead' } as any);
+  const result = shouldCast(caster, makeBF([caster, undead]));
+  assert('Undead is valid target for Dominate Monster', result !== null);
+}
+{
+  // Fiend — valid target
+  const caster = makeCaster({ x: 0, y: 0, z: 0 });
+  const fiend = makeWeakEnemy('fiend', { x: 1, y: 0, z: 0 }, { creatureType: 'fiend' } as any);
+  const result = shouldCast(caster, makeBF([caster, fiend]));
+  assert('Fiend is valid target for Dominate Monster', result !== null);
+}
+
+// ---- 5. execute — dominated effect (charmed + incapacitated) ---
+
+console.log('\n=== 5. execute — dominated effect ===\n');
 
 {
   const caster = makeCaster({ x: 0, y: 0, z: 0 });
@@ -185,14 +219,23 @@ console.log('\n=== 4. execute — guaranteed fail ===\n');
     eq('Slot consumed (8th level: 1 → 0)', (caster.resources as any).spellSlots[8].remaining, 0);
     assert('Concentration started', caster.concentration?.active === true);
     assert('Charmed applied', enemy.conditions.has('charmed'));
+    assert('Incapacitated applied', enemy.conditions.has('incapacitated'));
     const saveFails = state.log.events.filter(e => e.type === 'save_fail');
     assert('Save-fail log emitted', saveFails.length === 1);
+    // Check activeEffects has dominated type
+    const domEffect = enemy.activeEffects.find(eff => eff.effectType === 'dominated');
+    assert('dominated effect present', domEffect !== undefined);
+    if (domEffect) {
+      eq('effect spellName', domEffect.spellName, 'Dominate Monster');
+      eq('effect casterId', domEffect.casterId, 'wiz');
+      assert('sourceIsConcentration', domEffect.sourceIsConcentration === true);
+    }
   }
 }
 
-// ---- 5. execute — guaranteed success (no charm) ---------------
+// ---- 6. execute — guaranteed success (no charm) ---------------
 
-console.log('\n=== 5. execute — guaranteed success ===\n');
+console.log('\n=== 6. execute — guaranteed success ===\n');
 
 {
   const caster = makeCaster({ x: 0, y: 0, z: 0 }, DM_ACTION_LOW_DC);
@@ -204,14 +247,69 @@ console.log('\n=== 5. execute — guaranteed success ===\n');
     execute(caster, target as Combatant, state);
     eq('Slot consumed', (caster.resources as any).spellSlots[8].remaining, 0);
     assert('NOT charmed (save succeeded)', !enemy.conditions.has('charmed'));
+    assert('NOT incapacitated (save succeeded)', !enemy.conditions.has('incapacitated'));
     const saveSuccess = state.log.events.filter(e => e.type === 'save_success');
     assert('Save-success log emitted', saveSuccess.length === 1);
   }
 }
 
-// ---- 6. Cleanup is a no-op ------------------------------------
+// ---- 7. Concentration break removes both conditions -----------
 
-console.log('\n=== 6. Cleanup is a no-op ===\n');
+console.log('\n=== 7. Concentration break removes both conditions ===\n');
+
+{
+  const caster = makeCaster({ x: 0, y: 0, z: 0 });
+  const enemy = makeWeakEnemy('e1', { x: 5, y: 0, z: 0 });
+  const bf = makeBF([caster, enemy]);
+  const state = makeState(bf);
+  const target = shouldCast(caster, bf);
+  if (target) {
+    execute(caster, target as Combatant, state);
+    assert('Charmed before break', enemy.conditions.has('charmed'));
+    assert('Incapacitated before break', enemy.conditions.has('incapacitated'));
+    // Simulate concentration break
+    removeEffectsFromCaster(caster.id, bf);
+    assert('Charmed removed after break', !enemy.conditions.has('charmed'));
+    assert('Incapacitated removed after break', !enemy.conditions.has('incapacitated'));
+    assert('No dominated effect remaining', !enemy.activeEffects.some(eff => eff.effectType === 'dominated'));
+  }
+}
+
+// ---- 8. Already dominated target skipped by shouldCast ---------
+
+console.log('\n=== 8. Already dominated target skipped ===\n');
+
+{
+  const caster = makeCaster({ x: 0, y: 0, z: 0 });
+  const enemy = makeWeakEnemy('e1', { x: 1, y: 0, z: 0 });
+  const bf = makeBF([caster, enemy]);
+  const state = makeState(bf);
+  // First cast dominates the target
+  execute(caster, enemy, state);
+  assert('Target is charmed', enemy.conditions.has('charmed'));
+  // Second cast — caster is concentrating, so shouldCast returns null
+  eq('Returns null when already concentrating', shouldCast(caster, bf), null);
+}
+
+// ---- 9. Log messages ------------------------------------------
+
+console.log('\n=== 9. Log messages ===\n');
+
+{
+  const caster = makeCaster({ x: 0, y: 0, z: 0 });
+  const enemy = makeWeakEnemy('e1', { x: 5, y: 0, z: 0 });
+  const bf = makeBF([caster, enemy]);
+  const state = makeState(bf);
+  execute(caster, enemy, state);
+  const domLogs = state.log.events.filter((x: any) => x.description && x.description.includes('DOMINATED'));
+  assert('DOMINATED in log', domLogs.length > 0);
+  const charmOnlyLogs = state.log.events.filter((x: any) => x.description && x.description.includes('charm only'));
+  assert('No "charm only" log', charmOnlyLogs.length === 0);
+}
+
+// ---- 10. Cleanup is a no-op ------------------------------------
+
+console.log('\n=== 10. Cleanup is a no-op ===\n');
 
 {
   const caster = makeCaster();

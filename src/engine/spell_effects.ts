@@ -74,6 +74,11 @@ export function applySpellEffect(
       target.conditions.add(effect.payload.condition!);
       break;
 
+    case 'dominated':
+      target.conditions.add('charmed');
+      target.conditions.add('incapacitated');
+      break;
+
     case 'taunt':
     case 'curse_attack_disadv':
     case 'ability_disadvantage':
@@ -161,6 +166,11 @@ function _undoEffect(target: Combatant, effect: ActiveEffect): void {
           target._saveFailTracker.casterId === effect.casterId) {
         delete target._saveFailTracker;
       }
+      break;
+
+    case 'dominated':
+      target.conditions.delete('charmed');
+      target.conditions.delete('incapacitated');
       break;
 
     case 'taunt':

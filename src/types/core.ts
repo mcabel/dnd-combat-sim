@@ -103,6 +103,7 @@ export type SpellEffectType =
   | 'curse_attack_disadv'  // disadvantage on attacks vs the curse caster (Bestow Curse PHB p.214 opt.1)
   | 'ability_disadvantage' // disadvantage on ability checks & saves for one ability (Bestow Curse PHB p.214 opt.2)
   | 'curse_rider'          // 1d8 necrotic when cursed target attacks the curse caster (Bestow Curse PHB p.214 opt.4)
+  | 'dominated'             // charmed + incapacitated (Dominate Beast/Person/Monster PHB p.235 — control-override)
   // ── Session 27 — Batch 3 concentration buffs ────────────────────────
   // bane_die: inverse of bless_die (Bane PHB p.219: -1d4 to attacks/saves).
   // weapon_enchant extended with damageDie/damageDieCount/damageDieType
