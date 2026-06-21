@@ -488,5 +488,5 @@ console.log('\n=== Section 11: _movingZone not set when concentration is absent 
 // ---- Summary ------------------------------------------------
 
 console.log(`\n${'='.repeat(60)}`);
-console.log(`Moving Zone tests: ${passed} passed, ${failed} failed`);
+console.log(`\nResults: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
