@@ -8,22 +8,27 @@
 //         centered on a point you choose within range. All creatures
 //         and loose objects in that area fall upward to the top of the
 //         area. A creature can make a Dexterity saving throw to anchor
-//         itself to a solid surface. On a failed save, a creature is
-//         restrained (v1 simplification of the "fall upward" effect).
+//         itself to a solid surface. On a failed save, a creature falls
+//         upward 100 ft and is restrained at the top of the area.
+//         When concentration ends, affected creatures fall back down
+//         and take fall damage (PHB p.183: 1d6 per 10 ft).
 //
 // Upcast: none (7th-level spell — no upcast).
 //
-// v1 simplifications:
+// v2 mechanics:
+//   - Failed DEX save → restrained (stuck at top of 100-ft cylinder)
+//     + _fallHeight = 100 (PHB p.277: creatures fall to the top of the
+//     area, which is 100 ft up). When concentration breaks, the target
+//     falls back down and takes 10d6 bludgeoning fall damage.
+//   - Fall damage processed by processFallDamage() in combat.ts,
+//     called after every removeEffectsFromCaster() invocation.
+//     This handles: concentration save fail, caster death, new
+//     concentration replacing old, etc.
 //   - Shape: canon 50-ft-radius cylinder centered on a point within
-//     100 ft. v1 centers the cylinder on the highest-threat enemy
+//     100 ft. v2 centers the cylinder on the highest-threat enemy
 //     within 100 ft (mirrors Sunburst) and collects all enemies within
 //     50 ft via chebyshev3D (square approx of the cylinder).
-//   - Effect: canon "falls upward" + lands at top of area (then falls
-//     back when concentration ends, taking fall damage). v1 simplifies
-//     to `condition_apply:restrained` on a failed DEX save (the closest
-//     disabling condition; fall-damage-on-concentration-end NOT modelled).
-//     Documented via `reverseGravityFallUpwardSimplifiedToRestrained`.
-//   - Concentration: canon 1 min concentration. v1 starts concentration
+//   - Concentration: canon 1 min concentration. v2 starts concentration
 //     via startConcentration(); engine does NOT enforce concentration
 //     checks on damage taken (TG-002). The restrained is
 //     sourceIsConcentration: true.
@@ -59,8 +64,7 @@ export const metadata = {
   concentration: true,
   saveAbility: 'dex' as const,
   castingTime: 'action',
-  reverseGravityFallUpwardSimplifiedToRestrained: true,  // "fall upward" → restrained
-  reverseGravityFallDamageV1Simplified: true,            // fall-back damage NOT modelled
+  reverseGravityFallDamageV2: true,  // PHB p.277 + p.183: fall damage on concentration break
 } as const;
 
 // ---- Local log helper ---------------------------------------
@@ -176,12 +180,17 @@ export function execute(
         casterId: caster.id,
         spellName: 'Reverse Gravity',
         effectType: 'condition_apply',
-        payload: { condition: 'restrained' },
+        payload: { condition: 'restrained', fallHeight: 100 },
         sourceIsConcentration: true,
       });
+      // PHB p.277: creature falls upward to the top of the 100-ft cylinder.
+      // _fallHeight is read by processFallDamage() in combat.ts when
+      // concentration breaks (the restrained effect is removed, but the
+      // scratch field persists until processFallDamage clears it).
+      target._fallHeight = 100;
       emit(
         state, 'condition_add', caster.id,
-        `${target.name} is RESTRAINED (falls upward, anchored at the top of the area)!`,
+        `${target.name} is RESTRAINED (falls upward 100 ft, anchored at the top of the area)!`,
         target.id,
       );
     }

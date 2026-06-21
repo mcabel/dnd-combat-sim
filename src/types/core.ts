@@ -205,6 +205,11 @@ export interface ActiveEffect {
     riderDieCount?: number;             // e.g. 1 for 1d8
     riderDamageType?: DamageType;       // e.g. 'necrotic'
     riderCasterId?: string;             // ID of the curse caster — attacks vs this creature trigger rider
+    // ── condition_apply fallHeight (Reverse Gravity PHB p.277) ──────────
+    // Height in feet the creature has been lifted. When concentration
+    // breaks, the creature falls and takes fall damage (PHB p.183).
+    // Read by processFallDamage() in combat.ts.
+    fallHeight?: number;                // e.g. 100 for 100-ft Reverse Gravity cylinder
   };
   sourceIsConcentration: boolean;     // if true, removed when caster's concentration ends
 }
@@ -1247,6 +1252,14 @@ export interface Combatant {
   // turn in combat.ts's runCombat loop. Cleared when the tracker resolves
   // (3 fails or 3 successes) or when the matching active effect is removed.
   _saveFailTracker?: SaveFailTracker;
+
+  // ---- Reverse Gravity (PHB p.277) fall-damage scratch field ----
+  // Height in feet the creature has been lifted by Reverse Gravity.
+  // When concentration breaks, the creature falls back down and takes
+  // fall damage: 1d6 per 10 ft (PHB p.183). For 100 ft: 10d6 bludgeoning.
+  // Set by reverse_gravity.ts execute(); cleared by processFallDamage()
+  // in combat.ts after concentration break removes the effect.
+  _fallHeight?: number;
 }
 
 // ---- Obstacle -----------------------------------------------

@@ -804,6 +804,7 @@ export function resolveAttack(
         const maintained = rollConcentrationSave(target, dealt);
         if (!maintained) {
           removeEffectsFromCaster(target.id, state.battlefield);
+          processFallDamage(state);
           log(state, 'condition_remove', target.id,
             `${target.name} loses concentration on ${target.concentration?.spellName ?? 'spell'}!`, undefined);
         }
@@ -833,6 +834,7 @@ export function resolveAttack(
         const maintained = rollConcentrationSave(target, dealt);
         if (!maintained) {
           removeEffectsFromCaster(target.id, state.battlefield);
+          processFallDamage(state);
           log(state, 'condition_remove', target.id,
             `${target.name} loses concentration!`, undefined);
         }
@@ -1429,6 +1431,7 @@ export function resolveAttack(
       const maintained = rollConcentrationSave(target, dealt);
       if (!maintained) {
         removeEffectsFromCaster(target.id, state.battlefield);
+        processFallDamage(state);
         log(state, 'condition_remove', target.id,
           `${target.name} loses concentration on ${target.concentration?.spellName ?? 'spell'}!`, undefined);
       }
@@ -1512,6 +1515,7 @@ function checkDeath(target: Combatant, state: EngineState, attacker?: Combatant)
   if (target.concentration?.active) {
     const spellName = target.concentration.spellName ?? 'spell';
     removeEffectsFromCaster(target.id, state.battlefield);
+    processFallDamage(state);
     target.concentration = null;
     log(state, 'condition_remove', target.id,
       `${target.name}'s concentration on ${spellName} breaks!`, undefined);
@@ -1545,6 +1549,57 @@ function checkDeath(target: Combatant, state: EngineState, attacker?: Combatant)
   if (target.conditions.has('grappled')) {
     removeCondition(target, 'grappled');
     target.grappledBy = undefined;
+  }
+}
+
+// ---- Reverse Gravity fall-damage processing -------------------
+
+/**
+ * After removeEffectsFromCaster is called, check all combatants for
+ * _fallHeight > 0. If a combatant has _fallHeight set but no longer
+ * has an active 'Reverse Gravity' effect, they fall back down and take
+ * fall damage (PHB p.183: 1d6 per 10 ft, max 20d6).
+ *
+ * This must be called after EVERY removeEffectsFromCaster invocation
+ * so that Reverse Gravity fall damage is applied whenever concentration
+ * breaks — regardless of the cause (con save fail, caster death, new
+ * concentration replacing old, dispel, etc.).
+ *
+ * @param state  Current EngineState (for damage application, logging, death checks)
+ */
+function processFallDamage(state: EngineState): void {
+  const bf = state.battlefield;
+  for (const c of bf.combatants.values()) {
+    if (!c._fallHeight || c._fallHeight <= 0) continue;
+    if (c.isDead) { delete c._fallHeight; continue; }
+
+    // Check if the Reverse Gravity effect is still active on this target.
+    // If it is, concentration hasn't broken for this target yet — skip.
+    const hasRGEffect = c.activeEffects.some(e => e.spellName === 'Reverse Gravity');
+    if (hasRGEffect) continue;
+
+    // Fall damage! PHB p.183: 1d6 per 10 feet fallen, max 20d6.
+    const fallHeight = c._fallHeight;
+    const diceCount = Math.min(Math.floor(fallHeight / 10), 20); // cap at 20d6 (200 ft)
+    let fallDmg = 0;
+    for (let i = 0; i < diceCount; i++) fallDmg += rollDie(6);
+
+    // Apply via applyDamageWithTempHP so temp HP, resistance, and
+    // Warding Bond redirect are all handled correctly.
+    const dealt = applyDamageWithTempHP(c, fallDmg, 'bludgeoning');
+
+    log(state, 'damage', c.id,
+      `${c.name} falls ${fallHeight} ft and takes ${dealt} bludgeoning damage! (Reverse Gravity ended)`,
+      c.id, dealt);
+
+    // Warding Bond redirect (if the falling creature has a bonded protector)
+    applyWardingBondRedirect(c, dealt, state);
+
+    // Death check (the fall may have killed the creature)
+    checkDeath(c, state);
+
+    // Clear the scratch field
+    delete c._fallHeight;
   }
 }
 
@@ -3969,6 +4024,7 @@ export function runCombat(
             const maintained = rollConcentrationSave(actor, dealt);
             if (!maintained) {
               removeEffectsFromCaster(actor.id, battlefield);
+              processFallDamage(state);
               log(state, 'condition_remove', actor.id,
                 `${actor.name} loses concentration on ${actor.concentration?.spellName ?? 'spell'} (damaged by ${zone.spellName})!`, undefined);
             }
