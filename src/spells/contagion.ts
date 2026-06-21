@@ -11,16 +11,24 @@
 //
 // Upcast: none (5th-level spell — no upcast).
 //
-// v1 simplifications:
-//   - Disease-after-3-saves (PHB p.227: target makes CON saves; after 3
-//     failures the disease takes effect): v1 simplifies to IMMEDIATE
-//     poisoned on hit (no 3-save escalation). Documented via
+// v2 implementation (3-fail-save escalation):
+//   - On hit: apply poisoned. Set _saveFailTracker with fails=0, successes=0.
+//   - At the start of each of the target's turns: CON save vs spell DC.
+//   - After 3 failed saves: apply incapacitated (Slimy Doom disease,
+//     PHB p.227). Tracker cleared. Both poisoned + incapacitated persist.
+//   - After 3 successful saves: remove poisoned. Tracker cleared.
+//   - NO concentration — the disease persists until resolved.
+//
+// v1 simplifications (replaced in v2):
+//   - Disease-after-3-saves (PHB p.227): v1 simplified to IMMEDIATE
+//     poisoned on hit (no 3-save escalation). Was documented via
 //     `contagionThreeSaveEscalationV1Simplified`.
 //   - Disease choice (PHB p.227: 6 named diseases with varied effects):
-//     v1 picks `poisoned` (the common/simplest disabling condition).
-//     Documented via `contagionDiseaseChoiceV1SimplifiedToPoisoned`.
+//     v2 picks Slimy Doom (poisoned + incapacitated on 3 fails) as the
+//     most debilitating. Documented via
+//     `contagionDiseaseChoiceV1SimplifiedToPoisoned`.
 //   - NO damage (PHB p.227: the diseases cause conditions, not direct
-//     damage). v1 applies poisoned on hit, no damage roll.
+//     damage). v2 applies poisoned on hit, no damage roll.
 //   - NO concentration (PHB p.227: instantaneous — the disease is a
 //     non-concentration persistent effect).
 //   - Melee spell attack: mirrors Inflict Wounds (rollAttack vs AC,
@@ -39,7 +47,7 @@
 //   cleanup() — no-op (instantaneous; poisoned persists via condition_apply)
 // ============================================================
 
-import { Combatant, Battlefield } from '../types/core';
+import { Combatant, Battlefield, SaveFailTracker } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
 import { applySpellEffect } from '../engine/spell_effects';
 import { rollAttack, abilityMod } from '../engine/utils';
@@ -56,8 +64,8 @@ export const metadata = {
   concentration: false,
   saveAbility: null,             // PHB p.227: NO save (melee spell attack)
   castingTime: 'action',
-  contagionThreeSaveEscalationV1Simplified: true,         // immediate poisoned on hit
-  contagionDiseaseChoiceV1SimplifiedToPoisoned: true,     // v1 picks poisoned
+  contagionThreeSaveEscalationV2Implemented: true,         // 3-fail escalation tracked
+  contagionDiseaseChoiceV1SimplifiedToPoisoned: true,     // v2 picks Slimy Doom
   contagionHitBonusFromActionV1Implemented: true,         // uses action.hitBonus
 } as const;
 
@@ -102,11 +110,13 @@ export function shouldCast(caster: Combatant, bf: Battlefield): Combatant | null
 export function execute(caster: Combatant, target: Combatant, state: EngineState): void {
   const action = caster.actions.find(a => a.name === 'Contagion');
   const hitBonus = action?.hitBonus ?? abilityMod(caster.wis);
+  // Save DC: derived from the action's saveDC if present, else WIS mod + 8
+  const saveDC = action?.saveDC ?? (8 + abilityMod(caster.wis));
 
   consumeSpellSlot(caster, 5);
 
   emit(state, 'action', caster.id,
-    `${caster.name} casts Contagion! (melee spell attack, poisoned on hit, no damage)`, target.id);
+    `${caster.name} casts Contagion! (melee spell attack, poisoned on hit, 3-fail escalation tracked)`, target.id);
 
   if (target.isDead || target.isUnconscious) {
     emit(state, 'attack_miss', caster.id, `Contagion: ${target.name} is already down — spell fizzles.`, target.id);
@@ -125,7 +135,7 @@ export function execute(caster: Combatant, target: Combatant, state: EngineState
   emit(state, result.isCrit ? 'attack_crit' : 'attack_hit', caster.id,
     `${caster.name} ${result.isCrit ? 'CRITS' : 'hits'} ${target.name} with Contagion (${result.total} vs AC ${effectiveAC})`, target.id, result.roll);
 
-  // Apply poisoned on hit (disease-after-3-saves simplified to immediate).
+  // Apply poisoned on hit (v2: initial disease symptom, tracked via _saveFailTracker).
   if (!target.conditions.has('poisoned')) {
     applySpellEffect(target, {
       casterId: caster.id, spellName: 'Contagion',
@@ -133,8 +143,24 @@ export function execute(caster: Combatant, target: Combatant, state: EngineState
       sourceIsConcentration: false,
     });
     emit(state, 'condition_add', caster.id,
-      `${target.name} is POISONED by Contagion! (disadvantage on attacks/ability checks)`, target.id);
+      `${target.name} is POISONED by Contagion! (CON saves at start of each turn — 3 fails → incapacitated, 3 successes → cured)`, target.id);
   }
+
+  // Set the save-fail tracker for 3-fail escalation.
+  // Contagion: initial = poisoned, escalation = incapacitated (Slimy Doom).
+  // fails starts at 0 because the initial hit is NOT a save — the target
+  // gets their first save at the start of their NEXT turn.
+  target._saveFailTracker = {
+    spellName: 'Contagion',
+    casterId: caster.id,
+    fails: 0,
+    successes: 0,
+    maxCount: 3,
+    saveAbility: 'con',
+    saveDC,
+    conditionOnFail: 'incapacitated',
+    currentCondition: 'poisoned',
+  };
 }
 
 // ---- Cleanup ------------------------------------------------

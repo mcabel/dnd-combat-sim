@@ -4003,6 +4003,110 @@ export function runCombat(
       // Primary expiry happens in resolveAttack (consumeGuidingBoltMark); this is the safety net.
       cleanupGuidingBoltMarks(actor, battlefield);
 
+      // ── Save-fail tracker (Contagion / Flesh to Stone) ────────────────
+      // PHB p.227 (Contagion): "At the end of each of the target's turns,
+      //   the target must make a Constitution saving throw..."
+      // PHB p.241 (Flesh to Stone): "A creature restrained by this spell
+      //   must make another Constitution saving throw at the end of its
+      //   next turn."
+      //
+      // We process this at the START of the target's turn (before they act)
+      // rather than at the end. This avoids an off-by-one where the end-of-
+      // turn hook would fire on the same turn the spell was cast (the target
+      // shouldn't save on the turn they were first affected). For Contagion,
+      // the initial hit applies poisoned with no save; the first save comes
+      // at the start of the target's next turn. For Flesh to Stone, the
+      // initial CON save failure already counts as fail #1; the next save
+      // comes at the start of the target's next turn.
+      if (actor._saveFailTracker && !actor.isDead && !actor.isUnconscious) {
+        const tracker = actor._saveFailTracker;
+
+        // For Flesh to Stone: if the caster is no longer concentrating on
+        // this spell, the tracker should have been cleared by _undoEffect
+        // when the restrained condition was removed. But as a safety net,
+        // check concentration state and skip if broken.
+        if (tracker.spellName === 'Flesh to Stone') {
+          const ftsCaster = battlefield.combatants.get(tracker.casterId);
+          if (!ftsCaster || !ftsCaster.concentration?.active ||
+              ftsCaster.concentration.spellName !== 'Flesh to Stone') {
+            // Concentration broke — tracker should already be clear, but
+            // clean up just in case.
+            delete actor._saveFailTracker;
+          }
+        }
+
+        if (actor._saveFailTracker) {
+          const save = rollSave(actor, tracker.saveAbility, tracker.saveDC);
+          log(state,
+            save.success ? 'save_success' : 'save_fail',
+            tracker.casterId,
+            `${actor.name} ${save.success ? 'succeeds on' : 'fails'} DC ${tracker.saveDC} ${tracker.saveAbility.toUpperCase()} save vs ${tracker.spellName} (start-of-turn tracker: ${tracker.fails} fails / ${tracker.successes} successes → ${save.success ? 'success' : 'fail'} #${save.success ? tracker.successes + 1 : tracker.fails + 1}) (rolled ${save.total})`,
+            actor.id, save.roll);
+
+          if (save.success) {
+            tracker.successes++;
+            if (tracker.successes >= tracker.maxCount) {
+              // 3 successes: remove all effects from this tracker spell and clear it.
+              // Remove matching active effects and their conditions.
+              const matchingEffects = actor.activeEffects.filter(
+                e => e.casterId === tracker.casterId && e.spellName === tracker.spellName
+              );
+              for (const eff of matchingEffects) {
+                if (eff.effectType === 'condition_apply' && eff.payload.condition) {
+                  actor.conditions.delete(eff.payload.condition);
+                }
+              }
+              actor.activeEffects = actor.activeEffects.filter(
+                e => !(e.casterId === tracker.casterId && e.spellName === tracker.spellName)
+              );
+              log(state, 'condition_remove', tracker.casterId,
+                `${actor.name} overcomes ${tracker.spellName}! (3 successful saves — ${tracker.currentCondition} removed)`,
+                actor.id);
+              delete actor._saveFailTracker;
+            }
+          } else {
+            tracker.fails++;
+            if (tracker.fails >= tracker.maxCount) {
+              // 3 fails: escalate condition.
+              // Remove the current condition effects from this spell.
+              const matchingEffects = actor.activeEffects.filter(
+                e => e.casterId === tracker.casterId && e.spellName === tracker.spellName
+              );
+              for (const eff of matchingEffects) {
+                if (eff.effectType === 'condition_apply' && eff.payload.condition) {
+                  actor.conditions.delete(eff.payload.condition);
+                }
+              }
+              actor.activeEffects = actor.activeEffects.filter(
+                e => !(e.casterId === tracker.casterId && e.spellName === tracker.spellName)
+              );
+              // Apply the escalation condition.
+              // For Flesh to Stone: petrified is NOT concentration-sourced (permanent).
+              //   Use the TARGET's own ID as casterId so that removeEffectsFromCaster
+              //   on the original caster won't remove the petrified condition.
+              //   The petrification is self-sustaining once reached (PHB p.241).
+              // For Contagion: incapacitated is NOT concentration-sourced (permanent).
+              //   Use the original casterId — Contagion has no concentration, so
+              //   removeEffectsFromCaster won't be called for it in normal flow.
+              const escalationCasterId = tracker.spellName === 'Flesh to Stone'
+                ? actor.id   // petrified is self-sustaining; not tied to caster
+                : tracker.casterId;
+              applySpellEffect(actor, {
+                casterId: escalationCasterId,
+                spellName: tracker.spellName,
+                effectType: 'condition_apply',
+                payload: { condition: tracker.conditionOnFail },
+                sourceIsConcentration: false,
+              });
+              log(state, 'condition_add', tracker.casterId,
+                `${actor.name} succumbs to ${tracker.spellName}! (3 failed saves — ${tracker.currentCondition} → ${tracker.conditionOnFail})`,
+                actor.id);
+              delete actor._saveFailTracker;
+            }
+          }
+        }
+      }
+
       // Plan the turn
       const plan = planTurn(actor, battlefield);
 

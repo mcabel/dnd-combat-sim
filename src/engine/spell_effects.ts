@@ -152,6 +152,15 @@ function _undoEffect(target: Combatant, effect: ActiveEffect): void {
 
     case 'condition_apply':
       target.conditions.delete(effect.payload.condition!);
+      // Clear save-fail tracker if this effect belongs to a tracker spell
+      // (Contagion / Flesh to Stone). When the condition is removed (e.g.
+      // by concentration break or removeEffectsFromCaster), the tracker
+      // should also be cleared so no further save processing happens.
+      if (target._saveFailTracker &&
+          target._saveFailTracker.spellName === effect.spellName &&
+          target._saveFailTracker.casterId === effect.casterId) {
+        delete target._saveFailTracker;
+      }
       break;
 
     case 'taunt':

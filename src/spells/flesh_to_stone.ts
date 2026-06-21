@@ -16,17 +16,25 @@
 //
 // Upcast: none (6th-level spell — no upcast).
 //
-// v1 simplifications:
-//   - 3-fail petrification (PHB p.241: restrained → 3 failed saves →
-//     petrified): v1 simplifies to ONE condition — `restrained` on the
-//     initial failed save. The petrified-on-3-fails escalation is NOT
-//     modelled (no per-target save-counter subsystem). Documented via
+// v2 implementation (3-fail-save escalation):
+//   - On CON save fail: apply restrained (concentration-sourced).
+//     Set _saveFailTracker with fails=1, successes=0.
+//   - At the start of each of the target's turns: CON save vs spell DC.
+//   - After 3 failed saves total: upgrade to petrified (NOT concentration-
+//     sourced — permanent). Tracker cleared.
+//   - After 3 successful saves total: remove all effects, clear tracker.
+//   - If concentration breaks before petrification: restrained removed,
+//     tracker cleared.
+//   - If petrified is reached: condition persists even if concentration
+//     breaks (it's the final state — PHB p.241).
+//
+// v1 simplifications (replaced in v2):
+//   - 3-fail petrification: v1 simplified to ONE condition — restrained
+//     on initial fail (no 3-save escalation). Was documented via
 //     `fleshToStonePetrifiedOn3FailsV1Simplified`.
-//   - End-of-turn repeat save (PHB p.241): NOT modelled — v1 has no
-//     end-of-turn save hook. The restrained persists for the entire
-//     combat (or until concentration breaks). Documented via
-//     `fleshToStoneEndOfTurnSaveV1Implemented: false`.
-//   - Range: canon 60 ft. v1 uses chebyshev3D * 5 (square approx).
+//   - End-of-turn repeat save: v1 skipped (no end-of-turn save hook).
+//     Was documented via `fleshToStoneEndOfTurnSaveV1Implemented: false`.
+//   - Range: canon 60 ft. v1 uses chebyshev3D * 5.
 //   - Concentration: canon 1 min concentration. v1 starts concentration
 //     via startConcentration(); engine does NOT enforce concentration
 //     checks on damage taken (TG-002). The restrained is
@@ -47,7 +55,7 @@
 //   cleanup() — no-op (concentration break handles cleanup)
 // ============================================================
 
-import { Combatant, Battlefield } from '../types/core';
+import { Combatant, Battlefield, SaveFailTracker } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
 import { applySpellEffect, removeEffectsFromCaster } from '../engine/spell_effects';
 import { startConcentration, rollSave } from '../engine/utils';
@@ -64,8 +72,8 @@ export const metadata = {
   concentration: true,
   saveAbility: 'con' as const,
   castingTime: 'action',
-  fleshToStonePetrifiedOn3FailsV1Simplified: true,         // petrified escalation NOT modelled
-  fleshToStoneEndOfTurnSaveV1Implemented: false,           // end-of-turn save skipped
+  fleshToStonePetrifiedOn3FailsV2Implemented: true,        // 3-fail escalation tracked
+  fleshToStoneEndOfTurnSaveV2Implemented: true,             // start-of-turn save tracked
   fleshToStoneFleshOnlyRestrictionV1Simplified: true,      // no creature-composition tag
 } as const;
 
@@ -144,7 +152,8 @@ export function shouldCast(caster: Combatant, bf: Battlefield): Combatant | null
  *  1. Consume a 6th-level spell slot.
  *  2. Break any existing concentration (safety net).
  *  3. Start concentration on Flesh to Stone.
- *  4. Roll the target's CON save; on fail apply restrained (conc-sourced).
+ *  4. Roll the target's CON save; on fail apply restrained (conc-sourced)
+ *     and set _saveFailTracker with fails=1.
  *
  * @param caster  The casting Combatant (Warlock / Wizard)
  * @param target  The candidate from shouldCast (single enemy in range)
@@ -167,7 +176,7 @@ export function execute(
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Flesh to Stone at ${target.name}! (DC ${saveDC} CON)`,
+    `${caster.name} casts Flesh to Stone at ${target.name}! (DC ${saveDC} CON, 3-fail escalation tracked)`,
     target.id,
   );
 
@@ -202,9 +211,25 @@ export function execute(
 
   emit(
     state, 'condition_add', caster.id,
-    `${target.name} is RESTRAINED as flesh begins to harden! (v1: 3-fail petrified escalation NOT modelled)`,
+    `${target.name} is RESTRAINED as flesh begins to harden! (CON saves at start of each turn — 3 fails → petrified, 3 successes → freed)`,
     target.id,
   );
+
+  // Set the save-fail tracker for 3-fail escalation.
+  // Flesh to Stone: initial = restrained (concentration-sourced),
+  // escalation = petrified (NOT concentration-sourced — permanent).
+  // fails starts at 1 because the initial save was already failed.
+  target._saveFailTracker = {
+    spellName: 'Flesh to Stone',
+    casterId: caster.id,
+    fails: 1,
+    successes: 0,
+    maxCount: 3,
+    saveAbility: 'con',
+    saveDC,
+    conditionOnFail: 'petrified',
+    currentCondition: 'restrained',
+  };
 }
 
 // ---- Cleanup ------------------------------------------------

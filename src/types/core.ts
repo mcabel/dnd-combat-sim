@@ -339,6 +339,23 @@ export interface PlayerResources {
   hitDice?: { max: number; remaining: number; dieSides: number };
 }
 
+// ---- Save-fail tracker (Contagion / Flesh to Stone) -----------
+// Per-target save-fail tracker for escalating conditions.
+// Set on the TARGET by the spell's execute(); processed at the start
+// of the target's turn in combat.ts's runCombat loop.
+
+export interface SaveFailTracker {
+  spellName: string;              // 'Contagion' or 'Flesh to Stone'
+  casterId: string;               // who cast the spell
+  fails: number;                  // count of failed saves (0–3)
+  successes: number;              // count of successful saves (0–3)
+  maxCount: number;               // 3 for both spells
+  saveAbility: AbilityScore;      // 'con' for both spells
+  saveDC: number;                 // the DC from the original cast
+  conditionOnFail: Condition;     // condition to apply after max fails
+  currentCondition: Condition;    // currently applied condition
+}
+
 // ---- Combatant ----------------------------------------------
 
 export type AIProfile = 'attackNearest' | 'attackWeakest' | 'smart' | 'defend';
@@ -1206,6 +1223,17 @@ export interface Combatant {
   // real mechanical effect can migrate it to a bespoke scratch field
   // (and remove it from the generic registry).
   _genericSpellActiveSpells?: Set<string>;
+
+  // ---- Save-fail tracker (Contagion / Flesh to Stone) -----------
+  // Per-target save-fail tracker for escalating conditions.
+  // Contagion (PHB p.227): hit → poisoned; 3 fails → poisoned + incapacitated;
+  //   3 successes → disease ends (poisoned removed). NO concentration.
+  // Flesh to Stone (PHB p.241): fail → restrained; 3 fails → petrified;
+  //   3 successes → spell ends. Concentration.
+  // Set by the spell's execute() and processed at the start of the target's
+  // turn in combat.ts's runCombat loop. Cleared when the tracker resolves
+  // (3 fails or 3 successes) or when the matching active effect is removed.
+  _saveFailTracker?: SaveFailTracker;
 }
 
 // ---- Obstacle -----------------------------------------------
