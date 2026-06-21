@@ -23,7 +23,7 @@
 // defer until the first ActiveEffect-using concentration spell is implemented.
 // ============================================================
 
-import { ActiveEffect, Combatant, Battlefield, SpellEffectType, DamageType } from '../types/core';
+import { ActiveEffect, Combatant, Battlefield, SpellEffectType, DamageType, AbilityScore } from '../types/core';
 import { grantVulnerability, removeBySource } from './adv_system';
 
 // ---- ID generator -------------------------------------------
@@ -75,6 +75,9 @@ export function applySpellEffect(
       break;
 
     case 'taunt':
+    case 'curse_attack_disadv':
+    case 'ability_disadvantage':
+    case 'curse_rider':
     case 'ac_bonus':
     case 'ac_floor':
     case 'bless_die':
@@ -152,6 +155,9 @@ function _undoEffect(target: Combatant, effect: ActiveEffect): void {
       break;
 
     case 'taunt':
+    case 'curse_attack_disadv':
+    case 'ability_disadvantage':
+    case 'curse_rider':
     case 'ac_bonus':
     case 'ac_floor':
     case 'bless_die':
@@ -377,4 +383,73 @@ export function getActiveEnlargeReduce(c: Combatant): 'enlarge' | 'reduce' | nul
     return e.payload.enlargeReduceMode ?? null;
   }
   return null;
+}
+
+// ---- Curse attack disadv query (Bestow Curse PHB p.214 opt.1) ----
+
+/**
+ * Returns the list of curse-caster IDs that the combatant has disadvantage
+ * on attack rolls against. A creature affected by Bestow Curse (opt.1) has
+ * disadvantage on attack rolls against the creature that cast the curse
+ * (PHB p.214: "the target has disadvantage on attack rolls against you").
+ *
+ * Consumed in combat.ts resolveAttack — if the attacker attacks a creature
+ * whose ID appears in this list, the attack has disadvantage.
+ *
+ * Mirror of taunt (taunt = disadv vs non-caster; curse_attack_disadv =
+ * disadv vs specific caster). Multiple curse effects from different casters
+ * can stack (each adds one ID to the list).
+ */
+export function getActiveCurseAttackDisadv(c: Combatant): string[] {
+  const casterIds: string[] = [];
+  for (const e of c.activeEffects) {
+    if (e.effectType !== 'curse_attack_disadv') continue;
+    if (e.payload.curseCasterId) casterIds.push(e.payload.curseCasterId);
+  }
+  return casterIds;
+}
+
+// ---- Ability disadvantage query (Bestow Curse PHB p.214 opt.2) ----
+
+/**
+ * Returns true if the combatant has disadvantage on ability checks and
+ * saving throws with the given ability score (Bestow Curse PHB p.214 opt.2:
+ * "disadvantage on ability checks and saving throws made with that
+ * ability score").
+ *
+ * Consumed in utils.ts rollSave and rollAbilityCheck.
+ */
+export function hasAbilityDisadvantage(c: Combatant, ability: AbilityScore): boolean {
+  return c.activeEffects.some(
+    e => e.effectType === 'ability_disadvantage' && e.payload.ability === ability
+  );
+}
+
+// ---- Curse rider query (Bestow Curse PHB p.214 opt.4) ----
+
+/**
+ * Returns the active curse rider info if the attacker has a curse_rider
+ * effect and the target is the riderCasterId, or null if not applicable.
+ * Bestow Curse PHB p.214 opt.4: "each time the target makes an attack roll
+ * or spell attack against you, it takes 1d8 necrotic damage."
+ *
+ * The rider applies when the ATTACKER (who has the curse_rider effect)
+ * attacks the curse caster (identified by riderCasterId). The attacker
+ * takes necrotic damage (self-damage).
+ *
+ * Consumed in combat.ts resolveAttack's damage branch.
+ */
+export function getActiveCurseRider(
+  attacker: Combatant,
+  targetId: string,
+): { die: number; count: number; damageType: DamageType } | null {
+  const effect = attacker.activeEffects.find(
+    e => e.effectType === 'curse_rider' && e.payload.riderCasterId === targetId
+  );
+  if (!effect) return null;
+  const die = effect.payload.riderDie ?? 0;
+  const count = effect.payload.riderDieCount ?? 1;
+  const damageType = effect.payload.riderDamageType ?? 'necrotic';
+  if (die <= 0) return null;
+  return { die, count, damageType };
 }

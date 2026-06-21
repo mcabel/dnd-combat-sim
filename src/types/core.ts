@@ -99,6 +99,10 @@ export type SpellEffectType =
   | 'weapon_enchant'    // flat +N to attack rolls AND damage rolls with weapons (Magic Weapon PHB p.257)
   | 'enlarge_reduce'    // enlarge/reduce weapon-damage mod + STR check adv/disadv (Enlarge/Reduce PHB p.237)
   | 'taunt'             // disadvantage on attacks vs non-caster targets (Antagonize EGtW p.150)
+  // ── Bestow Curse (PHB p.214) — new effect types ────────────────────
+  | 'curse_attack_disadv'  // disadvantage on attacks vs the curse caster (Bestow Curse PHB p.214 opt.1)
+  | 'ability_disadvantage' // disadvantage on ability checks & saves for one ability (Bestow Curse PHB p.214 opt.2)
+  | 'curse_rider'          // 1d8 necrotic when cursed target attacks the curse caster (Bestow Curse PHB p.214 opt.4)
   // ── Session 27 — Batch 3 concentration buffs ────────────────────────
   // bane_die: inverse of bless_die (Bane PHB p.219: -1d4 to attacks/saves).
   // weapon_enchant extended with damageDie/damageDieCount/damageDieType
@@ -177,6 +181,28 @@ export interface ActiveEffect {
     // creature EXCEPT the one identified by tauntCasterId. Read by
     // getActiveTaunt() in spell_effects.ts; consumed in combat.ts resolveAttack.
     tauntCasterId?: string;            // ID of the caster — attacks vs anyone else have disadvantage
+    // ── curse_attack_disadv (Bestow Curse PHB p.214 opt.1) ──────────────
+    // The cursed creature has disadvantage on attack rolls against the
+    // curse caster. Mirror of taunt (taunt = disadv vs non-caster;
+    // curse_attack_disadv = disadv vs specific caster). Read by
+    // getActiveCurseAttackDisadv() in spell_effects.ts; consumed in
+    // combat.ts resolveAttack.
+    curseCasterId?: string;              // ID of the curse caster — attacks vs this creature have disadvantage
+    // ── ability_disadvantage (Bestow Curse PHB p.214 opt.2) ─────────────
+    // The cursed creature has disadvantage on ability checks and saving
+    // throws made with one chosen ability score. Read by
+    // hasAbilityDisadvantage() in spell_effects.ts; consumed in
+    // utils.ts rollSave and rollAbilityCheck.
+    ability?: AbilityScore;             // e.g. 'wis' — disadv on WIS checks & saves
+    // ── curse_rider (Bestow Curse PHB p.214 opt.4) ──────────────────────
+    // The cursed creature takes 1d8 necrotic damage each time it makes
+    // an attack roll or spell attack against the curse caster. Read by
+    // getActiveCurseRider() in spell_effects.ts; consumed in
+    // combat.ts resolveAttack.
+    riderDie?: number;                  // e.g. 8 for 1d8
+    riderDieCount?: number;             // e.g. 1 for 1d8
+    riderDamageType?: DamageType;       // e.g. 'necrotic'
+    riderCasterId?: string;             // ID of the curse caster — attacks vs this creature trigger rider
   };
   sourceIsConcentration: boolean;     // if true, removed when caster's concentration ends
 }

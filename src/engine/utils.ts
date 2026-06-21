@@ -5,7 +5,7 @@
 
 import { Combatant, Action, DiceExpression, Condition, ActionBudget, Battlefield, CreatureSize, DamageType } from '../types/core';
 import { querySelf, queryVulnerability } from './adv_system';
-import { getActiveBlessDie, getActiveBaneDie, getActiveEnlargeReduce } from './spell_effects';
+import { getActiveBlessDie, getActiveBaneDie, getActiveEnlargeReduce, hasAbilityDisadvantage } from './spell_effects';
 import { cleanup as cleanupShield } from '../spells/shield';
 import { cleanup as cleanupRayOfFrost } from '../spells/ray_of_frost';
 import { cleanup as cleanupChillTouch } from '../spells/chill_touch';
@@ -137,10 +137,15 @@ export function rollSave(
   const enlargeReduceMode = getActiveEnlargeReduce(combatant);
   const enlargeStrAdvantage   = ability === 'str' && enlargeReduceMode === 'enlarge';
   const enlargeStrDisadvantage = ability === 'str' && enlargeReduceMode === 'reduce';
+  // Bestow Curse — opt.2 (PHB p.214): disadvantage on ability checks and
+  // saving throws made with one chosen ability score. Flat unconditional
+  // disadvantage — modeled via the ability_disadvantage ActiveEffect
+  // (queried by hasAbilityDisadvantage).
+  const abilityDisadvantage = hasAbilityDisadvantage(combatant, ability);
   const hasAdvantage   = selfSave.advantage   || allSave.advantage   || rageStrAdvantage    || enlargeStrAdvantage;
   const hasDisadvantage = combatant.conditions.has('poisoned') // PHB Appendix A: poisoned → disadv on saves
     || selfSave.disadvantage || allSave.disadvantage
-    || enlargeStrDisadvantage;
+    || enlargeStrDisadvantage || abilityDisadvantage;
 
   let roll: number;
   if (hasAdvantage && !hasDisadvantage) roll = rollWithAdvantage();
@@ -311,8 +316,14 @@ export function rollAbilityCheck(
   // IS canonically correct.
   const poisonedDisadv = combatant.conditions.has('poisoned');
 
+  // Bestow Curse — opt.2 (PHB p.214): disadvantage on ability checks and
+  // saving throws made with one chosen ability score. Flat unconditional
+  // disadvantage — modeled via the ability_disadvantage ActiveEffect
+  // (queried by hasAbilityDisadvantage). Mirror rollSave's integration.
+  const abilityDisadvCheck = hasAbilityDisadvantage(combatant, ability);
+
   const hasAdvantage    = friendsAdv || selfCheck.advantage   || allCheck.advantage   || rageStrAdvantage || enlargeStrAdvantage || enhanceAbilityAdv;
-  const hasDisadvantage = poisonedDisadv || selfCheck.disadvantage || allCheck.disadvantage || enlargeStrDisadvantage;
+  const hasDisadvantage = poisonedDisadv || selfCheck.disadvantage || allCheck.disadvantage || enlargeStrDisadvantage || abilityDisadvCheck;
 
   let roll: number;
   if (hasAdvantage && !hasDisadvantage) {

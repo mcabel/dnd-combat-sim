@@ -33,7 +33,7 @@ import { tickAdvantages, grantSelf, grantVulnerability } from './adv_system';
 import { getSummonEntry }                           from '../summons/registry';
 import { rollGrappleContest, rollShoveContest, canGrappleOrShoveTarget } from './utils';
 import { computeLOS } from './los';
-import { removeEffectsFromCaster, removeEffectById, getActiveAcBonus, getActiveAcFloor, getActiveBlessDie, getActiveBaneDie, getActiveHexDie, getActiveDamageZones, getActiveWeaponEnchant, getActiveEnlargeReduce, getActiveTaunt, applySpellEffect } from './spell_effects';
+import { removeEffectsFromCaster, removeEffectById, getActiveAcBonus, getActiveAcFloor, getActiveBlessDie, getActiveBaneDie, getActiveHexDie, getActiveDamageZones, getActiveWeaponEnchant, getActiveEnlargeReduce, getActiveTaunt, getActiveCurseAttackDisadv, getActiveCurseRider, applySpellEffect } from './spell_effects';
 import { applyCantripEffect, getCantripAttackAdvantage, resolveCantripAction, resolveCantripAoE, resolveCantripTouchEffect } from './cantrip_effects';
 import { execute as executeHex } from '../spells/hex';
 import { execute as executeMagicMissile } from '../spells/magic_missile';
@@ -944,7 +944,18 @@ export function resolveAttack(
     log(state, 'action', attacker.id,
       `${attacker.name} attacks ${target.name} with Disadvantage (Taunted — must attack the taunt caster).`, target.id);
   }
-  const disadvantage = baseDisadv || !!protectionRider || losDisadvantage || chillTouchDisadv || viciousMockeryDisadv || frostbiteDisadv || tauntDisadvantage;
+  // Bestow Curse — opt.1 (PHB p.214): the cursed creature has disadvantage
+  // on attack rolls against the curse caster. Mirror of taunt (taunt = disadv
+  // vs non-caster; curse_attack_disadv = disadv vs specific caster). The
+  // effect is on the ATTACKER; if the target's ID is in the list of curse-
+  // caster IDs, the attack has disadvantage.
+  const curseAttackDisadvIds = getActiveCurseAttackDisadv(attacker);
+  const curseAttackDisadv = curseAttackDisadvIds.includes(target.id);
+  if (curseAttackDisadv) {
+    log(state, 'action', attacker.id,
+      `${attacker.name} attacks ${target.name} with Disadvantage (Bestow Curse — disadvantaged vs curse caster).`, target.id);
+  }
+  const disadvantage = baseDisadv || !!protectionRider || losDisadvantage || chillTouchDisadv || viciousMockeryDisadv || frostbiteDisadv || tauntDisadvantage || curseAttackDisadv;
   const advantage = baseAdv || packTacticsAdvantage || attacker.helpedThisTurn || cantripAdv || trueStrikeAdv;
 
   // Shillelagh (PHB p.275): while the self-buff is active, MELEE attacks use
@@ -1260,6 +1271,20 @@ export function resolveAttack(
       dmg += hexRoll;
       log(state, 'action', attacker.id,
         `${attacker.name} deals Hex bonus (+${hexRoll} necrotic) to ${target.name}`, target.id, hexRoll);
+    }
+
+    // Bestow Curse — opt.4 (PHB p.214): each time the cursed target makes an
+    // attack roll or spell attack against the curse caster, the CURSED TARGET
+    // takes 1d8 necrotic damage. This is self-damage to the attacker.
+    const curseRider = getActiveCurseRider(attacker, target.id);
+    if (curseRider) {
+      let riderDmg = 0;
+      const dice = isCrit ? curseRider.count * 2 : curseRider.count;
+      for (let i = 0; i < dice; i++) riderDmg += rollDie(curseRider.die);
+      // Apply necrotic damage to the ATTACKER (the cursed creature)
+      applyDamageWithTempHP(attacker, riderDmg, curseRider.damageType);
+      log(state, 'action', attacker.id,
+        `${attacker.name} takes ${riderDmg} ${curseRider.damageType} from Bestow Curse rider (attacking the curse caster)!`, attacker.id, riderDmg);
     }
 
     // ── Session 17 — level-2 batch 3 damage-branch hooks ────────────────
