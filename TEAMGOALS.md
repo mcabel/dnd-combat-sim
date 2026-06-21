@@ -217,7 +217,7 @@ completed by a single agent without coordination.
 
 ### TG-008: Reaction spell subsystem (Session 19 — bulk-deferred blockers)
 
-- **Status:** OPEN
+- **Status:** DONE (Session 33, z-workstream)
 - **Owners:** Core Engine (driving — owns `src/engine/combat.ts` reaction window) + Cantrip-z (consumes in spell modules)
 - **Source:** `zHANDOVER-SESSION-19.md` (Session 19 bulk-implementation pass — 5 reaction spells identified)
 - **Summary:** v1 has NO reaction subsystem beyond pre-set reactions in TurnPlan. Several classic spells are reaction-cast (triggered by an incoming attack / spell / fall). 5 in-scope spells blocked.
@@ -227,12 +227,22 @@ completed by a single agent without coordination.
   - When the trigger fires, the engine invokes the spell's `execute` if a slot is available.
 - **Risk:** MEDIUM — additive hook; no engine disruption.
 - **Coordination protocol:** Core Engine announces the trigger API; Cantrip-z wires spell modules.
+- **Resolution (Session 33):** Implemented the full reaction subsystem:
+  - `ReactionTrigger` discriminated union + `ReactionOutcome` type in `src/types/core.ts`
+  - `ReactionSpellDescriptor` interface + `REACTION_SPELLS` registry in `src/spells/_reaction_registry.ts`
+  - `triggerReactions(state, reactor, trigger)` helper in `src/engine/combat.ts` — iterates the registry, checks preconditions (reaction budget, slot, spell known, alive/conscious), fires the first matching spell
+  - 4 trigger points wired in `resolveAttack` (incoming_attack_hit for Shield/Silvery Barbs, incoming_damage at 3 sites for Absorb Elements/Hellish Rebuke), `executePlannedAction` (incoming_spell for Counterspell), and `processFallDamage` (falling for Feather Fall)
+  - Absorb Elements rider consumption in the standard attack damage branch
+  - Cleanup wired in `resetBudget` (utils.ts) for Absorb Elements resistance
+  - 6 reaction spells implemented: Shield (reworked to trigger-aware), Absorb Elements, Hellish Rebuke, Silvery Barbs, Counterspell, Feather Fall
+  - 285 new test assertions across 7 test files (reaction_registry, shield_reaction, absorb_elements, hellish_rebuke, counterspell, feather_fall, silvery_barbs)
+  - All baseline tests still pass (cure_wounds, healing_spells, healing_word, engine, ai, resources, scenario, combat, shield_simple, shield_of_faith, invisibility, thunderous_smite, booming_blade, green_flame_blade, conjure_fey, dispel_magic, etc.)
 - **Blocked spells (5):**
-  - **Level 1 (3):** Absorb Elements (XGE), Shield (PHB), Feather Fall (PHB).
-  - **Level 1 (1):** Hellish Rebuke (XGE).
-  - **Level 1 (1):** Silvery Barbs (SCC).
-  - **Level 3 (1):** Counterspell (PHB).
-  - **Level 3 (1):** Protection from Energy (PHB) — categorized as reaction because the broader "Protection from *" family overlaps with Shield's reaction model.
+  - **Level 1 (3):** Absorb Elements (XGE) ✅, Shield (PHB) ✅, Feather Fall (PHB) ✅.
+  - **Level 1 (1):** Hellish Rebuke (XGE) ✅.
+  - **Level 1 (1):** Silvery Barbs (SCC) ✅.
+  - **Level 3 (1):** Counterspell (PHB) ✅.
+  - **Level 3 (1):** Protection from Energy (PHB) — categorized as reaction because the broader "Protection from *" family overlaps with Shield's reaction model. NOT implemented in Session 33 (it's a buff spell, not a true reaction — the categorization was a stretch. Future work: implement as a regular concentration buff spell.)
 
 ### TG-009: Antimagic / Dispel subsystem (Session 19 — bulk-deferred blockers)
 

@@ -1052,6 +1052,27 @@ export interface Combatant {
     pushFt?: number;
   } | null;
 
+  // ---- Absorb Elements (TG-008, XGE p.150) scratch fields ----
+  // Set on the CASTER when it casts Absorb Elements as a reaction to taking
+  // acid/cold/fire/lightning/poison/thunder damage. Two fields:
+  //
+  //   _absorbElementsResistance — the damage type the caster now has
+  //   resistance to (until the start of their next turn). Added to
+  //   `resistances` on cast; removed by `cleanupAbsorbElements` in
+  //   `resetBudget`. PHB-style: "you have resistance to that damage type
+  //   until the start of your next turn."
+  //
+  //   _absorbElementsRider — the extra damage to add to the caster's next
+  //   melee weapon attack (1d6 of the triggering type, +1d6 per slot level
+  //   above 1st). Consumed by `resolveAttack`'s damage branch on the next
+  //   melee hit, then cleared. PHB: "the first time you hit with a melee
+  //   attack on your next turn, the target takes an additional 1d6 damage
+  //   of the triggering type." v1 simplification: the rider applies on the
+  //   next melee hit regardless of whose turn it is (so an OA melee hit
+  //   would also consume it) — this matches the "first time you hit" wording.
+  _absorbElementsResistance?: DamageType | null;
+  _absorbElementsRider?: { damageType: DamageType; diceCount: number } | null;
+
   // ---- Mirror Image (PHB p.260) scratch field ----
   // Set on the CASTER when it casts Mirror Image (2nd-level illusion,
   // PHB p.260: "Three illusory duplicates of yourself appear in your
@@ -1744,3 +1765,96 @@ export interface PlannedAction {
   // branches for the Session 19 bulk-implementation pass.
   spellName?: string;
 }
+
+// ============================================================
+// TG-008: Reaction spell subsystem
+//
+// Reactions fire OUTSIDE the reactor's own turn, in response to a
+// triggering event on another creature's turn. The engine emits a
+// `ReactionTrigger` at each trigger point (incoming attack hit,
+// incoming damage, incoming spell cast, falling). The
+// `triggerReactions` helper in combat.ts iterates candidate
+// reactors (the target itself for incoming_attack_hit /
+// incoming_damage; all enemies within range for incoming_spell;
+// all falling creatures for falling) and fires the first matching
+// reaction spell from the `REACTION_SPELLS` registry.
+//
+// PHB p.190: each creature gets ONE reaction per round, refreshed
+// at the start of its own turn. The `ActionBudget.reactionUsed`
+// flag tracks this (reset by `resetBudget` in utils.ts).
+// ============================================================
+
+/**
+ * Discriminated union describing the event that triggered a reaction.
+ * Passed to a reaction spell's `shouldCast` and `execute` so it can
+ * make trigger-aware decisions (e.g. Shield only fires on an attack
+ * that +5 AC would flip to a miss; Absorb Elements only fires on
+ * acid/cold/fire/lightning/poison/thunder damage).
+ */
+export type ReactionTrigger =
+  | {
+      kind: 'incoming_attack_hit';
+      /** The creature making the triggering attack. */
+      attacker: Combatant;
+      /** The attacking action (weapon or spell with an attack roll). */
+      action: Action;
+      /** The raw d20 roll (1-20) of the triggering attack. */
+      attackRoll: number;
+      /** The total attack roll (d20 + hit bonus + modifiers). */
+      attackTotal: number;
+      /** The target's effective AC at the time of the hit decision
+       *  (includes Shield's +5 if already active, cover, Warding Bond, etc.). */
+      effectiveAC: number;
+      /** True if the attack was a critical hit (nat 20 or forced crit). */
+      isCrit: boolean;
+    }
+  | {
+      kind: 'incoming_damage';
+      /** The creature that dealt the triggering damage. */
+      attacker: Combatant;
+      /** The creature that took the damage (potential reactor). */
+      target: Combatant;
+      /** Net damage dealt (after resistance / immunity / temp HP). */
+      amount: number;
+      /** The damage type, or null if untyped. */
+      damageType: DamageType | null;
+      /** The action that caused the damage, if any. */
+      action?: Action;
+    }
+  | {
+      kind: 'incoming_spell';
+      /** The creature in the process of casting the triggering spell. */
+      caster: Combatant;
+      /** Canonical spell name (e.g. 'Fireball', 'Cure Wounds'). */
+      spellName: string;
+      /** The spell's level (1-9). 0 = cantrip (Counterspell still works on cantrips per Sage Advice, but v1 skips cantrips). */
+      level: number;
+    }
+  | {
+      kind: 'falling';
+      /** IDs of all creatures currently falling (Feather Fall can affect up to 5). */
+      fallerIds: string[];
+      /** Fall height in feet. */
+      fallHeightFt: number;
+    };
+
+/**
+ * Outcome of a reaction spell execution. The engine uses this to decide
+ * whether to abort the triggering action (e.g. Counterspell negates the
+ * spell cast; Shield flips the hit to a miss).
+ */
+export type ReactionOutcome =
+  /** The reaction fired but did NOT change the triggering action's outcome.
+   *  Example: Absorb Elements grants resistance + a rider but the damage
+   *  still applies. Hellish Rebuke deals damage to the attacker but the
+   *  attacker's action still resolves. */
+  | { kind: 'no_effect' }
+  /** The reaction NEGATED the triggering action. The caller MUST abort
+   *  the triggering action (skip damage application, skip spell execution,
+   *  flip the hit to a miss, zero out fall damage, etc.).
+   *  Example: Shield's +5 AC flips the hit to a miss. Counterspell
+   *  succeeds on the ability check. Silvery Barbs forces a reroll that misses. */
+  | { kind: 'negated'; detail?: string }
+  /** The reaction fired but FAILED to negate. The triggering action
+   *  resolves normally. Example: Counterspell's ability check failed. */
+  | { kind: 'failed'; detail?: string };

@@ -6,7 +6,8 @@
 // ============================================================
 
 import {
-  Combatant, Battlefield, TurnPlan, PlannedAction, Action, Vec3
+  Combatant, Battlefield, TurnPlan, PlannedAction, Action, Vec3,
+  ReactionTrigger, ReactionOutcome,
 } from '../types/core';
 import {
   rollAttack, rollDamage, rollSave, applyDamage, applyHeal,
@@ -27,7 +28,10 @@ import {
   livingEnemiesOf, livingAlliesOf, posKey, pushAway
 } from './movement';
 import { planTurn, planLegendaryAction, shouldTakeOpportunityAttack } from '../ai/planner';
-import { shouldSmite, applyDivineSmite, tickRage, consumeSpellSlot } from '../ai/resources';
+import { shouldSmite, applyDivineSmite, tickRage, consumeSpellSlot, hasSpellSlot } from '../ai/resources';
+// TG-008: Reaction spell subsystem
+import { REACTION_SPELLS, ReactionSpellDescriptor } from '../spells/_reaction_registry';
+import { consumeRider as consumeAbsorbElementsRider } from '../spells/absorb_elements';
 import { isControlledMount, mountDeathRiderCheck, isIndependentMount } from '../summons/mount';
 import { checkMountedCombatant, checkProtectionStyle, checkInterceptionReduction } from './mount_redirect';
 import { tickAdvantages, grantSelf, grantVulnerability } from './adv_system';
@@ -789,6 +793,136 @@ function makeState(battlefield: Battlefield): EngineState {
 
 // ---- Attack resolution --------------------------------------
 
+
+// ============================================================
+// TG-008: Reaction spell subsystem — trigger dispatch
+//
+// `triggerReactions` is the central entry point for all reaction spells.
+// It checks whether `reactor` can cast any reaction spell in response to
+// `trigger`, and fires the FIRST matching one (a creature can only cast
+// one reaction per round — PHB p.190).
+//
+// Pre-conditions checked here:
+//   - reactor's reaction budget is unused
+//   - reactor is alive, conscious, not incapacitated
+//   - reactor has the spell in their actions
+//   - reactor has a spell slot of the required level
+//   - trigger is not self-caused (reactor != attacker/caster)
+//
+// The spell module's `shouldCast` is then called for tactical gating
+// (e.g. Shield only fires if +5 AC will flip the hit to a miss).
+//
+// Returns the outcome of the fired reaction, or null if no reaction fired.
+// ============================================================
+
+/**
+ * Attempt to fire a reaction spell on `reactor` in response to `trigger`.
+ * Returns the outcome of the fired reaction (negated / no_effect / failed),
+ * or null if no reaction was fired.
+ *
+ * The caller is responsible for:
+ *   - Passing the correct reactor (the target for incoming_attack_hit /
+ *     incoming_damage; an enemy for incoming_spell; a nearby caster for falling)
+ *   - Handling the outcome (e.g. flip hit to miss on 'negated', abort spell
+ *     cast on 'negated', skip fall damage on 'negated')
+ */
+function triggerReactions(
+  state: EngineState,
+  reactor: Combatant,
+  trigger: ReactionTrigger,
+): ReactionOutcome | null {
+  // Pre-condition checks
+  if (reactor.budget.reactionUsed) return null;
+  if (reactor.isDead || reactor.isUnconscious) return null;
+  if (reactor.conditions.has('incapacitated')) return null;
+
+  // Self-trigger guard: don't react to our own actions.
+  if (trigger.kind === 'incoming_attack_hit' && trigger.attacker.id === reactor.id) return null;
+  if (trigger.kind === 'incoming_damage' && trigger.attacker.id === reactor.id) return null;
+  if (trigger.kind === 'incoming_spell' && trigger.caster.id === reactor.id) return null;
+
+  // Iterate the registry in order; fire the first matching spell.
+  for (const spell of REACTION_SPELLS) {
+    if (!spell.triggerKinds.includes(trigger.kind)) continue;
+    // The reactor must have this spell in their actions list.
+    if (!reactor.actions.some(a => a.name === spell.name)) continue;
+    // The reactor must have a spell slot of the required level.
+    if (!hasSpellSlot(reactor, spell.level)) continue;
+    // Tactical gating — the spell module decides if it's worth casting.
+    if (!spell.shouldCast(reactor, state.battlefield, trigger)) continue;
+    // Fire the reaction.
+    return spell.execute(reactor, state, trigger);
+  }
+  return null;
+}
+
+// ============================================================
+// TG-008: Helper — extract spell name + level from a PlannedAction
+//
+// Returns null for non-spell plans (attack with a weapon, dash, rage, etc.).
+// For spell plans:
+//   - 'genericSpell' → uses plan.spellName + lookupGenericSpell for level
+//   - 'cast' / 'attack' → uses plan.action.name + plan.action.slotLevel
+//     (only if slotLevel >= 1 — cantrips have slotLevel 0/undefined)
+//   - Bespoke spell cases ('fireball', 'cureWounds', etc.) → uses plan.type
+//     as the name; level is unknown, default to 1 (auto-success for
+//     Counterspell with a L3 slot)
+//
+// v1 simplification: bespoke spell case branches don't carry the slot level
+// on the plan, so we default to L1. This means Counterspell auto-succeeds
+// against them (L1-3 spells are auto-countered by a L3 slot). Future work:
+// add a `slotLevel?` field to PlannedAction for bespoke cases.
+// ============================================================
+
+/** Plan types that are NOT spells (class features, movement, etc.). */
+const NON_SPELL_PLAN_TYPES = new Set<string>([
+  'attack',          // weapon attack (spell attacks use 'cast')
+  'dash', 'disengage', 'dodge', 'help', 'hide', 'ready',
+  'shove', 'grapple', 'escapeGrapple',
+  'secondWind',      // Fighter class feature
+  'rage',            // Barbarian class feature
+  'layOnHands',      // Paladin class feature
+  'bardicInspiration', // Bard class feature
+  'legendary',       // legendary action (not a spell cast)
+]);
+
+/**
+ * If `plan` represents a leveled spell cast, return its name + level.
+ * Returns null otherwise (non-spell plans, cantrips, or unknown types).
+ *
+ * Used by the Counterspell trigger to decide whether to fire.
+ */
+function getSpellInfoFromPlan(
+  plan: PlannedAction,
+  _bf: Battlefield,
+): { name: string; level: number } | null {
+  // 'genericSpell' — always a spell; level from the registry.
+  if (plan.type === 'genericSpell') {
+    if (!plan.spellName) return null;
+    const desc = lookupGenericSpell(plan.spellName);
+    if (!desc) return null;
+    return { name: plan.spellName, level: desc.level };
+  }
+  // 'cast' — handles cantrips AND leveled attack-roll spells.
+  // Only count as a leveled spell if slotLevel >= 1.
+  if (plan.type === 'cast') {
+    if (plan.action && plan.action.slotLevel && plan.action.slotLevel >= 1) {
+      return { name: plan.action.name, level: plan.action.slotLevel };
+    }
+    return null;  // cantrip or unknown
+  }
+  // Non-spell plan types.
+  if (NON_SPELL_PLAN_TYPES.has(plan.type)) return null;
+  // 'attack' is in NON_SPELL_PLAN_TYPES, so we don't reach here for weapon attacks.
+  // Bespoke spell case ('fireball', 'cureWounds', 'magicMissile', etc.):
+  // these are always spells. The level is unknown on the plan (v1), so default
+  // to 1 (Counterspell auto-succeeds with a L3 slot for L1-3 spells).
+  // The spell name is the plan type (camelCase) — we convert to the action
+  // name if available, else use the plan type directly.
+  const name = plan.action?.name ?? plan.type;
+  return { name, level: 1 };
+}
+
 /**
  * Resolve a single attack action against a target.
  * Handles: attack roll, hit check, damage roll, crit, death.
@@ -843,6 +977,20 @@ export function resolveAttack(
       const dmg = rollDamage(action.damage, false);
       const actual = save.success ? Math.floor(dmg / 2) : dmg; // half on save success
       const dealt = applyDamageWithTempHP(target, actual, action.damageType);
+      // TG-008: Absorb Elements / Hellish Rebuke reaction trigger (XGE p.150 / PHB p.249)
+      // These fire AFTER damage is applied. The triggering damage still applies
+      // (resistance from Absorb Elements protects against FUTURE damage of
+      // that type, not the triggering hit — PHB timing).
+      if (dealt > 0 && !target.isDead && !target.isUnconscious) {
+        triggerReactions(state, target, {
+          kind: 'incoming_damage',
+          attacker,
+          target,
+          amount: dealt,
+          damageType: action.damageType,
+          action,
+        });
+      }
       // Concentration check if target was concentrating
       if (target.concentration?.active && dealt > 0) {
         const maintained = rollConcentrationSave(target, dealt);
@@ -874,6 +1022,19 @@ export function resolveAttack(
     if (action.damage) {
       const dmg = rollDamage(action.damage, false);
       const dealt = applyDamageWithTempHP(target, dmg, action.damageType);
+      // TG-008: Absorb Elements / Hellish Rebuke reaction trigger.
+      // (Shield's "blocks Magic Missile" is NOT modelled in v1 — the auto-hit
+      //  branch bypasses the hit decision where Shield fires. Future work.)
+      if (dealt > 0 && !target.isDead && !target.isUnconscious) {
+        triggerReactions(state, target, {
+          kind: 'incoming_damage',
+          attacker,
+          target,
+          amount: dealt,
+          damageType: action.damageType,
+          action,
+        });
+      }
       if (target.concentration?.active && dealt > 0) {
         const maintained = rollConcentrationSave(target, dealt);
         if (!maintained) {
@@ -1141,7 +1302,52 @@ export function resolveAttack(
     const naturalAC = acFloor > 0 ? Math.max(target.ac, acFloor) : target.ac;
     effectiveAC = naturalAC + (target.wardingBond ? 1 : 0) + (los?.coverACBonus ?? 0) + getActiveAcBonus(target);
   }
-  const hits = isCritOverride ?? attackHits(result.roll, result.total, effectiveAC);
+  let hits = isCritOverride ?? attackHits(result.roll, result.total, effectiveAC);
+
+  // ── TG-008: Shield / Silvery Barbs reaction trigger (PHB p.275 / SCC p.38) ──
+  // When the attack HITS, the target may react with Shield (+5 AC, can flip
+  // the hit to a miss "including against the triggering attack" — PHB p.275)
+  // or Silvery Barbs (force a reroll, use the lower — SCC p.38). Both return
+  // `{ kind: 'negated' }` if they flip the hit to a miss; the engine then
+  // re-evaluates `hits` with the new AC / lower roll.
+  //
+  // The trigger fires BEFORE the Mirror Image duplicate resolution and the
+  // miss-return, so a Shield that flips the hit to a miss skips both. Mirror
+  // Image retargeting is excluded (Shield only protects the real caster, not
+  // duplicates — PHB p.260: duplicates "ignore all other damage and effects").
+  if (hits && !mirrorRetargeted && !target.isDead && !target.isUnconscious) {
+    const isCrit = isCritOverride === true || result.isCrit;
+    const outcome = triggerReactions(state, target, {
+      kind: 'incoming_attack_hit',
+      attacker,
+      action,
+      attackRoll: result.roll,
+      attackTotal: result.total,
+      effectiveAC,
+      isCrit,
+    });
+    if (outcome && outcome.kind === 'negated') {
+      // Shield may have applied +5 AC; Silvery Barbs may have computed a
+      // lower roll. The spell module already logged the details — we just
+      // need to flip the hit to a miss.
+      //
+      // For Shield: the +5 AC effect is now active (applied by executeReaction
+      // via applySpellEffect), so getActiveAcBonus(target) would return +5
+      // more if we re-read it. We don't need to recompute — the spell module
+      // already gated on "the +5 WILL flip the hit to a miss" in shouldCastReaction.
+      //
+      // For Silvery Barbs: the spell module rolled a new d20 and checked if
+      // the lower of (original, new) would miss. If it reported 'negated',
+      // the lower roll missed.
+      //
+      // v1: trust the spell module's outcome. If it says 'negated', flip the
+      // hit to a miss.
+      hits = false;
+      log(state, 'action', target.id,
+        `${target.name}'s reaction NEGATES ${attacker.name}'s ${action.name}! (original ${result.total} vs AC ${effectiveAC})`,
+        attacker.id);
+    }
+  }
 
   // ── Mirror Image duplicate resolution (PHB p.260) ────────────────────
   // If the attack was retargeted to a duplicate, resolve it now: on hit,
@@ -1481,7 +1687,36 @@ export function resolveAttack(
         target.id, interceptReduction);
     }
 
+    // TG-008: Absorb Elements rider consumption (XGE p.150).
+    // "The first time you hit with a melee attack on your next turn, the
+    // target takes an additional 1d6 damage of the triggering type."
+    // v1: applies on ANY melee weapon hit (not just the caster's next turn).
+    // The rider is one-shot — consumed on the first melee hit.
+    if (attacker._absorbElementsRider && action.attackType === 'melee') {
+      const rider = consumeAbsorbElementsRider(attacker);
+      if (rider && rider.damage > 0) {
+        dmg += rider.damage;
+        log(state, 'action', attacker.id,
+          `${attacker.name}'s Absorb Elements rider deals +${rider.damage} ${rider.damageType} damage!`,
+          target.id, rider.damage);
+      }
+    }
+
     const dealt = applyDamageWithTempHP(target, dmg, action.damageType);
+    // TG-008: Absorb Elements / Hellish Rebuke reaction trigger (XGE p.150 / PHB p.249)
+    // These fire AFTER damage is applied. The triggering damage still applies
+    // (resistance from Absorb Elements protects against FUTURE damage of
+    // that type, not the triggering hit — PHB timing).
+    if (dealt > 0 && !target.isDead && !target.isUnconscious) {
+      triggerReactions(state, target, {
+        kind: 'incoming_damage',
+        attacker,
+        target,
+        amount: dealt,
+        damageType: action.damageType,
+        action,
+      });
+    }
     if (target.concentration?.active && dealt > 0) {
       const maintained = rollConcentrationSave(target, dealt);
       if (!maintained) {
@@ -1662,6 +1897,58 @@ function checkDeath(target: Combatant, state: EngineState, attacker?: Combatant)
  */
 function processFallDamage(state: EngineState): void {
   const bf = state.battlefield;
+
+  // ── TG-008: Feather Fall reaction trigger (PHB p.239) ──────────────
+  // Before applying fall damage, gather all fallers and check if any
+  // creature wants to cast Feather Fall. The trigger fires once for ALL
+  // fallers (Feather Fall can affect up to 5). If the reaction fires and
+  // negates, affected fallers are marked with `_featherFallActive = true`
+  // and skipped in the damage loop below.
+  const fallerIds: string[] = [];
+  let maxFallHeight = 0;
+  for (const c of bf.combatants.values()) {
+    if (!c._fallHeight || c._fallHeight <= 0) continue;
+    if (c.isDead) { delete c._fallHeight; continue; }
+    // Check if the Reverse Gravity effect is still active on this target.
+    const hasRGEffect = c.activeEffects.some(e => e.spellName === 'Reverse Gravity');
+    if (hasRGEffect) continue;
+    fallerIds.push(c.id);
+    if (c._fallHeight > maxFallHeight) maxFallHeight = c._fallHeight;
+  }
+  if (fallerIds.length > 0 && maxFallHeight > 0) {
+    // Find a candidate Feather Fall caster: any creature (typically an
+    // ally of the fallers) with Feather Fall known, slot available,
+    // reaction unused. The triggerReactions helper iterates the registry
+    // and fires the first matching spell.
+    //
+    // v1: iterate all combatants (allies of the fallers first, since
+    // they'd want to save them). The first one whose shouldCast returns
+    // true fires. PHB p.239: "you or a creature within 60 feet of you
+    // falls" — the caster can be a faller themselves (self-cast).
+    const fallerSet = new Set(fallerIds);
+    // Sort candidates: fallers first (they'd want to save themselves),
+    // then non-fallers (allies who'd save the fallers).
+    const candidates = [...bf.combatants.values()].sort((a, b) => {
+      const aFaller = fallerSet.has(a.id) ? 0 : 1;
+      const bFaller = fallerSet.has(b.id) ? 0 : 1;
+      return aFaller - bFaller;
+    });
+    for (const candidate of candidates) {
+      const outcome = triggerReactions(state, candidate, {
+        kind: 'falling',
+        fallerIds,
+        fallHeightFt: maxFallHeight,
+      });
+      if (outcome && outcome.kind === 'negated') {
+        // Feather Fall fired — affected fallers are now marked with
+        // `_featherFallActive = true`. The damage loop below will skip them.
+        break;  // Only one Feather Fall needed.
+      }
+      // If outcome is null, this candidate didn't cast Feather Fall —
+      // continue to the next candidate.
+    }
+  }
+
   for (const c of bf.combatants.values()) {
     if (!c._fallHeight || c._fallHeight <= 0) continue;
     if (c.isDead) { delete c._fallHeight; continue; }
@@ -1670,6 +1957,17 @@ function processFallDamage(state: EngineState): void {
     // If it is, concentration hasn't broken for this target yet — skip.
     const hasRGEffect = c.activeEffects.some(e => e.spellName === 'Reverse Gravity');
     if (hasRGEffect) continue;
+
+    // TG-008: Feather Fall check — if this faller was affected by Feather
+    // Fall (marked by executeFeatherFall), skip the fall damage entirely.
+    if ((c as any)._featherFallActive) {
+      log(state, 'action', c.id,
+        `${c.name} falls ${c._fallHeight} ft but Feather Fall negates all damage — lands safely!`,
+        c.id, 0);
+      delete (c as any)._featherFallActive;
+      delete c._fallHeight;
+      continue;
+    }
 
     // Fall damage! PHB p.183: 1d6 per 10 feet fallen, max 20d6.
     const fallHeight = c._fallHeight;
@@ -1834,6 +2132,60 @@ function executePlannedAction(
       `${actor.name}'s Witch Bolt ends — they used their action for something else!`,
       undefined);
     actor.concentration = null;
+  }
+
+  // ── TG-008: Counterspell reaction trigger (PHB p.228) ──────────────
+  // Before executing a spell-cast plan, check if any enemy within 60 ft
+  // wants to cast Counterspell. If they do and it succeeds (auto-success
+  // for L1-3 spells with a L3 slot, or ability check vs DC 10+level for
+  // higher-level spells), the spell is negated — consume the actor's
+  // spell slot and return without executing the spell.
+  //
+  // v1 scope:
+  //   - Only LEVELED spells trigger Counterspell (cantrips are excluded —
+  //     wasting a L3 slot on a cantrip is a bad trade).
+  //   - Only the FIRST eligible enemy (in battlefield iteration order)
+  //     attempts Counterspell. Multiple enemies could each try per PHB,
+  //     but v1 simplifies to one attempt.
+  //   - The actor's spell slot is consumed even if Counterspelled (PHB
+  //     p.228: "the spell fails and has no effect, but resources used
+  //     to cast it are consumed").
+  const spellInfo = getSpellInfoFromPlan(plan, bf);
+  if (spellInfo && !actor.isDead && !actor.isUnconscious) {
+    let countered = false;
+    for (const enemy of livingEnemiesOf(actor, bf)) {
+      const outcome = triggerReactions(state, enemy, {
+        kind: 'incoming_spell',
+        caster: actor,
+        spellName: spellInfo.name,
+        level: spellInfo.level,
+      });
+      if (outcome && outcome.kind === 'negated') {
+        // Counterspell succeeded — consume the actor's spell slot and abort.
+        // PHB p.228: the countered spell's slot IS consumed.
+        if (spellInfo.level >= 1) {
+          consumeSpellSlot(actor, spellInfo.level);
+        }
+        actor.budget.actionUsed = true;
+        log(state, 'action', actor.id,
+          `${actor.name}'s ${spellInfo.name} was COUNTERSPELLED — spell slot consumed, action wasted!`,
+          enemy.id);
+        countered = true;
+        break;  // Only one Counterspell needed to negate.
+      }
+      // If outcome is 'failed', the Counterspell attempt failed — the spell
+      // still goes off. Could another enemy try? v1: no, only one attempt.
+      if (outcome && outcome.kind === 'failed') {
+        // The enemy's Counterspell failed — log it but continue with the spell.
+        // (The spell module already logged the failure.)
+        break;  // v1: only one attempt.
+      }
+      // If outcome is null or 'no_effect', no Counterspell fired — continue
+      // to the next enemy.
+    }
+    if (countered) {
+      return;  // Spell was negated — don't execute.
+    }
   }
 
   switch (plan.type) {

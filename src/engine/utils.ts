@@ -23,6 +23,8 @@ import { cleanup as cleanupFriends } from '../spells/friends';
 import { cleanup as cleanupLight } from '../spells/light';
 import { cleanup as cleanupMending } from '../spells/mending';
 import { cleanup as cleanupBrandingSmite } from '../spells/branding_smite';
+// TG-008: Reaction spell cleanups
+import { cleanup as cleanupAbsorbElements } from '../spells/absorb_elements';
 
 // Damage types resisted by Blade Ward (PHB p.218) — bludgeoning/piercing/slashing.
 const BLADE_WARD_PHYSICAL_TYPES: DamageType[] = ['bludgeoning', 'piercing', 'slashing'];
@@ -597,6 +599,12 @@ export function resetBudget(c: Combatant): void {
   // singular). Cleanup is a safety net (clears the flag if the caster
   // makes no weapon attack before their next turn).
   cleanupBrandingSmite(c);
+  // TG-008: Absorb Elements resistance expires at start of caster's next
+  // turn (XGE p.150: "you have resistance to that damage type until the
+  // start of your next turn"). The melee rider is NOT cleared here — it
+  // persists until consumed by the next melee hit (PHB: "the first time
+  // you hit with a melee attack on your next turn").
+  cleanupAbsorbElements(c);
 
   const speed = effectiveSpeed(c);
   c.budget = {
