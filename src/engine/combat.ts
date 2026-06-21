@@ -687,6 +687,10 @@ import { shouldCast as shouldCastSummonAberration,     execute as executeSummonA
 import { shouldCast as shouldCastSummonConstruct,      execute as executeSummonConstruct }      from '../spells/summon_construct';
 import { shouldCast as shouldCastSummonElemental,      execute as executeSummonElemental }      from '../spells/summon_elemental';
 import { shouldCast as shouldCastSummonGreaterDemon,   execute as executeSummonGreaterDemon }   from '../spells/summon_greater_demon';
+// ── TG-006 — L5+ TCE/FTD summon spells (Phase 1e) ────────────────────────
+import { shouldCast as shouldCastSummonCelestial,        execute as executeSummonCelestial }        from '../spells/summon_celestial';
+import { shouldCast as shouldCastSummonDraconicSpirit,   execute as executeSummonDraconicSpirit }   from '../spells/summon_draconic_spirit';
+import { shouldCast as shouldCastSummonFiend,            execute as executeSummonFiend }            from '../spells/summon_fiend';
 
 // ── Session 19 — bulk-implementation generic dispatch (262 new spells) ────
 import {
@@ -3764,8 +3768,14 @@ function executePlannedAction(
         executeSummonElemental(actor, actor, state);
       } else if (spellName === 'Summon Greater Demon') {
         executeSummonGreaterDemon(actor, actor, state);
+      } else if (spellName === 'Summon Celestial') {
+        executeSummonCelestial(actor, actor, state);
+      } else if (spellName === 'Summon Draconic Spirit') {
+        executeSummonDraconicSpirit(actor, actor, state);
+      } else if (spellName === 'Summon Fiend') {
+        executeSummonFiend(actor, actor, state);
       }
-      // More summon spells can be added here (Phase 1e+)
+      // More summon spells can be added here (Phase 1f+)
       break;
     }
 

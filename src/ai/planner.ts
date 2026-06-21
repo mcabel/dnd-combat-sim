@@ -253,6 +253,10 @@ import { shouldCast as shouldCastSummonAberration }     from '../spells/summon_a
 import { shouldCast as shouldCastSummonConstruct }      from '../spells/summon_construct';
 import { shouldCast as shouldCastSummonElemental }      from '../spells/summon_elemental';
 import { shouldCast as shouldCastSummonGreaterDemon }   from '../spells/summon_greater_demon';
+// ── TG-006 — L5+ TCE/FTD summon spells (Phase 1e) ────────────────────────
+import { shouldCast as shouldCastSummonCelestial }        from '../spells/summon_celestial';
+import { shouldCast as shouldCastSummonDraconicSpirit }   from '../spells/summon_draconic_spirit';
+import { shouldCast as shouldCastSummonFiend }            from '../spells/summon_fiend';
 
 // ── Session 19 — bulk-implementation generic dispatch (262 new spells) ────
 import { GENERIC_SPELL_LIST } from '../spells/_generic_registry';
@@ -2189,6 +2193,60 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
         action,
         targetId: self.id,
         description: `${self.name} casts Summon Greater Demon`,
+      };
+      plan.targetId = self.id;
+      plan.bonusAction = planBonusAction(self, self, battlefield);
+      return plan;
+    }
+  }
+
+  // === TG-006 — L5+ TCE/FTD SUMMON SPELLS (Phase 1e) ===
+  // Summon Celestial (TCE p.111): 5th-level conjuration, action, range 30 ft,
+  // concentration 1 hr. Spawns a Celestial Spirit (Defender) combatant.
+  // Summon Draconic Spirit (FTD p.21): 5th-level conjuration, action, range 30 ft,
+  // concentration 1 hr. Spawns a Draconic Spirit (Red/fire) combatant.
+  // Summon Fiend (TCE p.112): 6th-level conjuration, action, range 30 ft,
+  // concentration 1 hr. Spawns a Fiendish Spirit (Devil) combatant.
+  // All follow the same pattern as earlier summon spells.
+
+  if (!plan.action && self.actions.some(a => a.name === 'Summon Celestial')) {
+    if (shouldCastSummonCelestial(self, battlefield)) {
+      const action = self.actions.find(a => a.name === 'Summon Celestial')!;
+      plan.action = {
+        type: 'summonSpell',
+        action,
+        targetId: self.id,
+        description: `${self.name} casts Summon Celestial`,
+      };
+      plan.targetId = self.id;
+      plan.bonusAction = planBonusAction(self, self, battlefield);
+      return plan;
+    }
+  }
+
+  if (!plan.action && self.actions.some(a => a.name === 'Summon Draconic Spirit')) {
+    if (shouldCastSummonDraconicSpirit(self, battlefield)) {
+      const action = self.actions.find(a => a.name === 'Summon Draconic Spirit')!;
+      plan.action = {
+        type: 'summonSpell',
+        action,
+        targetId: self.id,
+        description: `${self.name} casts Summon Draconic Spirit`,
+      };
+      plan.targetId = self.id;
+      plan.bonusAction = planBonusAction(self, self, battlefield);
+      return plan;
+    }
+  }
+
+  if (!plan.action && self.actions.some(a => a.name === 'Summon Fiend')) {
+    if (shouldCastSummonFiend(self, battlefield)) {
+      const action = self.actions.find(a => a.name === 'Summon Fiend')!;
+      plan.action = {
+        type: 'summonSpell',
+        action,
+        targetId: self.id,
+        description: `${self.name} casts Summon Fiend`,
       };
       plan.targetId = self.id;
       plan.bonusAction = planBonusAction(self, self, battlefield);
