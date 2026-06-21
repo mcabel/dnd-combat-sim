@@ -10,26 +10,34 @@
 //         save, the target is affected by one of the following effects
 //         (your choice): Asleep, Panicked, or Sickened.
 //         Asleep: the target falls unconscious.
+//         Panicked: the target is frightened of you.
+//         Sickened: the target is poisoned.
 //         On each of your turns until the spell ends, you can use your
 //         action to target another creature.
 //
 // Upcast: none (6th-level spell — no upcast).
 //
-// v1 simplifications:
-//   - Effect choice: canon lets the caster pick Asleep/Panicked/Sickened
-//     each turn. v1 ALWAYS picks Asleep → `condition_apply:sleeping`
-//     (the most disabling of the three; Panicked ≈ frightened, Sickened
-//     ≈ poisoned — both partial). Documented via
-//     `eyebiteAlwaysPicksAsleepV1Simplified`.
+// v2 implementation:
+//   - Effect choice: 3 canon options (Asleep/Panicked/Sickened) with
+//     AI-driven selection via pickEyebiteOption(). Distance-based heuristic:
+//     ≤20 ft → Panicked (frightened forces them away),
+//     ≤40 ft → Sickened (poisoned hurts their attacks),
+//     >40 ft → Asleep (most disabling — they can't reach you).
+//     Documented via `eyebiteOptionsV2Implemented`.
 //   - Per-turn re-targeting (PHB p.238: "On each of your turns... you
-//     can use your action to target another creature"): v1 simplifies
-//     to ONE-SHOT — a single target on the cast turn. The repeat-action
-//     rider is NOT modelled. Documented via
-//     `eyebitePerTurnRetargetV1Simplified`.
-//   - Range: canon 60 ft. v1 uses chebyshev3D * 5 (square approx).
-//   - Concentration: canon 1 min concentration. v1 starts concentration
+//     can use your action to target another creature"): implemented as
+//     an automatic start-of-turn re-target in combat.ts's runCombat loop.
+//     v1 simplification: the re-target does NOT consume the caster's
+//     action (it fires automatically like damage_zone ticks). The caster
+//     still gets their normal turn. Canon requires using an action each
+//     turn to re-target, but the automatic approach is simpler and
+//     consistent with the engine's damage_zone tick pattern.
+//     Documented via `eyebitePerTurnRetargetV2Implemented` and
+//     `eyebitePerTurnRetargetActionCostV1Simplified`.
+//   - Range: canon 60 ft. Uses chebyshev3D * 5 (square approx).
+//   - Concentration: canon 1 min concentration. Starts concentration
 //     via startConcentration(); engine does NOT enforce concentration
-//     checks on damage taken (TG-002). The sleeping is
+//     checks on damage taken (TG-002). All conditions applied are
 //     sourceIsConcentration: true.
 //   - Sleeping wakes on damage (PHB p.292): v1 has no wake-on-damage
 //     hook — sleeping persists for the entire combat (or until conc
@@ -47,7 +55,7 @@
 //   cleanup() — no-op (concentration break handles cleanup)
 // ============================================================
 
-import { Combatant, Battlefield } from '../types/core';
+import { Combatant, Battlefield, Condition } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
 import { applySpellEffect, removeEffectsFromCaster } from '../engine/spell_effects';
 import { startConcentration, rollSave } from '../engine/utils';
@@ -64,10 +72,47 @@ export const metadata = {
   concentration: true,
   saveAbility: 'wis' as const,
   castingTime: 'action',
-  eyebiteAlwaysPicksAsleepV1Simplified: true,               // v1: always Asleep → sleeping
-  eyebitePerTurnRetargetV1Simplified: true,                 // one-shot (canon per-turn re-target simplified)
-  eyebiteWakeOnDamageV1Simplified: true,                    // no wake-on-damage hook
+  eyebiteOptionsV2Implemented: true,                         // v2: 3 canon options (Asleep/Panicked/Sickened)
+  eyebitePerTurnRetargetV2Implemented: true,                 // v2: per-turn re-target via start-of-turn processing
+  eyebitePerTurnRetargetActionCostV1Simplified: true,        // v1: re-target is automatic (doesn't consume action)
+  eyebiteWakeOnDamageV1Simplified: true,                     // no wake-on-damage hook
 } as const;
+
+// ---- Option types and AI picker -----------------------------
+
+export type EyebiteOption = 'asleep' | 'panicked' | 'sickened';
+
+/**
+ * Maps an EyebiteOption to the Condition it applies.
+ *   Asleep   → sleeping   (unconscious, drops items, melee auto-crit)
+ *   Panicked → frightened (disadv on attacks while source visible, can't approach)
+ *   Sickened → poisoned   (disadv on attacks and ability checks)
+ */
+export function optionToCondition(option: EyebiteOption): Condition {
+  switch (option) {
+    case 'asleep':   return 'sleeping';
+    case 'panicked': return 'frightened';
+    case 'sickened': return 'poisoned';
+  }
+}
+
+/**
+ * AI picks the best Eyebite option for the target based on distance.
+ *   ≤20 ft → Panicked (frightened: forces them away, disadv on attacks)
+ *   ≤40 ft → Sickened (poisoned: disadv on attacks and ability checks)
+ *   >40 ft → Asleep   (sleeping: most disabling — they can't reach you)
+ *
+ * Heuristic rationale: close targets are best dealt with by forcing
+ * them away (frightened can't approach); mid-range targets are
+ * disrupted by attack disadvantage (poisoned); distant targets are
+ * fully disabled (sleeping — most debilitating condition).
+ */
+export function pickEyebiteOption(target: Combatant, caster: Combatant): EyebiteOption {
+  const distFt = chebyshev3D(caster.pos, target.pos) * 5;
+  if (distFt <= 20) return 'panicked';
+  if (distFt <= 40) return 'sickened';
+  return 'asleep';
+}
 
 // ---- Local log helper ---------------------------------------
 
@@ -93,8 +138,8 @@ function emit(
 
 /**
  * Returns the single best target for Eyebite (a living enemy within 60 ft,
- * not already sleeping/incapacitated), or null when the spell should not
- * be cast.
+ * not already sleeping/incapacitated/frightened/poisoned by Eyebite from
+ * this caster), or null when the spell should not be cast.
  *
  * Target priority:
  *   1. Highest-threat enemy (maxHP) within 60 ft.
@@ -144,7 +189,11 @@ export function shouldCast(caster: Combatant, bf: Battlefield): Combatant | null
  *  1. Consume a 6th-level spell slot.
  *  2. Break any existing concentration (safety net).
  *  3. Start concentration on Eyebite.
- *  4. Roll the target's WIS save; on fail apply sleeping (conc-sourced).
+ *  4. Place a damage_zone SENTINEL on the caster (dieCount=0) to anchor
+ *     concentration-break cleanup of the _eyebiteActive scratch field.
+ *  5. Set caster._eyebiteActive = { saveDC } for per-turn re-target.
+ *  6. Pick the best option for this target (AI via pickEyebiteOption).
+ *  7. Roll the target's WIS save; on fail apply the chosen condition (conc-sourced).
  *
  * @param caster  The casting Combatant (Bard / Sorcerer / Warlock / Wizard)
  * @param target  The candidate from shouldCast (single enemy in range)
@@ -165,9 +214,27 @@ export function execute(
   }
   startConcentration(caster, 'Eyebite');
 
+  // Place a damage_zone sentinel on the caster for concentration-break cleanup.
+  // dieCount=0 means no damage tick — the start-of-turn damage_zone loop
+  // skips it. When concentration breaks, _undoEffect clears _eyebiteActive.
+  applySpellEffect(caster, {
+    casterId: caster.id,
+    spellName: 'Eyebite',
+    effectType: 'damage_zone',
+    payload: { dieCount: 0, dieSides: 0, damageType: 'psychic' },
+    sourceIsConcentration: true,
+  });
+  caster._eyebiteActive = { saveDC };
+
+  // Pick the best option for this target.
+  const option = pickEyebiteOption(target, caster);
+  const condition = optionToCondition(option);
+
+  const optionLabel = option.charAt(0).toUpperCase() + option.slice(1);
+
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Eyebite at ${target.name}! (DC ${saveDC} WIS — Asleep option)`,
+    `${caster.name} casts Eyebite at ${target.name}! (DC ${saveDC} WIS — ${optionLabel} option)`,
     target.id,
   );
 
@@ -186,7 +253,7 @@ export function execute(
   if (save.success) {
     emit(
       state, 'action', caster.id,
-      `${target.name} resists Eyebite — not asleep!`,
+      `${target.name} resists Eyebite — not ${optionLabel.toLowerCase()}!`,
       target.id,
     );
     return;
@@ -196,13 +263,20 @@ export function execute(
     casterId: caster.id,
     spellName: 'Eyebite',
     effectType: 'condition_apply',
-    payload: { condition: 'sleeping' },
+    payload: { condition },
     sourceIsConcentration: true,
   });
 
+  // Human-readable effect description per option
+  const effectDescs: Record<EyebiteOption, string> = {
+    asleep:   `falls ASLEEP (unconscious, drops what's holding, attacks vs them within 5 ft are crits)!`,
+    panicked: `is PANICKED (frightened — disadv on attacks while caster visible, can't approach)!`,
+    sickened: `is SICKENED (poisoned — disadv on attacks and ability checks)!`,
+  };
+
   emit(
     state, 'condition_add', caster.id,
-    `${target.name} falls ASLEEP (unconscious, drops what's holding, attacks vs them within 5 ft are crits)!`,
+    `${target.name} ${effectDescs[option]}`,
     target.id,
   );
 }

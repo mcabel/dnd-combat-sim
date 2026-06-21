@@ -503,6 +503,8 @@ import {
 import {
   shouldCast as shouldCastEyebite,
   execute as executeEyebite,
+  pickEyebiteOption,
+  optionToCondition,
 } from '../spells/eyebite';
 import {
   shouldCast as shouldCastFleshToStone,
@@ -4103,6 +4105,80 @@ export function runCombat(
                 actor.id);
               delete actor._saveFailTracker;
             }
+          }
+        }
+      }
+
+      // ── Eyebite per-turn re-target (PHB p.238) ──────────────────
+      // "On each of your turns until the spell ends, you can use your
+      //  action to target another creature."
+      // v1 simplification: the re-target is automatic (doesn't consume
+      // the caster's action), like damage_zone ticks. The caster still
+      // gets their normal turn. This fires at the START of the caster's
+      // turn, after damage_zone ticks and save-fail tracker processing.
+      if (actor._eyebiteActive && actor.concentration?.active &&
+          actor.concentration.spellName === 'Eyebite' &&
+          !actor.isDead && !actor.isUnconscious) {
+        const saveDC = actor._eyebiteActive.saveDC;
+
+        // Find a new target within 60 ft
+        const eyebiteTargets: Combatant[] = [];
+        for (const c of battlefield.combatants.values()) {
+          if (c.id === actor.id) continue;
+          if (c.faction === actor.faction) continue;
+          if (c.isDead || c.isUnconscious) continue;
+          const distFt = chebyshev3D(actor.pos, c.pos) * 5;
+          if (distFt > 60) continue;
+          // Skip targets already affected by this caster's Eyebite
+          if (c.activeEffects.some(e => e.casterId === actor.id && e.spellName === 'Eyebite' && e.effectType === 'condition_apply')) continue;
+          // Skip targets already sleeping/incapacitated (can't be further disabled)
+          if (c.conditions.has('sleeping') || c.conditions.has('incapacitated')) continue;
+          eyebiteTargets.push(c);
+        }
+
+        if (eyebiteTargets.length > 0) {
+          // Pick highest-threat target (mirror shouldCast priority)
+          eyebiteTargets.sort((a, b) => b.maxHP - a.maxHP);
+          const newTarget = eyebiteTargets[0];
+
+          // AI picks best option for this target
+          const option = pickEyebiteOption(newTarget, actor);
+          const condition = optionToCondition(option);
+          const optionLabel = option.charAt(0).toUpperCase() + option.slice(1);
+
+          log(state, 'action', actor.id,
+            `${actor.name} uses Eyebite re-target on ${newTarget.name}! (DC ${saveDC} WIS — ${optionLabel} option)`,
+            newTarget.id);
+
+          const save = rollSave(newTarget, 'wis', saveDC);
+          log(state,
+            save.success ? 'save_success' : 'save_fail',
+            actor.id,
+            `${newTarget.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} WIS save vs Eyebite re-target (rolled ${save.total})`,
+            newTarget.id, save.roll);
+
+          if (!save.success) {
+            applySpellEffect(newTarget, {
+              casterId: actor.id,
+              spellName: 'Eyebite',
+              effectType: 'condition_apply',
+              payload: { condition },
+              sourceIsConcentration: true,
+            });
+
+            const effectDescs: Record<string, string> = {
+              asleep:   `falls ASLEEP (unconscious, drops what's holding, attacks vs them within 5 ft are crits)!`,
+              panicked: `is PANICKED (frightened — disadv on attacks while caster visible, can't approach)!`,
+              sickened: `is SICKENED (poisoned — disadv on attacks and ability checks)!`,
+            };
+
+            log(state, 'condition_add', actor.id,
+              `${newTarget.name} ${effectDescs[option]}`,
+              newTarget.id);
+          } else {
+            log(state, 'action', actor.id,
+              `${newTarget.name} resists Eyebite re-target — not ${optionLabel.toLowerCase()}!`,
+              newTarget.id);
           }
         }
       }

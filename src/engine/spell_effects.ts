@@ -230,6 +230,13 @@ function _undoEffect(target: Combatant, effect: ActiveEffect): void {
           case 'Ray of Enfeeblement':
             delete target._rayOfEnfeeblementActive;
             break;
+          // ── Session 28 — Eyebite scratch field ──
+          // When the Eyebite sentinel (damage_zone dieCount=0 on the caster)
+          // is removed (concentration break), clear the _eyebiteActive scratch
+          // field so per-turn re-target stops.
+          case 'Eyebite':
+            delete target._eyebiteActive;
+            break;
         }
       }
       break;

@@ -1056,6 +1056,17 @@ export interface Combatant {
   // breaks. v1 simplification documented via `flameBladeAsWeaponRiderV1Simplified: true`.
   _flameBladeActive?: boolean;
 
+  // ---- Eyebite (PHB p.238) scratch field ----
+  // Set on the CASTER when Eyebite is cast. Stores the save DC so that the
+  // per-turn re-target can roll saves against the correct DC. While set and
+  // the caster is concentrating on Eyebite, the combat.ts runCombat loop
+  // automatically re-targets a new enemy at the start of the caster's turn
+  // (v1 simplification: the re-target is automatic, like damage_zone ticks,
+  // rather than consuming the caster's action as canon requires).
+  // Concentration spell — removed by removeEffectsFromCaster when concentration
+  // breaks (via damage_zone sentinel with dieCount=0 in _undoEffect).
+  _eyebiteActive?: { saveDC: number };
+
   // ---- Magic Weapon (PHB p.257) scratch field ----
   // Set on the TARGET (the weapon's wielder) when Magic Weapon is cast on
   // their weapon. Value: the +N bonus to attack rolls AND damage rolls with
