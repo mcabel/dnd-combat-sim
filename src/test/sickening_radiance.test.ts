@@ -26,6 +26,7 @@
 
 import { shouldCast, execute, metadata, rollDamage } from '../spells/sickening_radiance';
 import { Combatant, Action, PlayerResources, Vec3, Condition } from '../types/core';
+import { getActiveTerrainZones } from '../engine/spell_effects';
 
 let passed = 0, failed = 0;
 
@@ -56,7 +57,7 @@ const SR_ACTION: Action = {
   saveAbility: 'con',
   isAoE: true,
   isControl: false,
-  requiresConcentration: false,
+  requiresConcentration: true,
   slotLevel: 4,
   costType: 'action',
   legendaryCost: 0,
@@ -164,7 +165,8 @@ eq('Die count is 4', metadata.dieCount, 4);
 eq('Die sides is 10', metadata.dieSides, 10);
 eq('Damage type is radiant', metadata.damageType, 'radiant');
 eq('Save ability is con', metadata.saveAbility, 'con');
-eq('Not concentration (v1 one-shot)', metadata.concentration, false);
+eq('Concentration (v2 persistent)', metadata.concentration, true);
+assert('v2 persistent terrain flag', (metadata as any).sickeningRadiancePersistentV2Implemented === true);
 
 // ---- 2. shouldCast gates --------------------------------------
 
@@ -184,7 +186,15 @@ console.log('\n=== 2. shouldCast gates ===\n');
   const bf = makeBF([caster, enemy]);
   eq('Returns null when no 4th-level slots', shouldCast(caster, bf), null);
 }
-// 2c. No enemies within 120 ft → null
+// 2c. Already concentrating → null
+{
+  const caster = makeCaster({ x: 0, y: 0, z: 0 });
+  caster.concentration = { active: true, spellName: 'Bless', startedAtRound: 1 } as any;
+  const enemy = makeWeakEnemy('e1', { x: 1, y: 0, z: 0 });
+  const bf = makeBF([caster, enemy]);
+  eq('Returns null when already concentrating', shouldCast(caster, bf), null);
+}
+// 2d. No enemies within 120 ft → null
 {
   const caster = makeCaster({ x: 0, y: 0, z: 0 });
   // 25 squares away = 125 ft > 120 ft range
@@ -192,7 +202,7 @@ console.log('\n=== 2. shouldCast gates ===\n');
   const bf = makeBF([caster, enemy]);
   eq('Returns null when no enemies within 120 ft', shouldCast(caster, bf), null);
 }
-// 2d. Single enemy in range → returns array with that enemy
+// 2e. Single enemy in range → returns array with that enemy
 {
   const caster = makeCaster({ x: 0, y: 0, z: 0 });
   const enemy = makeWeakEnemy('e1', { x: 1, y: 0, z: 0 });
@@ -281,14 +291,17 @@ console.log('\n=== 4. execute — guaranteed fail (full damage + poisoned) ===\n
     // Condition-add log emitted
     const condAdds = state.log.events.filter((e: any) => e.type === 'condition_add');
     assert('Condition-add log emitted (poisoned)', condAdds.length >= 1);
-    // ActiveEffect recorded (condition_apply sourceIsConcentration: false — v1 one-shot)
+    // ActiveEffect recorded (condition_apply sourceIsConcentration: true — v2 concentration)
     const srEffects = enemy.activeEffects.filter((e: any) => e.spellName === 'Sickening Radiance');
     assert('ActiveEffect recorded with spellName Sickening Radiance', srEffects.length === 1);
     if (srEffects.length === 1) {
       eq('Effect type is condition_apply', srEffects[0].effectType, 'condition_apply');
       eq('Effect payload condition is poisoned', srEffects[0].payload.condition, 'poisoned');
-      eq('Effect NOT concentration-sourced (v1 one-shot)', srEffects[0].sourceIsConcentration, false);
+      eq('Effect IS concentration-sourced (v2)', srEffects[0].sourceIsConcentration, true);
     }
+    // Concentration started on caster
+    assert('Concentration started on caster', caster.concentration?.active === true);
+    eq('Concentration spell is Sickening Radiance', caster.concentration?.spellName, 'Sickening Radiance');
   }
 }
 
@@ -390,9 +403,59 @@ console.log('\n=== 7. execute — already-poisoned target ===\n');
   }
 }
 
-// ---- 8. Cleanup is a no-op ------------------------------------
+// ---- 8. Terrain zone effect on cast ===
 
-console.log('\n=== 8. Cleanup is a no-op ===\n');
+console.log('\n=== 8. Terrain zone effect on cast ===\n');
+
+{
+  const caster = makeCaster({ x: 0, y: 0, z: 0 });
+  const enemy = makeWeakEnemy('e1', { x: 1, y: 0, z: 0 }, { maxHP: 1000 });
+  const bf = makeBF([caster, enemy]);
+  const state = makeState(bf);
+
+  const targets = shouldCast(caster, bf);
+  if (targets) {
+    execute(caster, targets, state);
+  }
+  // The terrain_zone effect should be on the CASTER
+  const zones = getActiveTerrainZones(bf);
+  eq('1 terrain zone', zones.length, 1);
+  if (zones.length > 0) {
+    const z = zones[0];
+    eq('spell name', z.spellName, 'Sickening Radiance');
+    eq('save ability', z.saveAbility, 'con');
+    eq('condition', z.condition, 'poisoned');
+    eq('radius', z.radiusFt, 30);
+    eq('center X', z.centerX, 1);  // enemy at x:1
+    eq('center Y', z.centerY, 0);
+    eq('center Z', z.centerZ, 0);
+    eq('IS concentration-sourced', z.sourceIsConcentration, true);
+    eq('caster ID', z.casterId, 'sorc');
+  }
+}
+
+// ---- 9. Terrain zone removed on concentration break ===
+
+console.log('\n=== 9. Terrain zone removed on concentration break ===\n');
+
+{
+  const caster = makeCaster({ x: 0, y: 0, z: 0 });
+  const enemy = makeWeakEnemy('e1', { x: 1, y: 0, z: 0 });
+  const bf = makeBF([caster, enemy]);
+  const state = makeState(bf);
+
+  const targets = shouldCast(caster, bf);
+  if (targets) { execute(caster, targets, state); }
+  eq('zone before conc break', getActiveTerrainZones(bf).length, 1);
+  // Simulate concentration break by removing effects from caster
+  const { removeEffectsFromCaster } = require('../engine/spell_effects');
+  removeEffectsFromCaster('sorc', bf);
+  eq('zone after conc break', getActiveTerrainZones(bf).length, 0);
+}
+
+// ---- 10. Cleanup is a no-op ------------------------------------
+
+console.log('\n=== 10. Cleanup is a no-op ===\n');
 
 {
   const caster = makeCaster();
@@ -402,9 +465,9 @@ console.log('\n=== 8. Cleanup is a no-op ===\n');
   assert('cleanup() does not throw', cleanupOk);
 }
 
-// ---- 9. rollDamage respects 4d10 -------------------------------
+// ---- 11. rollDamage respects 4d10 -------------------------------
 
-console.log('\n=== 9. rollDamage ===\n');
+console.log('\n=== 11. rollDamage ===\n');
 
 {
   let min = Infinity, max = -Infinity;

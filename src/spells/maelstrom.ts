@@ -45,15 +45,15 @@
 // Spell module pattern (AoE save + condition — mirrors sunburst.ts):
 //   shouldCast(caster, bf) → Combatant[] | null
 //   execute(caster, targets, state) → void
-//   cleanup() — no-op (v1 one-shot)
+//   cleanup() — no-op (concentration break handles cleanup)
 // ============================================================
 
-import { Combatant, Battlefield } from '../types/core';
+import { Combatant, Battlefield, Condition } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
-import { rollSave, rollDie, applyDamageWithTempHP } from '../engine/utils';
+import { rollSave, rollDie, applyDamageWithTempHP, startConcentration } from '../engine/utils';
 import { chebyshev3D, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
-import { applySpellEffect } from '../engine/spell_effects';
+import { applySpellEffect, removeEffectsFromCaster } from '../engine/spell_effects';
 
 export const metadata = {
   name: 'Maelstrom',
@@ -64,10 +64,10 @@ export const metadata = {
   dieCount: 6,
   dieSides: 6,
   damageType: 'bludgeoning' as const,
-  concentration: false,          // v1 simplification: one-shot (canon concentration 1 min)
+  concentration: true,           // v2: persistent terrain zone (canon concentration 1 min)
   saveAbility: 'dex' as const,   // v1 follows plan (canon is STR)
   castingTime: 'action',
-  maelstromConcentrationV1Simplified: true,                           // canon concentration simplified to one-shot
+  maelstromPersistentV2Implemented: true,                              // v2: terrain_zone + damage_zone + concentration (was v1 one-shot)
   maelstromPullToRestrainedV1PerPlan: true,                           // canon pull-10ft → v1 restrained (per plan)
   maelstromDexSaveV1PerPlan: true,                                    // v1 uses DEX (canon is STR)
   maelstromUpcastV1Implemented: false,                                 // +1d6/slot-level NOT modelled
@@ -84,6 +84,7 @@ export function rollDamage(): number {
 }
 
 export function shouldCast(caster: Combatant, bf: Battlefield): Combatant[] | null {
+  if (caster.concentration?.active) return null;
   if (!caster.actions.some(a => a.name === 'Maelstrom')) return null;
   if (!hasSpellSlot(caster, 5)) return null;
 
@@ -115,11 +116,39 @@ export function execute(caster: Combatant, targets: Combatant[], state: EngineSt
   const saveDC = action?.saveDC ?? 15;
 
   consumeSpellSlot(caster, 5);
+  if (caster.concentration?.active) removeEffectsFromCaster(caster.id, state.battlefield);
+  startConcentration(caster, 'Maelstrom');
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Maelstrom! (DC ${saveDC} DEX, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}, ${metadata.aoeRadiusFt}-ft radius AoE + restrained on fail) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} caught!`,
+    `${caster.name} casts Maelstrom! (DC ${saveDC} DEX, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}, ${metadata.aoeRadiusFt}-ft radius AoE + restrained on fail, concentration) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} caught!`,
   );
+
+  // Find the center (highest-threat enemy) for the terrain zone position
+  const center = targets.reduce<Combatant | null>((best, t) => {
+    if (t.isDead || t.isUnconscious) return best;
+    if (!best || t.maxHP > best.maxHP) return t;
+    return best;
+  }, null);
+
+  // Apply terrain_zone effect on the CASTER (concentration)
+  // This marks a persistent 20-ft radius zone at the center position
+  if (center) {
+    applySpellEffect(caster, {
+      casterId: caster.id,
+      spellName: 'Maelstrom',
+      effectType: 'terrain_zone',
+      payload: {
+        terrainSaveAbility: 'dex' as const,
+        terrainCondition: 'restrained' as Condition,
+        terrainRadiusFt: 20,
+        terrainCenterX: center.pos.x,
+        terrainCenterY: center.pos.y,
+        terrainCenterZ: center.pos.z,
+      },
+      sourceIsConcentration: true,
+    });
+  }
 
   for (const target of targets) {
     if (target.isDead || target.isUnconscious) continue;
@@ -144,13 +173,28 @@ export function execute(caster: Combatant, targets: Combatant[], state: EngineSt
         spellName: 'Maelstrom',
         effectType: 'condition_apply',
         payload: { condition: 'restrained' },
-        sourceIsConcentration: false,
+        sourceIsConcentration: true,    // v2: concentration-sourced
       });
       emit(state, 'condition_add', caster.id, `${target.name} is caught in the MAELSTROM and restrained! (speed 0, attacks vs them have advantage, their attacks have disadvantage)`, target.id);
     }
+
+    // Persistent damage_zone — start-of-turn tick rolls DEX save for half.
+    applySpellEffect(target, {
+      casterId: caster.id,
+      spellName: 'Maelstrom',
+      effectType: 'damage_zone',
+      payload: {
+        dieCount: metadata.dieCount,
+        dieSides: metadata.dieSides,
+        damageType: metadata.damageType,
+        saveDC,
+        saveAbility: metadata.saveAbility,
+      },
+      sourceIsConcentration: true,
+    });
   }
 }
 
 export function cleanup(_c: Combatant): void {
-  // No-op — v1 one-shot.
+  // No-op — concentration break handles cleanup.
 }

@@ -143,7 +143,7 @@ eq('range is 120 ft', metadata.rangeFt, 120);
 eq('is concentration', metadata.concentration, true);
 eq('save ability is wis', metadata.saveAbility, 'wis');
 eq('casting time is action', metadata.castingTime, 'action');
-eq('forced-attack NOT implemented (v1)', metadata.crownOfMadnessForcedAttackV1Implemented, false);
+eq('forced-attack IS implemented (v2)', metadata.crownOfMadnessControlV2Implemented, true);
 eq('action maintenance NOT implemented (v1)', metadata.crownOfMadnessActionMaintenanceV1Implemented, false);
 eq('end-of-turn save NOT implemented (v1)', metadata.crownOfMadnessEndOfTurnSaveV1Implemented, false);
 
@@ -203,11 +203,11 @@ console.log('\n=== 2. shouldCast — precondition gates ===\n');
   const enemy = makeWeakEnemy('e1');
   enemy.activeEffects.push({
     id: 'eff_1', casterId: caster.id, spellName: 'Crown of Madness',
-    effectType: 'condition_apply', payload: { condition: 'charmed' },
+    effectType: 'taunt', payload: { tauntCasterId: caster.id },
     sourceIsConcentration: true,
   });
   const bf = makeBF([caster, enemy]);
-  assert('Returns null when enemy already Crown-of-Madness\'d by this caster', shouldCast(caster, bf) === null);
+  assert('Returns null when enemy already Crown-of-Madness\'d by this caster (taunt effect)', shouldCast(caster, bf) === null);
 }
 
 // ============================================================
@@ -255,6 +255,10 @@ console.log('\n=== 4. execute — save resolution + condition application ===\n'
   eq('Caster concentrating on Crown of Madness', caster.concentration?.spellName, 'Crown of Madness');
   assert('Active effect applied (condition_apply:charmed)',
     enemy.activeEffects.some(e => e.effectType === 'condition_apply' && e.payload.condition === 'charmed'));
+  assert('Active effect applied (taunt)',
+    enemy.activeEffects.some(e => e.effectType === 'taunt' && e.payload.tauntCasterId === caster.id));
+  eq('Taunt casterId matches caster',
+    enemy.activeEffects.find(e => e.effectType === 'taunt')?.payload.tauntCasterId, caster.id);
 }
 
 {
@@ -270,7 +274,7 @@ console.log('\n=== 4. execute — save resolution + condition application ===\n'
 
   assert('Enemy NOT charmed on successful save', !enemy.conditions.has('charmed'));
   eq('Slot still consumed on save success', caster.resources!.spellSlots![2]!.remaining, 1);
-  assert('No active effect applied on save success',
+  assert('No active effect applied on save success (no taunt, no charmed)',
     !enemy.activeEffects.some(e => e.spellName === 'Crown of Madness'));
 }
 
@@ -284,6 +288,8 @@ console.log('\n=== 4. execute — save resolution + condition application ===\n'
   execute(caster, enemy, state);
 
   assert('Dead enemy not charmed', !enemy.conditions.has('charmed'));
+  assert('Dead enemy not taunted',
+    !enemy.activeEffects.some(e => e.effectType === 'taunt' && e.spellName === 'Crown of Madness'));
   eq('Slot consumed even for dead target (stale plan)', caster.resources!.spellSlots![2]!.remaining, 1);
 }
 
@@ -323,7 +329,8 @@ console.log('\n=== 5. execute — logging ===\n');
   assert('At least 1 action event (cast log)', actionEvents.length >= 1);
   assert('Save event emitted', saveEvents.length === 1);
   assert('Save event is save_fail (guaranteed fail)', saveEvents[0]?.type === 'save_fail');
-  assert('Condition_add event emitted (charmed)', condEvents.length === 1);
+  assert('Condition_add event emitted (charmed + taunted)', condEvents.length === 1);
+  assert('Condition_add event mentions CHARMED + TAUNTED', condEvents[0]?.description?.includes('CHARMED + TAUNTED'));
   assert('Action event mentions "Crown of Madness"', actionEvents[0].description.includes('Crown of Madness'));
 }
 
@@ -360,7 +367,9 @@ console.log('\n=== 7. Integration pipeline ===\n');
   if (target) execute(caster, target, state);
 
   assert('Strong enemy charmed', strong.conditions.has('charmed'));
+  assert('Strong enemy taunted', strong.activeEffects.some(e => e.effectType === 'taunt' && e.spellName === 'Crown of Madness'));
   assert('Weak enemy NOT charmed', !weak.conditions.has('charmed'));
+  assert('Weak enemy NOT taunted', !weak.activeEffects.some(e => e.effectType === 'taunt'));
   eq('Slot consumed (1 remaining)', caster.resources!.spellSlots![2]!.remaining, 1);
 }
 

@@ -72,14 +72,15 @@
 // 20-ft radius sphere, 5d8 poison, 120-ft range, L5 slot):
 //   shouldCast(caster, bf) → Combatant[] | null
 //   execute(caster, targets, state) → void
-//   cleanup() — no-op (v1: one-shot, no persistent effect)
+//   cleanup() — no-op (concentration break handles cleanup)
 // ============================================================
 
 import { Combatant, Battlefield } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
-import { rollSave, rollDie, applyDamageWithTempHP } from '../engine/utils';
+import { rollSave, rollDie, applyDamageWithTempHP, startConcentration } from '../engine/utils';
 import { chebyshev3D, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
+import { applySpellEffect, removeEffectsFromCaster } from '../engine/spell_effects';
 
 // ---- Metadata -----------------------------------------------
 
@@ -92,12 +93,12 @@ export const metadata = {
   dieCount: 5,
   dieSides: 8,
   damageType: 'poison' as const,
-  concentration: false,         // v1: simplified to one-shot (concentration rider not modelled)
+  concentration: true,          // v2: persistent damage_zone (canon concentration 10 min)
   saveAbility: 'con' as const,
   castingTime: 'action',
   cloudkillDamage5d8Not8d8: true,                                   // PHB p.222: 5d8 (handover "8d8" was a typo)
   cloudkillMovingAoeV1Simplified: true,                             // no "move AoE" hook in v1
-  cloudkillConcentrationV1Simplified: true,                         // concentration rider not modelled (one-shot in v1)
+  cloudkillPersistentV2Implemented: true,                           // v2: damage_zone + concentration (was v1 one-shot)
   cloudkillHeavilyObscuredV1Simplified: true,                       // no vision-blocking terrain in v1
   cloudkillUpcastV1Implemented: false,                              // +1d8/slot-level NOT modelled
 } as const;
@@ -149,11 +150,11 @@ export function rollDamage(): number {
  *   - Caster has at least one 5th-level-or-higher slot available
  *   - At least 1 valid enemy target exists within 120 ft
  *
- * Note: v1 treats Cloudkill as NOT concentration (the concentration
- * rider is simplified away — see metadata.cloudkillConcentrationV1Simplified).
- * The planner should NOT gate on concentration.
+ * Note: v2 treats Cloudkill as concentration (the concentration
+ * rider is now modelled — see metadata.cloudkillPersistentV2Implemented).
  */
 export function shouldCast(caster: Combatant, bf: Battlefield): Combatant[] | null {
+  if (caster.concentration?.active) return null;
   if (!caster.actions.some(a => a.name === 'Cloudkill')) return null;
   if (!hasSpellSlot(caster, 5)) return null;
 
@@ -217,10 +218,12 @@ export function execute(
   const saveDC = action?.saveDC ?? 13;
 
   consumeSpellSlot(caster, 5);
+  if (caster.concentration?.active) removeEffectsFromCaster(caster.id, state.battlefield);
+  startConcentration(caster, 'Cloudkill');
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Cloudkill! (DC ${saveDC} CON, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}, ${metadata.aoeRadiusFt}-ft radius AoE) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} caught! (v1: one-shot — moving-AoE not modelled)`,
+    `${caster.name} casts Cloudkill! (DC ${saveDC} CON, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}, ${metadata.aoeRadiusFt}-ft radius AoE, concentration) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} caught! (moving-AoE not modelled)`,
   );
 
   for (const target of targets) {
@@ -243,6 +246,21 @@ export function execute(
       `Cloudkill: ${target.name} takes ${dealt} ${metadata.damageType} damage`,
       target.id, dealt,
     );
+
+    // Persistent damage_zone — start-of-turn tick rolls CON save for half.
+    applySpellEffect(target, {
+      casterId: caster.id,
+      spellName: 'Cloudkill',
+      effectType: 'damage_zone',
+      payload: {
+        dieCount: metadata.dieCount,
+        dieSides: metadata.dieSides,
+        damageType: metadata.damageType,
+        saveDC,
+        saveAbility: metadata.saveAbility,
+      },
+      sourceIsConcentration: true,
+    });
   }
 }
 
@@ -259,5 +277,5 @@ export function execute(
  * to clean up the damage_zone sentinel here (mirror Moonbeam's cleanup).
  */
 export function cleanup(_c: Combatant): void {
-  // No-op — v1: one-shot AoE, nothing to clean up.
+  // No-op — concentration break handles cleanup.
 }

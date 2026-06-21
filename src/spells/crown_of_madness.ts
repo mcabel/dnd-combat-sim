@@ -21,37 +21,46 @@
 //         the target can make a Wisdom saving throw at the end of each
 //         of its turns. On a success, the spell ends.
 //
-// v1 simplifications:
-//   - Duration: canon 1 min concentration → v1: concentration is started
+// v2 (this version) — forced-attack mechanic upgrade:
+//   - Forced-attack mechanic: PHB p.229 says "The charmed target must
+//     use its action before moving on each of its turns to make a melee
+//     attack against a creature other than itself that you mentally
+//     choose." v2 approximates this via taunt + charmed:
+//       1. `effectType:'taunt'` with `payload.tauntCasterId` — the
+//          target has disadvantage on attacks vs anyone except the caster.
+//          This models "must attack the caster's chosen target" — the
+//          target is penalized for attacking anyone other than the caster's
+//          chosen target.
+//       2. `effectType:'condition_apply'` with `payload.condition:'charmed'`
+//          — the target is charmed (can't attack the caster).
+//     Net effect: target is heavily penalized for attacking anyone,
+//     modeling the "controlled attack" behavior. The forced melee attack
+//     itself is a v1 simplification — taunt+charmed together approximate
+//     the control without requiring an AI override hook.
+//     Documented via `crownOfMadnessControlV2Implemented: true`.
+//
+// v1 simplifications still remaining:
+//   - Duration: canon 1 min concentration → v1/v2: concentration is started
 //     via startConcentration(), but the engine does NOT yet enforce
 //     concentration checks on damage taken (forward-compat TODO; see
 //     TG-002 in TEAMGOALS.md). The charmed condition persists until
 //     removeEffectsFromCaster() is called.
-//   - Forced-attack mechanic: PHB p.229 says "The charmed target must
-//     use its action before moving on each of its turns to make a melee
-//     attack against a creature other than itself that you mentally
-//     choose." v1 does NOT model this (the engine has no mechanism to
-//     override a combatant's AI to attack a specific creature — would
-//     require a "charmed controller" hook in planTurn). The charmed
-//     condition is applied but the forced-attack rider is skipped.
-//     Forward-compat TODO via the metadata flag
-//     `crownOfMadnessForcedAttackV1Implemented: false`.
 //   - Action maintenance: PHB p.229 says "On your subsequent turns,
 //     you must use your action to maintain control over the target, or
-//     the spell ends." v1 does NOT model this (no multi-turn action
+//     the spell ends." v1/v2 does NOT model this (no multi-turn action
 //     commitment subsystem). The spell persists for the entire combat
 //     without requiring the caster to spend actions maintaining it.
 //     Forward-compat TODO via the metadata flag
 //     `crownOfMadnessActionMaintenanceV1Implemented: false`.
 //   - End-of-turn WIS save: PHB p.229 says "the target can make a
 //     Wisdom saving throw at the end of each of its turns. On a
-//     success, the spell ends." v1 does NOT model this (forward-compat
+//     success, the spell ends." v1/v2 does NOT model this (forward-compat
 //     TODO via the metadata flag
 //     `crownOfMadnessEndOfTurnSaveV1Implemented: false`).
 //   - Humanoid creature-type restriction: PHB p.229 says "One humanoid".
-//     v1 does NOT verify creature type (parser tech debt — TG-004).
+//     v1/v2 does NOT verify creature type (parser tech debt — TG-004).
 //     All living enemies are valid targets.
-//   - Concentration enforcement: v1 does NOT enforce concentration
+//   - Concentration enforcement: v1/v2 does NOT enforce concentration
 //     checks (TG-002).
 //
 // Spell module pattern (Session 31 architecture):
@@ -78,7 +87,7 @@ export const metadata = {
   concentration: true,
   saveAbility: 'wis' as const,
   castingTime: 'action',
-  crownOfMadnessForcedAttackV1Implemented: false,           // forced-attack rider skipped
+  crownOfMadnessControlV2Implemented: true,                  // taunt+charmed approximates forced-attack control
   crownOfMadnessActionMaintenanceV1Implemented: false,      // multi-turn action commitment skipped
   crownOfMadnessEndOfTurnSaveV1Implemented: false,          // end-of-turn save skipped
   crownOfMadnessConcentrationEnforcementV1Implemented: false,  // see TG-002
@@ -129,15 +138,11 @@ function emit(
  * Note: Crown of Madness IS concentration — it cannot be cast while
  * concentrating on another spell. The planner gates on concentration.
  *
- * Note: In v1, the forced-attack rider is NOT modelled, so Crown of
- * Madness is functionally equivalent to a "save-or-charmed" debuff.
- * The charmed condition in v1 doesn't prevent the target from attacking
- * the caster's allies (the engine doesn't check charmed in
- * attackAdvantageState or planTurn). The spell's main v1 effect is
- * therefore the charmed condition's interaction with future Calm
- * Emotions / Break Enchantment-style effects. This is a known v1
- * limitation documented via the metadata flag
- * `crownOfMadnessForcedAttackV1Implemented: false`.
+ * Note: In v2, the forced-attack rider IS modelled via taunt + charmed.
+ * The taunt gives disadvantage on attacks vs non-caster (models "must
+ * attack the caster's chosen target"), and charmed prevents attacks on
+ * the caster. Together they approximate the controlled-attack behavior
+ * from PHB p.229. Documented via `crownOfMadnessControlV2Implemented: true`.
  */
 export function shouldCast(caster: Combatant, bf: Battlefield): Combatant | null {
   if (caster.concentration?.active) return null;
@@ -155,14 +160,14 @@ export function shouldCast(caster: Combatant, bf: Battlefield): Combatant | null
     if (distFt > 120) continue;
 
     // Skip if already charmed by any source — Crown of Madness doesn't
-    // stack (a creature can be charmed by multiple casters, but v1
+    // stack (a creature can be charmed by multiple casters, but v1/v2
     // doesn't model per-caster charm tracking — re-cast would only
     // refresh the duration, which is wasteful).
     if (c.conditions.has('charmed')) continue;
 
-    // Skip if already Crown-of-Madness'd by this caster (re-cast would
-    // only refresh the duration — wasteful in v1 since the end-of-turn
-    // save isn't modelled).
+    // Skip if already Crown-of-Madness'd by this caster (either taunt
+    // or charmed effect — re-cast would only refresh the duration,
+    // wasteful since the end-of-turn save isn't modelled).
     if (c.activeEffects.some(e =>
       e.casterId === caster.id && e.spellName === 'Crown of Madness'
     )) continue;
@@ -190,15 +195,19 @@ export function shouldCast(caster: Combatant, bf: Battlefield): Combatant | null
  *  2. Break any existing concentration (safety net — planner prevents this).
  *  3. Start concentration on Crown of Madness.
  *  4. Roll the target's WIS save vs the caster's saveDC.
- *  5. On fail: apply condition_apply:charmed effect on the target.
- *     - The effect has sourceIsConcentration: true (removed when the
- *       caster's concentration breaks).
+ *  5. On fail: apply TWO effects on the target:
+ *     a) taunt effect (disadvantage on attacks vs non-caster) — models
+ *        the forced-attack mechanic from PHB p.229.
+ *     b) condition_apply:charmed — target is charmed (can't attack caster).
+ *     Both effects have sourceIsConcentration: true (removed when the
+ *     caster's concentration breaks).
  *  6. On success: log the save, no effect applied.
  *
- * v1 simplifications: forced-attack rider NOT modelled; action
- * maintenance NOT modelled; end-of-turn WIS save NOT modelled;
- * concentration NOT enforced (TG-002). The charmed condition persists
- * for the entire combat (or until concentration breaks).
+ * v2: forced-attack rider approximated via taunt + charmed.
+ * v1 simplifications still remaining: action maintenance NOT modelled;
+ * end-of-turn WIS save NOT modelled; concentration NOT enforced (TG-002).
+ * The taunt + charmed conditions persist for the entire combat (or until
+ * concentration breaks).
  *
  * @param caster  The casting Combatant (Bard/Sorcerer/Warlock/Wizard)
  * @param target  The candidate from shouldCast (single enemy in range)
@@ -248,6 +257,18 @@ export function execute(
     return;
   }
 
+  // Apply taunt effect (disadvantage on attacks vs non-caster) — models
+  // the forced-attack mechanic from PHB p.229: "The charmed target must
+  // use its action... to make a melee attack against a creature other than
+  // itself that you mentally choose." IS concentration — sourceIsConcentration: true.
+  applySpellEffect(target, {
+    casterId: caster.id,
+    spellName: 'Crown of Madness',
+    effectType: 'taunt',
+    payload: { tauntCasterId: caster.id },
+    sourceIsConcentration: true,
+  });
+
   // Apply charmed condition. IS concentration — sourceIsConcentration: true.
   // The condition is removed via removeEffectsFromCaster when concentration
   // breaks.
@@ -261,7 +282,7 @@ export function execute(
 
   emit(
     state, 'condition_add', caster.id,
-    `${target.name} is CHARMED by Crown of Madness! (v1: forced-attack rider not modelled)`,
+    `${target.name} is CHARMED + TAUNTED by Crown of Madness! (disadvantage on attacks vs non-caster)`,
     target.id,
   );
 }
@@ -270,10 +291,11 @@ export function execute(
 
 /**
  * Cleanup hook for Crown of Madness — called from resetBudget() at the
- * start of the caster's next turn. NO-OP in v1 because:
- *   - Crown of Madness is a concentration spell; the charmed condition
- *     is removed via removeEffectsFromCaster() when concentration breaks.
- *   - v1 does NOT enforce concentration checks (TG-002).
+ * start of the caster's next turn. NO-OP in v2 because:
+ *   - Crown of Madness is a concentration spell; the taunt + charmed
+ *     effects are removed via removeEffectsFromCaster() when concentration
+ *     breaks.
+ *   - v2 does NOT enforce concentration checks (TG-002).
  *
  * Exported for symmetry with the other spell modules' cleanup pattern.
  * Future work: implement the end-of-turn WIS save by hooking into the

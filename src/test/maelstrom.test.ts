@@ -26,6 +26,7 @@
 
 import { shouldCast, execute, metadata, rollDamage } from '../spells/maelstrom';
 import { Combatant, Action, PlayerResources, Vec3, Condition } from '../types/core';
+import { getActiveTerrainZones } from '../engine/spell_effects';
 
 let passed = 0, failed = 0;
 
@@ -56,7 +57,7 @@ const MAELSTROM_ACTION: Action = {
   saveAbility: 'dex',   // v1 follows plan (canon is STR)
   isAoE: true,
   isControl: false,
-  requiresConcentration: false,
+  requiresConcentration: true,
   slotLevel: 5,
   costType: 'action',
   legendaryCost: 0,
@@ -164,7 +165,8 @@ eq('Die count is 6', metadata.dieCount, 6);
 eq('Die sides is 6', metadata.dieSides, 6);
 eq('Damage type is bludgeoning', metadata.damageType, 'bludgeoning');
 eq('Save ability is dex', metadata.saveAbility, 'dex');
-eq('Not concentration (v1 one-shot)', metadata.concentration, false);
+eq('Concentration (v2 persistent)', metadata.concentration, true);
+assert('v2 persistent terrain flag', (metadata as any).maelstromPersistentV2Implemented === true);
 
 // ---- 2. shouldCast gates --------------------------------------
 
@@ -184,7 +186,15 @@ console.log('\n=== 2. shouldCast gates ===\n');
   const bf = makeBF([caster, enemy]);
   eq('Returns null when no 5th-level slots', shouldCast(caster, bf), null);
 }
-// 2c. No enemies within 120 ft → null
+// 2c. Already concentrating → null
+{
+  const caster = makeCaster({ x: 0, y: 0, z: 0 });
+  caster.concentration = { active: true, spellName: 'Bless', startedAtRound: 1 } as any;
+  const enemy = makeWeakEnemy('e1', { x: 1, y: 0, z: 0 });
+  const bf = makeBF([caster, enemy]);
+  eq('Returns null when already concentrating', shouldCast(caster, bf), null);
+}
+// 2d. No enemies within 120 ft → null
 {
   const caster = makeCaster({ x: 0, y: 0, z: 0 });
   // 25 squares away = 125 ft > 120 ft range
@@ -192,7 +202,7 @@ console.log('\n=== 2. shouldCast gates ===\n');
   const bf = makeBF([caster, enemy]);
   eq('Returns null when no enemies within 120 ft', shouldCast(caster, bf), null);
 }
-// 2d. Single enemy in range → returns array with that enemy
+// 2e. Single enemy in range → returns array with that enemy
 {
   const caster = makeCaster({ x: 0, y: 0, z: 0 });
   const enemy = makeWeakEnemy('e1', { x: 1, y: 0, z: 0 });
@@ -284,14 +294,19 @@ console.log('\n=== 4. execute — guaranteed fail (full damage + restrained) ===
     // Condition-add log emitted
     const condAdds = state.log.events.filter((e: any) => e.type === 'condition_add');
     assert('Condition-add log emitted (restrained)', condAdds.length >= 1);
-    // ActiveEffect recorded (condition_apply sourceIsConcentration: false)
+    // ActiveEffect recorded (condition_apply sourceIsConcentration: true — v2 concentration)
     const ckEffects = enemy.activeEffects.filter((e: any) => e.spellName === 'Maelstrom');
-    assert('ActiveEffect recorded with spellName Maelstrom', ckEffects.length === 1);
-    if (ckEffects.length === 1) {
-      eq('Effect type is condition_apply', ckEffects[0].effectType, 'condition_apply');
-      eq('Effect payload condition is restrained', ckEffects[0].payload.condition, 'restrained');
-      eq('Effect NOT concentration-sourced', ckEffects[0].sourceIsConcentration, false);
+    assert('ActiveEffect recorded with spellName Maelstrom', ckEffects.length >= 1);
+    // Find the condition_apply effect
+    const condEffect = ckEffects.find((e: any) => e.effectType === 'condition_apply');
+    assert('condition_apply effect found', condEffect !== undefined);
+    if (condEffect) {
+      eq('Effect payload condition is restrained', condEffect.payload.condition, 'restrained');
+      eq('Effect IS concentration-sourced (v2)', condEffect.sourceIsConcentration, true);
     }
+    // Concentration started on caster
+    assert('Concentration started on caster', caster.concentration?.active === true);
+    eq('Concentration spell is Maelstrom', caster.concentration?.spellName, 'Maelstrom');
   }
 }
 
@@ -368,18 +383,96 @@ console.log('\n=== 7. execute — already-restrained target ===\n');
     execute(caster, targets as Combatant[], state);
     // Still restrained (was already)
     assert('Enemy still restrained after re-cast', enemy.conditions.has('restrained'));
-    // No SECOND activeEffect added (skip-if-already-restrained guard)
-    const ckEffects = enemy.activeEffects.filter((e: any) => e.spellName === 'Maelstrom');
-    eq('No Maelstrom activeEffect added (already restrained)', ckEffects.length, 0);
+    // No condition_apply activeEffect added (skip-if-already-restrained guard)
+    // Note: damage_zone is still applied (per-turn damage tick)
+    const ckCondEffects = enemy.activeEffects.filter((e: any) => e.spellName === 'Maelstrom' && e.effectType === 'condition_apply');
+    eq('No Maelstrom condition_apply added (already restrained)', ckCondEffects.length, 0);
+    const ckDzEffects = enemy.activeEffects.filter((e: any) => e.spellName === 'Maelstrom' && e.effectType === 'damage_zone');
+    assert('damage_zone still applied (per-turn tick)', ckDzEffects.length === 1);
     // Damage still applied
     const dmgLogs = state.log.events.filter((e: any) => e.type === 'damage');
     eq('Damage still applied to already-restrained target', dmgLogs.length, 1);
   }
 }
 
-// ---- 8. Cleanup is a no-op ------------------------------------
+// ---- 8. Terrain zone effect on cast ===
 
-console.log('\n=== 8. Cleanup is a no-op ===\n');
+console.log('\n=== 8. Terrain zone effect on cast ===\n');
+
+{
+  const caster = makeCaster({ x: 0, y: 0, z: 0 });
+  const enemy = makeWeakEnemy('e1', { x: 1, y: 0, z: 0 }, { maxHP: 1000 });
+  const bf = makeBF([caster, enemy]);
+  const state = makeState(bf);
+
+  const targets = shouldCast(caster, bf);
+  if (targets) {
+    execute(caster, targets, state);
+  }
+  // The terrain_zone effect should be on the CASTER
+  const zones = getActiveTerrainZones(bf);
+  eq('1 terrain zone', zones.length, 1);
+  if (zones.length > 0) {
+    const z = zones[0];
+    eq('spell name', z.spellName, 'Maelstrom');
+    eq('save ability', z.saveAbility, 'dex');
+    eq('condition', z.condition, 'restrained');
+    eq('radius', z.radiusFt, 20);
+    eq('center X', z.centerX, 1);  // enemy at x:1
+    eq('center Y', z.centerY, 0);
+    eq('center Z', z.centerZ, 0);
+    eq('IS concentration-sourced', z.sourceIsConcentration, true);
+    eq('caster ID', z.casterId, 'druid');
+  }
+}
+
+// ---- 9. damage_zone applied on target ===
+
+console.log('\n=== 9. damage_zone applied on target ===\n');
+
+{
+  const caster = makeCaster({ x: 0, y: 0, z: 0 });
+  const enemy = makeWeakEnemy('e1', { x: 1, y: 0, z: 0 }, { maxHP: 1000, currentHP: 1000 });
+  const bf = makeBF([caster, enemy]);
+  const state = makeState(bf);
+
+  const targets = shouldCast(caster, bf);
+  if (targets) {
+    execute(caster, targets, state);
+  }
+  // damage_zone applied on target for per-turn tick
+  const dzEffects = enemy.activeEffects.filter((e: any) => e.spellName === 'Maelstrom' && e.effectType === 'damage_zone');
+  assert('damage_zone effect on target', dzEffects.length === 1);
+  if (dzEffects.length === 1) {
+    eq('damage_zone dieCount', dzEffects[0].payload.dieCount, 6);
+    eq('damage_zone dieSides', dzEffects[0].payload.dieSides, 6);
+    eq('damage_zone damageType', dzEffects[0].payload.damageType, 'bludgeoning');
+    eq('damage_zone IS concentration-sourced', dzEffects[0].sourceIsConcentration, true);
+  }
+}
+
+// ---- 10. Terrain zone removed on concentration break ===
+
+console.log('\n=== 10. Terrain zone removed on concentration break ===\n');
+
+{
+  const caster = makeCaster({ x: 0, y: 0, z: 0 });
+  const enemy = makeWeakEnemy('e1', { x: 1, y: 0, z: 0 });
+  const bf = makeBF([caster, enemy]);
+  const state = makeState(bf);
+
+  const targets = shouldCast(caster, bf);
+  if (targets) { execute(caster, targets, state); }
+  eq('zone before conc break', getActiveTerrainZones(bf).length, 1);
+  // Simulate concentration break by removing effects from caster
+  const { removeEffectsFromCaster } = require('../engine/spell_effects');
+  removeEffectsFromCaster('druid', bf);
+  eq('zone after conc break', getActiveTerrainZones(bf).length, 0);
+}
+
+// ---- 11. Cleanup is a no-op ------------------------------------
+
+console.log('\n=== 11. Cleanup is a no-op ===\n');
 
 {
   const caster = makeCaster();
@@ -389,9 +482,9 @@ console.log('\n=== 8. Cleanup is a no-op ===\n');
   assert('cleanup() does not throw', cleanupOk);
 }
 
-// ---- 9. rollDamage respects 6d6 -------------------------------
+// ---- 12. rollDamage respects 6d6 -------------------------------
 
-console.log('\n=== 9. rollDamage ===\n');
+console.log('\n=== 12. rollDamage ===\n');
 
 {
   let min = Infinity, max = -Infinity;

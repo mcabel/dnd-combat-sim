@@ -40,15 +40,15 @@
 // Spell module pattern (AoE save + condition — mirrors sunburst.ts):
 //   shouldCast(caster, bf) → Combatant[] | null
 //   execute(caster, targets, state) → void
-//   cleanup() — no-op (v1 one-shot)
+//   cleanup() — no-op (concentration break handles cleanup)
 // ============================================================
 
-import { Combatant, Battlefield } from '../types/core';
+import { Combatant, Battlefield, Condition } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
-import { rollSave, rollDie, applyDamageWithTempHP } from '../engine/utils';
+import { rollSave, rollDie, applyDamageWithTempHP, startConcentration } from '../engine/utils';
 import { chebyshev3D, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
-import { applySpellEffect } from '../engine/spell_effects';
+import { applySpellEffect, removeEffectsFromCaster } from '../engine/spell_effects';
 
 export const metadata = {
   name: 'Sickening Radiance',
@@ -59,10 +59,10 @@ export const metadata = {
   dieCount: 4,
   dieSides: 10,
   damageType: 'radiant' as const,
-  concentration: false,          // v1 simplification: one-shot (canon concentration 10 min)
+  concentration: true,           // v2: persistent terrain zone (canon concentration 10 min)
   saveAbility: 'con' as const,
   castingTime: 'action',
-  sickeningRadianceConcentrationV1Simplified: true,                  // canon concentration simplified to one-shot
+  sickeningRadiancePersistentV2Implemented: true,                    // v2: terrain_zone + concentration (was v1 one-shot)
   sickeningRadianceExhaustionToPoisonedV1: true,                     // exhaustion simplified to poisoned
   sickeningRadianceUpcastV1Implemented: false,                       // +1d10/slot-level NOT modelled
 } as const;
@@ -78,6 +78,7 @@ export function rollDamage(): number {
 }
 
 export function shouldCast(caster: Combatant, bf: Battlefield): Combatant[] | null {
+  if (caster.concentration?.active) return null;
   if (!caster.actions.some(a => a.name === 'Sickening Radiance')) return null;
   if (!hasSpellSlot(caster, 4)) return null;
 
@@ -109,11 +110,39 @@ export function execute(caster: Combatant, targets: Combatant[], state: EngineSt
   const saveDC = action?.saveDC ?? 15;
 
   consumeSpellSlot(caster, 4);
+  if (caster.concentration?.active) removeEffectsFromCaster(caster.id, state.battlefield);
+  startConcentration(caster, 'Sickening Radiance');
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Sickening Radiance! (DC ${saveDC} CON, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}, ${metadata.aoeRadiusFt}-ft radius AoE + poisoned [exhaustion simplified] on fail) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} caught!`,
+    `${caster.name} casts Sickening Radiance! (DC ${saveDC} CON, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}, ${metadata.aoeRadiusFt}-ft radius AoE + poisoned [exhaustion simplified] on fail, concentration) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} caught!`,
   );
+
+  // Find the center (highest-threat enemy) for the terrain zone position
+  const center = targets.reduce<Combatant | null>((best, t) => {
+    if (t.isDead || t.isUnconscious) return best;
+    if (!best || t.maxHP > best.maxHP) return t;
+    return best;
+  }, null);
+
+  // Apply terrain_zone effect on the CASTER (concentration)
+  // This marks a persistent 30-ft radius zone at the center position
+  if (center) {
+    applySpellEffect(caster, {
+      casterId: caster.id,
+      spellName: 'Sickening Radiance',
+      effectType: 'terrain_zone',
+      payload: {
+        terrainSaveAbility: 'con' as const,
+        terrainCondition: 'poisoned' as Condition,
+        terrainRadiusFt: 30,
+        terrainCenterX: center.pos.x,
+        terrainCenterY: center.pos.y,
+        terrainCenterZ: center.pos.z,
+      },
+      sourceIsConcentration: true,
+    });
+  }
 
   for (const target of targets) {
     if (target.isDead || target.isUnconscious) continue;
@@ -139,7 +168,7 @@ export function execute(caster: Combatant, targets: Combatant[], state: EngineSt
         spellName: 'Sickening Radiance',
         effectType: 'condition_apply',
         payload: { condition: 'poisoned' },
-        sourceIsConcentration: false,   // v1 one-shot
+        sourceIsConcentration: true,    // v2: concentration-sourced
       });
       emit(
         state, 'condition_add', caster.id,
@@ -151,5 +180,5 @@ export function execute(caster: Combatant, targets: Combatant[], state: EngineSt
 }
 
 export function cleanup(_c: Combatant): void {
-  // No-op — v1 one-shot.
+  // No-op — concentration break handles cleanup.
 }

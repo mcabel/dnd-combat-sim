@@ -43,7 +43,7 @@ const CLOUDKILL_ACTION: Action = {
   saveAbility: 'con',
   isAoE: true,
   isControl: false,
-  requiresConcentration: false,   // v1: simplified (concentration rider not modelled)
+  requiresConcentration: true,   // v2: concentration now modelled
   slotLevel: 5,
   costType: 'action',
   legendaryCost: 0,
@@ -148,7 +148,8 @@ eq('Die count is 5', metadata.dieCount, 5);
 eq('Die sides is 8', metadata.dieSides, 8);
 eq('Damage type is poison', metadata.damageType, 'poison');
 eq('Save ability is con', metadata.saveAbility, 'con');
-eq('Not concentration (v1: one-shot)', metadata.concentration, false);
+eq('Concentration (v2 persistent)', metadata.concentration, true);
+assert('v2 persistent flag', (metadata as any).cloudkillPersistentV2Implemented === true);
 
 // ---- 2. shouldCast gates --------------------------------------
 
@@ -165,6 +166,13 @@ console.log('\n=== 2. shouldCast gates ===\n');
   const enemy = makeWeakEnemy('e1', { x: 1, y: 0, z: 0 });
   const bf = makeBF([caster, enemy]);
   eq('Returns null when no 5th-level slots', shouldCast(caster, bf), null);
+}
+{
+  const caster = makeCombatant('wiz', { actions: [CLOUDKILL_ACTION], resources: withSlots5(2) });
+  caster.concentration = { active: true, spellName: 'Bless', startedAtRound: 1 } as any;
+  const enemy = makeWeakEnemy('e1', { x: 1, y: 0, z: 0 });
+  const bf = makeBF([caster, enemy]);
+  eq('Returns null when already concentrating', shouldCast(caster, bf), null);
 }
 {
   const caster = makeWizard({ x: 0, y: 0, z: 0 });
@@ -242,6 +250,18 @@ console.log('\n=== 4. execute — guaranteed fail (full damage) ===\n');
     assert('Action log emitted', actions.length === 1);
     const saveFails = state.log.events.filter((e: any) => e.type === 'save_fail');
     assert('Save-fail log emitted (CON 1 vs DC 25)', saveFails.length === 1);
+    // Concentration started on caster
+    assert('Concentration started on caster', caster.concentration?.active === true);
+    eq('Concentration spell is Cloudkill', caster.concentration?.spellName, 'Cloudkill');
+    // damage_zone applied on target for per-turn tick
+    const dzEffects = enemy.activeEffects.filter((e: any) => e.spellName === 'Cloudkill' && e.effectType === 'damage_zone');
+    assert('damage_zone effect on target', dzEffects.length === 1);
+    if (dzEffects.length === 1) {
+      eq('damage_zone dieCount', dzEffects[0].payload.dieCount, 5);
+      eq('damage_zone dieSides', dzEffects[0].payload.dieSides, 8);
+      eq('damage_zone damageType', dzEffects[0].payload.damageType, 'poison');
+      eq('damage_zone IS concentration-sourced', dzEffects[0].sourceIsConcentration, true);
+    }
   }
 }
 
@@ -266,6 +286,9 @@ console.log('\n=== 5. execute — guaranteed success (half damage) ===\n');
       dmgDealt >= 2 && dmgDealt <= 20);
     const saveSuccess = state.log.events.filter((e: any) => e.type === 'save_success');
     assert('Save-success log emitted (CON 30 vs DC 5)', saveSuccess.length === 1);
+    // damage_zone still applied on target even on save success (per-turn tick)
+    const dzEffects = enemy.activeEffects.filter((e: any) => e.spellName === 'Cloudkill' && e.effectType === 'damage_zone');
+    assert('damage_zone effect applied even on save success', dzEffects.length === 1);
   }
 }
 
@@ -293,9 +316,30 @@ console.log('\n=== 6. execute — multi-target AoE ===\n');
   }
 }
 
-// ---- 7. Cleanup is a no-op ------------------------------------
+// ---- 7. damage_zone removed on concentration break ===
 
-console.log('\n=== 7. Cleanup is a no-op ===\n');
+console.log('\n=== 7. damage_zone removed on concentration break ===\n');
+
+{
+  const caster = makeWizard({ x: 0, y: 0, z: 0 });
+  const enemy = makeWeakEnemy('e1', { x: 1, y: 0, z: 0 }, { maxHP: 1000, currentHP: 1000 });
+  const bf = makeBF([caster, enemy]);
+  const state = makeState(bf);
+
+  const targets = shouldCast(caster, bf);
+  if (targets) { execute(caster, targets, state); }
+  const dzBefore = enemy.activeEffects.filter((e: any) => e.spellName === 'Cloudkill' && e.effectType === 'damage_zone');
+  assert('damage_zone present before conc break', dzBefore.length === 1);
+  // Simulate concentration break
+  const { removeEffectsFromCaster } = require('../engine/spell_effects');
+  removeEffectsFromCaster('wiz', bf);
+  const dzAfter = enemy.activeEffects.filter((e: any) => e.spellName === 'Cloudkill' && e.effectType === 'damage_zone');
+  eq('damage_zone removed after conc break', dzAfter.length, 0);
+}
+
+// ---- 8. Cleanup is a no-op ------------------------------------
+
+console.log('\n=== 8. Cleanup is a no-op ===\n');
 
 {
   const caster = makeWizard();
@@ -305,9 +349,9 @@ console.log('\n=== 7. Cleanup is a no-op ===\n');
   assert('cleanup() does not throw', cleanupOk);
 }
 
-// ---- 8. rollDamage respects 5d8 --------------------------------
+// ---- 9. rollDamage respects 5d8 --------------------------------
 
-console.log('\n=== 8. rollDamage ===\n');
+console.log('\n=== 9. rollDamage ===\n');
 
 {
   let min = Infinity, max = -Infinity;
