@@ -460,15 +460,30 @@ console.log('\n--- 13. +1d8 radiant on melee hit ---');
     dmgNoBuff >= 2 && dmgNoBuff <= 12, `got ${dmgNoBuff}`);
   assert('13b. buffed crit damage in 4..28 range (2d6 + 2d8)',
     dmgWithBuff >= 4 && dmgWithBuff <= 28, `got ${dmgWithBuff}`);
-  assert('13c. buffed damage > unbuffed damage (radiant added)',
-    dmgWithBuff > dmgNoBuff, `buffed=${dmgWithBuff}, unbuffed=${dmgNoBuff}`);
 
   // The Shillelagh bonus log should mention radiant.
+  // (Looked up before 13c so 13c can use the radiant bonus amount for a
+  //  robust comparison — see 13c comment.)
   const shillelaghBonusLog = state2.log.events.find(
     (e: CombatEvent) => e.type === 'action' && e.description.includes('Shillelagh bonus') && e.description.includes('radiant'),
   );
   assert('13d. "Shillelagh bonus ... radiant" log emitted',
     shillelaghBonusLog !== undefined, `events: ${state2.log.events.map((e: CombatEvent) => e.description).join(' | ')}`);
+
+  // 13c (robust, Session 36 flaky-test fix): the buffed damage's bludgeoning
+  // component (total − radiant bonus) is in the SAME 2..12 range as the
+  // unbuffed crit. This proves the buff ADDED radiant on top of normal
+  // bludgeoning, WITHOUT comparing two independent random rolls.
+  //
+  // The original 13c (`dmgWithBuff > dmgNoBuff`) was flaky: buffed 2d6 can
+  // roll 2 (→ 4 total with min 2d8) while unbuffed 2d6 rolls 12, making
+  // 4 > 12 false. The bludgeoning-component check is deterministic given
+  // the logged radiant bonus.
+  const radiantBonus = shillelaghBonusLog?.value ?? 0;
+  const bludgeoningComponent = dmgWithBuff - radiantBonus;
+  assert('13c. buffed bludgeoning component in 2..12 (radiant added on top, not replacing)',
+    bludgeoningComponent >= 2 && bludgeoningComponent <= 12,
+    `buffed=${dmgWithBuff}, radiant=${radiantBonus}, bludgeoning=${bludgeoningComponent}`);
 
   // The Shillelagh bonus should be in 2..16 range (2d8 crit).
   if (shillelaghBonusLog) {
