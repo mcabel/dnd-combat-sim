@@ -144,7 +144,7 @@ eq('die sides is 4', metadata.dieSides, 4);
 eq('damage type is piercing', metadata.damageType, 'piercing');
 eq('is concentration', metadata.concentration, true);
 eq('casting time is action', metadata.castingTime, 'action');
-eq('difficult terrain NOT implemented (v1)', metadata.spikeGrowthDifficultTerrainV1Implemented, false);
+eq('difficult terrain IS implemented (v1)', metadata.spikeGrowthDifficultTerrainV1Implemented, true);
 eq('movement trigger NOT implemented (v1)', metadata.spikeGrowthMovementTriggerV1Implemented, false);
 eq('upcast NOT implemented (v1)', metadata.spikeGrowthUpcastV1Implemented, false);
 eq('concentration enforcement NOT implemented (v1)', metadata.spikeGrowthConcentrationEnforcementV1Implemented, false);

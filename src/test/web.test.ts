@@ -159,7 +159,7 @@ eq('range is 60 ft', metadata.rangeFt, 60);
 eq('is concentration', metadata.concentration, true);
 eq('save ability is dex', metadata.saveAbility, 'dex');
 eq('casting time is action', metadata.castingTime, 'action');
-eq('difficult terrain NOT implemented (v1)', metadata.webDifficultTerrainV1Implemented, false);
+eq('difficult terrain IS implemented (v1)', metadata.webDifficultTerrainV1Implemented, true);
 eq('destruction NOT implemented (v1)', metadata.webDestructionV1Implemented, false);
 eq('escape action NOT implemented (v1)', metadata.webEscapeActionV1Implemented, false);
 eq('upcast NOT implemented (v1)', metadata.webUpcastV1Implemented, false);
