@@ -677,6 +677,10 @@ import { shouldCast as shouldCastFalseLife,       execute as executeFalseLife } 
 import { shouldCast as shouldCastDispelMagic,    execute as executeDispelMagic }     from '../spells/dispel_magic';
 // ── TG-006 — Summon Beast bespoke summon spell (Phase 1b) ────────────────
 import { shouldCast as shouldCastSummonBeast, execute as executeSummonBeast } from '../spells/summon_beast';
+// ── TG-006 — L3 TCE summon spells (Phase 1c) ──────────────────────────────
+import { shouldCast as shouldCastSummonFey,         execute as executeSummonFey }         from '../spells/summon_fey';
+import { shouldCast as shouldCastSummonUndead,      execute as executeSummonUndead }      from '../spells/summon_undead';
+import { shouldCast as shouldCastSummonShadowspawn, execute as executeSummonShadowspawn } from '../spells/summon_shadowspawn';
 
 // ── Session 19 — bulk-implementation generic dispatch (262 new spells) ────
 import {
@@ -3738,8 +3742,14 @@ function executePlannedAction(
       // Dispatch to the appropriate summon spell module
       if (spellName === 'Summon Beast') {
         executeSummonBeast(actor, actor, state);
+      } else if (spellName === 'Summon Fey') {
+        executeSummonFey(actor, actor, state);
+      } else if (spellName === 'Summon Undead') {
+        executeSummonUndead(actor, actor, state);
+      } else if (spellName === 'Summon Shadowspawn') {
+        executeSummonShadowspawn(actor, actor, state);
       }
-      // More spells will be added in Phase 1c+
+      // More summon spells can be added here (Phase 1d+)
       break;
     }
 

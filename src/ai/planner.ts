@@ -243,6 +243,10 @@ import { shouldCast as shouldCastFalseLife } from '../spells/false_life';
 import { shouldCast as shouldCastDispelMagic } from '../spells/dispel_magic';
 // ── TG-006 — Summon Beast bespoke summon spell (Phase 1b) ────────────────
 import { shouldCast as shouldCastSummonBeast } from '../spells/summon_beast';
+// ── TG-006 — L3 TCE summon spells (Phase 1c) ──────────────────────────────
+import { shouldCast as shouldCastSummonFey }         from '../spells/summon_fey';
+import { shouldCast as shouldCastSummonUndead }      from '../spells/summon_undead';
+import { shouldCast as shouldCastSummonShadowspawn } from '../spells/summon_shadowspawn';
 
 // ── Session 19 — bulk-implementation generic dispatch (262 new spells) ────
 import { GENERIC_SPELL_LIST } from '../spells/_generic_registry';
@@ -2038,6 +2042,59 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
         action: sbAction,
         targetId: self.id,  // self-targeting (summon appears near caster)
         description: `${self.name} casts Summon Beast`,
+      };
+      plan.targetId = self.id;
+      plan.bonusAction = planBonusAction(self, self, battlefield);
+      return plan;
+    }
+  }
+
+  // === TG-006 — TCE SUMMON SPELLS (Phase 1c) ===
+  // Summon Fey (TCE p.112): 3rd-level conjuration, action, range 30 ft,
+  // concentration 1 hr. Spawns a Fey Spirit combatant.
+  // Summon Undead (TCE p.113): 3rd-level necromancy, action, range 30 ft,
+  // concentration 1 hr. Spawns an Undead Spirit combatant.
+  // Summon Shadowspawn (TCE p.113): 3rd-level conjuration, action, range 30 ft,
+  // concentration 1 hr. Spawns a Shadow Spirit combatant.
+  // All three follow the same pattern as Summon Beast but at 3rd level.
+  if (!plan.action && self.actions.some(a => a.name === 'Summon Fey')) {
+    if (shouldCastSummonFey(self, battlefield)) {
+      const action = self.actions.find(a => a.name === 'Summon Fey')!;
+      plan.action = {
+        type: 'summonSpell',
+        action,
+        targetId: self.id,
+        description: `${self.name} casts Summon Fey`,
+      };
+      plan.targetId = self.id;
+      plan.bonusAction = planBonusAction(self, self, battlefield);
+      return plan;
+    }
+  }
+
+  if (!plan.action && self.actions.some(a => a.name === 'Summon Undead')) {
+    if (shouldCastSummonUndead(self, battlefield)) {
+      const action = self.actions.find(a => a.name === 'Summon Undead')!;
+      plan.action = {
+        type: 'summonSpell',
+        action,
+        targetId: self.id,
+        description: `${self.name} casts Summon Undead`,
+      };
+      plan.targetId = self.id;
+      plan.bonusAction = planBonusAction(self, self, battlefield);
+      return plan;
+    }
+  }
+
+  if (!plan.action && self.actions.some(a => a.name === 'Summon Shadowspawn')) {
+    if (shouldCastSummonShadowspawn(self, battlefield)) {
+      const action = self.actions.find(a => a.name === 'Summon Shadowspawn')!;
+      plan.action = {
+        type: 'summonSpell',
+        action,
+        targetId: self.id,
+        description: `${self.name} casts Summon Shadowspawn`,
       };
       plan.targetId = self.id;
       plan.bonusAction = planBonusAction(self, self, battlefield);
