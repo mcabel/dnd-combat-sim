@@ -179,7 +179,10 @@ console.log('\n=== 7. Fall damage on concentration break ===\n');
 // ============================================================
 console.log('\n=== 8. Fall damage respects temp HP ===\n');
 {
-  const c = makeCaster(); const e = weak('e1', { x: 5, y: 0 }, { maxHP: 200, currentHP: 200, tempHP: 30 });
+  // tempHP=5 (not 30): fall damage 10d6=10-60 always exceeds 5 temp HP,
+  // so current HP is always reduced. With tempHP=30, P(10d6 ≤ 30) ≈ 29%,
+  // making the 'current HP reduced' assertion flaky.
+  const c = makeCaster(); const e = weak('e1', { x: 5, y: 0 }, { maxHP: 200, currentHP: 200, tempHP: 5 });
   const bf = makeBF([c, e]); const st = makeState(bf); const t = shouldCast(c, bf);
   if (t) {
     execute(c, t, st);
