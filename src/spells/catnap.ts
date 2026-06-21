@@ -12,26 +12,26 @@
 //
 // Upcast: +1 target per slot-level above 3rd (not modelled in v1).
 //
-// v1 simplifications:
+// v1/v2 simplifications:
 //   - Willing-target / NO save (XGE p.151: "willing creatures"). v1
 //     treats same-faction allies as willing (no save rolled). This is a
 //     NEW selection pattern (willing allies, not enemies). Documented via
 //     `catnapWillingAlliesV1Simplified` — v1 has no willingness flag;
 //     same-faction = willing.
 //   - Short-rest benefit (XGE p.151: "equivalent of a short rest"):
-//     NOT modelled (v1 has no short-rest subsystem). v1 applies ONLY the
-//     sleeping condition — which is tactically poor in combat (disabling
-//     allies). Documented via `catnapShortRestBenefitV1NotModelled`.
+//     NOW modelled (v2). Each target spends 1 Hit Die to heal for
+//     1d(hitDieSize) + CON mod (minimum 1, capped at maxHP). Default
+//     hitDieSize = d8, hitDiceRemaining = 1. Documented via
+//     `catnapShortRestBenefitV2Implemented` and
+//     `catnapHitDieHealingV2Implemented`.
 //   - Wake-on-damage / shake-awake (XGE p.151): NOT modelled — sleeping
 //     persists for the v1 combat. NOT concentration (sourceIsConc: false).
 //   - Target cap: 3 (XGE p.151: "up to three"). v1 caps at 3 allies.
 //   - Upcast +1/slot-level NOT modelled.
 //   - Range: canon 30 ft. v1 uses chebyshev3D * 5.
 //
-// NOTE: Because v1 models no short-rest benefit, catnap is tactically
-// poor (it only disables allies). The planner may still cast it when
-// allies are in range — a known v1 limitation. A future short-rest
-// subsystem would give it real value.
+// Tactical value: Catnap now trades an ally's turn (sleeping) for
+// short-rest healing (hit die). This gives Catnap real combat value.
 //
 // Migration note (Session 25 / Batch 2): migrated from the generic
 // forward-compat flag to a bespoke willing-target sleeping (no save).
@@ -48,6 +48,7 @@
 import { Combatant, Battlefield } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
 import { applySpellEffect } from '../engine/spell_effects';
+import { applyHeal, rollDie, abilityMod } from '../engine/utils';
 import { chebyshev3D } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 
@@ -63,7 +64,8 @@ export const metadata = {
   saveAbility: null,             // XGE p.151: NO save (willing)
   castingTime: 'action',
   catnapWillingAlliesV1Simplified: true,                   // same-faction = willing
-  catnapShortRestBenefitV1NotModelled: true,               // short-rest benefit NOT modelled
+  catnapShortRestBenefitV2Implemented: true,                // short-rest benefit modelled (hit die healing)
+  catnapHitDieHealingV2Implemented: true,                   // 1d(hitDieSize) + CON mod, min 1
   catnapUpcastV1Implemented: false,                        // +1 target/slot-level NOT modelled
 } as const;
 
@@ -97,8 +99,8 @@ function emit(
  *   - At least 1 willing ally exists within 30 ft
  *
  * Note: Catnap is NOT concentration — it can be cast while concentrating.
- * NOTE: v1 models no short-rest benefit, so catnap only sleeps allies
- * (tactically poor). The planner may still cast it — a known limitation.
+ * v2: Catnap now provides short-rest healing (1 Hit Die per target),
+ * giving it real tactical value — trade an ally's turn for a heal.
  */
 export function shouldCast(caster: Combatant, bf: Battlefield): Combatant[] | null {
   if (!caster.actions.some(a => a.name === 'Catnap')) return null;
@@ -125,7 +127,10 @@ export function shouldCast(caster: Combatant, bf: Battlefield): Combatant[] | nu
 /**
  * Execute Catnap:
  *  1. Consume a 3rd-level spell slot.
- *  2. For each willing ally: apply sleeping (NO save — willing targets).
+ *  2. For each willing ally:
+ *     a. Apply sleeping (NO save — willing targets).
+ *     b. Short-rest benefit: spend 1 Hit Die to heal.
+ *        Roll 1d(hitDieSize) + CON mod (minimum 1), capped at maxHP.
  *     NOT concentration (sourceIsConcentration: false).
  *
  * @param caster  The casting Combatant (Bard / Sorcerer / Wizard)
@@ -140,21 +145,49 @@ export function execute(
   consumeSpellSlot(caster, 3);
 
   emit(state, 'action', caster.id,
-    `${caster.name} casts Catnap! (${targets.length} willing all${targets.length !== 1 ? 'ies' : 'y'} fall asleep — no save, no short-rest benefit in v1)`);
+    `${caster.name} casts Catnap! (${targets.length} willing all${targets.length !== 1 ? 'ies' : 'y'} receive a short rest)`);
 
   for (const target of targets) {
     if (target.isDead || target.isUnconscious) continue;
+
+    // Apply sleeping condition (still part of the spell)
     if (target.conditions.has('sleeping')) {
-      emit(state, 'condition_add', caster.id, `${target.name} is already asleep — Catnap has no additional effect.`, target.id);
-      continue;
+      emit(state, 'condition_add', caster.id, `${target.name} is already asleep — Catnap has no additional sleep effect.`, target.id);
+    } else {
+      applySpellEffect(target, {
+        casterId: caster.id, spellName: 'Catnap',
+        effectType: 'condition_apply', payload: { condition: 'sleeping' },
+        sourceIsConcentration: false,   // XGE p.151: NOT concentration (10 min)
+      });
+      emit(state, 'condition_add', caster.id,
+        `${target.name} falls ASLEEP (willing, no save)!`, target.id);
     }
-    applySpellEffect(target, {
-      casterId: caster.id, spellName: 'Catnap',
-      effectType: 'condition_apply', payload: { condition: 'sleeping' },
-      sourceIsConcentration: false,   // XGE p.151: NOT concentration (10 min)
-    });
-    emit(state, 'condition_add', caster.id,
-      `${target.name} falls ASLEEP (willing, no save)! (v1: short-rest benefit NOT modelled — sleeping only)`, target.id);
+
+    // Short-rest benefit: spend 1 Hit Die to heal (PHB p.186)
+    const hitDieSides = target.hitDieSize ?? 8;        // default d8
+    const hitDice = target.hitDiceRemaining ?? 1;     // default 1 hit die
+
+    if (hitDice > 0 && target.currentHP < target.maxHP) {
+      // Spend 1 hit die
+      if (target.hitDiceRemaining !== undefined) target.hitDiceRemaining--;
+
+      // Roll hit die + CON mod
+      const conMod = abilityMod(target.con);
+      const dieRoll = rollDie(hitDieSides);
+      const healAmount = Math.max(1, dieRoll + conMod);
+
+      const actualHealed = applyHeal(target, healAmount);
+
+      emit(state, 'heal', caster.id,
+        `${target.name} spends a Hit Die (d${hitDieSides}): ${dieRoll} + ${conMod} CON = ${healAmount} HP (short rest, ${actualHealed} healed)`, target.id, actualHealed);
+    } else if (hitDice <= 0) {
+      emit(state, 'action', caster.id,
+        `${target.name} has no hit dice remaining — no short-rest healing.`, target.id);
+    } else {
+      // Already at max HP
+      emit(state, 'action', caster.id,
+        `${target.name} is already at max HP — no short-rest healing needed.`, target.id);
+    }
   }
 }
 

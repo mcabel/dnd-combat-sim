@@ -1260,6 +1260,20 @@ export interface Combatant {
   // Set by reverse_gravity.ts execute(); cleared by processFallDamage()
   // in combat.ts after concentration break removes the effect.
   _fallHeight?: number;
+
+  // ---- Short-rest subsystem (PHB p.186) -------------------------
+  // Hit Dice: a character has hit dice equal to their level. On a short
+  // rest, they can spend one or more Hit Dice to regain HP. For each Hit
+  // Die spent, roll 1d(hitDieSize) + CON modifier (minimum 1).
+  // hitDieSize: size of the hit die — d6/d8/d10/d12 based on class
+  //   (Barbarian=d12, Fighter=d10, Bard/Cleric/Druid/Monk/Rogue/Warlock=d8,
+  //    Sorcerer/Wizard=d6). Default d8 if unset.
+  // hitDiceRemaining: number of hit dice still available to spend.
+  //   Equal to level minus hit dice spent since last long rest.
+  //   Default 1 if unset (most v1 combatants are low-level).
+  // Set by the parser/PC creation code; tests may set directly.
+  hitDieSize?: number;          // d6/d8/d10/d12 (default d8)
+  hitDiceRemaining?: number;    // remaining hit dice (default 1)
 }
 
 // ---- Obstacle -----------------------------------------------
