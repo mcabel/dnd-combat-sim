@@ -107,6 +107,7 @@ export type SpellEffectType =
   | 'suggestion'            // charmed + disadv on own attacks (Mass Suggestion PHB p.258 — follow-a-suggestion behaviour)
   | 'terrain_zone'          // persistent terrain effect on the battlefield (Grease/Sleet Storm/Watery Sphere)
   | 'exhaustion_level'      // increment exhaustion level (Sickening Radiance XGE p.164, future spells)
+  | 'invisible'             // true invisibility: attacks vs creature have disadv + own attacks have adv (PHB p.194)
   // ── Session 27 — Batch 3 concentration buffs ────────────────────────
   // bane_die: inverse of bless_die (Bane PHB p.219: -1d4 to attacks/saves).
   // weapon_enchant extended with damageDie/damageDieCount/damageDieType
@@ -573,6 +574,14 @@ export interface Combatant {
   // data is available (parser tech debt, same pattern as hasMetalArmor); tests
   // may set it directly.
   isUndead?: boolean;
+
+  // ---- Creature type flag (for spells like Spare the Dying, PHB p.277) ----
+  // True when the creature is a Construct. Optional — undefined is treated as "not
+  // a construct". Populated by the parser from the monster `type` field when
+  // available; tests may set it directly. Used by Spare the Dying (constructs are
+  // excluded), poison-based spells (constructs are immune to poison damage and
+  // the poisoned condition), and other construct-specific interactions.
+  isConstruct?: boolean;
 
   // ---- Chill Touch (PHB p.221) scratch fields ----
   // Set on the TARGET by Chill Touch's post-hit rider. Cleared by each module's

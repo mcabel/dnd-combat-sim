@@ -98,6 +98,16 @@ export function applySpellEffect(
       }
       break;
 
+    case 'invisible':
+      // PHB p.194: true invisibility
+      // 1. Disadvantage on attacks vs this creature (can't see target)
+      grantVulnerability(target, 'disadvantage', 'attack', effect.spellName, 'permanent');
+      // 2. Advantage on own attack rolls (unseen attacker, PHB p.194)
+      grantSelf(target, 'advantage', 'attack', effect.spellName, 'permanent');
+      // 3. Add the invisible condition (for OA immunity, etc.)
+      target.conditions.add('invisible');
+      break;
+
     case 'taunt':
     case 'curse_attack_disadv':
     case 'ability_disadvantage':
@@ -211,6 +221,12 @@ function _undoEffect(target: Combatant, effect: ActiveEffect): void {
     case 'exhaustion_level':
       // Exhaustion doesn't auto-undo on effect removal — it persists
       // (PHB p.291: exhaustion is removed by rest/spells, not by dispel)
+      break;
+
+    case 'invisible':
+      // Remove the invisible condition + both adv_system entries
+      target.conditions.delete('invisible');
+      removeBySource(target, effect.spellName);
       break;
 
     case 'taunt':
@@ -509,8 +525,8 @@ export function hasAbilityDisadvantage(c: Combatant, ability: AbilityScore): boo
 export interface TerrainZone {
   casterId: string;
   spellName: string;
-  condition: Condition;
-  saveAbility: 'str' | 'dex' | 'con' | 'wis';
+  condition?: Condition;                    // optional: zones with only difficult terrain (no save/condition)
+  saveAbility?: 'str' | 'dex' | 'con' | 'wis'; // optional: only needed when condition is set
   radiusFt: number;
   centerX: number;
   centerY: number;
@@ -535,8 +551,8 @@ export function getActiveTerrainZones(bf: Battlefield): TerrainZone[] {
       zones.push({
         casterId: e.casterId,
         spellName: e.spellName,
-        condition: e.payload.terrainCondition!,
-        saveAbility: e.payload.terrainSaveAbility!,
+        condition: e.payload.terrainCondition,
+        saveAbility: e.payload.terrainSaveAbility,
         radiusFt: e.payload.terrainRadiusFt!,
         centerX: e.payload.terrainCenterX!,
         centerY: e.payload.terrainCenterY!,

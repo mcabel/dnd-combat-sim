@@ -140,10 +140,11 @@ export function shouldCast(caster: Combatant, bf: Battlefield): Combatant | null
  *  1. Consume a 2nd-level spell slot.
  *  2. Break any existing concentration (safety net).
  *  3. Start concentration on Invisibility.
- *  4. Apply condition_apply:invisible effect on the target.
- *     The invisible condition is already wired into attackAdvantageState
- *     (utils.ts): invisible attacker has advantage, attacks vs invisible
- *     target have disadvantage.
+ *  4. Apply invisible effect on the target.
+ *     The 'invisible' SpellEffectType handles:
+ *     - Adding the 'invisible' condition (for OA immunity, etc.)
+ *     - Disadvantage on attacks vs the creature (can't see target, PHB p.194)
+ *     - Advantage on the creature's own attacks (unseen attacker, PHB p.194)
  *
  * v1 simplifications: ends-on-attack NOT modelled; upcast NOT modelled;
  * concentration NOT enforced (TG-002).
@@ -171,8 +172,8 @@ export function execute(
   applySpellEffect(target, {
     casterId: caster.id,
     spellName: 'Invisibility',
-    effectType: 'condition_apply',
-    payload: { condition: 'invisible' },
+    effectType: 'invisible',
+    payload: {},
     sourceIsConcentration: true,
   });
 

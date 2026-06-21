@@ -223,7 +223,7 @@ console.log('\n=== 3. shouldCast — target priority ===\n');
   const invEffAlly = makeAlly('inveff', { x: 1, y: 0, z: 0 }, { currentHP: 10 });
   invEffAlly.activeEffects.push({
     id: 'eff_inv', casterId: caster.id, spellName: 'Invisibility',
-    effectType: 'condition_apply', payload: { condition: 'invisible' },
+    effectType: 'invisible', payload: {},
     sourceIsConcentration: true,
   });
   const freshAlly = makeAlly('fresh', { x: 0, y: 1, z: 0 }, { currentHP: 50 });
@@ -252,9 +252,9 @@ console.log('\n=== 4. execute — condition application + effect + slot + concen
 
   assert('invisible condition applied to target', ally.conditions.has('invisible'));
   const invEff = ally.activeEffects.find(e =>
-    e.effectType === 'condition_apply' && e.payload.condition === 'invisible'
+    e.effectType === 'invisible'
   );
-  assert('Active effect attached (condition_apply:invisible)', invEff !== undefined);
+  assert('Active effect attached (invisible)', invEff !== undefined);
   if (invEff) {
     eq('Effect sourceIsConcentration is true', invEff.sourceIsConcentration, true);
     eq('Effect spellName is Invisibility', invEff.spellName, 'Invisibility');

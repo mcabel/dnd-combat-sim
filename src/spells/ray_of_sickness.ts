@@ -244,7 +244,17 @@ export function execute(
   // On hit: apply the poisoned condition (mirror Sunburst's blinded).
   // NOT concentration — sourceIsConcentration: false. v1 simplification:
   // no second save to negate the poison (conservative — see metadata).
-  if (!target.conditions.has('poisoned')) {
+  // Constructs are immune to the poisoned condition (MM p.6) and to
+  // poison damage — the engine's applyDamageWithTempHP handles poison
+  // damage immunity via resistances, and the isConstruct flag gates
+  // the condition application here.
+  if (target.isConstruct) {
+    emit(
+      state, 'condition_add', caster.id,
+      `${target.name} is a construct — immune to the poisoned condition (MM p.6).`,
+      target.id,
+    );
+  } else if (!target.conditions.has('poisoned')) {
     applySpellEffect(target, {
       casterId: caster.id,
       spellName: 'Ray of Sickness',

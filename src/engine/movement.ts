@@ -493,3 +493,109 @@ function isOccupied(p: Vec3, excludeId: string, bf: Battlefield): boolean {
   }
   return false;
 }
+
+// ---- Forced Movement (PHB p.195-196) ------------------------
+//
+// Forced movement pushes/pulls/throws creatures without using
+// their movement speed. It does NOT provoke opportunity attacks.
+// The creature is moved involuntarily.
+//
+// Many spells use forced movement:
+//   Thunderwave: push 10 ft
+//   Eldritch Blast (Repelling Blast): push 10 ft per beam
+//   Gust of Wind: push 15 ft
+//   Thorn Whip: pull 10 ft
+//   Telekinesis: move 30 ft
+//   Whirlwind: ejected upward
+
+/**
+ * Apply forced movement to a target creature.
+ * Moves the target to the specified position without consuming movement speed.
+ * Does NOT provoke opportunity attacks (PHB p.195).
+ *
+ * For v1, terrain zone damage at the destination is NOT modelled
+ * (documented via forcedMoveTerrainCheckV1NotModelled). Terrain zone
+ * checks happen at start of turn only.
+ *
+ * @param target   The creature being moved
+ * @param dest     The destination position
+ * @returns        The new position (copy of dest)
+ */
+export function forcedMoveTo(target: Combatant, dest: Vec3): Vec3 {
+  if (target.isDead || target.isUnconscious) return { ...target.pos };
+
+  target.pos = { ...dest };
+  return target.pos;
+}
+
+/**
+ * Push a target away from a source position by the given number of feet.
+ * Uses Chebyshev distance; direction is computed from source to target.
+ *
+ * @param target     The creature being pushed
+ * @param sourcePos  The position the push originates from
+ * @param pushFt     How far to push (in feet)
+ * @returns          The new position, or the original position if no push applied
+ */
+export function pushAway(target: Combatant, sourcePos: Vec3, pushFt: number): Vec3 {
+  if (target.isDead || target.isUnconscious) return { ...target.pos };
+
+  const squares = Math.floor(pushFt / 5);
+  if (squares <= 0) return { ...target.pos };
+
+  // Direction from source to target
+  const dx = target.pos.x - sourcePos.x;
+  const dy = target.pos.y - sourcePos.y;
+
+  // Normalize to unit direction (Chebyshev)
+  const dist = Math.max(Math.abs(dx), Math.abs(dy));
+  if (dist === 0) return { ...target.pos };  // Same position — no push direction
+
+  const dirX = dx === 0 ? 0 : dx / Math.abs(dx);
+  const dirY = dy === 0 ? 0 : dy / Math.abs(dy);
+
+  const dest: Vec3 = {
+    x: target.pos.x + dirX * squares,
+    y: target.pos.y + dirY * squares,
+    z: target.pos.z,
+  };
+
+  return forcedMoveTo(target, dest);
+}
+
+/**
+ * Pull a target toward a source position by the given number of feet.
+ * Will not pull past the source position.
+ *
+ * @param target     The creature being pulled
+ * @param sourcePos  The position to pull toward
+ * @param pullFt     How far to pull (in feet)
+ * @returns          The new position, or the original position if no pull applied
+ */
+export function pullToward(target: Combatant, sourcePos: Vec3, pullFt: number): Vec3 {
+  if (target.isDead || target.isUnconscious) return { ...target.pos };
+
+  const squares = Math.floor(pullFt / 5);
+  if (squares <= 0) return { ...target.pos };
+
+  // Direction from target to source (opposite of push)
+  const dx = sourcePos.x - target.pos.x;
+  const dy = sourcePos.y - target.pos.y;
+
+  const dist = Math.max(Math.abs(dx), Math.abs(dy));
+  if (dist === 0) return { ...target.pos };
+
+  const dirX = dx === 0 ? 0 : dx / Math.abs(dx);
+  const dirY = dy === 0 ? 0 : dy / Math.abs(dy);
+
+  // Don't pull past the source
+  const actualSquares = Math.min(squares, dist);
+
+  const dest: Vec3 = {
+    x: target.pos.x + dirX * actualSquares,
+    y: target.pos.y + dirY * actualSquares,
+    z: target.pos.z,
+  };
+
+  return forcedMoveTo(target, dest);
+}

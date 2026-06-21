@@ -4230,6 +4230,8 @@ export function runCombat(
       const terrainZones = getActiveTerrainZones(battlefield);
       if (terrainZones.length > 0 && !actor.isDead && !actor.isUnconscious) {
         for (const zone of terrainZones) {
+          // Skip zones that have no save/condition mechanic (pure difficult terrain)
+          if (!zone.condition || !zone.saveAbility) continue;
           // Skip if the creature already has the condition
           if (actor.conditions.has(zone.condition)) continue;
           // Skip allies of the caster (terrain affects enemies only)

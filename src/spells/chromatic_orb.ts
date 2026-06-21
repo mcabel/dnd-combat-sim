@@ -132,6 +132,13 @@ export function rollDamage(isCrit = false): number {
  * Vulnerabilities are also not modelled. Forward-compat TODO: extend
  * to skip immunities and prefer vulnerabilities once those fields
  * exist on Combatant.
+ *
+ * NOTE on construct immunity: Constructs are immune to poison damage
+ * (MM p.6). If the target is a construct (`target.isConstruct`), the
+ * smart-type picker should avoid choosing 'poison' as the damage type.
+ * Currently pickDamageType only checks `resistances` — a future update
+ * should also check isConstruct and isUndead to exclude poison from the
+ * candidate pool for those creature types.
  */
 export function pickDamageType(target: Combatant): DamageType {
   const resisted = new Set(target.resistances ?? []);
