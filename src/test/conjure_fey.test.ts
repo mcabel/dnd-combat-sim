@@ -239,9 +239,14 @@ console.log('\n=== 3. createGreenHag — combatant creation ===\n');
   eq('Green Hag CHA is 14', hag.cha, 14);
   eq('Green Hag CR is 3', hag.cr, 3);
 
-  // Attack action (Claws)
-  eq('Green Hag has 1 attack action', hag.actions.length, 1);
-  eq('Green Hag attack name is Claws', hag.actions[0].name, 'Claws');
+  // Attack actions (Session 32: Hag now has 2 — Claws + innate Vicious Mockery)
+  eq('Green Hag has 2 attack actions (Claws + Vicious Mockery)', hag.actions.length, 2);
+  eq('Green Hag attack 0 is Claws', hag.actions[0].name, 'Claws');
+  eq('Green Hag attack 1 is Vicious Mockery (innate)', hag.actions[1].name, 'Vicious Mockery');
+  eq('Vicious Mockery saveDC 12 (Hag innate DC)', hag.actions[1].saveDC, 12);
+  eq('Vicious Mockery saveAbility wis', hag.actions[1].saveAbility, 'wis');
+  eq('Vicious Mockery damageType psychic', hag.actions[1].damageType, 'psychic');
+  eq('Vicious Mockery range 60 ft', hag.actions[1].range!.normal, 60);
   eq('Green Hag attack hitBonus is +6', hag.actions[0].hitBonus, 6);
   assert('Green Hag attack damage 2d8+4', hag.actions[0].damage!.count === 2 && hag.actions[0].damage!.sides === 8 && hag.actions[0].damage!.bonus === 4);
   eq('Green Hag attack damageType is slashing', hag.actions[0].damageType, 'slashing');

@@ -132,7 +132,8 @@ eq('school is illusion', metadata.school, 'illusion');
 eq('range is 5 ft (touch)', metadata.rangeFt, 5);
 eq('is concentration', metadata.concentration, true);
 eq('casting time is action', metadata.castingTime, 'action');
-eq('ends-on-attack NOT implemented (v1)', metadata.invisibilityEndsOnAttackV1Implemented, false);
+// Session 32: ends-on-attack NOW IMPLEMENTED (flag flipped from false to true)
+eq('ends-on-attack NOW implemented (Session 32)', metadata.invisibilityEndsOnAttackV1Implemented, true);
 eq('upcast NOT implemented (v1)', metadata.invisibilityUpcastV1Implemented, false);
 eq('concentration enforcement NOT implemented (v1)', metadata.invisibilityConcentrationEnforcementV1Implemented, false);
 
