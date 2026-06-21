@@ -1294,6 +1294,21 @@ export interface Combatant {
   // in combat.ts after concentration break removes the effect.
   _fallHeight?: number;
 
+  // ---- Moving Zone scratch field (Flaming Sphere / Moonbeam / Call Lightning / Cloudkill) ----
+  // Tracks the position of a movable damage_zone. At the start of the caster's
+  // turn, the zone moves toward the highest-threat enemy and re-applies damage
+  // to creatures in its new position.
+  // v1 simplification: movement is automatic (no action cost), always toward
+  // the highest-threat enemy. Canon requires an action/bonus action to move.
+  _movingZone?: {
+    spellName: string;
+    centerX: number;
+    centerY: number;
+    centerZ: number;
+    radiusFt: number;     // radius of the zone in feet
+    movePerTurn: number;  // how far the zone can move each turn (ft)
+  };
+
   // ---- Short-rest subsystem (PHB p.186) -------------------------
   // Hit Dice: a character has hit dice equal to their level. On a short
   // rest, they can spend one or more Hit Dice to regain HP. For each Hit

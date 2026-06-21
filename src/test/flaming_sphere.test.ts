@@ -155,7 +155,7 @@ eq('damage type is fire', metadata.damageType, 'fire');
 eq('is concentration', metadata.concentration, true);
 eq('save ability is dex', metadata.saveAbility, 'dex');
 eq('casting time is action', metadata.castingTime, 'action');
-eq('sphere movement NOT implemented (v1)', metadata.flamingSphereMovementV1Implemented, false);
+eq('sphere movement IS implemented (v1)', metadata.flamingSphereMovementV1Implemented, true);
 eq('multi-target NOT implemented (v1)', metadata.flamingSphereMultiTargetV1Implemented, false);
 eq('upcast NOT implemented (v1)', metadata.flamingSphereUpcastV1Implemented, false);
 eq('concentration enforcement NOT implemented (v1)', metadata.flamingSphereConcentrationEnforcementV1Implemented, false);

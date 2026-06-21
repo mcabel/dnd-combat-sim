@@ -156,7 +156,7 @@ eq('is concentration', metadata.concentration, true);
 eq('save ability is con', metadata.saveAbility, 'con');
 eq('casting time is action', metadata.castingTime, 'action');
 eq('cylinder AoE NOT implemented (v1)', metadata.moonbeamCylinderAoeV1Implemented, false);
-eq('beam movement NOT implemented (v1)', metadata.moonbeamMovementV1Implemented, false);
+eq('beam movement IS implemented (v1)', metadata.moonbeamMovementV1Implemented, true);
 eq('upcast NOT implemented (v1)', metadata.moonbeamUpcastV1Implemented, false);
 eq('concentration enforcement NOT implemented (v1)', metadata.moonbeamConcentrationEnforcementV1Implemented, false);
 

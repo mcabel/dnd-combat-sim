@@ -4284,6 +4284,200 @@ export function runCombat(
         }
       }
 
+      // ── Moving zone start-of-turn processing (Flaming Sphere / Moonbeam / Call Lightning / Cloudkill) ──
+      // PHB p.242 (Flaming Sphere): bonus action to move sphere up to 30 ft.
+      // PHB p.261 (Moonbeam): action to move beam up to 60 ft.
+      // PHB p.220 (Call Lightning): action to call down another bolt within 60 ft.
+      // PHB p.222 (Cloudkill): cloud moves 10 ft away from caster at start of each turn.
+      //
+      // v1 simplification: the zone moves AUTOMATICALLY at the start of the
+      // caster's turn (no action cost). It moves toward the highest-threat
+      // enemy and re-applies damage to creatures in its new position. Old
+      // targets no longer in the zone have their damage_zone effects removed.
+      if (actor._movingZone && actor.concentration?.active &&
+          actor.concentration.spellName === actor._movingZone.spellName &&
+          !actor.isDead && !actor.isUnconscious) {
+        const mz = actor._movingZone;
+
+        // Find the highest-threat enemy within a generous range
+        const enemies = livingEnemiesOf(actor, battlefield);
+        let bestTarget: Combatant | null = null;
+        let bestThreat = -1;
+        let bestDist = Infinity;
+        for (const e of enemies) {
+          const distFt = chebyshev3D(
+            { x: mz.centerX, y: mz.centerY, z: mz.centerZ } as Vec3,
+            e.pos,
+          ) * 5;
+          // Only consider enemies within a reasonable range (movePerTurn + radiusFt * 2)
+          // so the zone can actually reach them
+          if (distFt > mz.movePerTurn + mz.radiusFt * 2 + 60) continue;
+          if (e.maxHP > bestThreat || (e.maxHP === bestThreat && distFt < bestDist)) {
+            bestTarget = e;
+            bestThreat = e.maxHP;
+            bestDist = distFt;
+          }
+        }
+
+        if (bestTarget) {
+          // Move the zone toward the best target (up to movePerTurn ft)
+          const oldCenter: Vec3 = { x: mz.centerX, y: mz.centerY, z: mz.centerZ };
+          const targetPos = bestTarget.pos;
+
+          // Calculate direction from zone center to target
+          const dx = targetPos.x - mz.centerX;
+          const dy = targetPos.y - mz.centerY;
+          const dz = targetPos.z - mz.centerZ;
+          const distSquares = Math.max(Math.abs(dx), Math.abs(dy), Math.abs(dz));
+          const moveSquares = Math.floor(mz.movePerTurn / 5);
+
+          if (distSquares > 0 && moveSquares > 0) {
+            const actualMove = Math.min(moveSquares, distSquares);
+            // Chebyshev movement: move each axis by sign * actualMove (capped at target)
+            const stepX = dx === 0 ? 0 : (Math.abs(dx) <= actualMove ? dx : Math.sign(dx) * actualMove);
+            const stepY = dy === 0 ? 0 : (Math.abs(dy) <= actualMove ? dy : Math.sign(dy) * actualMove);
+            const stepZ = dz === 0 ? 0 : (Math.abs(dz) <= actualMove ? dz : Math.sign(dz) * actualMove);
+
+            mz.centerX += stepX;
+            mz.centerY += stepY;
+            mz.centerZ += stepZ;
+
+            const movedFt = chebyshev3D(oldCenter, { x: mz.centerX, y: mz.centerY, z: mz.centerZ } as Vec3) * 5;
+            log(state, 'action', actor.id,
+              `${actor.name}'s ${mz.spellName} zone moves ${movedFt} ft toward ${bestTarget.name}! (new center: ${mz.centerX},${mz.centerY},${mz.centerZ}, radius: ${mz.radiusFt} ft)`,
+              bestTarget.id);
+          }
+
+          const newCenter: Vec3 = { x: mz.centerX, y: mz.centerY, z: mz.centerZ };
+
+          // ── Find all enemies in the new zone position ──
+          const enemiesInNewZone: Combatant[] = [];
+          for (const e of enemies) {
+            const distFt = chebyshev3D(newCenter, e.pos) * 5;
+            if (distFt <= mz.radiusFt) {
+              enemiesInNewZone.push(e);
+            }
+          }
+
+          // ── Remove damage_zone effects from enemies no longer in the zone ──
+          for (const c of battlefield.combatants.values()) {
+            if (c.faction === actor.faction) continue;  // skip allies
+            const distFt = chebyshev3D(newCenter, c.pos) * 5;
+            if (distFt > mz.radiusFt) {
+              // This creature is outside the new zone — remove damage_zone effects
+              // from this caster for this spell
+              const zoneEffects = c.activeEffects.filter(
+                e => e.casterId === actor.id && e.spellName === mz.spellName && e.effectType === 'damage_zone'
+              );
+              for (const eff of zoneEffects) {
+                removeEffectById(c.id, eff.id, battlefield);
+                log(state, 'condition_remove', actor.id,
+                  `${c.name} is no longer in ${mz.spellName}'s zone! (damage_zone effect removed)`,
+                  c.id);
+              }
+            }
+          }
+
+          // ── Apply damage to enemies in the new zone that don't already have a damage_zone effect ──
+          for (const e of enemiesInNewZone) {
+            if (e.isDead || e.isUnconscious) continue;
+
+            // Check if already affected by this caster's damage_zone for this spell
+            const alreadyAffected = e.activeEffects.some(
+              eff => eff.casterId === actor.id && eff.spellName === mz.spellName && eff.effectType === 'damage_zone'
+            );
+            if (alreadyAffected) continue;  // already in the zone — damage will tick on their turn
+
+            // Get the spell's action to find saveDC and damage parameters
+            const spellAction = actor.actions.find(a => a.name === mz.spellName);
+            const saveDC = spellAction?.saveDC ?? 13;
+
+            // Determine spell parameters based on spell name
+            let dieCount = 0;
+            let dieSides = 0;
+            let damageType: import('../types/core').DamageType = 'fire';
+            let saveAbility: import('../types/core').AbilityScore | undefined;
+
+            switch (mz.spellName) {
+              case 'Flaming Sphere':
+                dieCount = 2; dieSides = 6; damageType = 'fire'; saveAbility = 'dex';
+                break;
+              case 'Moonbeam':
+                dieCount = 2; dieSides = 10; damageType = 'radiant'; saveAbility = 'con';
+                break;
+              case 'Call Lightning':
+                dieCount = 3; dieSides = 10; damageType = 'lightning';
+                // Call Lightning: no save in v1 (callLightningDexSaveV1SimplifiedToNone)
+                break;
+              case 'Cloudkill':
+                dieCount = 5; dieSides = 8; damageType = 'poison'; saveAbility = 'con';
+                break;
+            }
+
+            // Roll damage
+            let dmgRoll = 0;
+            for (let i = 0; i < dieCount; i++) dmgRoll += rollDie(dieSides);
+
+            let actualDmg = dmgRoll;
+            let saveDesc = '';
+
+            // Save for half (if applicable)
+            if (saveAbility) {
+              const save = rollSave(e, saveAbility, saveDC);
+              if (save.success) {
+                actualDmg = Math.floor(dmgRoll / 2);
+              }
+              saveDesc = ` (DC ${saveDC} ${saveAbility.toUpperCase()} save: ${save.success ? 'SUCCESS — half damage' : 'FAIL — full damage'} (rolled ${save.total}))`;
+              log(state,
+                save.success ? 'save_success' : 'save_fail',
+                actor.id,
+                `${e.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} ${saveAbility.toUpperCase()} save vs ${mz.spellName} (moving zone damage)${saveDesc}`,
+                e.id, save.roll);
+            }
+
+            const dealt = applyDamageWithTempHP(e, actualDmg, damageType);
+            log(state, 'damage', actor.id,
+              `${e.name} takes ${dealt} ${damageType} damage from ${mz.spellName} (moving zone entered: ${dieCount}d${dieSides}=${dmgRoll}${actualDmg !== dmgRoll ? `, halved to ${actualDmg}` : ''})`,
+              e.id, dealt);
+
+            // Apply a damage_zone effect so the enemy takes start-of-turn damage
+            applySpellEffect(e, {
+              casterId: actor.id,
+              spellName: mz.spellName,
+              effectType: 'damage_zone',
+              payload: {
+                dieCount,
+                dieSides,
+                damageType,
+                ...(saveAbility ? { saveDC, saveAbility } : {}),
+              },
+              sourceIsConcentration: true,
+            });
+
+            log(state, 'condition_add', actor.id,
+              `${e.name} is caught in ${mz.spellName}'s zone! (will take ${dieCount}d${dieSides} ${damageType} at the start of each of its turns${saveAbility ? `, ${saveAbility.toUpperCase()} save for half` : ''})`,
+              e.id);
+
+            // Concentration check if the enemy was concentrating
+            if (e.concentration?.active && dealt > 0) {
+              const maintained = rollConcentrationSave(e, dealt);
+              if (!maintained) {
+                removeEffectsFromCaster(e.id, battlefield);
+                log(state, 'condition_remove', e.id,
+                  `${e.name} loses concentration on ${e.concentration?.spellName ?? 'spell'} (damaged by ${mz.spellName} moving zone)!`, undefined);
+              }
+            }
+
+            // Death check
+            checkDeath(e, state);
+          }
+        } else {
+          // No valid enemy found — zone stays in place
+          log(state, 'action', actor.id,
+            `${actor.name}'s ${mz.spellName} zone has no target to move toward — stays in place.`);
+        }
+      }
+
       // ── Eyebite per-turn re-target (PHB p.238) ──────────────────
       // "On each of your turns until the spell ends, you can use your
       //  action to target another creature."

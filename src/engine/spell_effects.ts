@@ -145,11 +145,16 @@ export function applySpellEffect(
  *   bless_die       → no undo needed (read from array at resolve time)
  */
 export function removeEffectsFromCaster(casterId: string, bf: Battlefield): void {
+  // Collect the spell names being removed (needed for _movingZone cleanup below)
+  const spellNames = new Set<string>();
+
   for (const combatant of bf.combatants.values()) {
     const owned = combatant.activeEffects.filter(e => e.casterId === casterId);
     if (owned.length === 0) continue;
 
     for (const e of owned) {
+      // Track spell names for _movingZone cleanup
+      spellNames.add(e.spellName);
       // Remove difficult terrain cells BEFORE undoing the effect
       if (e.effectType === 'terrain_zone' && e.payload.terrainDifficulty) {
         removeTerrainDifficulty(bf, e);
@@ -158,6 +163,16 @@ export function removeEffectsFromCaster(casterId: string, bf: Battlefield): void
     }
 
     combatant.activeEffects = combatant.activeEffects.filter(e => e.casterId !== casterId);
+  }
+
+  // ── Moving Zone cleanup ──
+  // When effects from this caster are removed (e.g. concentration break),
+  // also clear the caster's _movingZone scratch field if it belongs to one
+  // of the spells being removed. This ensures the moving zone stops
+  // processing at the start of the caster's next turn.
+  const caster = bf.combatants.get(casterId);
+  if (caster?._movingZone && spellNames.has(caster._movingZone.spellName)) {
+    delete caster._movingZone;
   }
 }
 

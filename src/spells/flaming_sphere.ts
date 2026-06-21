@@ -72,7 +72,7 @@ export const metadata = {
   concentration: true,
   saveAbility: 'dex' as const,
   castingTime: 'action',
-  flamingSphereMovementV1Implemented: false,                  // sphere movement NOT modelled
+  flamingSphereMovementV1Implemented: true,                   // sphere movement modelled (v1: automatic, no action cost)
   flamingSphereMultiTargetV1Implemented: false,               // single-target only
   flamingSphereUpcastV1Implemented: false,                    // +1d6/slot-level NOT modelled
   flamingSphereConcentrationEnforcementV1Implemented: false,  // see TG-002
@@ -233,6 +233,18 @@ export function execute(
     `${target.name} is adjacent to a Flaming Sphere! (will take ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType} at the start of each of its turns, DEX save for half)`,
     target.id,
   );
+
+  // Set _movingZone on the caster so the sphere can move at the start of
+  // each of the caster's turns (v1: automatic movement toward highest-threat
+  // enemy, no action cost — canon requires a bonus action to move 30 ft).
+  caster._movingZone = {
+    spellName: 'Flaming Sphere',
+    centerX: target.pos.x,
+    centerY: target.pos.y,
+    centerZ: target.pos.z,
+    radiusFt: 5,     // 5-ft diameter sphere (PHB p.242)
+    movePerTurn: 30,  // 30 ft per turn (PHB p.242: bonus action move up to 30 ft)
+  };
 }
 
 // ---- Cleanup ------------------------------------------------

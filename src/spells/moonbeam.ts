@@ -74,7 +74,7 @@ export const metadata = {
   saveAbility: 'con' as const,
   castingTime: 'action',
   moonbeamCylinderAoeV1Implemented: false,                      // single-target only
-  moonbeamMovementV1Implemented: false,                          // beam movement NOT modelled
+  moonbeamMovementV1Implemented: true,                           // beam movement modelled (v1: automatic, no action cost)
   moonbeamUpcastV1Implemented: false,                            // +1d10/slot-level NOT modelled
   moonbeamConcentrationEnforcementV1Implemented: false,          // see TG-002
 } as const;
@@ -242,6 +242,18 @@ export function execute(
     `${target.name} is bathed in moonlight! (will take ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType} at the start of each of its turns, CON save for half)`,
     target.id,
   );
+
+  // Set _movingZone on the caster so the beam can move at the start of
+  // each of the caster's turns (v1: automatic movement toward highest-threat
+  // enemy, no action cost — canon requires an action to move 60 ft).
+  caster._movingZone = {
+    spellName: 'Moonbeam',
+    centerX: target.pos.x,
+    centerY: target.pos.y,
+    centerZ: target.pos.z,
+    radiusFt: 5,     // 5-ft radius cylinder (PHB p.261)
+    movePerTurn: 60,  // 60 ft per turn (PHB p.261: action move up to 60 ft)
+  };
 }
 
 // ---- Cleanup ------------------------------------------------

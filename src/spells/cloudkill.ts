@@ -97,7 +97,8 @@ export const metadata = {
   saveAbility: 'con' as const,
   castingTime: 'action',
   cloudkillDamage5d8Not8d8: true,                                   // PHB p.222: 5d8 (handover "8d8" was a typo)
-  cloudkillMovingAoeV1Simplified: true,                             // no "move AoE" hook in v1
+  cloudkillMovingAoeV1Simplified: true,                             // no canon action-move (v1 uses automatic _movingZone)
+  cloudkillMovingZoneV1Implemented: true,                           // moving zone modelled (v1: automatic, no action cost)
   cloudkillPersistentV2Implemented: true,                           // v2: damage_zone + concentration (was v1 one-shot)
   cloudkillHeavilyObscuredV1Simplified: true,                       // no vision-blocking terrain in v1
   cloudkillUpcastV1Implemented: false,                              // +1d8/slot-level NOT modelled
@@ -262,6 +263,21 @@ export function execute(
       sourceIsConcentration: true,
     });
   }
+
+  // Set _movingZone on the caster so the cloud can move at the start of
+  // each of the caster's turns (v1: automatic movement toward highest-threat
+  // enemy, no action cost — canon says "moves 10 feet away from you at the
+  // start of each of your turns").
+  // Use the highest-threat target's position as the initial center.
+  const centerTarget = targets.find(t => !t.isDead && !t.isUnconscious) ?? targets[0];
+  caster._movingZone = {
+    spellName: 'Cloudkill',
+    centerX: centerTarget.pos.x,
+    centerY: centerTarget.pos.y,
+    centerZ: centerTarget.pos.z,
+    radiusFt: 20,    // 20-ft radius sphere (PHB p.222)
+    movePerTurn: 10,  // 10 ft per turn (PHB p.222: "moves 10 feet away from you")
+  };
 }
 
 // ---- Cleanup ------------------------------------------------

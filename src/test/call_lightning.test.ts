@@ -138,6 +138,8 @@ eq('canon flag set (bolt radius simplified to 10 ft)',
   (metadata as any).callLightningBoltRadiusV1SimplifiedTo10Ft, true);
 eq('canon flag set (dex save simplified to none)',
   (metadata as any).callLightningDexSaveV1SimplifiedToNone, true);
+eq('moving zone IS implemented (v1)',
+  (metadata as any).callLightningMovingZoneV1Implemented, true);
 
 // ============================================================
 // 2. shouldCast — precondition gates

@@ -151,6 +151,7 @@ eq('Damage type is poison', metadata.damageType, 'poison');
 eq('Save ability is con', metadata.saveAbility, 'con');
 eq('Concentration (v2 persistent)', metadata.concentration, true);
 assert('v2 persistent flag', (metadata as any).cloudkillPersistentV2Implemented === true);
+assert('moving zone IS implemented (v1)', (metadata as any).cloudkillMovingZoneV1Implemented === true);
 
 // ---- 2. shouldCast gates --------------------------------------
 

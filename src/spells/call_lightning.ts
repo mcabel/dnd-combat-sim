@@ -69,6 +69,7 @@ export const metadata = {
   callLightningStrikeChoiceV1Simplified: true,        // strike point fixed at cast (canon: re-pick each turn)
   callLightningBoltRadiusV1SimplifiedTo10Ft: true,    // canon: 5 ft; v1: 10 ft
   callLightningDexSaveV1SimplifiedToNone: true,       // canon: DEX save for half; v1: no save
+  callLightningMovingZoneV1Implemented: true,         // moving zone modelled (v1: automatic, no action cost)
   callLightningUpcastV1Implemented: false,            // +1d10/slot-level not modelled
 } as const;
 
@@ -234,6 +235,20 @@ export function execute(
       target.id,
     );
   }
+
+  // Set _movingZone on the caster so the bolt can move at the start of
+  // each of the caster's turns (v1: automatic movement toward highest-threat
+  // enemy, no action cost — canon requires an action to call down another bolt).
+  // Use the first target's position as the initial center (the strike point).
+  const centerTarget = targets.find(t => !t.isDead && !t.isUnconscious) ?? targets[0];
+  caster._movingZone = {
+    spellName: 'Call Lightning',
+    centerX: centerTarget.pos.x,
+    centerY: centerTarget.pos.y,
+    centerZ: centerTarget.pos.z,
+    radiusFt: 10,    // 10-ft bolt radius (v1 simplification; canon: 5 ft)
+    movePerTurn: 60,  // 60 ft per turn (PHB p.220: strike any point within 60 ft)
+  };
 }
 
 // ---- Cleanup ------------------------------------------------
