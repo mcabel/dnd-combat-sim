@@ -39,7 +39,7 @@
 
 import { Combatant, Battlefield, Condition } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
-import { applySpellEffect } from '../engine/spell_effects';
+import { applySpellEffect, applyTerrainDifficulty } from '../engine/spell_effects';
 import { rollSave } from '../engine/utils';
 import { chebyshev3D, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
@@ -49,6 +49,7 @@ export const metadata = {
   aoeRadiusFt: 10, concentration: false, saveAbility: 'dex' as const, castingTime: 'action',
   greaseSquareV1SimplifiedToRadius: true,                      // 10-ft square → 10-ft radius
   greasePersistentTerrainV2StartOfTurnOnly: true,             // start-of-turn check; on-enter deferred to v3
+  greaseDifficultTerrainImplemented: true,                    // PHB p.245: ground covered in grease is difficult terrain
 } as const;
 
 function emit(state: EngineState, type: CombatEvent['type'], actorId: string, desc: string, targetId?: string, value?: number): void {
@@ -93,8 +94,9 @@ export function execute(caster: Combatant, targets: Combatant[], state: EngineSt
 
   // Apply terrain_zone effect on the CASTER (not concentration)
   // This marks a persistent 10-ft radius zone at the center position
+  // terrainDifficulty: true marks cells as difficult terrain (PHB p.245)
   if (center) {
-    applySpellEffect(caster, {
+    const effect = applySpellEffect(caster, {
       casterId: caster.id,
       spellName: 'Grease',
       effectType: 'terrain_zone',
@@ -105,9 +107,12 @@ export function execute(caster: Combatant, targets: Combatant[], state: EngineSt
         terrainCenterX: center.pos.x,
         terrainCenterY: center.pos.y,
         terrainCenterZ: center.pos.z,
+        terrainDifficulty: true,
       },
       sourceIsConcentration: false,
     });
+    // Mark cells in the zone as difficult terrain
+    applyTerrainDifficulty(state.battlefield, effect);
   }
 
   for (const target of targets) {

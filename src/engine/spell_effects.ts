@@ -23,7 +23,7 @@
 // defer until the first ActiveEffect-using concentration spell is implemented.
 // ============================================================
 
-import { ActiveEffect, Combatant, Battlefield, SpellEffectType, DamageType, AbilityScore, Condition, Vec3 } from '../types/core';
+import { ActiveEffect, Combatant, Battlefield, SpellEffectType, DamageType, AbilityScore, Condition, Vec3, TerrainType } from '../types/core';
 import { grantVulnerability, grantSelf, removeBySource } from './adv_system';
 
 // ---- ID generator -------------------------------------------
@@ -87,6 +87,17 @@ export function applySpellEffect(
       grantSelf(target, 'disadvantage', 'attack', effect.spellName, 'permanent');
       break;
 
+    case 'exhaustion_level':
+      // PHB p.291: exhaustion is a 7-level graduated state.
+      // Increment the target's exhaustion level by the payload amount (default 1).
+      // Level 6 = death (PHB p.291: "Death").
+      target.exhaustionLevel = Math.min(6, target.exhaustionLevel + (effect.payload.exhaustionLevels ?? 1));
+      if (target.exhaustionLevel >= 6) {
+        target.isDead = true;
+        if (target.isPlayer) target.isUnconscious = true;
+      }
+      break;
+
     case 'taunt':
     case 'curse_attack_disadv':
     case 'ability_disadvantage':
@@ -129,6 +140,10 @@ export function removeEffectsFromCaster(casterId: string, bf: Battlefield): void
     if (owned.length === 0) continue;
 
     for (const e of owned) {
+      // Remove difficult terrain cells BEFORE undoing the effect
+      if (e.effectType === 'terrain_zone' && e.payload.terrainDifficulty) {
+        removeTerrainDifficulty(bf, e);
+      }
       _undoEffect(combatant, e);
     }
 
@@ -152,6 +167,10 @@ export function removeEffectById(
   const effect = target.activeEffects.find(e => e.id === effectId);
   if (!effect) return;
 
+  // Remove difficult terrain cells BEFORE undoing the effect
+  if (effect.effectType === 'terrain_zone' && effect.payload.terrainDifficulty) {
+    removeTerrainDifficulty(bf, effect);
+  }
   _undoEffect(target, effect);
   target.activeEffects = target.activeEffects.filter(e => e.id !== effectId);
 }
@@ -187,6 +206,11 @@ function _undoEffect(target: Combatant, effect: ActiveEffect): void {
     case 'suggestion':
       target.conditions.delete('charmed');
       removeBySource(target, effect.spellName);
+      break;
+
+    case 'exhaustion_level':
+      // Exhaustion doesn't auto-undo on effect removal — it persists
+      // (PHB p.291: exhaustion is removed by rest/spells, not by dispel)
       break;
 
     case 'taunt':
@@ -492,6 +516,7 @@ export interface TerrainZone {
   centerY: number;
   centerZ: number;
   sourceIsConcentration: boolean;
+  terrainDifficulty?: boolean;              // if true, this zone marks cells as difficult terrain
 }
 
 /**
@@ -517,6 +542,7 @@ export function getActiveTerrainZones(bf: Battlefield): TerrainZone[] {
         centerY: e.payload.terrainCenterY!,
         centerZ: e.payload.terrainCenterZ!,
         sourceIsConcentration: e.sourceIsConcentration,
+        terrainDifficulty: e.payload.terrainDifficulty,
       });
     }
   }
@@ -550,4 +576,88 @@ export function getActiveCurseRider(
   const damageType = effect.payload.riderDamageType ?? 'necrotic';
   if (die <= 0) return null;
   return { die, count, damageType };
+}
+
+// ---- Terrain difficulty (terrain_zone with terrainDifficulty) ----
+
+/**
+ * Mark cells within a terrain zone's radius as difficult terrain.
+ * Called when a terrain_zone effect with terrainDifficulty:true is applied.
+ *
+ * PHB p.182: "You move at half speed in difficult terrain — moving 1 foot in
+ * difficult terrain costs 2 feet of movement." Each square costs 10ft instead
+ * of 5ft (see squareCostFt in movement.ts).
+ *
+ * The cells are tracked in Battlefield.difficultTerrainCells (a Set of "x,y,z"
+ * keys matching posKey format). Movement code checks this set via a terrainFn
+ * callback passed to estimateMoveCostFt.
+ */
+export function applyTerrainDifficulty(bf: Battlefield, effect: ActiveEffect): void {
+  if (effect.effectType !== 'terrain_zone') return;
+  if (!effect.payload.terrainDifficulty) return;
+
+  const radiusFt = effect.payload.terrainRadiusFt ?? 0;
+  const radiusSquares = Math.ceil(radiusFt / 5);
+  const cx = effect.payload.terrainCenterX ?? 0;
+  const cy = effect.payload.terrainCenterY ?? 0;
+  const cz = effect.payload.terrainCenterZ ?? 0;
+
+  if (!bf.difficultTerrainCells) bf.difficultTerrainCells = new Set();
+
+  for (let dx = -radiusSquares; dx <= radiusSquares; dx++) {
+    for (let dy = -radiusSquares; dy <= radiusSquares; dy++) {
+      // Chebyshev radius check
+      if (Math.max(Math.abs(dx), Math.abs(dy)) > radiusSquares) continue;
+      const key = `${cx + dx},${cy + dy},${cz}`;
+      bf.difficultTerrainCells.add(key);
+    }
+  }
+}
+
+/**
+ * Remove cells from the difficult terrain set for a terrain zone effect.
+ * Called when the effect is removed (concentration break, dispel, etc.).
+ */
+export function removeTerrainDifficulty(bf: Battlefield, effect: ActiveEffect): void {
+  if (effect.effectType !== 'terrain_zone') return;
+  if (!effect.payload.terrainDifficulty) return;
+  if (!bf.difficultTerrainCells) return;
+
+  const radiusFt = effect.payload.terrainRadiusFt ?? 0;
+  const radiusSquares = Math.ceil(radiusFt / 5);
+  const cx = effect.payload.terrainCenterX ?? 0;
+  const cy = effect.payload.terrainCenterY ?? 0;
+  const cz = effect.payload.terrainCenterZ ?? 0;
+
+  for (let dx = -radiusSquares; dx <= radiusSquares; dx++) {
+    for (let dy = -radiusSquares; dy <= radiusSquares; dy++) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) > radiusSquares) continue;
+      const key = `${cx + dx},${cy + dy},${cz}`;
+      bf.difficultTerrainCells.delete(key);
+    }
+  }
+}
+
+/**
+ * Returns a terrainFn callback suitable for estimateMoveCostFt that checks
+ * Battlefield.difficultTerrainCells. If the cell is in the set, returns
+ * 'difficult'; otherwise 'normal'.
+ *
+ * Usage: estimateMoveCostFt(from, to, hasClimb, hasSwim, makeTerrainFn(bf))
+ */
+export function makeTerrainFn(bf: Battlefield): (pos: Vec3) => TerrainType {
+  return (pos: Vec3): TerrainType => {
+    const key = `${pos.x},${pos.y},${pos.z}`;
+    if (bf.difficultTerrainCells?.has(key)) return 'difficult';
+    // Also check the static cells array if present
+    if (bf.cells && Array.isArray(bf.cells) && bf.cells[pos.x]?.[pos.y]?.[pos.z]) {
+      return bf.cells[pos.x][pos.y][pos.z].terrain;
+    }
+    return 'normal';
+  };
+}
+
+/** Returns the target's current exhaustion level (PHB p.291). */
+export function getExhaustionLevel(c: Combatant): number {
+  return c.exhaustionLevel;
 }

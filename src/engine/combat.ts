@@ -33,7 +33,7 @@ import { tickAdvantages, grantSelf, grantVulnerability } from './adv_system';
 import { getSummonEntry }                           from '../summons/registry';
 import { rollGrappleContest, rollShoveContest, canGrappleOrShoveTarget } from './utils';
 import { computeLOS } from './los';
-import { removeEffectsFromCaster, removeEffectById, getActiveAcBonus, getActiveAcFloor, getActiveBlessDie, getActiveBaneDie, getActiveHexDie, getActiveDamageZones, getActiveWeaponEnchant, getActiveEnlargeReduce, getActiveTaunt, getActiveCurseAttackDisadv, getActiveCurseRider, applySpellEffect, getActiveTerrainZones } from './spell_effects';
+import { removeEffectsFromCaster, removeEffectById, getActiveAcBonus, getActiveAcFloor, getActiveBlessDie, getActiveBaneDie, getActiveHexDie, getActiveDamageZones, getActiveWeaponEnchant, getActiveEnlargeReduce, getActiveTaunt, getActiveCurseAttackDisadv, getActiveCurseRider, applySpellEffect, getActiveTerrainZones, makeTerrainFn } from './spell_effects';
 import { TerrainZone } from './spell_effects';
 import { applyCantripEffect, getCantripAttackAdvantage, resolveCantripAction, resolveCantripAoE, resolveCantripTouchEffect } from './cantrip_effects';
 import { execute as executeHex } from '../spells/hex';
@@ -967,7 +967,8 @@ export function resolveAttack(
     log(state, 'action', attacker.id,
       `${attacker.name} attacks ${target.name} with Disadvantage (Bestow Curse — disadvantaged vs curse caster).`, target.id);
   }
-  const disadvantage = baseDisadv || !!protectionRider || losDisadvantage || chillTouchDisadv || viciousMockeryDisadv || frostbiteDisadv || tauntDisadvantage || curseAttackDisadv;
+  const disadvantage = baseDisadv || !!protectionRider || losDisadvantage || chillTouchDisadv || viciousMockeryDisadv || frostbiteDisadv || tauntDisadvantage || curseAttackDisadv
+    || attacker.exhaustionLevel >= 3;  // Exhaustion level 3: disadvantage on attack rolls (PHB p.291)
   const advantage = baseAdv || packTacticsAdvantage || attacker.helpedThisTurn || cantripAdv || trueStrikeAdv;
 
   // Shillelagh (PHB p.275): while the self-buff is active, MELEE attacks use
@@ -1647,7 +1648,8 @@ export function executeMove(
   const cost = estimateMoveCostFt(
     mover.pos, dest,
     mover.burrowSpeed !== null,
-    mover.swimSpeed !== null
+    mover.swimSpeed !== null,
+    makeTerrainFn(bf)
   );
 
   if (!spendMovement(mover, cost)) {

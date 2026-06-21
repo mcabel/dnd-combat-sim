@@ -52,6 +52,7 @@ function makeCombatant(overrides: Partial<Combatant>): Combatant {
     deathSaves: null,
     resources: null,
     tempHP: 0,
+    exhaustionLevel: 0,
     mountedOn: null, carriedBy: null, independentMount: false,
     role: 'regular',
     bonded: null,

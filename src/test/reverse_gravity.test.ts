@@ -29,6 +29,7 @@ function makeCombatant(id: string, overrides: Partial<Combatant> = {}): Combatan
     budget: { movementFt: 30, actionUsed: false, bonusActionUsed: false, reactionUsed: false, freeObjectUsed: false },
     conditions: new Set() as Set<Condition>, aiProfile: 'smart', perception: { targets: new Map() } as any,
     concentration: null, deathSaves: null, resources: null, tempHP: 0,
+    exhaustionLevel: 0,
     mountedOn: null, carriedBy: null, independentMount: false, role: 'regular', bonded: null,
     usedSneakAttackThisTurn: false, helpedThisTurn: false, isDefender: false, cannotAttack: false,
     hasHands: true, wearingArmor: false, isDead: false, isUnconscious: false,

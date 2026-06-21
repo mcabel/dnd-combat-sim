@@ -50,6 +50,7 @@ function makeC(o: Partial<Combatant> = {}): Combatant {
     budget: { movementFt: speed, actionUsed: false, bonusActionUsed: false, reactionUsed: false, freeObjectUsed: false },
     conditions: new Set(),
     concentration: null, deathSaves: null, tempHP: 0,
+    exhaustionLevel: 0,
     resources: null, usedSneakAttackThisTurn: false,
     helpedThisTurn: false,
     isDefender: false,

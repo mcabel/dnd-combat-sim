@@ -45,7 +45,7 @@
 
 import { Combatant, Battlefield, Condition } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
-import { applySpellEffect, removeEffectsFromCaster } from '../engine/spell_effects';
+import { applySpellEffect, removeEffectsFromCaster, applyTerrainDifficulty } from '../engine/spell_effects';
 import { startConcentration, rollSave } from '../engine/utils';
 import { chebyshev3D, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
@@ -62,7 +62,8 @@ export const metadata = {
   saveAbility: 'dex' as const,
   castingTime: 'action',
   sleetStormConcentrationBreakV1Simplified: true,          // conc-break rider simplified away
-  sleetStormDifficultTerrainV1Simplified: true,            // terrain NOT modelled
+  sleetStormDifficultTerrainV1Simplified: false,            // terrain now modelled via terrainDifficulty
+  sleetStormDifficultTerrainImplemented: true,              // PHB p.276: ground is difficult terrain
   sleetStormPersistentTerrainV2StartOfTurnOnly: true,     // start-of-turn check; on-enter deferred to v3
 } as const;
 
@@ -129,8 +130,9 @@ export function execute(caster: Combatant, targets: Combatant[], state: EngineSt
 
   // Apply terrain_zone effect on the CASTER (concentration)
   // This marks a persistent 20-ft radius zone at the center position
+  // terrainDifficulty: true marks cells as difficult terrain (PHB p.276)
   if (center) {
-    applySpellEffect(caster, {
+    const effect = applySpellEffect(caster, {
       casterId: caster.id,
       spellName: 'Sleet Storm',
       effectType: 'terrain_zone',
@@ -141,9 +143,12 @@ export function execute(caster: Combatant, targets: Combatant[], state: EngineSt
         terrainCenterX: center.pos.x,
         terrainCenterY: center.pos.y,
         terrainCenterZ: center.pos.z,
+        terrainDifficulty: true,
       },
       sourceIsConcentration: true,
     });
+    // Mark cells in the zone as difficult terrain
+    applyTerrainDifficulty(state.battlefield, effect);
   }
 
   for (const target of targets) {

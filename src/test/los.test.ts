@@ -72,7 +72,7 @@ function makeC(o: Partial<Combatant> = {}): Combatant {
     concentration: null, deathSaves: null,
     mountedOn: null, carriedBy: null, independentMount: false,
     role: 'regular', bonded: null, resources: null,
-    tempHP: 0, usedSneakAttackThisTurn: false, helpedThisTurn: false,
+    tempHP: 0, exhaustionLevel: 0, usedSneakAttackThisTurn: false, helpedThisTurn: false,
     isDefender: false, cannotAttack: false, hasHands: true, wearingArmor: false,
     isDead: false, isUnconscious: false,
     advantages: [], vulnerabilities: [], resistances: [],

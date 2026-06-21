@@ -145,7 +145,8 @@ export function rollSave(
   const hasAdvantage   = selfSave.advantage   || allSave.advantage   || rageStrAdvantage    || enlargeStrAdvantage;
   const hasDisadvantage = combatant.conditions.has('poisoned') // PHB Appendix A: poisoned → disadv on saves
     || selfSave.disadvantage || allSave.disadvantage
-    || enlargeStrDisadvantage || abilityDisadvantage;
+    || enlargeStrDisadvantage || abilityDisadvantage
+    || combatant.exhaustionLevel >= 3;  // Exhaustion level 3: disadvantage on saving throws (PHB p.291)
 
   let roll: number;
   if (hasAdvantage && !hasDisadvantage) roll = rollWithAdvantage();
@@ -323,7 +324,8 @@ export function rollAbilityCheck(
   const abilityDisadvCheck = hasAbilityDisadvantage(combatant, ability);
 
   const hasAdvantage    = friendsAdv || selfCheck.advantage   || allCheck.advantage   || rageStrAdvantage || enlargeStrAdvantage || enhanceAbilityAdv;
-  const hasDisadvantage = poisonedDisadv || selfCheck.disadvantage || allCheck.disadvantage || enlargeStrDisadvantage || abilityDisadvCheck;
+  const hasDisadvantage = poisonedDisadv || selfCheck.disadvantage || allCheck.disadvantage || enlargeStrDisadvantage || abilityDisadvCheck
+    || combatant.exhaustionLevel >= 1;  // Exhaustion level 1: disadvantage on ability checks (PHB p.291)
 
   let roll: number;
   if (hasAdvantage && !hasDisadvantage) {
@@ -437,7 +439,8 @@ export function applyHeal(target: Combatant, amount: number): number {
   if (target.isDead) return 0; // Dead = no heal (stabilise is separate)
   if (target._chillTouchNoHealing) return 0; // Chill Touch heal-block rider
   const was = target.currentHP;
-  target.currentHP = Math.min(target.maxHP, target.currentHP + amount);
+  const cap = effectiveMaxHP(target);
+  target.currentHP = Math.min(cap, target.currentHP + amount);
 
   if (was === 0 && target.currentHP > 0) {
     // Regained consciousness
@@ -454,6 +457,12 @@ export function isBloodied(c: Combatant): boolean {
   return c.currentHP < c.maxHP * 0.5;
 }
 
+/** Returns the effective max HP considering exhaustion level 4 (PHB p.291). */
+export function effectiveMaxHP(c: Combatant): number {
+  if (c.exhaustionLevel >= 4) return Math.floor(c.maxHP / 2);
+  return c.maxHP;
+}
+
 // ---- Conditions ---------------------------------------------
 
 export function addCondition(target: Combatant, condition: Condition): void {
@@ -461,6 +470,16 @@ export function addCondition(target: Combatant, condition: Condition): void {
   // Cascade: incapacitated implies can't take actions
   if (condition === 'paralyzed' || condition === 'stunned' || condition === 'petrified') {
     target.conditions.add('incapacitated');
+  }
+  // Auto-break concentration on incapacitated (PHB p.203: "You lose concentration
+  // on a spell if you are incapacitated"). Note: this only nulls the concentration
+  // flag — conc-sourced effects (conditions, terrain zones) remain until
+  // removeEffectsFromCaster is called. The caller (combat.ts) should call
+  // removeEffectsFromCaster after addCondition to fully clean up. v1 limitation:
+  // effects may briefly persist without concentration anchor.
+  if (condition === 'incapacitated' && target.concentration?.active) {
+    target.concentration.active = false;
+    target.concentration.spellName = null;
   }
 }
 
@@ -610,7 +629,12 @@ export function effectiveSpeed(c: Combatant): number {
   if (c.conditions.has('stunned')) return 0;
   if (c.conditions.has('unconscious')) return 0;
   if (c.conditions.has('restrained')) return 0;
-  return c.speed;
+  // Exhaustion level 5 (PHB p.291): speed reduced to 0
+  if (c.exhaustionLevel >= 5) return 0;
+  let speed = c.speed;
+  // Exhaustion level 2 (PHB p.291): speed halved
+  if (c.exhaustionLevel >= 2) speed = Math.floor(speed / 2);
+  return speed;
 }
 
 // ---- Initiative --------------------------------------------
@@ -846,6 +870,22 @@ export function startConcentration(caster: Combatant, spellName: string): void {
  * Break concentration on a combatant (spell ends, no save).
  */
 export function breakConcentration(caster: Combatant): void {
+  caster.concentration = null;
+}
+
+/**
+ * Voluntarily end concentration (PHB p.203: "You can end concentration at any
+ * time"). This sets the concentration flag to null. The CALLER is responsible
+ * for calling removeEffectsFromCaster(caster.id, bf) afterwards to clean up
+ * any conc-sourced effects (conditions, terrain zones, etc.).
+ *
+ * Why not call removeEffectsFromCaster here? Because it lives in
+ * spell_effects.ts and importing it from utils.ts would create a circular
+ * dependency (spell_effects already imports from utils). The separation is
+ * intentional: combat.ts orchestrates both this function and the cleanup.
+ */
+export function voluntaryEndConcentration(caster: Combatant): void {
+  if (!caster.concentration?.active) return;
   caster.concentration = null;
 }
 
@@ -1109,7 +1149,7 @@ export function spendHitDiceOnRest(c: Combatant, targetFraction = 0.75): number 
   while (hd.remaining > 0 && c.currentHP < c.maxHP * targetFraction) {
     const roll = rollDie(hd.dieSides);
     const recovered = Math.max(0, roll + conMod);
-    c.currentHP = Math.min(c.maxHP, c.currentHP + recovered);
+    c.currentHP = Math.min(effectiveMaxHP(c), c.currentHP + recovered);
     hd.remaining--;
     spent++;
   }
@@ -1124,11 +1164,14 @@ export function spendHitDiceOnRest(c: Combatant, targetFraction = 0.75): number 
  * Also restores HP to max and clears conditions/effects.
  */
 export function longRest(c: Combatant): void {
-  c.currentHP    = c.maxHP;
-  c.tempHP       = 0;
-  c.conditions   = new Set();
-  c.concentration = null;
-  c.activeEffects = [];      // all spell effects end on a long rest
+  c.currentHP      = c.maxHP;  // long rest restores to full maxHP (exhaustion may reduce effective cap)
+  c.tempHP         = 0;
+  c.conditions     = new Set();
+  c.concentration  = null;
+  c.activeEffects  = [];      // all spell effects end on a long rest
+  // PHB p.291: "Finishing a long rest reduces a creature's exhaustion level by 1,
+  // provided that the creature has also ingested some food and drink."
+  if (c.exhaustionLevel > 0) c.exhaustionLevel--;
   c.deathSaves   = c.isPlayer ? { successes: 0, failures: 0 } : null;
 
   const r = c.resources;

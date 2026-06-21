@@ -106,6 +106,7 @@ export type SpellEffectType =
   | 'dominated'             // charmed + incapacitated (Dominate Beast/Person/Monster PHB p.235 — control-override)
   | 'suggestion'            // charmed + disadv on own attacks (Mass Suggestion PHB p.258 — follow-a-suggestion behaviour)
   | 'terrain_zone'          // persistent terrain effect on the battlefield (Grease/Sleet Storm/Watery Sphere)
+  | 'exhaustion_level'      // increment exhaustion level (Sickening Radiance XGE p.164, future spells)
   // ── Session 27 — Batch 3 concentration buffs ────────────────────────
   // bane_die: inverse of bless_die (Bane PHB p.219: -1d4 to attacks/saves).
   // weapon_enchant extended with damageDie/damageDieCount/damageDieType
@@ -211,6 +212,11 @@ export interface ActiveEffect {
     // breaks, the creature falls and takes fall damage (PHB p.183).
     // Read by processFallDamage() in combat.ts.
     fallHeight?: number;                // e.g. 100 for 100-ft Reverse Gravity cylinder
+    // ── exhaustion_level (Sickening Radiance XGE p.164, future spells) ───
+    // How many exhaustion levels to add (e.g. 1 for Sickening Radiance).
+    // Exhaustion is a 7-level graduated state (PHB p.291): level 6 = death.
+    // NOT auto-removed on effect dispel — persists until rest/spell removal.
+    exhaustionLevels?: number;
     // ── terrain_zone (Grease/Sleet Storm/Watery Sphere) ────────────────
     // Persistent terrain effect that applies a condition to creatures
     // starting their turn in the zone's radius. The effect is stored on
@@ -223,6 +229,7 @@ export interface ActiveEffect {
     terrainCenterX?: number;                              // center position X (grid squares)
     terrainCenterY?: number;                              // center position Y (grid squares)
     terrainCenterZ?: number;                              // center position Z (grid squares)
+    terrainDifficulty?: boolean;                          // if true, this terrain_zone marks cells as difficult terrain (PHB p.182)
   };
   sourceIsConcentration: boolean;     // if true, removed when caster's concentration ends
 }
@@ -450,6 +457,10 @@ export interface Combatant {
 
   // Temporary HP (absorbs damage before real HP)
   tempHP: number;
+
+  // Exhaustion level (PHB p.291): 0 = none, 1–6 graduated effects.
+  // Separate from conditions Set — exhaustion is a 7-level graduated state.
+  exhaustionLevel: number;  // 0–6, default 0
 
   // Mount state (PHB p.198)
   // A combatant can be a controlled mount OR a rider — never both simultaneously.
@@ -1339,6 +1350,12 @@ export interface Battlefield {
   // LOS/Cover: static obstacles on the map (walls, pillars, doors, fog, etc.)
   // Optional — absent means open terrain (no cover calculations).
   obstacles?: Obstacle[];
+  // Difficult terrain cells from terrain_zone spells (Grease, Sleet Storm, etc.)
+  // Keyed by "x,y,z" — matches posKey() format from movement.ts.
+  // Added/removed when terrain_zone effects with terrainDifficulty:true are
+  // applied/removed. Checked by the terrainFn passed to estimateMoveCostFt
+  // in executeMove().
+  difficultTerrainCells?: Set<string>;
 }
 
 // ---- TurnPlan (output of AI) --------------------------------

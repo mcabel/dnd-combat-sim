@@ -436,6 +436,7 @@ export function pcToCombatant(
     bonded: null,
     creatureType: 'humanoid',   // PHB p.11: all PCs are humanoids (Session 27 TG-004)
     tempHP: 0,
+    exhaustionLevel: 0,
     resources: buildResources(raw),
     usedSneakAttackThisTurn: false,
     helpedThisTurn: false,
