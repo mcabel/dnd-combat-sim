@@ -15,13 +15,15 @@
 //
 // Upcast: none (1st-level spell — no upcast).
 //
-// v1 simplifications:
-//   - Taunt (PHB p.224: "disadvantage on attacks vs others" + "must stay
-//     within 30 ft"): simplified to `condition_apply:frightened` (the
-//     closest available condition — frightened grants a similar "disadv
-//     on attacks while caster visible"). The movement-restriction rider
-//     is NOT modelled (v1 has no movement-compulsion subsystem).
-//     Documented via `compelledDuelTauntV1SimplifiedToFrightened`.
+// v2: Taunt implemented via `effectType: 'taunt'` (Session 28 engine
+//   mechanism). The taunted creature has disadvantage on attack rolls
+//   against creatures other than the caster — matching PHB p.224:
+//   "disadvantage on attack rolls against creatures other than you".
+//   Previous v1 simplified to `condition_apply:frightened` (closest
+//   available condition, but overly broad — frightened gives disadv on
+//   ALL attacks while caster visible). The movement-restriction rider
+//   is NOT modelled (v1 has no movement-compulsion subsystem).
+//   Documented via `compelledDuelTauntV2Implemented`.
 //   - Concentration: canon 1 min concentration. v1 starts concentration;
 //     not enforced on damage (TG-002). frightened is conc-sourced.
 //   - End-of-turn repeat save (PHB p.224): NOT modelled.
@@ -48,7 +50,7 @@ import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 export const metadata = {
   name: 'Compelled Duel', level: 1, school: 'enchantment', rangeFt: 30,
   concentration: true, saveAbility: 'wis' as const, castingTime: 'action',
-  compelledDuelTauntV1SimplifiedToFrightened: true,        // taunt + movement-restriction → frightened
+  compelledDuelTauntV2Implemented: true,                   // taunt via effectType (disadv vs non-caster)
   compelledDuelConcentrationEnforcementV1Implemented: false,
 } as const;
 
@@ -67,7 +69,7 @@ export function shouldCast(caster: Combatant, bf: Battlefield): Combatant | null
     if (c.isDead || c.isUnconscious) continue;
     const distFt = chebyshev3D(caster.pos, c.pos) * 5;
     if (distFt > 30) continue;
-    if (c.conditions.has('frightened')) continue;
+    if (c.activeEffects.some(e => e.effectType === 'taunt')) continue;
     if (c.activeEffects.some(e => e.casterId === caster.id && e.spellName === 'Compelled Duel')) continue;
     candidates.push({ c, threat: c.maxHP, dist: distFt });
   }
@@ -88,8 +90,8 @@ export function execute(caster: Combatant, target: Combatant, state: EngineState
   emit(state, save.success ? 'save_success' : 'save_fail', caster.id,
     `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} WIS save vs Compelled Duel (rolled ${save.total})`, target.id, save.roll);
   if (save.success) { emit(state, 'action', caster.id, `${target.name} resists Compelled Duel — no effect!`, target.id); return; }
-  applySpellEffect(target, { casterId: caster.id, spellName: 'Compelled Duel', effectType: 'condition_apply', payload: { condition: 'frightened' }, sourceIsConcentration: true });
-  emit(state, 'condition_add', caster.id, `${target.name} is FRIGHTENED by Compelled Duel! (v1: taunt + movement-restriction simplified to frightened)`, target.id);
+  applySpellEffect(target, { casterId: caster.id, spellName: 'Compelled Duel', effectType: 'taunt', payload: { tauntCasterId: caster.id }, sourceIsConcentration: true });
+  emit(state, 'condition_add', caster.id, `${target.name} is TAUNTED by Compelled Duel! (disadv on attacks vs non-caster)`, target.id);
 }
 
 export function cleanup(_c: Combatant): void { /* no-op — concentration break handles cleanup */ }

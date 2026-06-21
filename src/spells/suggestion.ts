@@ -17,36 +17,29 @@
 //
 // Upcast: — (no At Higher Levels entry).
 //
-// v1 simplifications:
-//   - Duration: canon 8 hr concentration → v1: concentration is started
-//     via startConcentration(), but the engine does NOT yet enforce
-//     concentration checks on damage taken (forward-compat TODO; see
-//     TG-002 in TEAMGOALS.md). The charmed condition persists until
-//     removeEffectsFromCaster() is called. v1 treats the duration as
-//     "1 min combat-relevant" (forward-compat TODO via the metadata flag
-//     `suggestionDurationV1Simplified: true`).
-//   - Command subsystem: canon says "You suggest a course of activity...
-//     The target must make a Wisdom saving throw. On a failed save, it
-//     pursues the course of action you described to the best of its
-//     ability." v1 does NOT model the command-subsystem (the engine has
-//     no mechanism to override a combatant's AI to perform a specific
-//     action — would require a "suggested action" hook in planTurn, similar
-//     to Crown of Madness's forced-attack rider). v1 applies ONLY the
-//     `charmed` condition (mirror Crown of Madness's v1 simplification).
-//     Forward-compat TODO via the metadata flag
-//     `suggestionCommandSubystemV1Implemented: false`.
+// v2: Suggestion effect type implemented via `effectType: 'suggestion'`
+//   (Session 28 engine mechanism). The target is charmed AND has
+//   disadvantage on their own attack rolls — matching PHB p.281:
+//   "it pursues the course of action you described" (interpreted as
+//   the target won't fight effectively). The `suggestion` effect type
+//   auto-applies charmed condition + grantSelf disadvantage on attack
+//   rolls (handled in applySpellEffect / _undoEffect in spell_effects.ts).
+//   Previous v1 simplified to `condition_apply:charmed` only (no combat
+//   penalty — charmed alone doesn't hinder attacks in 5e).
+//   Documented via `suggestionBehaviourV2Implemented`.
+//
+// v1 simplifications still pending:
+//   - Duration: canon 8 hr concentration → v1: 1 min combat duration
+//     (suggestionDurationV1Simplified: true).
+//   - Command subsystem: NOT modelled (engine has no mechanism to
+//     override AI — would require a "suggested action" hook in planTurn).
+//     (suggestionCommandSubystemV1Implemented: false).
 //   - Creature-type restriction: NONE in canon (Suggestion works on any
-//     creature that can hear and understand you — unlike Crown of Madness
-//     which is humanoid-only). v1 does NOT verify language comprehension
-//     (parser tech debt — TG-004). All living enemies are valid targets.
-//   - Damage-end: canon says "If you or any of your companions damage the
-//     creature, the spell ends." v1 does NOT model this (no per-action
-//     damage-end hook for concentration spells). The condition persists
-//     for the entire combat (or until concentration breaks).
-//   - Upcast: — (no At Higher Levels entry). v1 always targets a single
-//     creature. Forward-compat TODO via `suggestionUpcastV1Implemented: false`.
-//   - Concentration enforcement: v1 does NOT enforce concentration
-//     checks (TG-002).
+//     creature that can hear and understand you). v1 does NOT verify
+//     language comprehension (parser tech debt — TG-004).
+//   - Damage-end: NOT modelled (no per-action damage-end hook).
+//   - Upcast: — (no At Higher Levels entry).
+//   - Concentration enforcement: NOT enforced (TG-002).
 //
 // Spell module pattern (mirrors crown_of_madness.ts save-or-charmed pattern
 // but WITHOUT the humanoid-type check):
@@ -73,6 +66,7 @@ export const metadata = {
   concentration: true,
   saveAbility: 'wis' as const,
   castingTime: 'action',
+  suggestionBehaviourV2Implemented: true,                  // suggestion effect type (charmed + disadv on attacks)
   suggestionCommandSubystemV1Implemented: false,            // command-subsystem NOT modelled
   suggestionDurationV1Simplified: true,                     // canon 8 hr → v1 1 min combat duration
   suggestionUpcastV1Implemented: false,                     // no At Higher Levels entry — single target
@@ -222,19 +216,19 @@ export function execute(
     return;
   }
 
-  // Apply charmed condition (v1 simplification: charmed condition only —
-  // the command-subsystem is NOT modelled).
+  // Apply suggestion effect (v2: charmed + disadv on attack rolls —
+  // the command-subsystem is NOT modelled, but the target won't fight effectively).
   applySpellEffect(target, {
     casterId: caster.id,
     spellName: 'Suggestion',
-    effectType: 'condition_apply',
-    payload: { condition: 'charmed' },
+    effectType: 'suggestion',
+    payload: {},
     sourceIsConcentration: true,
   });
 
   emit(
     state, 'condition_add', caster.id,
-    `${target.name} is CHARMED by Suggestion! (v1: command-subsystem not modelled — charmed condition only)`,
+    `${target.name} is under SUGGESTION! (charmed + disadv on attacks)`,
     target.id,
   );
 }

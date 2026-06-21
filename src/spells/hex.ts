@@ -13,10 +13,14 @@
 //
 // Implementation notes:
 //   - Applies 'hex_damage' ActiveEffect on target (casterId = warlock.id)
+//   - Applies 'ability_disadvantage' ActiveEffect on target (Session 28 engine
+//     mechanism, originally added for Bestow Curse PHB p.214 opt.2)
 //   - Concentration tag applied here (not in hexPlan) so breakConcentration
-//     cleans up the effect correctly
+//     cleans up both effects correctly
 //   - Bonus-action-in-case: dispatched from executePlannedAction 'hex' case
 //   - Hit bonus applied in resolveAttack after damage roll
+//   - Ability disadvantage consumed by hasAbilityDisadvantage() in utils.ts
+//     rollSave and rollAbilityCheck
 // ============================================================
 
 import { Combatant, Battlefield, AbilityScore } from '../types/core';
@@ -57,11 +61,19 @@ export function shouldCast(
   return true;
 }
 
+// ---- Metadata -----------------------------------------------
+
+export const metadata = {
+  /** PHB p.251: ability check disadvantage implemented (Session 28 engine). */
+  hexAbilityDisadvantageV2Implemented: true as const,
+} as const;
+
 // ---- execute ------------------------------------------------
 
 /**
  * Apply the Hex effect to `target`.
  * - Adds 'hex_damage' ActiveEffect (sourceIsConcentration: true)
+ * - Adds 'ability_disadvantage' ActiveEffect (sourceIsConcentration: true)
  * - Sets warlock concentration
  * - Does NOT consume slot — that is done in hexPlan (resources.ts) before dispatch
  */
@@ -84,11 +96,25 @@ export function execute(
     sourceIsConcentration: true,
   });
 
+  // PHB p.251: "choose one ability — the target has disadvantage on ability
+  // checks made with the chosen ability". AI always picks STR (most common
+  // for Hex — targets grapple/shove). Session 28 engine mechanism: the
+  // ability_disadvantage effect type was added for Bestow Curse PHB p.214
+  // opt.2; it applies disadvantage on ability checks AND saving throws for
+  // the specified ability. Consumed by hasAbilityDisadvantage() in utils.ts.
+  applySpellEffect(target, {
+    casterId: warlock.id,
+    spellName: 'Hex',
+    effectType: 'ability_disadvantage',
+    payload: { ability: _cursedAbility },
+    sourceIsConcentration: true,
+  });
+
   state.log.events.push({
     round: state.battlefield.round ?? 0,
     actorId: warlock.id,
     type: 'action',
     targetId: target.id,
-    description: `${warlock.name} casts Hex on ${target.name} (+1d6 necrotic on each hit)`,
+    description: `${warlock.name} casts Hex on ${target.name} (+1d6 necrotic on each hit, disadv on ${_cursedAbility.toUpperCase()} checks/saves)`,
   });
 }

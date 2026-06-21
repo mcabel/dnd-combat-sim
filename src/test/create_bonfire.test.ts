@@ -196,12 +196,14 @@ console.log('\n--- 5. concentration ---');
 }
 
 // ============================================================
-// 6. metadata exposes v1 simplification flag
+// 6. metadata exposes v2 persistent flag
 // ============================================================
-console.log('\n--- 6. v1 simplification flag ---');
+console.log('\n--- 6. v2 persistent flag ---');
 {
-  eq('6a. bonfirePersistentV1Implemented = false (on-cast damage only)',
-    metadata.bonfirePersistentV1Implemented, false);
+  eq('6a. bonfirePersistentV2Implemented = true (persistent damage_zone)',
+    metadata.bonfirePersistentV2Implemented, true);
+  eq('6b. bonfireMoveIntoV2Implemented = false (move-into trigger not yet)',
+    metadata.bonfireMoveIntoV2Implemented, false);
 }
 
 // ============================================================
@@ -465,18 +467,18 @@ console.log('\n--- 17. Total Cover blocks Create Bonfire ---');
 }
 
 // ============================================================
-// 18. metadata does NOT include persistent-trigger fields (v1 simplification)
+// 18. v2 metadata: persistent damage_zone implemented
 // ============================================================
-console.log('\n--- 18. no persistent-trigger fields in v1 ---');
+console.log('\n--- 18. v2 persistent damage_zone ---');
 {
-  // v1 implements ONLY trigger (1) (on-cast damage). The persistent-trigger
-  // fields (move-into, end-turn) would require a new subsystem. Verify that
-  // v1's metadata does NOT claim to implement them.
-  eq('18a. bonfirePersistentV1Implemented = false',
-    metadata.bonfirePersistentV1Implemented, false);
-
-  // The metadata should still expose bonfireSizeFt for forward-compat.
-  eq('18b. bonfireSizeFt = 5 (forward-compat for future persistent subsystem)',
+  // v2 implements triggers (1) and (3) — on-cast damage + persistent
+  // damage_zone start-of-turn tick. The move-into trigger (2) is not yet
+  // implemented.
+  eq('18a. bonfirePersistentV2Implemented = true',
+    metadata.bonfirePersistentV2Implemented, true);
+  eq('18b. bonfireMoveIntoV2Implemented = false (move-into not yet)',
+    metadata.bonfireMoveIntoV2Implemented, false);
+  eq('18c. bonfireSizeFt = 5',
     metadata.bonfireSizeFt, 5);
 }
 

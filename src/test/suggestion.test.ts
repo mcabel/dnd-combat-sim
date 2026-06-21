@@ -4,20 +4,21 @@
 // concentration (8 hr canon; v1: 1 min combat duration).
 // Components: V, M (a snake's tongue + bit of honeycomb or sweet oil).
 //
-// Effect: WIS save or charmed (one command). v1: charmed condition only —
-//         the command-subsystem is NOT modelled.
+// Effect: WIS save or suggestion effect (charmed + disadv on attacks).
+// v2: suggestion effect type applies charmed condition + grantSelf
+// disadvantage on attack rolls (Session 28 engine mechanism).
 //
-// v1 simplifications (documented via metadata flags):
-//   - Command-subsystem NOT modelled (charmed condition only).
+// v1 simplifications still pending (documented via metadata flags):
+//   - Command-subsystem NOT modelled.
 //   - Duration simplified (canon 8 hr → v1 1 min).
 //   - Damage-end NOT modelled.
 //   - Concentration NOT enforced (TG-002).
 //
 // Tests cover shouldCast() preconditions + target priority, execute()
-// WIS save resolution (guaranteed fail → charmed; guaranteed success →
-// not charmed), effect attachment (condition_apply:charmed,
-// sourceIsConcentration: true), logging, cleanup no-op, integration
-// pipeline, and metadata shape.
+// WIS save resolution (guaranteed fail → suggestion effect; guaranteed success →
+// no effect), effect attachment (effectType: 'suggestion',
+// sourceIsConcentration: true), charmed condition + disadv on attacks,
+// logging, cleanup no-op, integration pipeline, and metadata shape.
 //
 // Deterministic save outcomes:
 //   - WIS 1  + DC 25 = guaranteed fail  (mod -5, even nat 20 → 15 < 25)
@@ -159,7 +160,7 @@ eq('range is 30 ft', metadata.rangeFt, 30);
 eq('is concentration', metadata.concentration, true);
 eq('save ability is wis', metadata.saveAbility, 'wis');
 eq('casting time is action', metadata.castingTime, 'action');
-eq('command-subsystem NOT implemented (v1)', metadata.suggestionCommandSubystemV1Implemented, false);
+eq('suggestion behaviour v2 implemented', metadata.suggestionBehaviourV2Implemented, true);
 eq('duration simplified (v1)', metadata.suggestionDurationV1Simplified, true);
 eq('upcast NOT implemented (v1)', metadata.suggestionUpcastV1Implemented, false);
 eq('concentration enforcement NOT implemented (v1)', metadata.suggestionConcentrationEnforcementV1Implemented, false);
@@ -220,7 +221,7 @@ console.log('\n=== 2. shouldCast — precondition gates ===\n');
   const enemy = makeGullibleEnemy('e1');
   enemy.activeEffects.push({
     id: 'eff_1', casterId: caster.id, spellName: 'Suggestion',
-    effectType: 'condition_apply', payload: { condition: 'charmed' },
+    effectType: 'suggestion', payload: {},
     sourceIsConcentration: true,
   });
   const bf = makeBF([caster, enemy]);
@@ -275,7 +276,7 @@ console.log('\n=== 3. shouldCast — target priority ===\n');
 console.log('\n=== 4. execute — save resolution ===\n');
 
 {
-  // 4a. Guaranteed fail (WIS 1 vs DC 25) → charmed applied
+  // 4a. Guaranteed fail (WIS 1 vs DC 25) → suggestion effect applied (charmed + disadv on attacks)
   const caster = makeWarlock();
   const enemy = makeGullibleEnemy('e1');
   const bf = makeBF([caster, enemy]);
@@ -285,6 +286,7 @@ console.log('\n=== 4. execute — save resolution ===\n');
   execute(caster, target, state);
 
   assert('Enemy charmed on failed save', enemy.conditions.has('charmed'));
+  assert('Enemy has suggestion effect', enemy.activeEffects.some(e => e.effectType === 'suggestion' && e.spellName === 'Suggestion'));
   eq('Slot consumed', caster.resources!.spellSlots![2]!.remaining, 1);
   eq('Caster concentrating on Suggestion', caster.concentration?.spellName, 'Suggestion');
 }
@@ -354,7 +356,7 @@ console.log('\n=== 4. execute — save resolution ===\n');
 }
 
 {
-  // 4f. Active effect attached with correct shape (on save fail)
+  // 4f. Active effect attached with correct shape (on save fail) — suggestion effect type
   const caster = makeWarlock();
   const enemy = makeGullibleEnemy('e1');
   const bf = makeBF([caster, enemy]);
@@ -363,15 +365,15 @@ console.log('\n=== 4. execute — save resolution ===\n');
   execute(caster, enemy, state);
 
   const suggEff = enemy.activeEffects.find(e =>
-    e.effectType === 'condition_apply' && e.payload.condition === 'charmed'
+    e.effectType === 'suggestion'
   );
-  assert('Active effect attached (condition_apply:charmed)', suggEff !== undefined);
+  assert('Active effect attached (effectType: suggestion)', suggEff !== undefined);
   if (suggEff) {
     eq('Effect sourceIsConcentration is true', suggEff.sourceIsConcentration, true);
     eq('Effect spellName is Suggestion', suggEff.spellName, 'Suggestion');
     eq('Effect casterId is caster', suggEff.casterId, caster.id);
-    eq('Effect payload.condition is charmed', suggEff.payload.condition, 'charmed');
   }
+  assert('Charmed condition applied by suggestion effect', enemy.conditions.has('charmed'));
 }
 
 // ============================================================
@@ -400,8 +402,8 @@ console.log('\n=== 5. execute — logging ===\n');
   assert('Save event is save_fail (guaranteed fail)', saveEvents[0]?.type === 'save_fail');
   assert('Condition_add event emitted (charmed applied)', condEvents.length === 1);
   assert('First action event mentions "Suggestion"', actionEvents[0].description.includes('Suggestion'));
-  assert('Condition_add mentions charmed or CHARMED',
-    condEvents[0].description.toLowerCase().includes('charmed'));
+  assert('Condition_add mentions SUGGESTION or suggestion',
+    condEvents[0].description.toLowerCase().includes('suggestion'));
 }
 
 {

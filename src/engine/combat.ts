@@ -37,6 +37,7 @@ import { removeEffectsFromCaster, removeEffectById, getActiveAcBonus, getActiveA
 import { TerrainZone } from './spell_effects';
 import { applyCantripEffect, getCantripAttackAdvantage, resolveCantripAction, resolveCantripAoE, resolveCantripTouchEffect } from './cantrip_effects';
 import { execute as executeHex } from '../spells/hex';
+import { shouldCast as shouldCastCreateBonfire, execute as executeCreateBonfire } from '../spells/create_bonfire';
 import { execute as executeMagicMissile } from '../spells/magic_missile';
 import { execute as executeBurningHands, shouldCast as shouldCastBurningHands } from '../spells/burning_hands';
 import { execute as executeDissonantWhispers, shouldCast as shouldCastDissonantWhispers } from '../spells/dissonant_whispers';
@@ -2331,6 +2332,19 @@ function executePlannedAction(
         ? fsTarget
         : shouldCastFlamingSphere(actor, bf);
       if (liveTarget) executeFlamingSphere(actor, liveTarget, state);
+      break;
+    }
+
+    case 'createBonfire': {
+      // Create Bonfire — XGE p.152: action, 60 ft, DEX save 1d8 fire,
+      // concentration 1 min. Persistent damage_zone with save for half.
+      // Cantrip (level 0) — no spell slot consumed.
+      const cbTargetId = plan.targetId;
+      const cbTarget = cbTargetId ? bf.combatants.get(cbTargetId) ?? null : null;
+      const cbLiveTarget = cbTarget && !cbTarget.isDead && !cbTarget.isUnconscious
+        ? cbTarget
+        : shouldCastCreateBonfire(actor, bf);
+      if (cbLiveTarget) executeCreateBonfire(actor, cbLiveTarget, state);
       break;
     }
 

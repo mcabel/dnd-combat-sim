@@ -1390,6 +1390,7 @@ export interface PlannedAction {
     | 'enhanceAbility'     // Enhance Ability — touch, advantage on one ability's checks, concentration 1 hr
     | 'flameBlade'         // Flame Blade — self, +3d6 fire on melee weapon attacks, concentration 10 min
     | 'flamingSphere'      // Flaming Sphere — 60 ft, DEX save 2d6 fire + persistent damage_zone, concentration 1 min
+    | 'createBonfire'      // Create Bonfire — 60 ft, DEX save 1d8 fire + persistent damage_zone, concentration 1 min (cantrip)
     | 'heatMetal'          // Heat Metal — 60 ft, CON save 2d8 fire + persistent damage_zone, concentration 1 min
     | 'melfsAcidArrow'     // Melf's Acid Arrow — ranged spell attack, 4d4 acid + 2d4 delayed, 90 ft
     | 'mistyStep'          // Misty Step — BONUS ACTION, self teleport 30 ft, no concentration

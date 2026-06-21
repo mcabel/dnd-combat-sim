@@ -42,6 +42,7 @@ import { shouldCast as shouldCastEnlargeReduce } from '../spells/enlarge_reduce'
 import { shouldCast as shouldCastEnhanceAbility } from '../spells/enhance_ability';
 import { shouldCast as shouldCastFlameBlade } from '../spells/flame_blade';
 import { shouldCast as shouldCastFlamingSphere } from '../spells/flaming_sphere';
+import { shouldCast as shouldCastCreateBonfire } from '../spells/create_bonfire';
 import { shouldCast as shouldCastHeatMetal } from '../spells/heat_metal';
 import { shouldCast as shouldCastMelfsAcidArrow } from '../spells/melf_s_acid_arrow';
 import { shouldCast as shouldCastMistyStep } from '../spells/misty_step';
@@ -1371,6 +1372,26 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
       };
       plan.targetId = fsTarget.id;
       plan.bonusAction = planBonusAction(self, fsTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 11L2. CREATE BONFIRE (DEX save, persistent damage_zone, concentration, cantrip) ---
+  // XGE p.152: action, 60 ft, DEX save 1d8 fire (half on save) + persistent
+  // 1d8 fire/turn (DEX save for half), concentration. Cantrip (no slot) —
+  // lower damage than Flaming Sphere but free. Only considered when no
+  // leveled spell action is planned and caster has Create Bonfire available.
+  if (!plan.action && self.actions.some(a => a.name === 'Create Bonfire')) {
+    const cbTarget = shouldCastCreateBonfire(self, battlefield);
+    if (cbTarget) {
+      plan.action = {
+        type: 'createBonfire',
+        action: null,
+        targetId: cbTarget.id,
+        description: `${self.name} casts Create Bonfire at ${cbTarget.name}`,
+      };
+      plan.targetId = cbTarget.id;
+      plan.bonusAction = planBonusAction(self, cbTarget, battlefield);
       return plan;
     }
   }

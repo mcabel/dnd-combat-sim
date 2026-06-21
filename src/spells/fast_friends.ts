@@ -11,9 +11,21 @@
 //
 // Upcast: none (3rd-level spell — no upcast).
 //
-// v1 simplifications: control/behaviour-modification simplified to charmed;
-// concentration not enforced (TG-002); end-of-turn save not modelled;
-// range 30 ft (chebyshev approx).
+// v2: Suggestion effect type implemented via `effectType: 'suggestion'`
+//   (Session 28 engine mechanism). The target is charmed AND has
+//   disadvantage on their own attack rolls — matching EGtW p.151:
+//   "charmed by you for the duration... you can issue commands".
+//   The `suggestion` effect type auto-applies charmed condition +
+//   grantSelf disadvantage on attack rolls (handled in applySpellEffect /
+//   _undoEffect in spell_effects.ts).
+//   Previous v1 simplified to `condition_apply:charmed` only (no combat
+//   penalty — charmed alone doesn't hinder attacks in 5e).
+//   Documented via `fastFriendsControlV2Implemented`.
+//
+// v1 simplifications still pending:
+//   - Movement-restriction rider NOT modelled (no movement-compulsion subsystem).
+//   - End-of-turn save NOT modelled.
+//   - Concentration enforcement NOT modelled (TG-002).
 //
 // Migration note (Session 25 / Batch 2): migrated from the generic
 // forward-compat flag to a bespoke WIS-save-or-charmed (concentration).
@@ -44,7 +56,7 @@ export const metadata = {
   concentration: true,
   saveAbility: 'wis' as const,
   castingTime: 'action',
-  fastFriendsControlV1Simplified: true,
+  fastFriendsControlV2Implemented: true,                   // suggestion effect type (charmed + disadv on attacks)
   fastFriendsConcentrationEnforcementV1Implemented: false,
 } as const;
 
@@ -108,11 +120,11 @@ export function execute(caster: Combatant, target: Combatant, state: EngineState
 
   applySpellEffect(target, {
     casterId: caster.id, spellName: 'Fast Friends',
-    effectType: 'condition_apply', payload: { condition: 'charmed' },
+    effectType: 'suggestion', payload: {},
     sourceIsConcentration: true,
   });
   emit(state, 'condition_add', caster.id,
-    `${target.name} is CHARMED by Fast Friends! (v1: control rider NOT modelled — charm only)`, target.id);
+    `${target.name} is under SUGGESTION via Fast Friends! (charmed + disadv on attacks)`, target.id);
 }
 
 // ---- Cleanup ------------------------------------------------

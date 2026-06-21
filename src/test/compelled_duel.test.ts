@@ -1,5 +1,5 @@
 // compelled_duel.test.ts — Compelled Duel (Session 25 / Batch 2)
-// PHB p.224: L1, 30 ft, WIS save or frightened (taunt), concentration.
+// PHB p.224: L1, 30 ft, WIS save or taunt, concentration.
 import { shouldCast, execute, metadata } from '../spells/compelled_duel';
 import { Combatant, Action, PlayerResources, Condition } from '../types/core';
 
@@ -28,10 +28,10 @@ console.log('\n=== 2. shouldCast gates ===\n');
 { const c = makeCaster(); const r = shouldCast(c, makeBF([c, weak('e1', { x: 1, y: 0 })])); assert('non-null', r !== null); if (r) eq('enemy id', (r as Combatant).id, 'e1'); }
 console.log('\n=== 3. shouldCast target selection ===\n');
 { const c = makeCaster(); const lo = weak('lo', { x: 1, y: 0 }, { maxHP: 30 }); const hi = weak('hi', { x: 5, y: 0 }, { maxHP: 300 }); const r = shouldCast(c, makeBF([c, lo, hi])); if (r) eq('picks highest-threat', (r as Combatant).id, 'hi'); }
-console.log('\n=== 4. execute — guaranteed fail (frightened) ===\n');
-{ const c = makeCaster(); const e = weak('e1', { x: 5, y: 0 }); const bf = makeBF([c, e]); const st = makeState(bf); const t = shouldCast(c, bf); if (t) { execute(c, t as Combatant, st); eq('slot consumed', (c.resources as any).spellSlots[1].remaining, 0); assert('concentration started', c.concentration?.active === true); assert('frightened applied', e.conditions.has('frightened')); } }
+console.log('\n=== 4. execute — guaranteed fail (taunt) ===\n');
+{ const c = makeCaster(); const e = weak('e1', { x: 5, y: 0 }); const bf = makeBF([c, e]); const st = makeState(bf); const t = shouldCast(c, bf); if (t) { execute(c, t as Combatant, st); eq('slot consumed', (c.resources as any).spellSlots[1].remaining, 0); assert('concentration started', c.concentration?.active === true); assert('taunt effect applied', e.activeEffects.some(ef => ef.effectType === 'taunt' && ef.payload.tauntCasterId === c.id)); assert('NOT frightened (v1 condition removed)', !e.conditions.has('frightened')); } }
 console.log('\n=== 5. execute — guaranteed success ===\n');
-{ const c = makeCaster({ x: 0, y: 0, z: 0 }, CD_ACTION_LOW); const e = strong('e1', { x: 5, y: 0 }); const bf = makeBF([c, e]); const st = makeState(bf); const t = shouldCast(c, bf); if (t) { execute(c, t as Combatant, st); assert('NOT frightened', !e.conditions.has('frightened')); const ss = st.log.events.filter((x: any) => x.type === 'save_success'); assert('save_success log', ss.length === 1); } }
+{ const c = makeCaster({ x: 0, y: 0, z: 0 }, CD_ACTION_LOW); const e = strong('e1', { x: 5, y: 0 }); const bf = makeBF([c, e]); const st = makeState(bf); const t = shouldCast(c, bf); if (t) { execute(c, t as Combatant, st); assert('NOT taunted', !e.activeEffects.some(ef => ef.effectType === 'taunt')); const ss = st.log.events.filter((x: any) => x.type === 'save_success'); assert('save_success log', ss.length === 1); } }
 console.log('\n=== 6. Cleanup no-op ===\n');
 { let ok = true; try { (require('../spells/compelled_duel') as any).cleanup(makeCaster()); } catch { ok = false; } assert('no throw', ok); }
 console.log(`\n=== Results: ${passed} passed, ${failed} failed ===\n`);
