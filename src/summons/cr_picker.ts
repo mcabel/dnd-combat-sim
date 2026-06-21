@@ -124,3 +124,76 @@ export const CONJURE_ANIMALS_OPTIONS: readonly { maxCR: number; count: number; l
  * This is the most iconic and commonly chosen option.
  */
 export const DEFAULT_CA_OPTION = CONJURE_ANIMALS_OPTIONS[1]; // Two beasts of CR 1
+
+// ---- Conjure Woodland Beings option table -------------------
+
+/**
+ * PHB p.228 — Conjure Woodland Beings CR/count options.
+ * 4th-level conjuration. Each entry is one valid (maxCR, count) pair.
+ */
+export const CONJURE_WOODLAND_BEINGS_OPTIONS: readonly { maxCR: number; count: number; label: string }[] = [
+  { maxCR: 2,    count: 1, label: 'One fey of CR 2' },
+  { maxCR: 1,    count: 2, label: 'Two fey of CR 1' },
+  { maxCR: 0.5,  count: 4, label: 'Four fey of CR 1/2' },
+  { maxCR: 0.25, count: 8, label: 'Eight fey of CR 1/4' },
+] as const;
+
+/**
+ * Default Conjure Woodland Beings option for v1: 4 Sprites (CR 1/4).
+ * Sprites are the most combat-capable CR 1/4 fey in the Monster Manual
+ * (MM p.340) — they have both a melee longsword and a ranged shortbow
+ * with a poisoned arrow effect. v1 spawns 4 of them for a manageable
+ * battlefield footprint (instead of the listed maximum of 8).
+ */
+export const DEFAULT_CWB_OPTION = CONJURE_WOODLAND_BEINGS_OPTIONS[3]; // Eight fey of CR 1/4
+
+// ---- Conjure Minor Elementals option table ------------------
+
+/**
+ * PHB p.226 — Conjure Minor Elementals CR/count options.
+ * 4th-level conjuration. Same option structure as Conjure Woodland Beings.
+ */
+export const CONJURE_MINOR_ELEMENTALS_OPTIONS: readonly { maxCR: number; count: number; label: string }[] = [
+  { maxCR: 2,    count: 1, label: 'One elemental of CR 2' },
+  { maxCR: 1,    count: 2, label: 'Two elementals of CR 1' },
+  { maxCR: 0.5,  count: 4, label: 'Four elementals of CR 1/2' },
+  { maxCR: 0.25, count: 8, label: 'Eight elementals of CR 1/4' },
+] as const;
+
+/**
+ * Default Conjure Minor Elementals option for v1: 4 Mud Mephits (CR 1/4).
+ * Mud Mephits (MM p.215) are the most well-rounded CR 1/4 elemental —
+ * AC 11, HP 27 (highest of the CR 1/4 mephits), Fists +3 1d6+1 bludgeoning
+ * plus a recharge Mud Breath (restrains Medium or smaller on DC 11 DEX).
+ * v1 spawns 4 of them for a manageable battlefield footprint.
+ */
+export const DEFAULT_CME_OPTION = CONJURE_MINOR_ELEMENTALS_OPTIONS[3]; // Eight elementals of CR 1/4
+
+// ---- Conjure Elemental option table -------------------------
+
+/**
+ * PHB p.225 — Conjure Elemental CR/count options.
+ * 5th-level conjuration. Unlike the L4 Conjure spells, Conjure Elemental
+ * summons a single elemental whose CR scales with the slot level used:
+ *   L5: CR 5 or lower
+ *   L6: CR 6 or lower
+ *   L7: CR 7 or lower
+ *   L8: CR 8 or lower
+ *   L9: CR 9 or lower
+ * The maxCR equals the slot level. Each entry here is keyed by slot level.
+ */
+export const CONJURE_ELEMENTAL_OPTIONS: readonly { slotLevel: number; maxCR: number; label: string }[] = [
+  { slotLevel: 5, maxCR: 5, label: 'L5: one elemental of CR 5' },
+  { slotLevel: 6, maxCR: 6, label: 'L6: one elemental of CR 6' },
+  { slotLevel: 7, maxCR: 7, label: 'L7: one elemental of CR 7' },
+  { slotLevel: 8, maxCR: 8, label: 'L8: one elemental of CR 8' },
+  { slotLevel: 9, maxCR: 9, label: 'L9: one elemental of CR 9' },
+] as const;
+
+/**
+ * Default Conjure Elemental option for v1: L5 → 1 Fire Elemental (CR 5).
+ * Fire Elemental (MM p.125) is the iconic combat option — Touch +6 2d6+3
+ * fire with Multiattack (2 touches), and the Fire Form trait ignites
+ * flammable targets and lets the elemental move through hostile spaces.
+ */
+export const DEFAULT_CE_OPTION = CONJURE_ELEMENTAL_OPTIONS[0]; // L5: CR 5

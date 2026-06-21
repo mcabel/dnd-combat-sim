@@ -259,6 +259,10 @@ import { shouldCast as shouldCastSummonDraconicSpirit }   from '../spells/summon
 import { shouldCast as shouldCastSummonFiend }            from '../spells/summon_fiend';
 // ── TG-006 — PHB Conjure spells (Phase 2) ────────────────────────────────
 import { shouldCast as shouldCastConjureAnimals } from '../spells/conjure_animals';
+// ── TG-006 — PHB Conjure spells (Phase 4 — Session 30) ───────────────────
+import { shouldCast as shouldCastConjureWoodlandBeings }  from '../spells/conjure_woodland_beings';
+import { shouldCast as shouldCastConjureMinorElementals } from '../spells/conjure_minor_elementals';
+import { shouldCast as shouldCastConjureElemental }       from '../spells/conjure_elemental';
 // ── TG-006 — PHB/XGE Find spells (Phase 3) ──────────────────────────────
 import { shouldCast as shouldCastFindFamiliar }        from '../spells/find_familiar';
 import { shouldCast as shouldCastFindSteed }           from '../spells/find_steed';
@@ -2272,6 +2276,73 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
         action,
         targetId: self.id,
         description: `${self.name} casts Conjure Animals`,
+      };
+      plan.targetId = self.id;
+      plan.bonusAction = planBonusAction(self, self, battlefield);
+      return plan;
+    }
+  }
+
+  // === TG-006 — PHB CONJURE SPELLS (Phase 4 — Session 30) ===
+  // Three new PHB Conjure spells added in Session 30:
+  //   - Conjure Elemental (L5): 1 Fire Elemental (CR 5), concentration 1 hr.
+  //     Most powerful single-target summon of the three — prioritised highest.
+  //   - Conjure Woodland Beings (L4): 4 Sprites (CR 1/4), concentration 1 hr.
+  //     Sprite shortbow +6 with DC 10 CON poisoned rider — solid ranged DPS.
+  //   - Conjure Minor Elementals (L4): 4 Mud Mephits (CR 1/4), concentration 1 hr.
+  //     Mud Mephit Fists +3 1d6+1 bludgeoning — tanky (HP 27) melee.
+  // All three use the same TCE-style initiative insertion (shares caster's
+  // initiative, acts immediately after caster).
+
+  // --- Conjure Elemental (5th-level, 1 Fire Elemental, concentration) ---
+  // PHB p.225: action, 90 ft, concentration 1 hr. Spawns 1 Fire Elemental
+  // (CR 5) with HP 102, Touch +6 2d6+3 fire × 2 via Multiattack.
+  // Priority: highest of the 3 new spells (single powerful creature > pack).
+  if (!plan.action && self.actions.some(a => a.name === 'Conjure Elemental')) {
+    if (shouldCastConjureElemental(self, battlefield)) {
+      const action = self.actions.find(a => a.name === 'Conjure Elemental')!;
+      plan.action = {
+        type: 'summonSpell',
+        action,
+        targetId: self.id,
+        description: `${self.name} casts Conjure Elemental`,
+      };
+      plan.targetId = self.id;
+      plan.bonusAction = planBonusAction(self, self, battlefield);
+      return plan;
+    }
+  }
+
+  // --- Conjure Woodland Beings (4th-level, 4 Sprites, concentration) ---
+  // PHB p.228: action, 60 ft, concentration 1 hr. Spawns 4 Sprites
+  // (CR 1/4) with AC 15, HP 2, Shortbow +6 1 piercing + DC 10 CON poisoned.
+  // Priority: above Conjure Minor Elementals because of the ranged poison.
+  if (!plan.action && self.actions.some(a => a.name === 'Conjure Woodland Beings')) {
+    if (shouldCastConjureWoodlandBeings(self, battlefield)) {
+      const action = self.actions.find(a => a.name === 'Conjure Woodland Beings')!;
+      plan.action = {
+        type: 'summonSpell',
+        action,
+        targetId: self.id,
+        description: `${self.name} casts Conjure Woodland Beings`,
+      };
+      plan.targetId = self.id;
+      plan.bonusAction = planBonusAction(self, self, battlefield);
+      return plan;
+    }
+  }
+
+  // --- Conjure Minor Elementals (4th-level, 4 Mud Mephits, concentration) ---
+  // PHB p.226: action, 90 ft, concentration 1 hr. Spawns 4 Mud Mephits
+  // (CR 1/4) with AC 11, HP 27, Fists +3 1d6+1 bludgeoning.
+  if (!plan.action && self.actions.some(a => a.name === 'Conjure Minor Elementals')) {
+    if (shouldCastConjureMinorElementals(self, battlefield)) {
+      const action = self.actions.find(a => a.name === 'Conjure Minor Elementals')!;
+      plan.action = {
+        type: 'summonSpell',
+        action,
+        targetId: self.id,
+        description: `${self.name} casts Conjure Minor Elementals`,
       };
       plan.targetId = self.id;
       plan.bonusAction = planBonusAction(self, self, battlefield);
