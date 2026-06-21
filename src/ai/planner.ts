@@ -11,9 +11,9 @@ import {
   shouldRage, activateRagePlan, shouldSecondWind, secondWindPlan,
   shouldLayOnHands, layOnHandsPlan, bardicInspirationTarget, bardicInspirationPlan,
   shouldCastHex, hexPlan,
-  shouldCastCureWounds, spellHealPlan,
 } from './resources';
 import { shouldCast as shouldCastHW } from '../spells/healing_word';
+import { shouldCast as shouldCastCW } from '../spells/cure_wounds';
 import { shouldCast as shouldCastFaerieFire } from '../spells/faerie_fire';
 import { shouldCast as shouldCastBless } from '../spells/bless';
 import { shouldCast as shouldCastMageArmor } from '../spells/mage_armor';
@@ -890,9 +890,15 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
   // Reviving a downed ally or saving a critical ally takes precedence over attacking.
   // Only fires when the caster has 'Cure Wounds' in their actions AND a slot available.
   if (self.actions.some(a => a.name === 'Cure Wounds')) {
-    const cwTarget = shouldCastCureWounds(self, battlefield);
+    const cwTarget = shouldCastCW(self, battlefield);
     if (cwTarget) {
-      plan.action = spellHealPlan(self, cwTarget.id, false);
+      const cwAction = self.actions.find(a => a.name === 'Cure Wounds') ?? null;
+      plan.action = {
+        type: 'cureWounds',
+        action: cwAction,
+        targetId: cwTarget.id,
+        description: `${self.name} casts Cure Wounds on ${cwTarget.name}`,
+      };
       plan.targetId = cwTarget.id;
       // Movement: move toward the heal target if needed (Cure Wounds is touch range)
       const dist = chebyshev3D(self.pos, cwTarget.pos) * 5;

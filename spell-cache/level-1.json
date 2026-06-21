@@ -42,7 +42,7 @@
       "inScope": true,
       "otherSources": [],
       "classes": [],
-      "effect": "utility · 1d6 · Self · timed",
+      "effect": "utility \u00b7 1d6 \u00b7 Self \u00b7 timed",
       "meta": {
         "time": "1 reaction",
         "range": "Self",
@@ -78,7 +78,7 @@
         "Wizard",
         "Artificer"
       ],
-      "effect": "utility · 30 ft · timed",
+      "effect": "utility \u00b7 30 ft \u00b7 timed",
       "meta": {
         "time": "1 min",
         "range": "30 ft",
@@ -112,7 +112,7 @@
         "Druid",
         "Ranger"
       ],
-      "effect": "WISDOM save · 30 ft · timed",
+      "effect": "WISDOM save \u00b7 30 ft \u00b7 timed",
       "meta": {
         "time": "1 action",
         "range": "30 ft",
@@ -144,7 +144,7 @@
       "classes": [
         "Warlock"
       ],
-      "effect": "utility · Self · timed",
+      "effect": "utility \u00b7 Self \u00b7 timed",
       "meta": {
         "time": "1 action",
         "range": "Self",
@@ -176,7 +176,7 @@
       "classes": [
         "Warlock"
       ],
-      "effect": "STRENGTH save · 2d6 necrotic · radius 10 ft · Instantaneous",
+      "effect": "STRENGTH save \u00b7 2d6 necrotic \u00b7 radius 10 ft \u00b7 Instantaneous",
       "meta": {
         "time": "1 action",
         "range": "radius 10 ft",
@@ -211,7 +211,7 @@
         "Bard",
         "Cleric"
       ],
-      "effect": "CHARISMA save · 30 ft · timed",
+      "effect": "CHARISMA save \u00b7 30 ft \u00b7 timed",
       "meta": {
         "time": "1 action",
         "range": "30 ft",
@@ -235,7 +235,7 @@
       "inScope": true,
       "otherSources": [],
       "classes": [],
-      "effect": "utility · Touch · timed",
+      "effect": "utility \u00b7 Touch \u00b7 timed",
       "meta": {
         "time": "1 action",
         "range": "Touch",
@@ -268,7 +268,7 @@
         "Cleric",
         "Paladin"
       ],
-      "effect": "utility · 30 ft · timed",
+      "effect": "utility \u00b7 30 ft \u00b7 timed",
       "meta": {
         "time": "1 action",
         "range": "30 ft",
@@ -301,7 +301,7 @@
         "Sorcerer",
         "Wizard"
       ],
-      "effect": "DEXTERITY save · 3d6 fire · cone 15 ft · Instantaneous",
+      "effect": "DEXTERITY save \u00b7 3d6 fire \u00b7 cone 15 ft \u00b7 Instantaneous",
       "meta": {
         "time": "1 action",
         "range": "cone 15 ft",
@@ -327,7 +327,7 @@
       "inScope": true,
       "otherSources": [],
       "classes": [],
-      "effect": "DEXTERITY save · 3d8 bludgeoning · 60 ft · Instantaneous",
+      "effect": "DEXTERITY save \u00b7 3d8 bludgeoning \u00b7 60 ft \u00b7 Instantaneous",
       "meta": {
         "time": "1 action",
         "range": "60 ft",
@@ -353,7 +353,7 @@
       "inScope": true,
       "otherSources": [],
       "classes": [],
-      "effect": "WISDOM save · 60 ft · timed",
+      "effect": "WISDOM save \u00b7 60 ft \u00b7 timed",
       "meta": {
         "time": "1 action",
         "range": "60 ft",
@@ -377,7 +377,7 @@
       "inScope": true,
       "otherSources": [],
       "classes": [],
-      "effect": "utility · Touch · Instantaneous",
+      "effect": "utility \u00b7 Touch \u00b7 Instantaneous",
       "meta": {
         "time": "1 hour",
         "range": "Touch",
@@ -401,7 +401,7 @@
       "inScope": true,
       "otherSources": [],
       "classes": [],
-      "effect": "ranged spell attack · 120 ft · Instantaneous",
+      "effect": "ranged spell attack \u00b7 120 ft \u00b7 Instantaneous",
       "meta": {
         "time": "1 action",
         "range": "120 ft",
@@ -437,7 +437,7 @@
         "Warlock",
         "Wizard"
       ],
-      "effect": "WISDOM save · 30 ft · timed",
+      "effect": "WISDOM save \u00b7 30 ft \u00b7 timed",
       "meta": {
         "time": "1 action",
         "range": "30 ft",
@@ -470,7 +470,7 @@
         "Sorcerer",
         "Wizard"
       ],
-      "effect": "ranged spell attack · 3d8 acid + ? cold + ? fire + ? lightning + ? poison + ? thunder · 90 ft · Instantaneous",
+      "effect": "ranged spell attack \u00b7 3d8 acid + ? cold + ? fire + ? lightning + ? poison + ? thunder \u00b7 90 ft \u00b7 Instantaneous",
       "meta": {
         "time": "1 action",
         "range": "90 ft",
@@ -510,7 +510,7 @@
         "Sorcerer",
         "Wizard"
       ],
-      "effect": "utility · cone 15 ft · timed",
+      "effect": "utility \u00b7 cone 15 ft \u00b7 timed",
       "meta": {
         "time": "1 action",
         "range": "cone 15 ft",
@@ -543,7 +543,7 @@
         "Cleric",
         "Paladin"
       ],
-      "effect": "WISDOM save · 60 ft · timed",
+      "effect": "WISDOM save \u00b7 60 ft \u00b7 timed",
       "meta": {
         "time": "1 action",
         "range": "60 ft",
@@ -575,7 +575,7 @@
       "classes": [
         "Paladin"
       ],
-      "effect": "WISDOM save · 30 ft · timed",
+      "effect": "WISDOM save \u00b7 30 ft \u00b7 timed",
       "meta": {
         "time": "1 bonus action",
         "range": "30 ft",
@@ -610,7 +610,7 @@
         "Warlock",
         "Wizard"
       ],
-      "effect": "utility · Self · timed",
+      "effect": "utility \u00b7 Self \u00b7 timed",
       "meta": {
         "time": "1 action",
         "range": "Self",
@@ -643,7 +643,7 @@
         "Cleric",
         "Druid"
       ],
-      "effect": "utility · 30 ft · Instantaneous",
+      "effect": "utility \u00b7 30 ft \u00b7 Instantaneous",
       "meta": {
         "time": "1 action",
         "range": "30 ft",
@@ -662,8 +662,8 @@
       "page": 230,
       "level": 1,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "cure_wounds.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -680,7 +680,7 @@
         "Ranger",
         "Artificer"
       ],
-      "effect": "utility · Touch · Instantaneous",
+      "effect": "utility \u00b7 Touch \u00b7 Instantaneous",
       "meta": {
         "time": "1 action",
         "range": "Touch",
@@ -713,7 +713,7 @@
         "Cleric",
         "Paladin"
       ],
-      "effect": "utility · Self · timed",
+      "effect": "utility \u00b7 Self \u00b7 timed",
       "meta": {
         "time": "1 action",
         "range": "Self",
@@ -752,7 +752,7 @@
         "Wizard",
         "Artificer"
       ],
-      "effect": "utility · Self · timed",
+      "effect": "utility \u00b7 Self \u00b7 timed",
       "meta": {
         "time": "1 action",
         "range": "Self",
@@ -787,7 +787,7 @@
         "Paladin",
         "Ranger"
       ],
-      "effect": "utility · Self · timed",
+      "effect": "utility \u00b7 Self \u00b7 timed",
       "meta": {
         "time": "1 action",
         "range": "Self",
@@ -822,7 +822,7 @@
         "Wizard",
         "Artificer"
       ],
-      "effect": "utility · Self · timed",
+      "effect": "utility \u00b7 Self \u00b7 timed",
       "meta": {
         "time": "1 action",
         "range": "Self",
@@ -854,7 +854,7 @@
       "classes": [
         "Bard"
       ],
-      "effect": "WISDOM save · 3d6 psychic · 60 ft · Instantaneous",
+      "effect": "WISDOM save \u00b7 3d6 psychic \u00b7 60 ft \u00b7 Instantaneous",
       "meta": {
         "time": "1 action",
         "range": "60 ft",
@@ -885,7 +885,7 @@
         "Wizard",
         "Warlock"
       ],
-      "effect": "utility · Touch · timed",
+      "effect": "utility \u00b7 Touch \u00b7 timed",
       "meta": {
         "time": "1 min",
         "range": "Touch",
@@ -917,7 +917,7 @@
       "classes": [
         "Paladin"
       ],
-      "effect": "utility · 1d4 radiant · Self · timed",
+      "effect": "utility \u00b7 1d4 radiant \u00b7 Self \u00b7 timed",
       "meta": {
         "time": "1 bonus action",
         "range": "Self",
@@ -945,7 +945,7 @@
       "classes": [
         "Paladin"
       ],
-      "effect": "utility · 2d8 radiant + 1d8 · Self · Instantaneous",
+      "effect": "utility \u00b7 2d8 radiant + 1d8 \u00b7 Self \u00b7 Instantaneous",
       "meta": {
         "time": "1 bonus action",
         "range": "Self",
@@ -972,7 +972,7 @@
       "inScope": true,
       "otherSources": [],
       "classes": [],
-      "effect": "DEXTERITY save · 1d6 bludgeoning · 10 ft · Instantaneous",
+      "effect": "DEXTERITY save \u00b7 1d6 bludgeoning \u00b7 10 ft \u00b7 Instantaneous",
       "meta": {
         "time": "1 action",
         "range": "10 ft",
@@ -1006,7 +1006,7 @@
       "classes": [
         "Ranger"
       ],
-      "effect": "STRENGTH save · Self · timed",
+      "effect": "STRENGTH save \u00b7 Self \u00b7 timed",
       "meta": {
         "time": "1 bonus action",
         "range": "Self",
@@ -1038,7 +1038,7 @@
       "classes": [
         "Druid"
       ],
-      "effect": "STRENGTH save · 90 ft · timed",
+      "effect": "STRENGTH save \u00b7 90 ft \u00b7 timed",
       "meta": {
         "time": "1 action",
         "range": "90 ft",
@@ -1073,7 +1073,7 @@
         "Wizard",
         "Artificer"
       ],
-      "effect": "utility · Self · timed",
+      "effect": "utility \u00b7 Self \u00b7 timed",
       "meta": {
         "time": "1 bonus action",
         "range": "Self",
@@ -1107,7 +1107,7 @@
         "Druid",
         "Artificer"
       ],
-      "effect": "DEXTERITY save · 60 ft · timed",
+      "effect": "DEXTERITY save \u00b7 60 ft \u00b7 timed",
       "meta": {
         "time": "1 action",
         "range": "60 ft",
@@ -1141,7 +1141,7 @@
         "Wizard",
         "Artificer"
       ],
-      "effect": "utility · Self · timed",
+      "effect": "utility \u00b7 Self \u00b7 timed",
       "meta": {
         "time": "1 action",
         "range": "Self",
@@ -1176,7 +1176,7 @@
         "Wizard",
         "Artificer"
       ],
-      "effect": "utility · 60 ft · timed",
+      "effect": "utility \u00b7 60 ft \u00b7 timed",
       "meta": {
         "time": "1 reaction",
         "range": "60 ft",
@@ -1208,7 +1208,7 @@
       "classes": [
         "Wizard"
       ],
-      "effect": "utility · 10 ft · Instantaneous",
+      "effect": "utility \u00b7 10 ft \u00b7 Instantaneous",
       "meta": {
         "time": "1 hour",
         "range": "10 ft",
@@ -1243,7 +1243,7 @@
         "Sorcerer",
         "Wizard"
       ],
-      "effect": "utility · 120 ft · timed",
+      "effect": "utility \u00b7 120 ft \u00b7 timed",
       "meta": {
         "time": "1 action",
         "range": "120 ft",
@@ -1269,7 +1269,7 @@
       "classes": [
         "Wizard"
       ],
-      "effect": "CONSTITUTION save · 2d8 cold · cone 15 ft · Instantaneous",
+      "effect": "CONSTITUTION save \u00b7 2d8 cold \u00b7 cone 15 ft \u00b7 Instantaneous",
       "meta": {
         "time": "1 action",
         "range": "cone 15 ft",
@@ -1295,7 +1295,7 @@
       "inScope": true,
       "otherSources": [],
       "classes": [],
-      "effect": "utility · Touch · timed",
+      "effect": "utility \u00b7 Touch \u00b7 timed",
       "meta": {
         "time": "1 min",
         "range": "Touch",
@@ -1328,7 +1328,7 @@
         "Druid",
         "Ranger"
       ],
-      "effect": "utility · Touch · Instantaneous",
+      "effect": "utility \u00b7 Touch \u00b7 Instantaneous",
       "meta": {
         "time": "1 action",
         "range": "Touch",
@@ -1361,7 +1361,7 @@
         "Wizard",
         "Artificer"
       ],
-      "effect": "DEXTERITY save · 60 ft · timed",
+      "effect": "DEXTERITY save \u00b7 60 ft \u00b7 timed",
       "meta": {
         "time": "1 action",
         "range": "60 ft",
@@ -1393,7 +1393,7 @@
       "classes": [
         "Cleric"
       ],
-      "effect": "ranged spell attack · 4d6 radiant · 120 ft · timed",
+      "effect": "ranged spell attack \u00b7 4d6 radiant \u00b7 120 ft \u00b7 timed",
       "meta": {
         "time": "1 action",
         "range": "120 ft",
@@ -1427,7 +1427,7 @@
       "classes": [
         "Ranger"
       ],
-      "effect": "DEXTERITY save · 1d10 piercing · Self · timed",
+      "effect": "DEXTERITY save \u00b7 1d10 piercing \u00b7 Self \u00b7 timed",
       "meta": {
         "time": "1 bonus action",
         "range": "Self",
@@ -1463,7 +1463,7 @@
         "Cleric",
         "Druid"
       ],
-      "effect": "utility · 60 ft · Instantaneous",
+      "effect": "utility \u00b7 60 ft \u00b7 Instantaneous",
       "meta": {
         "time": "1 bonus action",
         "range": "60 ft",
@@ -1495,7 +1495,7 @@
       "classes": [
         "Warlock"
       ],
-      "effect": "DEXTERITY save · 2d10 fire · 60 ft · Instantaneous",
+      "effect": "DEXTERITY save \u00b7 2d10 fire \u00b7 60 ft \u00b7 Instantaneous",
       "meta": {
         "time": "1 reaction",
         "range": "60 ft",
@@ -1530,7 +1530,7 @@
         "Bard",
         "Paladin"
       ],
-      "effect": "utility · Touch · timed",
+      "effect": "utility \u00b7 Touch \u00b7 timed",
       "meta": {
         "time": "1 action",
         "range": "Touch",
@@ -1562,7 +1562,7 @@
       "classes": [
         "Warlock"
       ],
-      "effect": "utility · 1d6 necrotic · 90 ft · timed",
+      "effect": "utility \u00b7 1d6 necrotic \u00b7 90 ft \u00b7 timed",
       "meta": {
         "time": "1 bonus action",
         "range": "90 ft",
@@ -1596,7 +1596,7 @@
       "classes": [
         "Ranger"
       ],
-      "effect": "utility · 1d6 · 90 ft · timed",
+      "effect": "utility \u00b7 1d6 \u00b7 90 ft \u00b7 timed",
       "meta": {
         "time": "1 bonus action",
         "range": "90 ft",
@@ -1628,7 +1628,7 @@
         }
       ],
       "classes": [],
-      "effect": "ranged spell attack · 1d10 cold + 2d6 piercing · 60 ft · Instantaneous",
+      "effect": "ranged spell attack \u00b7 1d10 cold + 2d6 piercing \u00b7 60 ft \u00b7 Instantaneous",
       "meta": {
         "time": "1 action",
         "range": "60 ft",
@@ -1665,7 +1665,7 @@
         "Wizard",
         "Artificer"
       ],
-      "effect": "utility · Touch · Instantaneous",
+      "effect": "utility \u00b7 Touch \u00b7 Instantaneous",
       "meta": {
         "time": "1 min",
         "range": "Touch",
@@ -1699,7 +1699,7 @@
         "Warlock",
         "Wizard"
       ],
-      "effect": "utility · Touch · timed",
+      "effect": "utility \u00b7 Touch \u00b7 timed",
       "meta": {
         "time": "1 min",
         "range": "Touch",
@@ -1731,7 +1731,7 @@
       "classes": [
         "Cleric"
       ],
-      "effect": "melee spell attack · 3d10 necrotic · Touch · Instantaneous",
+      "effect": "melee spell attack \u00b7 3d10 necrotic \u00b7 Touch \u00b7 Instantaneous",
       "meta": {
         "time": "1 action",
         "range": "Touch",
@@ -1759,7 +1759,7 @@
       "classes": [
         "Wizard"
       ],
-      "effect": "ranged spell attack · 120 ft · Instantaneous",
+      "effect": "ranged spell attack \u00b7 120 ft \u00b7 Instantaneous",
       "meta": {
         "time": "1 action",
         "range": "120 ft",
@@ -1795,7 +1795,7 @@
         "Wizard",
         "Artificer"
       ],
-      "effect": "utility · Touch · timed",
+      "effect": "utility \u00b7 Touch \u00b7 timed",
       "meta": {
         "time": "1 action",
         "range": "Touch",
@@ -1831,7 +1831,7 @@
         "Wizard",
         "Artificer"
       ],
-      "effect": "utility · Touch · timed",
+      "effect": "utility \u00b7 Touch \u00b7 timed",
       "meta": {
         "time": "1 action",
         "range": "Touch",
@@ -1864,7 +1864,7 @@
         "Sorcerer",
         "Wizard"
       ],
-      "effect": "utility · Touch · timed",
+      "effect": "utility \u00b7 Touch \u00b7 timed",
       "meta": {
         "time": "1 action",
         "range": "Touch",
@@ -1897,7 +1897,7 @@
         "Sorcerer",
         "Wizard"
       ],
-      "effect": "utility · 120 ft · Instantaneous",
+      "effect": "utility \u00b7 120 ft \u00b7 Instantaneous",
       "meta": {
         "time": "1 action",
         "range": "120 ft",
@@ -1921,7 +1921,7 @@
       "inScope": true,
       "otherSources": [],
       "classes": [],
-      "effect": "CONSTITUTION save · 2d8 force · 60 ft · timed",
+      "effect": "CONSTITUTION save \u00b7 2d8 force \u00b7 60 ft \u00b7 timed",
       "meta": {
         "time": "1 action",
         "range": "60 ft",
@@ -1958,7 +1958,7 @@
         "Warlock",
         "Wizard"
       ],
-      "effect": "utility · Touch · timed",
+      "effect": "utility \u00b7 Touch \u00b7 timed",
       "meta": {
         "time": "1 action",
         "range": "Touch",
@@ -1993,7 +1993,7 @@
         "Paladin",
         "Artificer"
       ],
-      "effect": "utility · 10 ft · Instantaneous",
+      "effect": "utility \u00b7 10 ft \u00b7 Instantaneous",
       "meta": {
         "time": "1 action",
         "range": "10 ft",
@@ -2026,7 +2026,7 @@
         "Sorcerer",
         "Wizard"
       ],
-      "effect": "ranged spell attack · 2d8 poison · 60 ft · Instantaneous",
+      "effect": "ranged spell attack \u00b7 2d8 poison \u00b7 60 ft \u00b7 Instantaneous",
       "meta": {
         "time": "1 action",
         "range": "60 ft",
@@ -2061,7 +2061,7 @@
         "Cleric",
         "Artificer"
       ],
-      "effect": "WISDOM save · 30 ft · timed",
+      "effect": "WISDOM save \u00b7 30 ft \u00b7 timed",
       "meta": {
         "time": "1 bonus action",
         "range": "30 ft",
@@ -2093,7 +2093,7 @@
       "classes": [
         "Paladin"
       ],
-      "effect": "CONSTITUTION save · 1d6 fire · Self · timed",
+      "effect": "CONSTITUTION save \u00b7 1d6 fire \u00b7 Self \u00b7 timed",
       "meta": {
         "time": "1 bonus action",
         "range": "Self",
@@ -2128,7 +2128,7 @@
         "Sorcerer",
         "Wizard"
       ],
-      "effect": "utility · Self · timed",
+      "effect": "utility \u00b7 Self \u00b7 timed",
       "meta": {
         "time": "1 reaction",
         "range": "Self",
@@ -2161,7 +2161,7 @@
         "Cleric",
         "Paladin"
       ],
-      "effect": "utility · 60 ft · timed",
+      "effect": "utility \u00b7 60 ft \u00b7 timed",
       "meta": {
         "time": "1 bonus action",
         "range": "60 ft",
@@ -2195,7 +2195,7 @@
         "Sorcerer",
         "Wizard"
       ],
-      "effect": "utility · 60 ft · timed",
+      "effect": "utility \u00b7 60 ft \u00b7 timed",
       "meta": {
         "time": "1 action",
         "range": "60 ft",
@@ -2223,7 +2223,7 @@
         "Sorcerer",
         "Wizard"
       ],
-      "effect": "utility · 60 ft · Instantaneous",
+      "effect": "utility \u00b7 60 ft \u00b7 Instantaneous",
       "meta": {
         "time": "1 reaction",
         "range": "60 ft",
@@ -2257,7 +2257,7 @@
         "Sorcerer",
         "Wizard"
       ],
-      "effect": "utility · 90 ft · timed",
+      "effect": "utility \u00b7 90 ft \u00b7 timed",
       "meta": {
         "time": "1 action",
         "range": "90 ft",
@@ -2281,7 +2281,7 @@
       "inScope": true,
       "otherSources": [],
       "classes": [],
-      "effect": "DEXTERITY save · Touch · timed",
+      "effect": "DEXTERITY save \u00b7 Touch \u00b7 timed",
       "meta": {
         "time": "1 min",
         "range": "Touch",
@@ -2315,7 +2315,7 @@
         "Druid",
         "Ranger"
       ],
-      "effect": "utility · Self · timed",
+      "effect": "utility \u00b7 Self \u00b7 timed",
       "meta": {
         "time": "1 action",
         "range": "Self",
@@ -2342,7 +2342,7 @@
         "Sorcerer",
         "Wizard"
       ],
-      "effect": "ranged spell attack · 2d10 radiant · 60 ft · Instantaneous",
+      "effect": "ranged spell attack \u00b7 2d10 radiant \u00b7 60 ft \u00b7 Instantaneous",
       "meta": {
         "time": "1 action",
         "range": "60 ft",
@@ -2370,7 +2370,7 @@
       "classes": [
         "Artificer"
       ],
-      "effect": "DEXTERITY save · 2d4 acid · line 30 ft · timed",
+      "effect": "DEXTERITY save \u00b7 2d4 acid \u00b7 line 30 ft \u00b7 timed",
       "meta": {
         "time": "1 action",
         "range": "line 30 ft",
@@ -2405,7 +2405,7 @@
         "Bard",
         "Wizard"
       ],
-      "effect": "WISDOM save · 30 ft · timed",
+      "effect": "WISDOM save \u00b7 30 ft \u00b7 timed",
       "meta": {
         "time": "1 action",
         "range": "30 ft",
@@ -2437,7 +2437,7 @@
       "classes": [
         "Wizard"
       ],
-      "effect": "utility · 30 ft · timed",
+      "effect": "utility \u00b7 30 ft \u00b7 timed",
       "meta": {
         "time": "1 action",
         "range": "30 ft",
@@ -2469,7 +2469,7 @@
       "classes": [
         "Paladin"
       ],
-      "effect": "STRENGTH save · 2d6 thunder · Self · timed",
+      "effect": "STRENGTH save \u00b7 2d6 thunder \u00b7 Self \u00b7 timed",
       "meta": {
         "time": "1 bonus action",
         "range": "Self",
@@ -2506,7 +2506,7 @@
         "Sorcerer",
         "Wizard"
       ],
-      "effect": "CONSTITUTION save · 2d8 thunder · cube · Instantaneous",
+      "effect": "CONSTITUTION save \u00b7 2d8 thunder \u00b7 cube \u00b7 Instantaneous",
       "meta": {
         "time": "1 action",
         "range": "cube",
@@ -2542,7 +2542,7 @@
         "Warlock",
         "Wizard"
       ],
-      "effect": "utility · 60 ft · timed",
+      "effect": "utility \u00b7 60 ft \u00b7 timed",
       "meta": {
         "time": "1 action",
         "range": "60 ft",
@@ -2571,7 +2571,7 @@
         "Paladin",
         "Wizard"
       ],
-      "effect": "CONSTITUTION save · 60 ft · Instantaneous",
+      "effect": "CONSTITUTION save \u00b7 60 ft \u00b7 Instantaneous",
       "meta": {
         "time": "1 action",
         "range": "60 ft",
@@ -2605,7 +2605,7 @@
         "Warlock",
         "Wizard"
       ],
-      "effect": "ranged spell attack · 1d12 lightning · 30 ft · timed",
+      "effect": "ranged spell attack \u00b7 1d12 lightning \u00b7 30 ft \u00b7 timed",
       "meta": {
         "time": "1 action",
         "range": "30 ft",
@@ -2639,7 +2639,7 @@
       "classes": [
         "Paladin"
       ],
-      "effect": "WISDOM save · 1d6 psychic · Self · timed",
+      "effect": "WISDOM save \u00b7 1d6 psychic \u00b7 Self \u00b7 timed",
       "meta": {
         "time": "1 bonus action",
         "range": "Self",
@@ -2665,7 +2665,7 @@
       "inScope": true,
       "otherSources": [],
       "classes": [],
-      "effect": "utility · Self · timed",
+      "effect": "utility \u00b7 Self \u00b7 timed",
       "meta": {
         "time": "1 bonus action",
         "range": "Self",

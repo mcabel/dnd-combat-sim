@@ -264,7 +264,7 @@ console.log('\n=== 4. planTurn — Cleric picks Cure Wounds over attacking ===\n
   const bf = makeBF([cleric, fighter, enemy]);
 
   const plan = planTurn(cleric, bf);
-  eq('Plan type is spellHeal when ally downed adjacent', plan.action?.type, 'spellHeal');
+  eq('Plan type is cureWounds when ally downed adjacent', plan.action?.type, 'cureWounds');
   eq('Plan targets the downed fighter', plan.action?.targetId, fighter.id);
 }
 
@@ -276,7 +276,7 @@ console.log('\n=== 4. planTurn — Cleric picks Cure Wounds over attacking ===\n
   const bf = makeBF([cleric, fighter]);
 
   const plan = planTurn(cleric, bf);
-  assert('Cleric attacks when no heal target', plan.action?.type !== 'spellHeal',
+  assert('Cleric attacks when no heal target', plan.action?.type !== 'cureWounds',
     `got ${plan.action?.type}`);
 }
 
@@ -297,7 +297,7 @@ console.log('\n=== 4. planTurn — Cleric picks Cure Wounds over attacking ===\n
 
   const plan = planTurn(cleric, bf);
   assert('Cure Wounds not planned for downed ally at 25ft (out of touch range)',
-    plan.action?.type !== 'spellHeal' || plan.action?.targetId !== fighter.id,
+    plan.action?.type !== 'cureWounds' || plan.action?.targetId !== fighter.id,
     `action: ${plan.action?.type}, target: ${plan.action?.targetId}`);
 }
 
@@ -409,8 +409,8 @@ console.log('\n=== 8. Edge cases ===\n');
   const bf = makeBF([cleric, fighter, enemy]);
 
   const plan = planTurn(cleric, bf);
-  assert('No spellHeal planned when slots exhausted',
-    plan.action?.type !== 'spellHeal' && plan.bonusAction?.type !== 'spellHeal'
+  assert('No heal spell planned when slots exhausted',
+    plan.action?.type !== 'cureWounds' && plan.bonusAction?.type !== 'cureWounds'
     && plan.bonusAction?.type !== 'healingWord',
     `action: ${plan.action?.type}, bonus: ${plan.bonusAction?.type}`);
 }

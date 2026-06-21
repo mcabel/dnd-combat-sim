@@ -1358,7 +1358,8 @@ export interface PlannedAction {
     | 'attack' | 'cast' | 'dash' | 'disengage' | 'dodge'
     | 'help' | 'hide' | 'ready' | 'shove' | 'grapple' | 'escapeGrapple'
     | 'secondWind' | 'rage' | 'layOnHands' | 'bardicInspiration'
-    | 'spellHeal'    // Cure Wounds (action) or Healing Word (bonus action)
+    | 'spellHeal'    // legacy — no longer dispatched; retained for test compatibility
+    | 'cureWounds'  // Cure Wounds — action, 1d8+mod heal per slot level, touch range (PHB p.230)
     | 'faerieFire'     // Faerie Fire AoE control (concentration)
     | 'bless'          // Bless up to 3 allies — +1d4 to attacks and saves (concentration)
     | 'entangle'       // Entangle AoE control — STR save or restrained (concentration)

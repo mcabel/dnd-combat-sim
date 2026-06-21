@@ -56,6 +56,7 @@ import {
   cleanupMarks as cleanupGuidingBoltMarks, consumeMark as consumeGuidingBoltMark,
 } from '../spells/guiding_bolt';
 import { execute as executeHealingWord } from '../spells/healing_word';
+import { execute as executeCureWounds } from '../spells/cure_wounds';
 import { rollDiceString as rollBoomingBladeDice } from '../spells/booming_blade';
 import { shouldCast as shouldCastAid, execute as executeAid } from '../spells/aid';
 import { shouldCast as shouldCastBarkskin, execute as executeBarkskin } from '../spells/barkskin';
@@ -2189,6 +2190,16 @@ function executePlannedAction(
       const hwTarget = plan.targetId ? bf.combatants.get(plan.targetId) ?? null : null;
       if (!hwTarget) break;
       executeHealingWord(actor, hwTarget, state);
+      break;
+    }
+
+    case 'cureWounds': {
+      // Cure Wounds — PHB p.230: action, touch range (5 ft), 1d8+WIS heal.
+      // No effect on undead or constructs (PHB p.230).
+      // Slot consumed and heal applied inside execute().
+      const cwTarget = plan.targetId ? bf.combatants.get(plan.targetId) ?? null : null;
+      if (!cwTarget) break;
+      executeCureWounds(actor, cwTarget, state);
       break;
     }
 

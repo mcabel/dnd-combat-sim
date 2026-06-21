@@ -11,13 +11,13 @@ Core Engine
 
 ## ACTIVE OBJECTIVE
 
-Implement remaining PHB 1st-level combat spell modules.
+Implement Cure Wounds as a dedicated spell module, migrating it away from the legacy `'spellHeal'` / `spellHealPlan` path.
 
 ---
 
 ## CURRENT PHASE
 
-Tier 1 PHB combat spell coverage — 1st-level spells for all classes represented in pc_stat_blocks_lv1.json.
+Tier 1 PHB combat spell coverage — 1st-level spells.
 
 ---
 
@@ -25,29 +25,22 @@ Tier 1 PHB combat spell coverage — 1st-level spells for all classes represente
 
 Objective is complete when:
 
-* [ ] Shield implemented (Wizard/Sorcerer reaction, +5 AC, no concentration)
-* [ ] Guiding Bolt implemented (Cleric ranged spell attack, 4d6 radiant, next attack has advantage)
-* [ ] Healing Word implemented (Bard/Cleric bonus action heal 1d4+mod)
-* [ ] All implemented spells have dedicated test suites passing 0 failures
-* [ ] Full suite baseline maintained (0 persistent failures)
-
----
-
-## CURRENT PRIORITIES
-
-1. Shield (Wizard/Sorcerer reaction — +5 AC until next turn, no concentration)
-2. Guiding Bolt (Cleric — ranged spell attack, 4d6 radiant, grants advantage on next hit)
-3. Healing Word (Bard/Cleric — bonus action, 1d4+mod heal, 60 ft range)
+* [ ] `src/spells/cure_wounds.ts` exists with `shouldCast` / `execute` / `metadata` pattern
+* [ ] `'cureWounds'` added to `PlannedAction` type union in `src/types/core.ts`
+* [ ] `case 'cureWounds':` wired in `src/engine/combat.ts`
+* [ ] `src/ai/planner.ts` uses `shouldCast` from `cure_wounds.ts` (replaces `spellHealPlan` call for Cure Wounds)
+* [ ] `src/test/cure_wounds.test.ts` passes 0 failures
+* [ ] `healing_spells.test.ts` updated for any changed assertion types, passes 0 failures
+* [ ] Full baseline maintained (combat, engine, ai, resources, scenario — 0 persistent failures)
 
 ---
 
 ## ACTIVE CONSTRAINTS
 
-* Use testDataSpells/ as authoritative spell data source before implementing.
-* Reuse established spell module architecture (shouldCast / execute / metadata pattern).
+* Use `testDataSpells/spells-phb.json` as authoritative data (Cure Wounds, PHB p.230).
+* Follow `healing_word.ts` as the implementation template.
+* `spellHealPlan` in `resources.ts` is retained but will no longer be called for Cure Wounds after this task.
 * Do NOT touch sheet routes, leveler.ts, or builder.ts.
-* Spell DB key format: lowercase with spaces ('shield', 'guiding bolt').
-* All inline enemy factories in tests must use loadBestiaryJson + monsterToCombatant pattern.
 * PAT provided verbally at session start — do not paste in files.
 
 ---
