@@ -233,6 +233,24 @@ export interface ActiveEffect {
     terrainDifficulty?: boolean;                          // if true, this terrain_zone marks cells as difficult terrain (PHB p.182)
   };
   sourceIsConcentration: boolean;     // if true, removed when caster's concentration ends
+  /**
+   * PHB p.254 (Invisibility) / p.254 (Greater Invisibility):
+   * "The spell ends for a target that attacks or casts a spell."
+   *
+   * If true, this effect is automatically removed from the target when
+   * the target makes an attack roll or casts a spell. Set by the
+   * Invisibility spell (PHB p.254) but NOT by Greater Invisibility
+   * (PHB p.254: Greater Invisibility has no ends-on-attack clause —
+   * the caster stays invisible for the full duration regardless of
+   * their actions).
+   *
+   * Implementation: combat.ts resolveAttack checks the ATTACKER's
+   * activeEffects for any effect with breaksOnAttackOrCast=true and
+   * removes it AFTER the attack resolves. The spell-casting path
+   * (case 'summonSpell' / case 'genericSpell' in executePlannedAction)
+   * does the same for the caster.
+   */
+  breaksOnAttackOrCast?: boolean;
 }
 
 // ---- Action -------------------------------------------------
@@ -535,6 +553,21 @@ export interface Combatant {
   // Populated by class features (Rage → B/P/S), racial traits, spells (Stoneskin), etc.
   // Use addResistance() / removeResistance() helpers to avoid duplicates.
   resistances: DamageType[];
+
+  // Damage immunities (PHB p.197): incoming damage of listed types is reduced to 0.
+  // Populated by racial traits (e.g. Tiefling fire resistance is a resistance, not
+  // immunity; construct undead are typically immune to poison), monster stat blocks
+  // (e.g. Fire Elemental immune to fire, Couatl immune to radiant/psychic), and
+  // spells/items (e.g. Potion of Fire Resistance gives resistance, not immunity).
+  // Use addImmunity() / removeImmunity() helpers to avoid duplicates.
+  // Immunity takes precedence over resistance and vulnerability — an immune creature
+  // takes 0 damage regardless of any resistance/vulnerability entries.
+  //
+  // OPTIONAL: undefined is treated as "no immunities" (equivalent to []) for
+  // backwards compatibility with existing Combatant factories that pre-date the
+  // immunities field. New code should set this explicitly to [] when constructing
+  // a Combatant.
+  immunities?: DamageType[];
 
   // Bardic Inspiration die granted by a Bard (PHB p.54).
   // Die size (e.g. 6 for d6). Consumed on the next attack roll or saving throw.
@@ -1011,6 +1044,12 @@ export interface Combatant {
     count: number;
     damageType: DamageType;
     condition?: Condition;     // optional: applied to the target hit (conc-sourced)
+    /** Optional forced movement on hit (PHB p.282: Thunderous Smite pushes 10 ft).
+     *  The target is pushed directly away from the attacker by this many feet
+     *  (rounded to grid cells). Ignored on a miss. v1 does NOT model the
+     *  "Large or smaller" size restriction (PHB p.282) — the push applies to
+     *  any target on a hit. */
+    pushFt?: number;
   } | null;
 
   // ---- Mirror Image (PHB p.260) scratch field ----
@@ -1463,6 +1502,7 @@ export interface PlannedAction {
     | 'melfsAcidArrow'     // Melf's Acid Arrow — ranged spell attack, 4d4 acid + 2d4 delayed, 90 ft
     | 'mistyStep'          // Misty Step — BONUS ACTION, self teleport 30 ft, no concentration
     | 'invisibility'       // Invisibility — touch, grants invisible condition, concentration 1 hr
+    | 'greaterInvisibility' // Greater Invisibility — self, grants invisible condition (no ends-on-attack), concentration 1 min
     | 'gustOfWind'         // Gust of Wind — line 60 ft, STR save or pushed 15 ft, concentration 1 min
     | 'levitate'           // Levitate — 60 ft, CON save or restrained (v1), concentration 10 min
     | 'lesserRestoration'  // Lesser Restoration — touch, ends blinded/deafened/poisoned/paralyzed, no concentration

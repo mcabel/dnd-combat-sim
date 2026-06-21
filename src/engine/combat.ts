@@ -18,12 +18,13 @@ import {
   addResistance, removeResistance,
   parseDieSides, consumeBardicInspiration,
   teamHasNoAttackCapability, canDealDamage, makeImprovisedUnarmed, makeImprovisedWeapon,
-  effectiveSpeed, rollDie, abilityMod, proficiencyBonus
+  effectiveSpeed, rollDie, abilityMod, proficiencyBonus,
+  rollDiceString as rollBoomingBladeDice,
 } from './utils';
 import {
   chebyshev3D, distanceFt, euclideanDistFt, canReach, estimateMoveCostFt,
   opportunityAttackTriggered, selectOAAction,
-  livingEnemiesOf, livingAlliesOf, posKey
+  livingEnemiesOf, livingAlliesOf, posKey, pushAway
 } from './movement';
 import { planTurn, planLegendaryAction, shouldTakeOpportunityAttack } from '../ai/planner';
 import { shouldSmite, applyDivineSmite, tickRage, consumeSpellSlot } from '../ai/resources';
@@ -57,12 +58,20 @@ import {
 } from '../spells/guiding_bolt';
 import { execute as executeHealingWord } from '../spells/healing_word';
 import { execute as executeCureWounds } from '../spells/cure_wounds';
-import { rollDiceString as rollBoomingBladeDice } from '../spells/booming_blade';
+// rollDiceString (formerly rollBoomingBladeDice) now imported from ./utils above (TG-013)
 import { shouldCast as shouldCastAid, execute as executeAid } from '../spells/aid';
 import { shouldCast as shouldCastBarkskin, execute as executeBarkskin } from '../spells/barkskin';
 import { shouldCast as shouldCastBlur, execute as executeBlur } from '../spells/blur';
 import { shouldCast as shouldCastShadowOfMoil, execute as executeShadowOfMoil } from '../spells/shadow_of_moil';
 import { shouldCast as shouldCastBlindnessDeafness, execute as executeBlindnessDeafness } from '../spells/blindness_deafness';
+import {
+  shouldCast as shouldCastInvisibility,
+  execute as executeInvisibility,
+} from '../spells/invisibility';
+import {
+  shouldCast as shouldCastGreaterInvisibility,
+  execute as executeGreaterInvisibility,
+} from '../spells/greater_invisibility';
 import { shouldCast as shouldCastBrandingSmite, execute as executeBrandingSmite } from '../spells/branding_smite';
 import { shouldCast as shouldCastCalmEmotions, execute as executeCalmEmotions } from '../spells/calm_emotions';
 import { shouldCast as shouldCastCloudOfDaggers, execute as executeCloudOfDaggers } from '../spells/cloud_of_daggers';
@@ -98,10 +107,7 @@ import {
   shouldCast as shouldCastMistyStep,
   execute as executeMistyStep,
 } from '../spells/misty_step';
-import {
-  shouldCast as shouldCastInvisibility,
-  execute as executeInvisibility,
-} from '../spells/invisibility';
+// Invisibility imports moved up next to Greater Invisibility (Session 32)
 import {
   shouldCast as shouldCastGustOfWind,
   execute as executeGustOfWind,
@@ -1303,6 +1309,16 @@ export function resolveAttack(
           log(state, 'condition_add', attacker.id,
             `${target.name} is ${rider.condition.toUpperCase()} by ${rider.spellName}!`, target.id);
         }
+        // PHB p.282: Thunderous Smite pushes the target 10 ft away if Large or
+        // smaller. v1 ignores the size restriction and pushes any target on hit.
+        // The pushFt field is optional — only Thunderous Smite sets it currently.
+        if (rider.pushFt && rider.pushFt > 0) {
+          const oldPos: Vec3 = { ...target.pos };
+          pushAway(target, attacker.pos, rider.pushFt);
+          log(state, 'move', attacker.id,
+            `${target.name} is pushed ${rider.pushFt} ft away by ${rider.spellName} (${oldPos.x},${oldPos.y}) → (${target.pos.x},${target.pos.y})`,
+            target.id);
+        }
         attacker._nextHitRider = null;   // one-shot consumed
       }
     }
@@ -1489,6 +1505,44 @@ export function resolveAttack(
     applyCantripEffect(attacker, target, action.name, state);
     applyWardingBondRedirect(target, dealt, state);
     checkDeath(target, state);
+  }
+
+  // ── PHB p.254: "The spell ends for a target that attacks or casts a spell."
+  // Session 32: Invisibility ends on attack. Check the ATTACKER's activeEffects
+  // for any effect with breaksOnAttackOrCast=true and remove it AFTER the attack
+  // resolves (so the attack still gets invisible-advantage, but the invisibility
+  // ends immediately after). Greater Invisibility does NOT set this flag.
+  //
+  // We only break on attacks that involve an attack roll (melee/ranged/spell).
+  // Save-based spells (e.g., Sacred Flame) don't trigger the ends-on-attack
+  // clause per PHB p.254 ("attacks or casts a spell" — the "casts a spell" half
+  // is handled separately in the spell-casting path).
+  if (action.attackType === 'melee' || action.attackType === 'ranged' || action.attackType === 'spell') {
+    breakInvisibilityOnAction(attacker, state);
+  }
+}
+
+/**
+ * Remove any active effects on the combatant that have `breaksOnAttackOrCast: true`.
+ * Called from resolveAttack (for attacks) and executePlannedAction (for spell casts).
+ *
+ * PHB p.254 Invisibility: "The spell ends for a target that attacks or casts a spell."
+ * This implements the "attacks" half; the "casts a spell" half is handled by calling
+ * this function from the spell-casting path.
+ *
+ * Logs a condition_remove event for each effect removed.
+ */
+function breakInvisibilityOnAction(actor: Combatant, state: EngineState): void {
+  const breakingEffects = actor.activeEffects.filter(e => e.breaksOnAttackOrCast === true);
+  if (breakingEffects.length === 0) return;
+
+  for (const effect of breakingEffects) {
+    // Remove the effect's mechanical impact (condition, adv/disadv entries, etc.)
+    // via removeEffectById, which calls _undoEffect internally.
+    removeEffectById(actor.id, effect.id, state.battlefield);
+    log(state, 'condition_remove', actor.id,
+      `${actor.name}'s ${effect.spellName} ends (${actor.name} attacked or cast a spell)!`,
+      actor.id);
   }
 }
 
@@ -2445,6 +2499,15 @@ function executePlannedAction(
         ? invTarget
         : shouldCastInvisibility(actor, bf);
       if (liveTarget) executeInvisibility(actor, liveTarget, state);
+      break;
+    }
+
+    case 'greaterInvisibility': {
+      // Greater Invisibility — PHB p.254: action, self, concentration 1 min.
+      // Grants invisible condition. Does NOT end on attack/cast (unlike L2 Invisibility).
+      if (shouldCastGreaterInvisibility(actor, bf)) {
+        executeGreaterInvisibility(actor, actor, state);
+      }
       break;
     }
 
@@ -3822,6 +3885,28 @@ function executePlannedAction(
       }
       break;
     }
+  }
+
+  // ── PHB p.254: "The spell ends for a target that attacks or casts a spell."
+  // Session 32: Invisibility ends on spell cast. The "casts a spell" half.
+  // Triggered AFTER the spell executes (so any attack-roll spells like Firebolt
+  // or spell-attacks like Inflict Wounds would have already triggered the
+  // "attacks" half via resolveAttack — but calling here is idempotent: if the
+  // effect was already removed, the filter returns empty and we no-op).
+  //
+  // We use a deny-list of NON-spell action types. Anything not in this list
+  // is treated as a spell cast (or spell-like action) and triggers the break.
+  // The 'attack' case is handled separately by resolveAttack above (the
+  // "attacks" half of the clause) — including it here is harmless because
+  // breakInvisibilityOnAction is idempotent.
+  const NON_SPELL_ACTIONS = new Set([
+    'attack', 'dash', 'disengage', 'dodge', 'help', 'hide', 'ready',
+    'shove', 'grapple', 'escapeGrapple',
+    'secondWind', 'rage', 'layOnHands', 'bardicInspiration',
+    'move',  // movement-only actions don't break invisibility
+  ]);
+  if (!NON_SPELL_ACTIONS.has(plan.type)) {
+    breakInvisibilityOnAction(actor, state);
   }
 }
 

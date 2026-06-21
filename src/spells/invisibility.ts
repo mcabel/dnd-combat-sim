@@ -15,14 +15,13 @@
 //   - Duration: canon 1 hr concentration → v1: concentration is started,
 //     but NOT enforced (TG-002). The invisible condition persists until
 //     removeEffectsFromCaster() is called OR the target attacks/casts.
-//   - "Spell ends for a target that attacks or casts a spell": v1 does NOT
-//     model this end condition (no per-action hook to break invisibility
-//     when the invisible creature attacks/casts). Forward-compat TODO via
-//     the metadata flag `invisibilityEndsOnAttackV1Implemented: false`.
-//     In v1, the invisible condition persists for the entire combat (or
-//     until concentration breaks) regardless of the target's actions.
-//     This is a known v1 simplification — a creature could become invisible,
-//     attack with advantage, and STAY invisible for subsequent attacks.
+//   - "Spell ends for a target that attacks or casts a spell": NOW MODELLED
+//     (Session 32). The applySpellEffect call sets `breaksOnAttackOrCast: true`
+//     on the ActiveEffect. combat.ts resolveAttack checks the ATTACKER's
+//     activeEffects for this flag and removes the effect AFTER the attack
+//     resolves (so the attack still gets invisible-advantage, but the
+//     invisibility ends immediately after). The spell-casting path does
+//     the same when the invisible creature casts a spell.
 //   - Upcast: +1 target/slot-level NOT modelled — v1 always targets a
 //     single creature.
 //   - The invisible condition is already wired into attackAdvantageState
@@ -51,7 +50,7 @@ export const metadata = {
   rangeFt: 5,       // touch
   concentration: true,
   castingTime: 'action',
-  invisibilityEndsOnAttackV1Implemented: false,               // ends-on-attack NOT modelled
+  invisibilityEndsOnAttackV1Implemented: true,                // ends-on-attack NOW modelled (Session 32)
   invisibilityUpcastV1Implemented: false,                     // +1 target/slot-level NOT modelled
   invisibilityConcentrationEnforcementV1Implemented: false,   // see TG-002
 } as const;
@@ -175,6 +174,11 @@ export function execute(
     effectType: 'invisible',
     payload: {},
     sourceIsConcentration: true,
+    // PHB p.254: "The spell ends for a target that attacks or casts a spell."
+    // Session 32: now modelled — combat.ts resolveAttack + spell-casting path
+    // check for breaksOnAttackOrCast=true and remove the effect after the
+    // attack/spell resolves. Greater Invisibility does NOT set this flag.
+    breaksOnAttackOrCast: true,
   });
 
   emit(

@@ -211,12 +211,9 @@ export function createMudMephit(
     isUnconscious: false,
     advantages: [],
     vulnerabilities: [],
-    // Mud Mephit damage immunities: acid, poison (MM p.215)
-    // The Combatant type doesn't have a dedicated `immunities` array,
-    // so we model these via the `resistances` array which is treated
-    // as "always-half" by the engine. Future engine work may add a
-    // dedicated immunities field; for now, the trait tag above
-    // documents the immunity for any future consumer.
+    // Mud Mephit: immune to acid and poison damage (MM p.215).
+    // Enforced via applyDamageWithTempHP's immunity check (PHB p.197).
+    immunities: ['acid', 'poison'],
     resistances: [],
     bardicInspirationDie: null,
     wardingBond: null,

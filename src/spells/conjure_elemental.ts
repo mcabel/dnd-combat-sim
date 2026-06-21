@@ -242,11 +242,9 @@ export function createFireElemental(
     isUnconscious: false,
     advantages: [],
     vulnerabilities: [],
-    // Fire Elemental: immune to fire (MM p.125). The Combatant type uses
-    // `resistances` for "always-half" effects; true immunities should be a
-    // dedicated `immunities` array, which doesn't exist yet. For v1 we
-    // leave this empty — the trait tag above documents the immunity for
-    // any future consumer.
+    // Fire Elemental: immune to fire (MM p.125).
+    // Enforced via applyDamageWithTempHP's immunity check (PHB p.197).
+    immunities: ['fire'],
     resistances: [],
     bardicInspirationDie: null,
     wardingBond: null,

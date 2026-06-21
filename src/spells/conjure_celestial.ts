@@ -282,6 +282,9 @@ export function createCouatl(
     isUnconscious: false,
     advantages: [],
     vulnerabilities: [],
+    // Couatl: immune to radiant and psychic damage (MM p.43).
+    // Enforced via applyDamageWithTempHP's immunity check (PHB p.197).
+    immunities: ['radiant', 'psychic'],
     resistances: [],
     bardicInspirationDie: null,
     wardingBond: null,

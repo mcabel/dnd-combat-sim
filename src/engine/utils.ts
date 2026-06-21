@@ -974,6 +974,13 @@ export function applyDamageWithTempHP(
   amount: number,
   damageType?: DamageType | null,
 ): number {
+  // PHB p.197: immunity reduces damage to 0. Checked FIRST — before resistance,
+  // temp HP, or any other mitigation. An immune creature takes 0 damage regardless
+  // of any resistance/vulnerability entries (immunity overrides everything).
+  if (damageType != null && (target.immunities?.includes(damageType) ?? false)) {
+    return 0;
+  }
+
   // PHB p.197: resistance halves damage (rounded down) before temp HP absorption.
   // Warding Bond (PHB p.287) grants resistance to ALL damage types.
   // Blade Ward (PHB p.218) grants resistance to bludgeoning/piercing/slashing.
@@ -1010,6 +1017,51 @@ export function addResistance(c: Combatant, type: DamageType): void {
 /** Remove a damage-type resistance from a combatant (no-op if not present). */
 export function removeResistance(c: Combatant, type: DamageType): void {
   c.resistances = c.resistances.filter(r => r !== type);
+}
+
+// ---- Immunity helpers ---------------------------------------
+
+/**
+ * Grant a damage-type immunity to a combatant (idempotent — no duplicates).
+ * Immunity overrides resistance (PHB p.197): an immune creature takes 0 damage
+ * of that type regardless of any resistance/vulnerability entries.
+ */
+export function addImmunity(c: Combatant, type: DamageType): void {
+  if (!c.immunities) c.immunities = [];
+  if (!c.immunities.includes(type)) c.immunities.push(type);
+}
+
+/** Remove a damage-type immunity from a combatant (no-op if not present). */
+export function removeImmunity(c: Combatant, type: DamageType): void {
+  if (!c.immunities) return;
+  c.immunities = c.immunities.filter(r => r !== type);
+}
+
+// ---- Dice string parsing ------------------------------------
+
+/**
+ * Roll a dice expression like '1d8' or '2d8' and return the sum.
+ * Used by executeMove in combat.ts when the Booming Blade rider detonates,
+ * and by any other caller that needs to roll an arbitrary NdM expression.
+ *
+ * Returns 0 for unparseable inputs (e.g. 'invalid', '').
+ *
+ * Originally lived in `src/spells/booming_blade.ts` and was imported
+ * from there by combat.ts. Moved to utils.ts (TG-013 housekeeping) so
+ * the engine doesn't depend on a specific cantrip module for a generic
+ * helper. The original location re-exports this function for backwards
+ * compatibility.
+ */
+export function rollDiceString(expr: string): number {
+  const m = expr.match(/^(\d+)d(\d+)$/);
+  if (!m) return 0;
+  const count = parseInt(m[1], 10);
+  const sides = parseInt(m[2], 10);
+  let total = 0;
+  for (let i = 0; i < count; i++) {
+    total += Math.floor(Math.random() * sides) + 1;
+  }
+  return total;
 }
 
 // ---- Bardic Inspiration helpers ----------------------------

@@ -50,6 +50,7 @@ import { shouldCast as shouldCastHeatMetal } from '../spells/heat_metal';
 import { shouldCast as shouldCastMelfsAcidArrow } from '../spells/melf_s_acid_arrow';
 import { shouldCast as shouldCastMistyStep } from '../spells/misty_step';
 import { shouldCast as shouldCastInvisibility } from '../spells/invisibility';
+import { shouldCast as shouldCastGreaterInvisibility } from '../spells/greater_invisibility';
 import { shouldCast as shouldCastGustOfWind } from '../spells/gust_of_wind';
 import { shouldCast as shouldCastLevitate } from '../spells/levitate';
 import { shouldCast as shouldCastLesserRestoration } from '../spells/lesser_restoration';
@@ -1549,6 +1550,26 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
       };
       plan.targetId = invTarget.id;
       plan.bonusAction = planBonusAction(self, invTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 11Q-bis. GREATER INVISIBILITY (self, invisible, no ends-on-attack, L4) ---
+  // PHB p.254: action, self, concentration 1 min. Grants invisible condition.
+  // Unlike L2 Invisibility, does NOT end on attack/cast — the caster stays
+  // invisible for the full duration. Priority: above Invisibility (L4 > L2)
+  // because the no-ends-on-attack clause makes it strictly better for martial
+  // casters who want invisible-advantage on every attack.
+  if (!plan.action && self.actions.some(a => a.name === 'Greater Invisibility')) {
+    if (shouldCastGreaterInvisibility(self, battlefield)) {
+      plan.action = {
+        type: 'greaterInvisibility',
+        action: null,
+        targetId: self.id,
+        description: `${self.name} casts Greater Invisibility`,
+      };
+      plan.targetId = self.id;
+      plan.bonusAction = planBonusAction(self, self, battlefield);
       return plan;
     }
   }

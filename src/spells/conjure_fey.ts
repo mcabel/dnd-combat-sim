@@ -160,6 +160,33 @@ export function createGreenHag(
     description: 'Claws: +6 to hit, reach 5 ft, 2d8+4 slashing damage.',
   };
 
+  // Innate Spellcasting (MM p.177): at-will vicious mockery.
+  // DC 12 (Cha), 60 ft, WIS save or 1d4 psychic + disadv on next attack.
+  // The Hag is a CR 3 creature with both a strong melee Claws attack and
+  // a ranged cantrip. The AI planner (selectAction) will choose Vicious
+  // Mockery when the target is out of melee reach or when the disadv
+  // rider is more valuable than the extra damage.
+  // This is the first summon with at-will innate spellcasting (Session 32).
+  const viciousMockeryAction: Action = {
+    name: 'Vicious Mockery',
+    isMultiattack: false,
+    attackType: 'save',
+    reach: 60,
+    range: { normal: 60, long: 60 },
+    hitBonus: null,
+    damage: { count: 1, sides: 4, bonus: 0, average: 2 },
+    damageType: 'psychic',
+    saveDC: 12,  // Green Hag innate spellcasting DC (MM p.177)
+    saveAbility: 'wis',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 0,  // cantrip — no slot
+    costType: 'action',
+    legendaryCost: 0,
+    description: 'Vicious Mockery (innate): DC 12 WIS save or 1d4 psychic + disadv on next attack.',
+  };
+
   // Position: adjacent to caster (1 square away)
   const pos = { x: caster.pos.x + 1, y: caster.pos.y, z: caster.pos.z };
 
@@ -185,7 +212,11 @@ export function createGreenHag(
     cha: 14,
     cr: 3,
     pos,
-    actions: [clawsAction],
+    // Both Claws (melee) and Vicious Mockery (innate cantrip, ranged save)
+    // are available. The AI planner will choose based on target reach and
+    // expected damage — Vicious Mockery is preferred when the target is out
+    // of melee reach or when the disadv rider is tactically valuable.
+    actions: [clawsAction, viciousMockeryAction],
     traits: [
       'Amphibious',
       'Mimicry',
