@@ -331,14 +331,26 @@ function _undoEffect(target: Combatant, effect: ActiveEffect): void {
             delete target._eyebiteActive;
             break;
           // ── Session 34 — Protection from Energy resistance removal ──
+          // ── Session 36 — innate-resistance fix ──
           // When the sentinel (damage_zone dieCount=0 on the target, with
           // payload.damageType set) is removed (concentration break), remove
-          // the resistance we added to target.resistances. Only the type we
-          // added is removed — innate resistance to the same type is left
-          // intact.
+          // the resistance we added to target.resistances — BUT only if the
+          // spell actually added it (payload.addedResistance === true).
+          //
+          // Session 36 fix: if the target had INNATE resistance to the same
+          // type the spell grants, the spell's idempotent push was a no-op
+          // (addedResistance === false). In that case we must NOT splice —
+          // doing so would wrongly remove the innate entry. Only the type
+          // we added is removed; innate resistance to other types is always
+          // preserved.
+          //
+          // Backwards compat: payload.addedResistance === undefined (legacy
+          // pre-Session 36 sentinels) → assume true (the original Session 34
+          // behavior spliced unconditionally).
           case 'Protection from Energy': {
             const dt = effect.payload.damageType;
-            if (dt) {
+            const added = effect.payload.addedResistance !== false;  // default true
+            if (dt && added) {
               const idx = target.resistances.indexOf(dt);
               if (idx >= 0) target.resistances.splice(idx, 1);
             }

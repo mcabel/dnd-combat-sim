@@ -14,8 +14,10 @@
 //   9. execute — consumes slot, starts concentration, applies resistance + sentinel
 //  10. execute — damage halved by resistance
 //  11. concentration break — resistance removed, sentinel removed
-//  12. concentration break — innate resistance NOT removed
+//  12. concentration break — innate resistance PRESERVED (Session 36 fix)
 //  13. execute via generic-registry dispatch (end-to-end)
+//  14. Upcast — multi-target selection (Session 36)
+//  15. Innate-resistance fix — addedResistance flag (Session 36)
 //
 // Run: npx ts-node src/test/protection_from_energy.test.ts
 // ============================================================
@@ -27,6 +29,7 @@ import {
   pickDamageType,
   execute,
   executeWithTarget,
+  executeWithTargets,
 } from '../spells/protection_from_energy';
 import { lookupGenericSpell } from '../spells/_generic_registry';
 import {
@@ -187,7 +190,9 @@ reset();
   eq('range is 5 ft (touch)', metadata.rangeFt, 5);
   eq('is concentration', metadata.concentration, true);
   eq('casting time is action', metadata.castingTime, 'action');
-  eq('upcast NOT implemented (v1)', metadata.protectionFromEnergyUpcastV1Implemented, false);
+  eq('upcast NOW implemented (Session 36)', metadata.protectionFromEnergyUpcastV1Implemented, true);
+  eq('innate-resistance fix NOW implemented (Session 36)',
+    metadata.protectionFromEnergyInnateResistanceFixV1Implemented, true);
   eq('concentration enforcement IS implemented (Session 34 TG-002)',
     metadata.protectionFromEnergyConcentrationEnforcementV1Implemented, true);
   // Eligible types array sanity check
@@ -483,9 +488,9 @@ reset();
 }
 
 // ============================================================
-// 12. concentration break — innate resistance NOT removed
+// 12. concentration break — innate resistance PRESERVED (Session 36 fix)
 // ============================================================
-console.log('\n=== 12. concentration break — innate resistance preserved ===\n');
+console.log('\n=== 12. concentration break — innate resistance preserved (Session 36 fix) ===\n');
 reset();
 {
   const caster = makeC({
@@ -501,36 +506,37 @@ reset();
   const state = makeState(bf);
 
   // Caster also grants fire resistance via Protection from Energy.
-  // The spell's idempotent check means the resistance array doesn't change,
-  // but a sentinel is still attached.
+  // The spell's idempotent check means the resistance array doesn't change
+  // (no duplicate push), and the sentinel records `addedResistance: false`.
   executeWithTarget(caster, ally, state, 'fire');
   eq('12a. resistances array still has 1 fire entry (idempotent)',
     ally.resistances.filter(r => r === 'fire').length, 1);
   assert('12b. sentinel effect attached', ally.activeEffects.some(e => e.spellName === 'Protection from Energy'));
 
-  // On concentration break, _undoEffect should remove ONE fire entry.
-  // BUT since we never added one (idempotent check), it would remove the
-  // INNATE one — that's a bug we'd want to avoid. Let me check: the spell's
-  // execute only calls `target.resistances.push(damageType)` if it's NOT
-  // already present. So the sentinel's payload.damageType is 'fire', but no
-  // entry was actually added. On undo, we'd remove the innate fire entry —
-  // incorrect!
-  //
-  // HOWEVER — this is an edge case (innate resistance + spell-granted same
-  // type). For v1, we accept this simplification: the spell's idempotent
-  // push means the sentinel doesn't know whether it added the entry or not.
-  // Document as a known v1 simplification.
+  // Session 36 fix: the sentinel records addedResistance=false because the
+  // spell did NOT push a new entry (the innate one was already there).
+  const sentinel = ally.activeEffects.find(e => e.spellName === 'Protection from Energy');
+  eq('12c. sentinel payload.addedResistance === false (innate, no push)',
+    sentinel?.payload.addedResistance, false);
+
+  // On concentration break, _undoEffect checks addedResistance and does NOT
+  // splice — the innate fire resistance is PRESERVED.
   removeEffectsFromCaster(caster.id, bf);
 
-  // Verify the sentinel is gone (cleanup worked)
-  assert('12c. sentinel effect removed after break',
+  // Sentinel removed (cleanup worked)
+  assert('12d. sentinel effect removed after break',
     !ally.activeEffects.some(e => e.spellName === 'Protection from Energy'));
-  // NOTE: the innate fire resistance MAY be removed here (v1 simplification).
-  // We document this but don't assert — the behavior is "remove one entry
-  // matching the damageType", which is correct for the common case (no innate
-  // resistance) and an acceptable simplification for the rare case (innate +
-  // spell-granted same type).
-  console.log(`  ℹ️  (v1 simplification: innate + spell-granted same-type case — resistances now: [${ally.resistances.join(', ')}])`);
+  // Innate fire resistance PRESERVED (Session 36 fix — was a v1 simplification)
+  assert('12e. innate fire resistance PRESERVED after break (Session 36 fix)',
+    ally.resistances.includes('fire'));
+  eq('12f. resistances array still has exactly 1 fire entry',
+    ally.resistances.filter(r => r === 'fire').length, 1);
+
+  // Damage still halved after break (innate resistance persists)
+  const before = ally.currentHP;
+  applyDamageWithTempHP(ally, 40, 'fire');
+  eq('12g. fire damage STILL halved after break (innate resistance intact, 40 → 20)',
+    before - ally.currentHP, 20);
 }
 
 // ============================================================
@@ -571,6 +577,438 @@ reset();
     ally.resistances.includes('cold') || caster.resistances.includes('cold'));
   assert('13f. concentration started', caster.concentration?.active === true);
   eq('13g. slot consumed', caster.resources!.spellSlots![3].remaining, 1);
+}
+
+// ============================================================
+// 14. Upcast — multi-target selection (Session 36)
+// ============================================================
+console.log('\n=== 14. Upcast — multi-target selection (Session 36) ===\n');
+
+/**
+ * Resources with slots at multiple levels for upcast testing.
+ * Defaults to NO slots; pass overrides like { 3: 1, 4: 1 }.
+ */
+function withSlotsMulti(overrides: { [level: number]: number } = {}): PlayerResources {
+  const spellSlots: any = {};
+  for (let lvl = 1; lvl <= 9; lvl++) {
+    spellSlots[lvl] = { max: 2, remaining: overrides[lvl] ?? 0 };
+  }
+  return { spellSlots };
+}
+
+/** Count how many combatants in `bf` currently have a Protection from Energy sentinel. */
+function countProtected(bf: Battlefield): number {
+  let n = 0;
+  for (const c of bf.combatants.values()) {
+    if (c.activeEffects.some(e => e.spellName === 'Protection from Energy')) n++;
+  }
+  return n;
+}
+
+{
+  // 14a. L3 slot only + 2 allies in range → only 1 ally gets resistance (no upcast)
+  const caster = makeC({
+    id: 'wiz', pos: { x: 5, y: 5, z: 0 },
+    actions: [PFE_ACTION], resources: withSlotsMulti({ 3: 1 }),
+    faction: 'party',
+  });
+  const a1 = makeC({ id: 'a1', pos: { x: 6, y: 5, z: 0 }, faction: 'party' });
+  const a2 = makeC({ id: 'a2', pos: { x: 5, y: 6, z: 0 }, faction: 'party' });
+  const bf = makeBF([caster, a1, a2]);
+  const state = makeState(bf);
+  execute(caster, state);
+  eq('14a. L3 slot → 1 target protected (no upcast)', countProtected(bf), 1);
+  eq('14a. L3 slot consumed', caster.resources!.spellSlots![3].remaining, 0);
+}
+
+{
+  // 14b. L4 slot + 2 allies → 2 allies get resistance (upcast by 1)
+  const caster = makeC({
+    id: 'wiz', pos: { x: 5, y: 5, z: 0 },
+    actions: [PFE_ACTION], resources: withSlotsMulti({ 4: 1 }),
+    faction: 'party',
+  });
+  const a1 = makeC({ id: 'a1', pos: { x: 6, y: 5, z: 0 }, faction: 'party' });
+  const a2 = makeC({ id: 'a2', pos: { x: 5, y: 6, z: 0 }, faction: 'party' });
+  const bf = makeBF([caster, a1, a2]);
+  const state = makeState(bf);
+  execute(caster, state);
+  eq('14b. L4 slot + 2 allies → 2 targets protected', countProtected(bf), 2);
+  eq('14b. L4 slot consumed', caster.resources!.spellSlots![4].remaining, 0);
+}
+
+{
+  // 14c. L5 slot + 3 allies → 3 allies get resistance
+  const caster = makeC({
+    id: 'wiz', pos: { x: 5, y: 5, z: 0 },
+    actions: [PFE_ACTION], resources: withSlotsMulti({ 5: 1 }),
+    faction: 'party',
+  });
+  const a1 = makeC({ id: 'a1', pos: { x: 6, y: 5, z: 0 }, faction: 'party' });
+  const a2 = makeC({ id: 'a2', pos: { x: 5, y: 6, z: 0 }, faction: 'party' });
+  const a3 = makeC({ id: 'a3', pos: { x: 6, y: 6, z: 0 }, faction: 'party' });
+  const bf = makeBF([caster, a1, a2, a3]);
+  const state = makeState(bf);
+  execute(caster, state);
+  eq('14c. L5 slot + 3 allies → 3 targets protected', countProtected(bf), 3);
+  eq('14c. L5 slot consumed', caster.resources!.spellSlots![5].remaining, 0);
+}
+
+{
+  // 14d. L5 slot but only 2 allies in range → 2 protected (capped at candidates, no waste)
+  const caster = makeC({
+    id: 'wiz', pos: { x: 5, y: 5, z: 0 },
+    actions: [PFE_ACTION], resources: withSlotsMulti({ 5: 1 }),
+    faction: 'party',
+  });
+  const a1 = makeC({ id: 'a1', pos: { x: 6, y: 5, z: 0 }, faction: 'party' });
+  const a2 = makeC({ id: 'a2', pos: { x: 5, y: 6, z: 0 }, faction: 'party' });
+  const farAlly = makeC({ id: 'far', pos: { x: 15, y: 15, z: 0 }, faction: 'party' });  // out of touch range
+  const bf = makeBF([caster, a1, a2, farAlly]);
+  const state = makeState(bf);
+  execute(caster, state);
+  eq('14d. L5 slot but only 2 allies in range → 2 protected (capped)',
+    countProtected(bf), 2);
+  // far ally NOT protected
+  assert('14d. far ally (out of range) NOT protected',
+    !farAlly.activeEffects.some(e => e.spellName === 'Protection from Energy'));
+}
+
+{
+  // 14e. L4 slot but only 1 ally in range → 1 protected (capped at candidates)
+  const caster = makeC({
+    id: 'wiz', pos: { x: 5, y: 5, z: 0 },
+    actions: [PFE_ACTION], resources: withSlotsMulti({ 4: 1 }),
+    faction: 'party',
+  });
+  const a1 = makeC({ id: 'a1', pos: { x: 6, y: 5, z: 0 }, faction: 'party' });
+  const bf = makeBF([caster, a1]);
+  const state = makeState(bf);
+  execute(caster, state);
+  eq('14e. L4 slot but only 1 ally → 1 protected (capped)', countProtected(bf), 1);
+}
+
+{
+  // 14f. execute with 2 targets consumes L4 slot (not L3)
+  const caster = makeC({
+    id: 'wiz', pos: { x: 5, y: 5, z: 0 },
+    actions: [PFE_ACTION], resources: withSlotsMulti({ 3: 1, 4: 1 }),
+    faction: 'party',
+  });
+  const a1 = makeC({ id: 'a1', pos: { x: 6, y: 5, z: 0 }, faction: 'party' });
+  const a2 = makeC({ id: 'a2', pos: { x: 5, y: 6, z: 0 }, faction: 'party' });
+  const bf = makeBF([caster, a1, a2]);
+  const state = makeState(bf);
+  executeWithTargets(caster, [a1, a2], state, 'fire');
+  eq('14f. L4 slot consumed for 2 targets', caster.resources!.spellSlots![4].remaining, 0);
+  eq('14f. L3 slot NOT consumed', caster.resources!.spellSlots![3].remaining, 1);
+  assert('14f. a1 has fire resistance', a1.resistances.includes('fire'));
+  assert('14f. a2 has fire resistance', a2.resistances.includes('fire'));
+}
+
+{
+  // 14g. execute with 3 targets consumes L5 slot (not L3/L4)
+  const caster = makeC({
+    id: 'wiz', pos: { x: 5, y: 5, z: 0 },
+    actions: [PFE_ACTION], resources: withSlotsMulti({ 3: 1, 4: 1, 5: 1 }),
+    faction: 'party',
+  });
+  const a1 = makeC({ id: 'a1', pos: { x: 6, y: 5, z: 0 }, faction: 'party' });
+  const a2 = makeC({ id: 'a2', pos: { x: 5, y: 6, z: 0 }, faction: 'party' });
+  const a3 = makeC({ id: 'a3', pos: { x: 6, y: 6, z: 0 }, faction: 'party' });
+  const bf = makeBF([caster, a1, a2, a3]);
+  const state = makeState(bf);
+  executeWithTargets(caster, [a1, a2, a3], state, 'cold');
+  eq('14g. L5 slot consumed for 3 targets', caster.resources!.spellSlots![5].remaining, 0);
+  eq('14g. L4 slot NOT consumed', caster.resources!.spellSlots![4].remaining, 1);
+  eq('14g. L3 slot NOT consumed', caster.resources!.spellSlots![3].remaining, 1);
+  assert('14g. all 3 allies have cold resistance',
+    a1.resistances.includes('cold') && a2.resistances.includes('cold') && a3.resistances.includes('cold'));
+}
+
+{
+  // 14h. execute with 1 target consumes L3 slot (no upcast)
+  const caster = makeC({
+    id: 'wiz', pos: { x: 5, y: 5, z: 0 },
+    actions: [PFE_ACTION], resources: withSlotsMulti({ 3: 1, 4: 1 }),
+    faction: 'party',
+  });
+  const a1 = makeC({ id: 'a1', pos: { x: 6, y: 5, z: 0 }, faction: 'party' });
+  const bf = makeBF([caster, a1]);
+  const state = makeState(bf);
+  executeWithTargets(caster, [a1], state, 'lightning');
+  eq('14h. L3 slot consumed for 1 target', caster.resources!.spellSlots![3].remaining, 0);
+  eq('14h. L4 slot NOT consumed', caster.resources!.spellSlots![4].remaining, 1);
+}
+
+{
+  // 14i. Multi-target priority: lowest-HP% allies picked first
+  const caster = makeC({
+    id: 'wiz', pos: { x: 5, y: 5, z: 0 },
+    actions: [PFE_ACTION], resources: withSlotsMulti({ 4: 1 }),  // L4 → 2 targets
+    faction: 'party',
+  });
+  const healthy = makeC({
+    id: 'healthy', name: 'Healthy', pos: { x: 6, y: 5, z: 0 },
+    maxHP: 100, currentHP: 100, faction: 'party',
+  });
+  const wounded = makeC({
+    id: 'wounded', name: 'Wounded', pos: { x: 5, y: 6, z: 0 },
+    maxHP: 100, currentHP: 20, faction: 'party',
+  });
+  const full = makeC({
+    id: 'full', name: 'Full', pos: { x: 6, y: 6, z: 0 },
+    maxHP: 100, currentHP: 100, faction: 'party',
+  });
+  const bf = makeBF([caster, healthy, wounded, full]);
+  const state = makeState(bf);
+  execute(caster, state);
+  // wounded (20% HP) must be protected; the 2nd target is healthy or full
+  assert('14i. wounded (lowest HP%) is protected',
+    wounded.activeEffects.some(e => e.spellName === 'Protection from Energy'));
+  eq('14i. exactly 2 targets protected', countProtected(bf), 2);
+}
+
+{
+  // 14j. Log message includes all target names + "2 creatures"
+  const caster = makeC({
+    id: 'wiz', name: 'Wizard', pos: { x: 5, y: 5, z: 0 },
+    actions: [PFE_ACTION], resources: withSlotsMulti({ 4: 1 }),
+    faction: 'party',
+  });
+  const a1 = makeC({ id: 'a1', name: 'Alice', pos: { x: 6, y: 5, z: 0 }, faction: 'party' });
+  const a2 = makeC({ id: 'a2', name: 'Bob', pos: { x: 5, y: 6, z: 0 }, faction: 'party' });
+  const bf = makeBF([caster, a1, a2]);
+  const state = makeState(bf);
+  execute(caster, state);
+  const actionEvent = state.log.events.find(e => e.type === 'action' && e.description.includes('Protection from Energy'));
+  assert('14j. action event logged', actionEvent !== undefined);
+  assert('14j. action event mentions Alice', !!(actionEvent && actionEvent.description.includes('Alice')));
+  assert('14j. action event mentions Bob', !!(actionEvent && actionEvent.description.includes('Bob')));
+  assert('14j. action event mentions "2 creatures"', !!(actionEvent && actionEvent.description.includes('2 creature')));
+}
+
+{
+  // 14k. Each target gets its own sentinel effect with the correct damageType;
+  //      all sourced from the same caster (concentration-linked).
+  const caster = makeC({
+    id: 'wiz', pos: { x: 5, y: 5, z: 0 },
+    actions: [PFE_ACTION], resources: withSlotsMulti({ 4: 1 }),
+    faction: 'party',
+  });
+  const a1 = makeC({ id: 'a1', pos: { x: 6, y: 5, z: 0 }, faction: 'party' });
+  const a2 = makeC({ id: 'a2', pos: { x: 5, y: 6, z: 0 }, faction: 'party' });
+  const bf = makeBF([caster, a1, a2]);
+  const state = makeState(bf);
+  executeWithTargets(caster, [a1, a2], state, 'thunder');
+  const eff1 = a1.activeEffects.find(e => e.spellName === 'Protection from Energy');
+  const eff2 = a2.activeEffects.find(e => e.spellName === 'Protection from Energy');
+  assert('14k. a1 has sentinel', eff1 !== undefined);
+  assert('14k. a2 has sentinel', eff2 !== undefined);
+  eq('14k. a1 sentinel damageType', eff1?.payload.damageType, 'thunder');
+  eq('14k. a2 sentinel damageType', eff2?.payload.damageType, 'thunder');
+  eq('14k. a1 sentinel sourceIsConcentration', eff1?.sourceIsConcentration, true);
+  eq('14k. a2 sentinel sourceIsConcentration', eff2?.sourceIsConcentration, true);
+  eq('14k. a1 sentinel casterId', eff1?.casterId, caster.id);
+  eq('14k. a2 sentinel casterId', eff2?.casterId, caster.id);
+}
+
+{
+  // 14l. executeWithTarget (singular) applies to 1 target only (backwards compat)
+  const caster = makeC({
+    id: 'wiz', pos: { x: 5, y: 5, z: 0 },
+    actions: [PFE_ACTION], resources: withSlotsMulti({ 3: 1, 4: 1 }),
+    faction: 'party',
+  });
+  const a1 = makeC({ id: 'a1', pos: { x: 6, y: 5, z: 0 }, faction: 'party' });
+  const a2 = makeC({ id: 'a2', pos: { x: 5, y: 6, z: 0 }, faction: 'party' });
+  const bf = makeBF([caster, a1, a2]);
+  const state = makeState(bf);
+  executeWithTarget(caster, a1, state, 'acid');
+  assert('14l. a1 has acid resistance (executeWithTarget)',
+    a1.resistances.includes('acid'));
+  assert('14l. a2 NOT protected (executeWithTarget only targets a1)',
+    !a2.resistances.includes('acid'));
+  // L3 consumed (1 target → L3, no upcast)
+  eq('14l. L3 slot consumed (single target)', caster.resources!.spellSlots![3].remaining, 0);
+  eq('14l. L4 slot NOT consumed', caster.resources!.spellSlots![4].remaining, 1);
+}
+
+{
+  // 14m. All targets share the same damage type (pickDamageType picks once)
+  const caster = makeC({
+    id: 'wiz', pos: { x: 5, y: 5, z: 0 },
+    actions: [PFE_ACTION], resources: withSlotsMulti({ 5: 1 }),  // L5 → 3 targets
+    faction: 'party',
+  });
+  // Enemy deals only cold damage → pickDamageType returns 'cold'
+  const enemy = makeC({
+    id: 'enemy', pos: { x: 0, y: 0, z: 0 }, faction: 'enemy',
+    actions: [makeAttackAction('cold')],
+  });
+  const a1 = makeC({ id: 'a1', pos: { x: 6, y: 5, z: 0 }, faction: 'party' });
+  const a2 = makeC({ id: 'a2', pos: { x: 5, y: 6, z: 0 }, faction: 'party' });
+  const a3 = makeC({ id: 'a3', pos: { x: 6, y: 6, z: 0 }, faction: 'party' });
+  const bf = makeBF([caster, enemy, a1, a2, a3]);
+  const state = makeState(bf);
+  execute(caster, state);
+  // All 3 targets should have COLD resistance (not fire default)
+  assert('14m. a1 has cold resistance (shared type)', a1.resistances.includes('cold'));
+  assert('14m. a2 has cold resistance (shared type)', a2.resistances.includes('cold'));
+  assert('14m. a3 has cold resistance (shared type)', a3.resistances.includes('cold'));
+  // And NOT fire (would be the default if pickDamageType wasn't called)
+  assert('14m. a1 does NOT have fire resistance (cold was picked)',
+    !a1.resistances.includes('fire'));
+}
+
+{
+  // 14n. Self-fallback: caster alone with an L5 slot → targets self only,
+  //      consumes L3 (no upcast — single target, no waste).
+  //      Verifies the "self as fallback when no allies" design.
+  const caster = makeC({
+    id: 'wiz', name: 'Wizard', pos: { x: 5, y: 5, z: 0 },
+    actions: [PFE_ACTION], resources: withSlotsMulti({ 5: 1, 3: 1 }),
+    faction: 'party',
+  });
+  const bf = makeBF([caster]);  // alone — no allies
+  const state = makeState(bf);
+  execute(caster, state);
+  // Caster protected self (fallback)
+  assert('14n. caster self-protected (fallback when alone)',
+    caster.activeEffects.some(e => e.spellName === 'Protection from Energy'));
+  // Only 1 target (self) → L3 consumed (no upcast, no waste)
+  eq('14n. L3 slot consumed (1 target, no upcast)', caster.resources!.spellSlots![3].remaining, 0);
+  eq('14n. L5 slot NOT consumed (no waste on single target)', caster.resources!.spellSlots![5].remaining, 1);
+}
+
+{
+  // 14o. Self excluded when allies present: caster + 1 ally + L4 slot.
+  //      Caster is NOT targeted (ally benefits more); only ally protected.
+  const caster = makeC({
+    id: 'wiz', name: 'Wizard', pos: { x: 5, y: 5, z: 0 },
+    actions: [PFE_ACTION], resources: withSlotsMulti({ 4: 1 }),
+    faction: 'party',
+  });
+  const ally = makeC({ id: 'ally', name: 'Ally', pos: { x: 6, y: 5, z: 0 }, faction: 'party' });
+  const bf = makeBF([caster, ally]);
+  const state = makeState(bf);
+  execute(caster, state);
+  assert('14o. ally protected', ally.activeEffects.some(e => e.spellName === 'Protection from Energy'));
+  assert('14o. caster NOT protected (self excluded when ally present)',
+    !caster.activeEffects.some(e => e.spellName === 'Protection from Energy'));
+  // 1 target (ally) → L3 consumed (no upcast — only 1 ally, no benefit from L4)
+  eq('14o. L3 NOT consumed (no L3 slot; consumeSpellSlot falls back to L4)',
+    caster.resources!.spellSlots![3]?.remaining ?? 0, 0);
+  eq('14o. L4 slot consumed (1 ally, fallback from L3)', caster.resources!.spellSlots![4].remaining, 0);
+}
+
+// ============================================================
+// 15. Innate-resistance fix — addedResistance flag (Session 36)
+// ============================================================
+console.log('\n=== 15. Innate-resistance fix — addedResistance flag (Session 36) ===\n');
+reset();
+
+{
+  // 15a. Target WITHOUT innate resistance → addedResistance=true, entry spliced on break
+  const caster = makeC({
+    id: 'wiz', pos: { x: 5, y: 5, z: 0 },
+    actions: [PFE_ACTION], resources: withSlots(2),
+  });
+  const ally = makeC({ id: 'ally', pos: { x: 6, y: 5, z: 0 } });  // no innate resistances
+  const bf = makeBF([caster, ally]);
+  const state = makeState(bf);
+  executeWithTarget(caster, ally, state, 'fire');
+  const sentinel = ally.activeEffects.find(e => e.spellName === 'Protection from Energy');
+  eq('15a. sentinel addedResistance === true (spell pushed the entry)',
+    sentinel?.payload.addedResistance, true);
+  assert('15a. fire resistance present before break', ally.resistances.includes('fire'));
+  removeEffectsFromCaster(caster.id, bf);
+  assert('15a. fire resistance REMOVED after break (spell added it)',
+    !ally.resistances.includes('fire'));
+}
+
+{
+  // 15b. Target WITH innate resistance → addedResistance=false, innate entry PRESERVED on break
+  const caster = makeC({
+    id: 'wiz', pos: { x: 5, y: 5, z: 0 },
+    actions: [PFE_ACTION], resources: withSlots(2),
+  });
+  const ally = makeC({
+    id: 'ally', pos: { x: 6, y: 5, z: 0 },
+    resistances: ['fire'],  // innate fire resistance
+  });
+  const bf = makeBF([caster, ally]);
+  const state = makeState(bf);
+  executeWithTarget(caster, ally, state, 'fire');
+  const sentinel = ally.activeEffects.find(e => e.spellName === 'Protection from Energy');
+  eq('15b. sentinel addedResistance === false (innate, no push)',
+    sentinel?.payload.addedResistance, false);
+  removeEffectsFromCaster(caster.id, bf);
+  assert('15b. innate fire resistance PRESERVED after break',
+    ally.resistances.includes('fire'));
+}
+
+{
+  // 15c. Multi-target mix: one target has innate fire res, one doesn't.
+  //      Both sentinels correct; cleanup preserves innate on one + removes granted on the other.
+  const caster = makeC({
+    id: 'wiz', pos: { x: 5, y: 5, z: 0 },
+    actions: [PFE_ACTION], resources: withSlotsMulti({ 4: 1 }),  // L4 → 2 targets
+    faction: 'party',
+  });
+  const innate = makeC({
+    id: 'innate', name: 'Innate', pos: { x: 6, y: 5, z: 0 },
+    resistances: ['fire'],  // innate fire resistance
+    faction: 'party',
+  });
+  const fresh = makeC({
+    id: 'fresh', name: 'Fresh', pos: { x: 5, y: 6, z: 0 },
+    faction: 'party',  // no innate resistance
+  });
+  const bf = makeBF([caster, innate, fresh]);
+  const state = makeState(bf);
+  executeWithTargets(caster, [innate, fresh], state, 'fire');
+
+  const sentInnate = innate.activeEffects.find(e => e.spellName === 'Protection from Energy');
+  const sentFresh = fresh.activeEffects.find(e => e.spellName === 'Protection from Energy');
+  eq('15c. innate target sentinel addedResistance === false', sentInnate?.payload.addedResistance, false);
+  eq('15c. fresh target sentinel addedResistance === true', sentFresh?.payload.addedResistance, true);
+  // Both have exactly 1 fire entry (innate: original; fresh: spell-granted)
+  eq('15c. innate has 1 fire entry (idempotent)', innate.resistances.filter(r => r === 'fire').length, 1);
+  eq('15c. fresh has 1 fire entry (spell-granted)', fresh.resistances.filter(r => r === 'fire').length, 1);
+
+  // Break concentration
+  removeEffectsFromCaster(caster.id, bf);
+
+  // Innate target: fire resistance PRESERVED
+  assert('15c. innate target fire resistance PRESERVED', innate.resistances.includes('fire'));
+  // Fresh target: fire resistance REMOVED (spell granted it)
+  assert('15c. fresh target fire resistance REMOVED (spell granted)', !fresh.resistances.includes('fire'));
+}
+
+{
+  // 15d. Backwards compat: legacy sentinel with addedResistance === undefined
+  //      is treated as addedResistance === true (original Session 34 behavior).
+  //      Simulates a pre-Session 36 sentinel (e.g. from a saved game state).
+  const caster = makeC({
+    id: 'wiz', pos: { x: 5, y: 5, z: 0 },
+    actions: [PFE_ACTION], resources: withSlots(2),
+  });
+  const ally = makeC({ id: 'ally', pos: { x: 6, y: 5, z: 0 } });
+  const bf = makeBF([caster, ally]);
+  // Manually apply a legacy sentinel (no addedResistance field) + push resistance
+  ally.resistances.push('fire');
+  applySpellEffect(ally, {
+    casterId: caster.id,
+    spellName: 'Protection from Energy',
+    effectType: 'damage_zone',
+    payload: { dieCount: 0, dieSides: 0, damageType: 'fire' },  // NO addedResistance field
+    sourceIsConcentration: true,
+  });
+  // On break, legacy sentinel (addedResistance undefined → default true) splices
+  removeEffectsFromCaster(caster.id, bf);
+  assert('15d. legacy sentinel (addedResistance undefined) still splices resistance',
+    !ally.resistances.includes('fire'));
 }
 
 // ============================================================

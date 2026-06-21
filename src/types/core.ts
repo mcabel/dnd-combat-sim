@@ -144,6 +144,18 @@ export interface ActiveEffect {
     // the caster's concentration breaks (sourceIsConcentration: true).
     dieCount?: number;                // e.g. 4 for 4d4
     damageType?: DamageType;          // e.g. 'slashing' for Cloud of Daggers
+    // ── Session 36 — Protection from Energy innate-resistance fix ──────
+    // When the Protection from Energy sentinel (damage_zone dieCount=0 on
+    // the target) is applied, the spell may or may not have actually pushed
+    // a new entry into target.resistances:
+    //   - addedResistance === true  → spell pushed a new entry; _undoEffect
+    //     should splice it back out on concentration break.
+    //   - addedResistance === false → target had INNATE resistance to the
+    //     same type (idempotent push was a no-op); _undoEffect must NOT
+    //     splice (would wrongly remove the innate entry).
+    //   - undefined → legacy sentinels (pre-Session 36) assume true for
+    //     backwards compat (the pre-fix behavior spliced unconditionally).
+    addedResistance?: boolean;
     // ── Session 17 additions (level-2 batch 3) ─────────────────────────
     // saveDC + saveAbility: if present, the start-of-turn damage tick rolls
     // a save; on success, the damage is halved (PHB p.242 Flaming Sphere:
