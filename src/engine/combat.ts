@@ -675,6 +675,8 @@ import { shouldCast as shouldCastPowerWordHeal,   execute as executePowerWordHea
 import { shouldCast as shouldCastArmorOfAgathys,  execute as executeArmorOfAgathys }  from '../spells/armor_of_agathys';
 import { shouldCast as shouldCastFalseLife,       execute as executeFalseLife }       from '../spells/false_life';
 import { shouldCast as shouldCastDispelMagic,    execute as executeDispelMagic }     from '../spells/dispel_magic';
+// ── TG-006 — Summon Beast bespoke summon spell (Phase 1b) ────────────────
+import { shouldCast as shouldCastSummonBeast, execute as executeSummonBeast } from '../spells/summon_beast';
 
 // ── Session 19 — bulk-implementation generic dispatch (262 new spells) ────
 import {
@@ -3728,16 +3730,16 @@ function executePlannedAction(
     case 'summonSpell': {
       // Summon/Conjure spell — spawns a combatant mid-combat (TG-006)
       // The actual spell execution is handled by the spell module's execute(),
-      // which is dispatched via the SUMMON_SPELL_REGISTRY in planner.ts.
-      // The planner sets plan.action to the spell's Action; its name identifies
-      // which summon spell to cast. The case branch ensures the type system
-      // is consistent and no unhandled-type warnings appear.
+      // which is dispatched via this case branch. The planner sets plan.action
+      // to the spell's Action; its name identifies which summon spell to cast.
       const spellAction = plan.action;
       if (!spellAction) break;
       const spellName = spellAction.name;
       // Dispatch to the appropriate summon spell module
-      // (will be wired in Phase 1b+)
-      void spellName; // used by future dispatch
+      if (spellName === 'Summon Beast') {
+        executeSummonBeast(actor, actor, state);
+      }
+      // More spells will be added in Phase 1c+
       break;
     }
 
@@ -4600,6 +4602,28 @@ export function runCombat(
       // Update perception for all observers
       const target = plan.targetId ? battlefield.combatants.get(plan.targetId) ?? null : null;
       updatePerception(actor, target, plan, battlefield);
+
+      // ── Process pending initiative inserts (summon spells, TG-006) ──────
+      // TCE Summon spells: "shares your initiative count, takes turn after
+      // yours." After each actor's turn, insert any pending summons that
+      // should go after this actor. The summon will then get its own turn
+      // later in this round (or next round if the round has already passed
+      // its position).
+      if (battlefield.pendingInitiativeInserts && battlefield.pendingInitiativeInserts.length > 0) {
+        const toInsert = battlefield.pendingInitiativeInserts.filter(
+          i => i.insertAfterId === actor.id
+        );
+        for (const insert of toInsert) {
+          const afterIdx = battlefield.initiativeOrder.indexOf(insert.insertAfterId);
+          if (afterIdx !== -1 && !battlefield.initiativeOrder.includes(insert.combatantId)) {
+            battlefield.initiativeOrder.splice(afterIdx + 1, 0, insert.combatantId);
+          }
+        }
+        // Remove processed inserts
+        battlefield.pendingInitiativeInserts = battlefield.pendingInitiativeInserts.filter(
+          i => i.insertAfterId !== actor.id
+        );
+      }
 
       // Legendary action window: after each creature's turn,
       // legendary creatures get to act (design doc §6, §5.3.5)

@@ -241,6 +241,8 @@ import { shouldCast as shouldCastPowerWordHeal } from '../spells/power_word_heal
 import { shouldCast as shouldCastArmorOfAgathys } from '../spells/armor_of_agathys';
 import { shouldCast as shouldCastFalseLife } from '../spells/false_life';
 import { shouldCast as shouldCastDispelMagic } from '../spells/dispel_magic';
+// ── TG-006 — Summon Beast bespoke summon spell (Phase 1b) ────────────────
+import { shouldCast as shouldCastSummonBeast } from '../spells/summon_beast';
 
 // ── Session 19 — bulk-implementation generic dispatch (262 new spells) ────
 import { GENERIC_SPELL_LIST } from '../spells/_generic_registry';
@@ -2017,6 +2019,28 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
       };
       plan.targetId = self.id;
       plan.bonusAction = planBonusAction(self, target, battlefield);
+      return plan;
+    }
+  }
+
+  // === TG-006 — TCE SUMMON SPELLS (Phase 1b) ===
+  // Summon Beast (TCE p.111): 2nd-level conjuration, action, range 30 ft,
+  // concentration 1 hr. Spawns a Bestial Spirit combatant that shares the
+  // caster's initiative count and takes its turn immediately after.
+  // Priority: above Session 21 damage spells — adding a body to the fight
+  // is tactically more valuable than a single damage cast when the caster
+  // has no current summon.
+  if (!plan.action && self.actions.some(a => a.name === 'Summon Beast')) {
+    if (shouldCastSummonBeast(self, battlefield)) {
+      const sbAction = self.actions.find(a => a.name === 'Summon Beast')!;
+      plan.action = {
+        type: 'summonSpell',
+        action: sbAction,
+        targetId: self.id,  // self-targeting (summon appears near caster)
+        description: `${self.name} casts Summon Beast`,
+      };
+      plan.targetId = self.id;
+      plan.bonusAction = planBonusAction(self, self, battlefield);
       return plan;
     }
   }
