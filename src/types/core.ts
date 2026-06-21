@@ -1848,6 +1848,31 @@ export type ReactionTrigger =
       fallerIds: string[];
       /** Fall height in feet. */
       fallHeightFt: number;
+    }
+  // ── Session 37 — Shield "targeted by Magic Missile" trigger ──
+  // PHB p.275 Shield: "Reaction: When you are hit by an attack or targeted
+  // by Magic Missile." The `incoming_attack_hit` trigger covers the first
+  // half; this trigger covers the second half.
+  //
+  // Magic Missile (PHB p.257) auto-hits — it has no attack roll, so it
+  // bypasses the `incoming_attack_hit` trigger point in resolveAttack.
+  // Instead, the `case 'magicMissile':` dispatch in combat.ts fires this
+  // trigger for the target BEFORE calling executeMagicMissile. If Shield
+  // negates, the dispatch skips the damage loop (MM slot is still consumed
+  // — the spell was cast, just blocked).
+  //
+  // v1 simplification: MM currently targets a single creature (all darts
+  // aimed at one target per the AI heuristic). Shield blocks ALL darts.
+  // If MM ever supports multi-target darts, Shield would only block darts
+  // aimed at the Shield-caster (per-dart blocking — future enhancement).
+  | {
+      kind: 'targeted_by_magic_missile';
+      /** The creature casting Magic Missile. */
+      caster: Combatant;
+      /** The creature being targeted by Magic Missile (potential reactor). */
+      target: Combatant;
+      /** Number of darts aimed at `target` (informational; Shield blocks all regardless). */
+      dartCount: number;
     };
 
 /**
