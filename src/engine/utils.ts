@@ -41,6 +41,22 @@ export function rollDice(expr: DiceExpression): number {
   return total;
 }
 
+/**
+ * Parse an "NdM" string and roll it, returning the total.
+ * Returns 0 for unrecognised expressions.
+ * Exported here (canonical location) so engine code can call it without
+ * importing from a spell module. (TG-013)
+ */
+export function rollDiceString(expr: string): number {
+  const m = expr.match(/^(\d+)d(\d+)$/);
+  if (!m) return 0;
+  const count = parseInt(m[1], 10);
+  const sides = parseInt(m[2], 10);
+  let total = 0;
+  for (let i = 0; i < count; i++) total += rollDie(sides);
+  return total;
+}
+
 /** Roll with advantage: roll twice, take higher. */
 export function rollWithAdvantage(sides = 20): number {
   return Math.max(rollDie(sides), rollDie(sides));

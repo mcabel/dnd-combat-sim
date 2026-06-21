@@ -31,7 +31,7 @@ import { isControlledMount, mountDeathRiderCheck, isIndependentMount } from '../
 import { checkMountedCombatant, checkProtectionStyle, checkInterceptionReduction } from './mount_redirect';
 import { tickAdvantages, grantSelf, grantVulnerability } from './adv_system';
 import { getSummonEntry }                           from '../summons/registry';
-import { rollGrappleContest, rollShoveContest, canGrappleOrShoveTarget } from './utils';
+import { rollGrappleContest, rollShoveContest, canGrappleOrShoveTarget, rollDiceString } from './utils';
 import { computeLOS } from './los';
 import { removeEffectsFromCaster, removeEffectById, getActiveAcBonus, getActiveAcFloor, getActiveBlessDie, getActiveBaneDie, getActiveHexDie, getActiveDamageZones, getActiveWeaponEnchant, getActiveEnlargeReduce, getActiveTaunt, getActiveCurseAttackDisadv, getActiveCurseRider, applySpellEffect, getActiveTerrainZones } from './spell_effects';
 import { TerrainZone } from './spell_effects';
@@ -57,7 +57,7 @@ import {
 } from '../spells/guiding_bolt';
 import { execute as executeHealingWord } from '../spells/healing_word';
 import { execute as executeCureWounds } from '../spells/cure_wounds';
-import { rollDiceString as rollBoomingBladeDice } from '../spells/booming_blade';
+// rollDiceString is imported from './utils' (see above) — TG-013
 import { shouldCast as shouldCastAid, execute as executeAid } from '../spells/aid';
 import { shouldCast as shouldCastBarkskin, execute as executeBarkskin } from '../spells/barkskin';
 import { shouldCast as shouldCastBlur, execute as executeBlur } from '../spells/blur';
@@ -1681,7 +1681,7 @@ export function executeMove(
     const casterLabel = casterId
       ? (bf.combatants.get(casterId)?.name ?? casterId)
       : 'Booming Blade';
-    const dmg = rollBoomingBladeDice(dice);
+    const dmg = rollDiceString(dice);
     // Apply with thunder damage type so resistances/immunities compose
     // correctly via applyDamageWithTempHP (Blade Ward doesn't apply — it
     // only resists B/P/S — but other sources like a hypothetical thunder

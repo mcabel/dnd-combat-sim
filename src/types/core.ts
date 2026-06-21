@@ -563,6 +563,12 @@ export interface Combatant {
   // may set it directly.
   isUndead?: boolean;
 
+  // ---- Creature type flag (for spells like Spare the Dying, PHB p.277) ----
+  // True when the creature is a Construct. Optional — undefined is treated as
+  // "not a construct". Populated by the parser from the monster `type` field.
+  // Tests may set it directly. (TG-004)
+  isConstruct?: boolean;
+
   // ---- Chill Touch (PHB p.221) scratch fields ----
   // Set on the TARGET by Chill Touch's post-hit rider. Cleared by each module's
   // cleanup() called from resetBudget() in utils.ts.

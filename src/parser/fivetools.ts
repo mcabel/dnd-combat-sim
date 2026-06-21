@@ -52,6 +52,12 @@ export interface Raw5etoolsMonster {
   trait?: RawAction[];
   type?: string | { type: string };
   size?: string | string[];
+  /** 5etools spellcasting block — present on spellcasting monsters only. */
+  spellcasting?: Array<{
+    ability?: string;          // 'int' | 'wis' | 'cha' etc.
+    headerEntries?: string[];  // may contain "is a Nth-level spellcaster"
+    [k: string]: unknown;
+  }>;
 }
 
 // ---- Dice parsing -------------------------------------------
@@ -402,6 +408,82 @@ export function hasHandsForType(
   return text.includes('tentacle');
 }
 
+// ---- TG-004: parser tech debt helpers -----------------------
+
+/** Extract the base type string from raw.type (string or object form). */
+function rawCreatureType(type: Raw5etoolsMonster['type']): string {
+  if (!type) return '';
+  if (typeof type === 'string') return type.toLowerCase();
+  return (type.type ?? '').toLowerCase();
+}
+
+/** True when the creature is of type Undead (PHB — Chill Touch, Cure Wounds, etc.). */
+function parseIsUndead(type: Raw5etoolsMonster['type']): boolean {
+  return rawCreatureType(type) === 'undead';
+}
+
+/** True when the creature is a Construct (PHB — Spare the Dying, etc.). */
+function parseIsConstruct(type: Raw5etoolsMonster['type']): boolean {
+  return rawCreatureType(type) === 'construct';
+}
+
+/**
+ * Metal armor keywords per PHB p.143 equipment table.
+ * Matches 5etools item names like "{@item chain mail|phb}", "breastplate", etc.
+ */
+const METAL_ARMOR_RE = /chain\s*(?:mail|shirt)|plate\s*(?:armor|mail)|scale\s*mail|ring\s*mail|splint|half[\s-]plate|breastplate/i;
+
+/**
+ * True when any AC entry lists metal armor as a source.
+ * Shocking Grasp (PHB p.275) grants advantage against creatures wearing metal armor.
+ */
+function parseHasMetalArmor(ac: Raw5etoolsMonster['ac']): boolean {
+  if (!ac) return false;
+  for (const entry of ac) {
+    if (typeof entry === 'object' && entry.from) {
+      for (const source of entry.from) {
+        if (METAL_ARMOR_RE.test(source)) return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * Spellcasting ability modifier derived from the monster's spellcasting block.
+ * Returns undefined for non-spellcasters (no block present).
+ * Used by Green-Flame Blade splash, etc.
+ */
+function parseSpellcastingMod(raw: Raw5etoolsMonster): number | undefined {
+  const sc = (raw.spellcasting ?? [])[0];
+  if (!sc?.ability) return undefined;
+  const abilityMap: Record<string, keyof Pick<Raw5etoolsMonster, 'str'|'dex'|'con'|'int'|'wis'|'cha'>> = {
+    str: 'str', dex: 'dex', con: 'con', int: 'int', wis: 'wis', cha: 'cha',
+  };
+  const key = abilityMap[sc.ability.toLowerCase()];
+  if (!key) return undefined;
+  const score: number = (raw[key] as number) ?? 10;
+  return Math.floor((score - 10) / 2);
+}
+
+/**
+ * Caster level from "is a Nth-level spellcaster" in the spellcasting header.
+ * Falls back to ceil(CR) for innate spellcasters that list no explicit level.
+ * Returns undefined for non-spellcasters.
+ * Used for cantrip damage scaling (5th/11th/17th thresholds).
+ */
+function parseCasterLevel(raw: Raw5etoolsMonster): number | undefined {
+  const sc = (raw.spellcasting ?? [])[0];
+  if (!sc) return undefined;
+  for (const header of sc.headerEntries ?? []) {
+    const m = String(header).match(/is\s+an?\s+(\d+)(?:st|nd|rd|th)-level\s+spellcaster/i);
+    if (m) return parseInt(m[1], 10);
+  }
+  // Innate spellcasters: use CR as a proxy (minimum 1)
+  const cr = parseCR(raw.cr);
+  return cr !== null ? Math.max(1, Math.ceil(cr)) : undefined;
+}
+
 export function monsterToCombatant(
   raw: Raw5etoolsMonster,
   pos: Vec3 = { x: 0, y: 0, z: 0 },
@@ -468,7 +550,12 @@ export function monsterToCombatant(
     independentMount: false,
     role: 'regular',
     bonded: null,
-    creatureType: typeof raw.type === 'string' ? raw.type.toLowerCase() : '',   // MM p.6 — beast/humanoid/undead/etc. (Session 27 TG-004)
+    creatureType: rawCreatureType(raw.type),   // MM p.6 — beast/humanoid/undead/etc. (TG-004: handles string + object forms)
+    isUndead:    parseIsUndead(raw.type),        // TG-004
+    isConstruct: parseIsConstruct(raw.type),     // TG-004
+    hasMetalArmor: parseHasMetalArmor(raw.ac),  // TG-004 — Shocking Grasp advantage check
+    spellcastingMod: parseSpellcastingMod(raw), // TG-004 — GFB splash, etc.
+    casterLevel:     parseCasterLevel(raw),      // TG-004 — cantrip scaling
     tempHP: 0,
     resources: null,
     usedSneakAttackThisTurn: false,

@@ -25,18 +25,14 @@
 > `ACKNOWLEDGED — reviewing, ETA <N>` on the same line. Remove the line once
 > the underlying TG entry is actioned.
 
-- TG-006 awaiting Core Engine review since Cantrip-z session 21 (commit
-  `b53b622`) — see `docs/TG-006-SUMMON-PLAN.md` for the 4-phase plan Cantrip-z
-  is blocked on. **STALL FLAG (Sheet-37):** checked as of Cantrip-z session 28
-  / Core Engine session 44 — no acknowledgment logged, no `TASK.md` mention,
-  and zero `isSummon`/`summonerId`/`pendingInitiativeInserts` fields in
-  `src/types/core.ts`. The TG-012 2-session timeout has been exceeded by a
-  wide margin (7+ sessions). Per the TG-012 fallback protocol, Cantrip-z may
-  proceed unilaterally on Phase 1 LOW-risk additive sub-phases (new optional
-  type fields, new files under `src/summons/`, `src/spells/summon_*.ts`)
-  without further wait, but still needs explicit Core Engine sign-off before
-  touching `runCombat`/`combat.ts`. Flagged for Ares to route; Sheet has no
-  owned file in this item and is not actioning it further.
+- TG-006 **ACKNOWLEDGED — Core Engine session 46** (commit below).
+  Core Engine sign-off: **Phase 1 is APPROVED.** Cantrip-z may proceed with
+  all Phase 1 LOW-risk sub-phases immediately: optional type fields on
+  `Combatant`/`Battlefield`, new files under `src/summons/` and
+  `src/spells/summon_*.ts`, new `'summonSpell'` `PlannedAction` type. Do NOT
+  touch `runCombat`/`combat.ts` without a separate RFC comment in this file
+  first — that still requires explicit Core Engine sign-off per the TG-006
+  coordination protocol. Remove this line once Phase 1 is complete.
 
 ---
 
@@ -125,7 +121,7 @@ completed by a single agent without coordination.
 
 ### TG-004: Parser tech debt (Option E)
 
-- **Status:** OPEN
+- **Status:** IN PROGRESS — session 46: `isUndead`, `isConstruct`, `hasMetalArmor`, `spellcastingMod`, `casterLevel` all populated by `monsterToCombatant`. `isConstruct` added to `Combatant` type. 14/14 bestiary smoke-tests pass.
 - **Owners:** Core Engine (driving — owns `src/parser/*`)
 - **Source:** `zHANDOVER-SESSION-15.md` Option E; documented in
   zHANDOVER-3/4/5/6/7/8/9/10/11/12/13/14/15.
@@ -350,7 +346,7 @@ completed by a single agent without coordination.
 
 ### TG-013: Move `rollDiceString` from `booming_blade.ts` to `utils.ts`
 
-- **Status:** OPEN
+- **Status:** IN PROGRESS — Core Engine side DONE (session 46): added to `utils.ts`, updated `combat.ts` import. Cantrip-z to clean up re-export in `booming_blade.ts`.
 - **Owners:** Cantrip-z (driving — owns `src/spells/booming_blade.ts`) + Core Engine (must update `src/engine/combat.ts` import)
 - **Source:** Core Engine peer review, Session 45
 - **Summary:** `rollDiceString` (parses `"NdM"` strings and rolls them) is exported from `src/spells/booming_blade.ts` and imported directly by `src/engine/combat.ts` (line 57) for the Booming Blade detonation in `executeMove`. A spell module must not be a utility dependency of the engine. `utils.ts` already owns `rollDie` and `rollDice`; this function belongs there too.
