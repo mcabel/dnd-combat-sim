@@ -259,6 +259,10 @@ import { shouldCast as shouldCastSummonDraconicSpirit }   from '../spells/summon
 import { shouldCast as shouldCastSummonFiend }            from '../spells/summon_fiend';
 // ── TG-006 — PHB Conjure spells (Phase 2) ────────────────────────────────
 import { shouldCast as shouldCastConjureAnimals } from '../spells/conjure_animals';
+// ── TG-006 — PHB/XGE Find spells (Phase 3) ──────────────────────────────
+import { shouldCast as shouldCastFindFamiliar }        from '../spells/find_familiar';
+import { shouldCast as shouldCastFindSteed }           from '../spells/find_steed';
+import { shouldCast as shouldCastFindGreaterSteed }    from '../spells/find_greater_steed';
 
 // ── Session 19 — bulk-implementation generic dispatch (262 new spells) ────
 import { GENERIC_SPELL_LIST } from '../spells/_generic_registry';
@@ -2268,6 +2272,65 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
         action,
         targetId: self.id,
         description: `${self.name} casts Conjure Animals`,
+      };
+      plan.targetId = self.id;
+      plan.bonusAction = planBonusAction(self, self, battlefield);
+      return plan;
+    }
+  }
+
+  // === TG-006 — PHB/XGE FIND SPELLS (Phase 3) ===
+  // Find Familiar (PHB p.240): 1st-level conjuration, action, range 10 ft,
+  // NOT concentration (Instantaneous). Spawns an Owl Familiar (Tiny, Help action).
+  // Find Steed (PHB p.240): 2nd-level conjuration, action, range 30 ft,
+  // NOT concentration (Instantaneous). Spawns a Warhorse mount (Large, combat_mount).
+  // Find Greater Steed (XGE p.156): 4th-level conjuration, action, range 30 ft,
+  // NOT concentration (Instantaneous). Spawns a Griffon mount (Large, combat_mount).
+  // Priority: Find Greater Steed > Find Steed > Find Familiar (higher-level
+  // summons are more impactful). All three are NOT concentration — they
+  // persist until killed or dismissed.
+
+  // --- Find Greater Steed (4th-level, Griffon, NOT concentration) ---
+  if (!plan.action && self.actions.some(a => a.name === 'Find Greater Steed')) {
+    if (shouldCastFindGreaterSteed(self, battlefield)) {
+      const action = self.actions.find(a => a.name === 'Find Greater Steed')!;
+      plan.action = {
+        type: 'summonSpell',
+        action,
+        targetId: self.id,
+        description: `${self.name} casts Find Greater Steed`,
+      };
+      plan.targetId = self.id;
+      plan.bonusAction = planBonusAction(self, self, battlefield);
+      return plan;
+    }
+  }
+
+  // --- Find Steed (2nd-level, Warhorse, NOT concentration) ---
+  if (!plan.action && self.actions.some(a => a.name === 'Find Steed')) {
+    if (shouldCastFindSteed(self, battlefield)) {
+      const action = self.actions.find(a => a.name === 'Find Steed')!;
+      plan.action = {
+        type: 'summonSpell',
+        action,
+        targetId: self.id,
+        description: `${self.name} casts Find Steed`,
+      };
+      plan.targetId = self.id;
+      plan.bonusAction = planBonusAction(self, self, battlefield);
+      return plan;
+    }
+  }
+
+  // --- Find Familiar (1st-level, Owl, NOT concentration) ---
+  if (!plan.action && self.actions.some(a => a.name === 'Find Familiar')) {
+    if (shouldCastFindFamiliar(self, battlefield)) {
+      const action = self.actions.find(a => a.name === 'Find Familiar')!;
+      plan.action = {
+        type: 'summonSpell',
+        action,
+        targetId: self.id,
+        description: `${self.name} casts Find Familiar`,
       };
       plan.targetId = self.id;
       plan.bonusAction = planBonusAction(self, self, battlefield);

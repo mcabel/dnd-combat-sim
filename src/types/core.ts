@@ -475,7 +475,7 @@ export interface Combatant {
   independentMount: boolean;   // false = controlled (default); true = acts independently
 
   // Familiar / companion bonding
-  role: 'familiar' | 'mount' | 'companion' | 'regular';  // creature type/role
+  role: 'familiar' | 'mount' | 'combat_mount' | 'companion' | 'regular';  // creature type/role
   bonded: string | null;       // ID of bonded caster (for familiars) or bonded companion owner
 
   // Creature type (MM p.6) — e.g. 'beast', 'humanoid', 'undead', 'fiend'.

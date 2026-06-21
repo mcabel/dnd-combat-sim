@@ -693,6 +693,10 @@ import { shouldCast as shouldCastSummonDraconicSpirit,   execute as executeSummo
 import { shouldCast as shouldCastSummonFiend,            execute as executeSummonFiend }            from '../spells/summon_fiend';
 // ── TG-006 — PHB Conjure spells (Phase 2) ────────────────────────────────
 import { shouldCast as shouldCastConjureAnimals, execute as executeConjureAnimals } from '../spells/conjure_animals';
+// ── TG-006 — PHB/XGE Find spells (Phase 3) ──────────────────────────────
+import { shouldCast as shouldCastFindFamiliar,        execute as executeFindFamiliar }        from '../spells/find_familiar';
+import { shouldCast as shouldCastFindSteed,           execute as executeFindSteed }            from '../spells/find_steed';
+import { shouldCast as shouldCastFindGreaterSteed,    execute as executeFindGreaterSteed }     from '../spells/find_greater_steed';
 
 // ── Session 19 — bulk-implementation generic dispatch (262 new spells) ────
 import {
@@ -3778,6 +3782,12 @@ function executePlannedAction(
         executeSummonFiend(actor, actor, state);
       } else if (spellName === 'Conjure Animals') {
         executeConjureAnimals(actor, actor, state);
+      } else if (spellName === 'Find Familiar') {
+        executeFindFamiliar(actor, actor, state);
+      } else if (spellName === 'Find Steed') {
+        executeFindSteed(actor, actor, state);
+      } else if (spellName === 'Find Greater Steed') {
+        executeFindGreaterSteed(actor, actor, state);
       }
       // More summon spells can be added here (Phase 2+)
       break;
