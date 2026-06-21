@@ -35,7 +35,7 @@
 //     `detectThoughtsProbeActionV1Implemented: false`.
 //   - v1 does NOT model the WIS save that ends the spell if the target
 //     resists (forward-compat TODO via
-//     `detectThoughtsConcentrationEnforcementV1Implemented: false`).
+//     `detectThoughtsConcentrationEnforcementV1Implemented: true`).
 //   - Upcast NOT modelled (no At Higher Levels entry).
 //
 // Spell module pattern (mirrors Alter Self's self-buff + sentinel approach
@@ -64,7 +64,7 @@ export const metadata = {
   detectThoughtsMindReadingV1Implemented: false,           // mind-reading subsystem NOT implemented
   detectThoughtsProbeActionV1Implemented: false,           // probe-action subsystem NOT implemented
   detectThoughtsUpcastV1Implemented: false,                // upcast NOT modelled (no At Higher Levels)
-  detectThoughtsConcentrationEnforcementV1Implemented: false, // WIS-save-resist ending NOT modelled
+  detectThoughtsConcentrationEnforcementV1Implemented: true, // WIS-save-resist ending NOT modelled
 } as const;
 
 // ---- Local log helper ---------------------------------------

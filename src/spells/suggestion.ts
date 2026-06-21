@@ -70,7 +70,7 @@ export const metadata = {
   suggestionCommandSubystemV1Implemented: false,            // command-subsystem NOT modelled
   suggestionDurationV1Simplified: true,                     // canon 8 hr → v1 1 min combat duration
   suggestionUpcastV1Implemented: false,                     // no At Higher Levels entry — single target
-  suggestionConcentrationEnforcementV1Implemented: false,   // see TG-002
+  suggestionConcentrationEnforcementV1Implemented: true,   // TG-002 DONE (Session 34)
 } as const;
 
 // ---- Local log helper ---------------------------------------

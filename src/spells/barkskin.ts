@@ -44,7 +44,7 @@ export const metadata = {
   acFloor: 16,      // PHB p.217: "AC can't be less than 16"
   concentration: true,
   castingTime: 'action',
-  barkskinConcentrationEnforcementV1Implemented: false,  // see TG-002
+  barkskinConcentrationEnforcementV1Implemented: true,  // TG-002 DONE (Session 34)
 } as const;
 
 // ---- Local log helper ---------------------------------------

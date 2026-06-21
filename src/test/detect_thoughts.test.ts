@@ -144,8 +144,8 @@ eq('v1: probe action NOT implemented',
   (metadata as any).detectThoughtsProbeActionV1Implemented, false);
 eq('v1: upcast NOT implemented',
   (metadata as any).detectThoughtsUpcastV1Implemented, false);
-eq('v1: concentration enforcement NOT implemented',
-  (metadata as any).detectThoughtsConcentrationEnforcementV1Implemented, false);
+eq('v1: concentration enforcement NOW implemented (Session 34 TG-002)',
+  (metadata as any).detectThoughtsConcentrationEnforcementV1Implemented, true);
 
 // ============================================================
 // 2. shouldCast — precondition gates

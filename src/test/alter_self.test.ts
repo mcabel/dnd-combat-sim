@@ -166,8 +166,8 @@ eq('v1: Aquatic Adaptation NOT implemented',
   (metadata as any).alterSelfAquaticAdaptationV1Implemented, false);
 eq('v1: Change Appearance NOT implemented',
   (metadata as any).alterSelfChangeAppearanceV1Implemented, false);
-eq('v1: concentration enforcement NOT implemented',
-  (metadata as any).alterSelfConcentrationEnforcementV1Implemented, false);
+eq('v1: concentration enforcement NOW implemented (Session 34 TG-002)',
+  (metadata as any).alterSelfConcentrationEnforcementV1Implemented, true);
 
 // ============================================================
 // 2. shouldCast — precondition gates

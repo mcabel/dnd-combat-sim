@@ -80,7 +80,7 @@ export const metadata = {
   castingTime: 'action',
   phantasmalForceRationalizationV1Implemented: false,             // rationalization NOT modelled
   phantasmalForceUpcastV1Implemented: false,                       // (no upcast entry — placeholder)
-  phantasmalForceConcentrationEnforcementV1Implemented: false,     // see TG-002
+  phantasmalForceConcentrationEnforcementV1Implemented: true,     // TG-002 DONE (Session 34)
 } as const;
 
 // ---- Local log helper ---------------------------------------

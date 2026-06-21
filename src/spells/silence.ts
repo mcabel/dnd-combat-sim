@@ -68,7 +68,7 @@ export const metadata = {
   silenceVerbalSpellBlockV1Implemented: false,            // verbal spell block NOT modelled
   silenceAoEMultiTargetV1Implemented: false,              // single-target simplification
   silenceUpcastV1Implemented: false,                      // no At Higher Levels entry — single target
-  silenceConcentrationEnforcementV1Implemented: false,    // see TG-002
+  silenceConcentrationEnforcementV1Implemented: true,    // TG-002 DONE (Session 34)
 } as const;
 
 // ---- Local log helper ---------------------------------------

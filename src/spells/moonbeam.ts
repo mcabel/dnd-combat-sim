@@ -76,7 +76,7 @@ export const metadata = {
   moonbeamCylinderAoeV1Implemented: false,                      // single-target only
   moonbeamMovementV1Implemented: true,                           // beam movement modelled (v1: automatic, no action cost)
   moonbeamUpcastV1Implemented: false,                            // +1d10/slot-level NOT modelled
-  moonbeamConcentrationEnforcementV1Implemented: false,          // see TG-002
+  moonbeamConcentrationEnforcementV1Implemented: true,          // TG-002 DONE (Session 34)
 } as const;
 
 // ---- Local log helper ---------------------------------------

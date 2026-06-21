@@ -81,7 +81,7 @@ export const metadata = {
   spikeGrowthDifficultTerrainV1Implemented: true,                 // PHB p.277: area becomes difficult terrain
   spikeGrowthMovementTriggerV1Implemented: false,                  // per-5-ft movement damage NOT modelled
   spikeGrowthUpcastV1Implemented: false,                           // (no upcast entry — placeholder)
-  spikeGrowthConcentrationEnforcementV1Implemented: false,         // see TG-002
+  spikeGrowthConcentrationEnforcementV1Implemented: true,         // TG-002 DONE (Session 34)
 } as const;
 
 // ---- Local log helper ---------------------------------------

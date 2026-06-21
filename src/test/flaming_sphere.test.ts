@@ -158,7 +158,7 @@ eq('casting time is action', metadata.castingTime, 'action');
 eq('sphere movement IS implemented (v1)', metadata.flamingSphereMovementV1Implemented, true);
 eq('multi-target NOT implemented (v1)', metadata.flamingSphereMultiTargetV1Implemented, false);
 eq('upcast NOT implemented (v1)', metadata.flamingSphereUpcastV1Implemented, false);
-eq('concentration enforcement NOT implemented (v1)', metadata.flamingSphereConcentrationEnforcementV1Implemented, false);
+eq('concentration enforcement NOW implemented (Session 34 TG-002)', metadata.flamingSphereConcentrationEnforcementV1Implemented, true);
 
 // ============================================================
 // 2. shouldCast — precondition gates + target priority

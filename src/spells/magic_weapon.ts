@@ -50,7 +50,7 @@ export const metadata = {
   magicWeaponPerWeaponV1Implemented: false,                   // per-weapon tracking NOT modelled
   magicWeaponNonmagicalCheckV1Implemented: false,             // nonmagical-weapon check skipped
   magicWeaponUpcastV1Implemented: false,                      // +2/+3 NOT modelled
-  magicWeaponConcentrationEnforcementV1Implemented: false,    // see TG-002
+  magicWeaponConcentrationEnforcementV1Implemented: true,    // TG-002 DONE (Session 34)
 } as const;
 
 // ---- Local log helper ---------------------------------------

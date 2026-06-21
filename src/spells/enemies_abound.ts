@@ -52,7 +52,7 @@ export const metadata = {
   saveAbility: 'int' as const,
   castingTime: 'action',
   enemiesAboundDebuffV1SimplifiedToFrightened: true,       // target-acquisition → frightened
-  enemiesAboundConcentrationEnforcementV1Implemented: false,
+  enemiesAboundConcentrationEnforcementV1Implemented: true,
   enemiesAboundEndOfTurnSaveV1Implemented: false,
 } as const;
 

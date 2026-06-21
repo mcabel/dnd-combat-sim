@@ -147,7 +147,7 @@ eq('casting time is action', metadata.castingTime, 'action');
 eq('difficult terrain IS implemented (v1)', metadata.spikeGrowthDifficultTerrainV1Implemented, true);
 eq('movement trigger NOT implemented (v1)', metadata.spikeGrowthMovementTriggerV1Implemented, false);
 eq('upcast NOT implemented (v1)', metadata.spikeGrowthUpcastV1Implemented, false);
-eq('concentration enforcement NOT implemented (v1)', metadata.spikeGrowthConcentrationEnforcementV1Implemented, false);
+eq('concentration enforcement NOW implemented (Session 34 TG-002)', metadata.spikeGrowthConcentrationEnforcementV1Implemented, true);
 
 // ============================================================
 // 2. shouldCast — precondition gates

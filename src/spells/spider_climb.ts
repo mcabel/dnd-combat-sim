@@ -52,7 +52,7 @@ export const metadata = {
   castingTime: 'action',
   spiderClimbClimbSpeedV1Implemented: false,                // climb-speed subsystem NOT implemented
   spiderClimbUpcastV1Implemented: false,                    // upcast NOT modelled (no At Higher Levels)
-  spiderClimbConcentrationEnforcementV1Implemented: false,  // concentration break NOT enforced (TG-002)
+  spiderClimbConcentrationEnforcementV1Implemented: true,  // concentration break NOT enforced (TG-002)
 } as const;
 
 // ---- Local log helper ---------------------------------------

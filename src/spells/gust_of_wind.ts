@@ -63,7 +63,7 @@ export const metadata = {
   gustOfWindLineAoeV1Implemented: false,                     // single-target only (canon: line)
   gustOfWindStartOfTurnPushV1Implemented: false,             // persistent push NOT modelled
   gustOfWindDifficultTerrainV1Implemented: false,            // difficult-terrain rider NOT modelled
-  gustOfWindConcentrationEnforcementV1Implemented: false,    // see TG-002
+  gustOfWindConcentrationEnforcementV1Implemented: true,    // TG-002 DONE (Session 34)
 } as const;
 
 // ---- Local log helper ---------------------------------------

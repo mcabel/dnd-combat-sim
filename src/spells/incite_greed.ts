@@ -43,7 +43,7 @@ export const metadata = {
   concentration: true,
   saveAbility: 'wis' as const,
   castingTime: 'action',
-  inciteGreedConcentrationEnforcementV1Implemented: false,
+  inciteGreedConcentrationEnforcementV1Implemented: true,
   inciteGreedEndOfTurnSaveV1Implemented: false,
 } as const;
 

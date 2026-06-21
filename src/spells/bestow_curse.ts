@@ -77,7 +77,7 @@ export const metadata = {
   castingTime: 'action',
   bestowCurseOptionsV2Implemented: true,                    // 4 canon curse options with proper effects
   bestowCurseCanonTouchRangeV1: true,                       // Session 27: canon Touch range (was 60 ft per plan)
-  bestowCurseConcentrationEnforcementV1Implemented: false,
+  bestowCurseConcentrationEnforcementV1Implemented: true,
   bestowCurseUpcastV1Implemented: false,                    // duration extensions NOT modelled
 } as const;
 

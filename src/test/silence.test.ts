@@ -148,7 +148,7 @@ eq('casting time is action', metadata.castingTime, 'action');
 eq('verbal spell block NOT implemented (v1)', metadata.silenceVerbalSpellBlockV1Implemented, false);
 eq('AoE multi-target NOT implemented (v1)', metadata.silenceAoEMultiTargetV1Implemented, false);
 eq('upcast NOT implemented (v1)', metadata.silenceUpcastV1Implemented, false);
-eq('concentration enforcement NOT implemented (v1)', metadata.silenceConcentrationEnforcementV1Implemented, false);
+eq('concentration enforcement NOW implemented (Session 34 TG-002)', metadata.silenceConcentrationEnforcementV1Implemented, true);
 
 // ============================================================
 // 2. shouldCast — precondition gates (incl. concentration)

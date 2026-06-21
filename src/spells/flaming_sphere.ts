@@ -75,7 +75,7 @@ export const metadata = {
   flamingSphereMovementV1Implemented: true,                   // sphere movement modelled (v1: automatic, no action cost)
   flamingSphereMultiTargetV1Implemented: false,               // single-target only
   flamingSphereUpcastV1Implemented: false,                    // +1d6/slot-level NOT modelled
-  flamingSphereConcentrationEnforcementV1Implemented: false,  // see TG-002
+  flamingSphereConcentrationEnforcementV1Implemented: true,  // TG-002 DONE (Session 34)
 } as const;
 
 // ---- Local log helper ---------------------------------------

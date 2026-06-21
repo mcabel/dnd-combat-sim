@@ -57,7 +57,7 @@ export const metadata = {
   saveAbility: 'wis' as const,
   castingTime: 'action',
   fastFriendsControlV2Implemented: true,                   // suggestion effect type (charmed + disadv on attacks)
-  fastFriendsConcentrationEnforcementV1Implemented: false,
+  fastFriendsConcentrationEnforcementV1Implemented: true,
 } as const;
 
 // ---- Local log helper ---------------------------------------

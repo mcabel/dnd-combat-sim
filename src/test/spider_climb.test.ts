@@ -140,8 +140,8 @@ eq('v1: climb-speed subsystem NOT implemented',
   (metadata as any).spiderClimbClimbSpeedV1Implemented, false);
 eq('v1: upcast NOT implemented',
   (metadata as any).spiderClimbUpcastV1Implemented, false);
-eq('v1: concentration enforcement NOT implemented',
-  (metadata as any).spiderClimbConcentrationEnforcementV1Implemented, false);
+eq('v1: concentration enforcement NOW implemented (Session 34 TG-002)',
+  (metadata as any).spiderClimbConcentrationEnforcementV1Implemented, true);
 
 // ============================================================
 // 2. shouldCast — precondition gates

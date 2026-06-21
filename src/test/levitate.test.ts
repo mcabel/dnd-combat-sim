@@ -165,7 +165,7 @@ eq('Levitate modelled as restrained (v1 simplified)', metadata.levitateAsRestrai
 eq('end-of-turn CON save NOT implemented (v1)', metadata.levitateEndOfTurnSaveV1Implemented, false);
 eq('vertical movement NOT implemented (v1)', metadata.levitateVerticalMovementV1Implemented, false);
 eq('object targeting NOT implemented (v1)', metadata.levitateObjectTargetingV1Implemented, false);
-eq('concentration enforcement NOT implemented (v1)', metadata.levitateConcentrationEnforcementV1Implemented, false);
+eq('concentration enforcement NOW implemented (Session 34 TG-002)', metadata.levitateConcentrationEnforcementV1Implemented, true);
 
 // ============================================================
 // 2. shouldCast — precondition gates + priority

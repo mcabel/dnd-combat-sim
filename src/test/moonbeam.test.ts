@@ -158,7 +158,7 @@ eq('casting time is action', metadata.castingTime, 'action');
 eq('cylinder AoE NOT implemented (v1)', metadata.moonbeamCylinderAoeV1Implemented, false);
 eq('beam movement IS implemented (v1)', metadata.moonbeamMovementV1Implemented, true);
 eq('upcast NOT implemented (v1)', metadata.moonbeamUpcastV1Implemented, false);
-eq('concentration enforcement NOT implemented (v1)', metadata.moonbeamConcentrationEnforcementV1Implemented, false);
+eq('concentration enforcement NOW implemented (Session 34 TG-002)', metadata.moonbeamConcentrationEnforcementV1Implemented, true);
 
 // ============================================================
 // 2. shouldCast — precondition gates

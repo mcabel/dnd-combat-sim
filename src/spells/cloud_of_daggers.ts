@@ -78,7 +78,7 @@ export const metadata = {
   cloudOfDaggersMultiTargetV1Implemented: false,           // single-target only
   cloudOfDaggersMovementTrackingV1Implemented: false,      // persistent dmg regardless of position
   cloudOfDaggersUpcastV1Implemented: false,                // +2d4/slot-level not modelled
-  cloudOfDaggersConcentrationEnforcementV1Implemented: false,  // see TG-002
+  cloudOfDaggersConcentrationEnforcementV1Implemented: true,  // TG-002 DONE (Session 34)
 } as const;
 
 // ---- Local log helper ---------------------------------------

@@ -135,7 +135,7 @@ eq('casting time is action', metadata.castingTime, 'action');
 // Session 32: ends-on-attack NOW IMPLEMENTED (flag flipped from false to true)
 eq('ends-on-attack NOW implemented (Session 32)', metadata.invisibilityEndsOnAttackV1Implemented, true);
 eq('upcast NOT implemented (v1)', metadata.invisibilityUpcastV1Implemented, false);
-eq('concentration enforcement NOT implemented (v1)', metadata.invisibilityConcentrationEnforcementV1Implemented, false);
+eq('concentration enforcement NOW implemented (Session 34 TG-002)', metadata.invisibilityConcentrationEnforcementV1Implemented, true);
 
 // ============================================================
 // 2. shouldCast — precondition gates

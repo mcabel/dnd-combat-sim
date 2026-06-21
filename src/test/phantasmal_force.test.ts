@@ -154,7 +154,7 @@ eq('save ability is int (first INT save)', metadata.saveAbility, 'int');
 eq('casting time is action', metadata.castingTime, 'action');
 eq('rationalization NOT implemented (v1)', metadata.phantasmalForceRationalizationV1Implemented, false);
 eq('upcast NOT implemented (v1)', metadata.phantasmalForceUpcastV1Implemented, false);
-eq('concentration enforcement NOT implemented (v1)', metadata.phantasmalForceConcentrationEnforcementV1Implemented, false);
+eq('concentration enforcement NOW implemented (Session 34 TG-002)', metadata.phantasmalForceConcentrationEnforcementV1Implemented, true);
 
 // ============================================================
 // 2. shouldCast — precondition gates

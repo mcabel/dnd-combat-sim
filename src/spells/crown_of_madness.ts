@@ -90,7 +90,7 @@ export const metadata = {
   crownOfMadnessControlV2Implemented: true,                  // taunt+charmed approximates forced-attack control
   crownOfMadnessActionMaintenanceV1Implemented: false,      // multi-turn action commitment skipped
   crownOfMadnessEndOfTurnSaveV1Implemented: false,          // end-of-turn save skipped
-  crownOfMadnessConcentrationEnforcementV1Implemented: false,  // see TG-002
+  crownOfMadnessConcentrationEnforcementV1Implemented: true,  // TG-002 DONE (Session 34)
   crownOfMadnessHumanoidTypeCheckV1Implemented: false,      // see TG-004
 } as const;
 

@@ -160,7 +160,7 @@ eq('casting time is action', metadata.castingTime, 'action');
 eq('line AoE NOT implemented (v1 — single-target)', metadata.gustOfWindLineAoeV1Implemented, false);
 eq('start-of-turn push NOT implemented (v1)', metadata.gustOfWindStartOfTurnPushV1Implemented, false);
 eq('difficult-terrain rider NOT implemented (v1)', metadata.gustOfWindDifficultTerrainV1Implemented, false);
-eq('concentration enforcement NOT implemented (v1)', metadata.gustOfWindConcentrationEnforcementV1Implemented, false);
+eq('concentration enforcement NOW implemented (Session 34 TG-002)', metadata.gustOfWindConcentrationEnforcementV1Implemented, true);
 
 // ============================================================
 // 2. shouldCast — precondition gates + priority

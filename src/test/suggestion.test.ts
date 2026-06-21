@@ -164,7 +164,7 @@ eq('casting time is action', metadata.castingTime, 'action');
 eq('suggestion behaviour v2 implemented', metadata.suggestionBehaviourV2Implemented, true);
 eq('duration simplified (v1)', metadata.suggestionDurationV1Simplified, true);
 eq('upcast NOT implemented (v1)', metadata.suggestionUpcastV1Implemented, false);
-eq('concentration enforcement NOT implemented (v1)', metadata.suggestionConcentrationEnforcementV1Implemented, false);
+eq('concentration enforcement NOW implemented (Session 34 TG-002)', metadata.suggestionConcentrationEnforcementV1Implemented, true);
 
 // ============================================================
 // 2. shouldCast — precondition gates (incl. concentration)

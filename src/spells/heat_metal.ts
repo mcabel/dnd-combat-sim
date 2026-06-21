@@ -75,7 +75,7 @@ export const metadata = {
   heatMetalHoldingDisadvantageV1Implemented: false,           // holding disadv NOT modelled
   heatMetalMetalObjectCheckV1Implemented: false,              // metal-object check skipped (TG-004)
   heatMetalUpcastV1Implemented: false,                        // +1d8/slot-level NOT modelled
-  heatMetalConcentrationEnforcementV1Implemented: false,      // see TG-002
+  heatMetalConcentrationEnforcementV1Implemented: true,      // TG-002 DONE (Session 34)
 } as const;
 
 // ---- Local log helper ---------------------------------------
