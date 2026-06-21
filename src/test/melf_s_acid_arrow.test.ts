@@ -276,17 +276,33 @@ console.log('\n=== 4. execute — on miss ===\n');
 
 {
   // 4a. On miss: no immediate damage, no damage_zone effect
-  const caster = makeWizard();
-  caster.actions = [ACID_ACTION_MISS];       // hitBonus 0
-  const enemy = makeHighAcEnemy('e1');        // AC 30
-  const bf = makeBF([caster, enemy]);
-  const state = makeState(bf);
+  // NOTE: AC 30 vs hitBonus +0 guarantees a miss EXCEPT on a nat 20 (5% chance),
+  // which auto-crits per PHB p.194. We retry until we get a confirmed miss
+  // (attack_miss event in the log) to make the test deterministic.
+  let attempts = 0;
+  let confirmedMiss = false;
+  while (attempts < 50 && !confirmedMiss) {
+    attempts++;
+    const caster = makeWizard();
+    caster.actions = [ACID_ACTION_MISS];       // hitBonus 0
+    caster.resources = { spellSlots: { 2: { max: 2, remaining: 2 } } } as any; // fresh slots each attempt
+    const enemy = makeHighAcEnemy('e1');        // AC 30
+    const bf = makeBF([caster, enemy]);
+    const state = makeState(bf);
 
-  execute(caster, enemy, state);
+    execute(caster, enemy, state);
 
-  eq('No immediate damage on miss', enemy.currentHP, 100);
-  eq('No damage_zone effect on miss', getActiveDamageZones(enemy).length, 0);
-  eq('Slot still consumed on miss', caster.resources!.spellSlots![2]!.remaining, 1);
+    const events = state.log.events as any[];
+    const missEvents = events.filter(e => e.type === 'attack_miss');
+    if (missEvents.length > 0) {
+      confirmedMiss = true;
+      eq('No immediate damage on miss', enemy.currentHP, 100);
+      eq('No damage_zone effect on miss', getActiveDamageZones(enemy).length, 0);
+      // Slot consumed on the confirmed-miss attempt
+      eq('Slot still consumed on miss', caster.resources!.spellSlots![2]!.remaining, 1);
+    }
+  }
+  assert('4a: confirmed miss within 50 attempts (nat-20 avoided)', confirmedMiss);
 }
 
 {
@@ -356,22 +372,33 @@ console.log('\n=== 6. execute — logging ===\n');
 
 {
   // 6b. On miss: attack_miss event, no damage event, no condition_add event
-  const caster = makeWizard();
-  caster.actions = [ACID_ACTION_MISS];
-  const enemy = makeHighAcEnemy('e1');
-  const bf = makeBF([caster, enemy]);
-  const state = makeState(bf);
+  // NOTE: Same nat-20 flakiness as test 4a — retry until confirmed miss.
+  let attempts = 0;
+  let confirmedMiss = false;
+  while (attempts < 50 && !confirmedMiss) {
+    attempts++;
+    const caster = makeWizard();
+    caster.actions = [ACID_ACTION_MISS];
+    caster.resources = { spellSlots: { 2: { max: 2, remaining: 2 } } } as any;
+    const enemy = makeHighAcEnemy('e1');
+    const bf = makeBF([caster, enemy]);
+    const state = makeState(bf);
 
-  execute(caster, enemy, state);
+    execute(caster, enemy, state);
 
-  const events = state.log.events as any[];
-  const missEvents = events.filter(e => e.type === 'attack_miss');
-  const damageEvents = events.filter(e => e.type === 'damage');
-  const condEvents = events.filter(e => e.type === 'condition_add');
+    const events = state.log.events as any[];
+    const missEvents = events.filter(e => e.type === 'attack_miss');
+    if (missEvents.length > 0) {
+      confirmedMiss = true;
+      const damageEvents = events.filter(e => e.type === 'damage');
+      const condEvents = events.filter(e => e.type === 'condition_add');
 
-  assert('Attack miss event emitted', missEvents.length === 1);
-  assert('No damage event on miss', damageEvents.length === 0);
-  assert('No condition_add event on miss', condEvents.length === 0);
+      assert('Attack miss event emitted', missEvents.length === 1);
+      assert('No damage event on miss', damageEvents.length === 0);
+      assert('No condition_add event on miss', condEvents.length === 0);
+    }
+  }
+  assert('6b: confirmed miss within 50 attempts (nat-20 avoided)', confirmedMiss);
 }
 
 // ============================================================
