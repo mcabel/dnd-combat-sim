@@ -18,7 +18,8 @@
 //   - applyLevelUp sets subclassPrompt; caller must call chooseSubclass
 // ============================================================
 
-import { CharacterSheet, ClassName } from './types';
+import { CharacterSheet, ClassName, CharacterFeature, totalLevel } from './types';
+import { getFeat } from './feat_data';
 
 // Valid ability score keys
 const ABILITY_KEYS = ['str', 'dex', 'con', 'int', 'wis', 'cha'] as const;
@@ -27,6 +28,15 @@ type AbilityKey = typeof ABILITY_KEYS[number];
 function isAbilityKey(v: unknown): v is AbilityKey {
   return ABILITY_KEYS.includes(v as AbilityKey);
 }
+
+// All 18 PHB 2014 skill names (mirrors the SkillName union in types.ts —
+// kept as a runtime array here since unions aren't inspectable at runtime).
+const SKILL_NAMES: string[] = [
+  'Athletics', 'Acrobatics', 'Sleight of Hand', 'Stealth',
+  'Arcana', 'History', 'Investigation', 'Nature', 'Religion',
+  'Animal Handling', 'Insight', 'Medicine', 'Perception', 'Survival',
+  'Deception', 'Intimidation', 'Performance', 'Persuasion',
+];
 
 // ============================================================
 // applyASI
@@ -115,6 +125,209 @@ export function applyASI(
     baseStats: newBase,
     pendingAbilityScoreImprovements: newPending,
     pendingASIHalfPoints: newHalf,
+    updatedAt: new Date().toISOString(),
+  };
+
+  return result;
+}
+
+
+// ============================================================
+// applyFeat
+// ============================================================
+//
+// PHB p.165: "Instead of taking an Ability Score Improvement, you can
+// forgo it to take the feat of your choice." A feat consumes exactly
+// one FULL ASI (the same accounting as applyASI(ability, 2)) — it is
+// never combined with a partial +1 split.
+//
+// Scope (see feat_data.ts header for the full rationale): this applies
+// every sheet-computable PHB feat effect — ability score bumps,
+// saving-throw/skill/tool/language/armor proficiencies, and Tough's HP
+// bonus. Combat-only feat mechanics (Great Weapon Master, Sharpshooter,
+// Polearm Master, Sentinel, etc.) have no sheet-side number to apply;
+// the feat is still recorded with its full description so it's visible
+// on the sheet, but its combat effect must be applied at the table or
+// by Core Engine's combat resolution, not here.
+//
+// Known limitation: unlike a class-level push, taking a feat is not
+// recorded in CharacterSheet.levelHistory, so popLevel() cannot reverse
+// a feat choice. This mirrors the pre-existing behavior of chooseSubclass
+// (also not stack-reversible) rather than introducing a new gap — full
+// undo support would require extending LevelRecord to snapshot
+// proficiencies/languages/feats, which is out of scope for this pass.
+// ============================================================
+
+export interface ApplyFeatChoices {
+  /** Required only if the feat's abilityChoice offers more than one option. */
+  abilityChoice?: string;
+  /** Skilled: skill names chosen (validated against the 18 PHB skills). */
+  skillChoices?: string[];
+  /** Skilled: tool/instrument/gaming-set names chosen (freeform, not validated). */
+  toolChoices?: string[];
+  /** Linguist: language names chosen (freeform, not validated). */
+  languageChoices?: string[];
+}
+
+/**
+ * Apply a feat chosen instead of an Ability Score Improvement.
+ *
+ * @param sheet     Current character sheet
+ * @param featName  Exact PHB feat name (see FEAT_NAMES in feat_data.ts)
+ * @param choices   Resolves any feat-specific picks (ability/skills/tools/languages)
+ * @returns Updated sheet (new object, no mutation)
+ * @throws Error if validation fails
+ */
+export function applyFeat(
+  sheet: CharacterSheet,
+  featName: string,
+  choices: ApplyFeatChoices = {},
+): CharacterSheet {
+  const feat = getFeat(featName);
+  if (!feat) {
+    throw new Error(`Unknown feat "${featName}". Must be one of the 42 PHB 2014 feats.`);
+  }
+
+  // Most feats can only be taken once. Elemental Adept (PHB p.166) is the sole
+  // PHB exception — it can be selected multiple times, once per damage type —
+  // but the sheet doesn't track which type was chosen, so we still allow a
+  // repeat pick here rather than silently blocking a legal RAW choice.
+  if (featName !== 'Elemental Adept' && (sheet.feats || []).includes(featName)) {
+    throw new Error(`Character already has the "${featName}" feat.`);
+  }
+
+  // Consume one full ASI (2 half-points) — identical accounting to applyASI(ability, 2).
+  const pending    = sheet.pendingAbilityScoreImprovements ?? 0;
+  const halfPoints = sheet.pendingASIHalfPoints ?? 0;
+  const totalHalf  = pending * 2 + halfPoints;
+  if (totalHalf < 2) {
+    throw new Error(
+      `No pending Ability Score Improvement available to spend on a feat. ` +
+      `pendingAbilityScoreImprovements=${pending}, pendingASIHalfPoints=${halfPoints}.`
+    );
+  }
+
+  let newStats   = { ...sheet.stats };
+  let newBase    = { ...sheet.baseStats };
+  const newSavingThrows = [...sheet.proficiencies.savingThrows];
+  const newSkills       = [...sheet.proficiencies.skills];
+  const newTools        = [...sheet.proficiencies.tools];
+  const newArmor        = [...sheet.proficiencies.armor];
+  const newLanguages    = [...sheet.languages];
+  let newMaxHP     = sheet.maxHP;
+  let newCurrentHP = sheet.currentHP;
+
+  // ---- Ability score increase --------------------------------
+  let chosenAbility: AbilityKey | undefined;
+  if (feat.abilityChoice) {
+    const { options, amount } = feat.abilityChoice;
+    if (options.length === 1) {
+      chosenAbility = options[0] as AbilityKey;
+    } else {
+      if (!choices.abilityChoice || !isAbilityKey(choices.abilityChoice) ||
+          !options.includes(choices.abilityChoice)) {
+        throw new Error(
+          `Feat "${featName}" requires an ability choice from: ${options.join(', ')}.`
+        );
+      }
+      chosenAbility = choices.abilityChoice;
+    }
+    const current = newStats[chosenAbility];
+    if (current + amount > 20) {
+      throw new Error(
+        `Cannot raise ${chosenAbility} above 20 via "${featName}" (current: ${current}).`
+      );
+    }
+    newStats = { ...newStats, [chosenAbility]: current + amount };
+    newBase  = { ...newBase,  [chosenAbility]: newBase[chosenAbility] + amount };
+  }
+
+  // ---- Saving throw proficiency (Resilient only) ---------------
+  if (feat.savingThrowMatchesAbilityChoice && chosenAbility) {
+    if (!newSavingThrows.includes(chosenAbility)) newSavingThrows.push(chosenAbility);
+  }
+
+  // ---- Skill / tool proficiencies (Skilled only) ----------------
+  if (feat.skillOrToolChoiceCount) {
+    const skills = choices.skillChoices ?? [];
+    const tools  = choices.toolChoices  ?? [];
+    const total  = skills.length + tools.length;
+    if (total !== feat.skillOrToolChoiceCount) {
+      throw new Error(
+        `Feat "${featName}" requires exactly ${feat.skillOrToolChoiceCount} ` +
+        `skill/tool choices combined (got ${total}).`
+      );
+    }
+    for (const s of skills) {
+      if (!SKILL_NAMES.includes(s)) {
+        throw new Error(`"${s}" is not a valid PHB skill name.`);
+      }
+      if (!newSkills.includes(s as typeof newSkills[number])) {
+        newSkills.push(s as typeof newSkills[number]);
+      }
+    }
+    for (const t of tools) {
+      if (!newTools.includes(t)) newTools.push(t);
+    }
+  }
+
+  // ---- Languages (Linguist only) ---------------------------------
+  if (feat.languageChoiceCount) {
+    const langs = choices.languageChoices ?? [];
+    if (langs.length !== feat.languageChoiceCount) {
+      throw new Error(
+        `Feat "${featName}" requires exactly ${feat.languageChoiceCount} language choices ` +
+        `(got ${langs.length}).`
+      );
+    }
+    for (const l of langs) {
+      if (!newLanguages.includes(l)) newLanguages.push(l);
+    }
+  }
+
+  // ---- Armor proficiency (Heavily/Moderately/Lightly Armored) ----
+  if (feat.armorProficiencyGrant) {
+    for (const a of feat.armorProficiencyGrant) {
+      if (!newArmor.includes(a)) newArmor.push(a);
+    }
+  }
+
+  // ---- HP (Tough only): +N x current total level, immediately ----
+  if (feat.hpPerLevel) {
+    const bonus = feat.hpPerLevel * totalLevel(sheet);
+    newMaxHP     += bonus;
+    newCurrentHP += bonus;
+  }
+
+  // ---- Consume the ASI slot --------------------------------------
+  const newTotalHalf = totalHalf - 2;
+  const newPending    = Math.floor(newTotalHalf / 2);
+  const newHalf       = newTotalHalf % 2;
+
+  const newFeature: CharacterFeature = {
+    name:        feat.name,
+    description: feat.description,
+    source:      'feat',
+  };
+
+  const result: CharacterSheet = {
+    ...sheet,
+    stats:     newStats,
+    baseStats: newBase,
+    proficiencies: {
+      ...sheet.proficiencies,
+      savingThrows: newSavingThrows,
+      skills:       newSkills,
+      tools:        newTools,
+      armor:        newArmor,
+    },
+    languages:  newLanguages,
+    maxHP:      newMaxHP,
+    currentHP:  newCurrentHP,
+    feats:      [...(sheet.feats || []), featName],
+    allFeatures: [...sheet.allFeatures, newFeature],
+    pendingAbilityScoreImprovements: newPending,
+    pendingASIHalfPoints:            newHalf,
     updatedAt: new Date().toISOString(),
   };
 

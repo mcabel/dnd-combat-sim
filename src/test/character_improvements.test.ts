@@ -4,8 +4,9 @@
 // ============================================================
 
 import { randomUUID } from 'crypto';
-import { applyASI, chooseSubclass } from '../characters/improvements';
-import { applyLevelUp } from '../characters/leveler';
+import { applyASI, applyFeat, chooseSubclass } from '../characters/improvements';
+import { applyLevelUp, popLevel } from '../characters/leveler';
+import { getFeat, FEAT_NAMES } from '../characters/feat_data';
 import { CharacterSheet } from '../characters/types';
 
 // ---- Test harness -------------------------------------------
@@ -345,6 +346,204 @@ console.log('\n=== Pure Function Guarantees ===');
 
   chooseSubclass(leveled, 'Fighter', 'Champion');
   eq('chooseSubclass: input unchanged', JSON.stringify(leveled), frozen2);
+}
+
+// ============================================================
+// GROUP 16: applyFeat — fixed-ability feat (Keen Mind, no choice needed)
+// ============================================================
+console.log('\n=== applyFeat: Fixed Ability (Keen Mind) ===');
+{
+  const sheet = makeFighterWithASI(); // int: 8
+  const result = applyFeat(sheet, 'Keen Mind');
+  eq('INT raised by 1', result.stats.int, 9);
+  eq('baseStats.int raised by 1', result.baseStats.int, 9);
+  eq('pending ASI consumed', result.pendingAbilityScoreImprovements, 0);
+  eq('half points still 0', result.pendingASIHalfPoints, 0);
+  assert('feat recorded in feats[]', result.feats.includes('Keen Mind'));
+  const added = result.allFeatures.find(f => f.name === 'Keen Mind');
+  assert('feature added to allFeatures', !!added);
+  eq('feature source is feat', added?.source, 'feat');
+  assert('description non-empty', !!added && added.description.length > 20);
+}
+
+// ============================================================
+// GROUP 17: applyFeat — choice-ability feat (Athlete: STR or DEX)
+// ============================================================
+console.log('\n=== applyFeat: Choice Ability (Athlete) ===');
+{
+  throws('missing abilityChoice throws', () => applyFeat(makeFighterWithASI(), 'Athlete'), 'requires an ability choice');
+  throws('invalid abilityChoice throws', () => applyFeat(makeFighterWithASI(), 'Athlete', { abilityChoice: 'wis' }), 'requires an ability choice');
+
+  const sheet = makeFighterWithASI(); // dex: 10
+  const result = applyFeat(sheet, 'Athlete', { abilityChoice: 'dex' });
+  eq('DEX raised by 1', result.stats.dex, 11);
+  eq('STR unchanged', result.stats.str, 17);
+}
+
+// ============================================================
+// GROUP 18: applyFeat — Resilient (ability choice + matching save prof)
+// ============================================================
+console.log('\n=== applyFeat: Resilient ===');
+{
+  const sheet = makeFighterWithASI(); // savingThrows: ['str','con'], wis: 12
+  assert('precondition: no WIS save prof yet', !sheet.proficiencies.savingThrows.includes('wis'));
+  const result = applyFeat(sheet, 'Resilient', { abilityChoice: 'wis' });
+  eq('WIS raised by 1', result.stats.wis, 13);
+  assert('WIS save proficiency granted', result.proficiencies.savingThrows.includes('wis'));
+  assert('existing str/con saves preserved', result.proficiencies.savingThrows.includes('str') && result.proficiencies.savingThrows.includes('con'));
+
+  // Re-applying for an ability that already has the save prof shouldn't duplicate it
+  const sheet2 = makeFighterWithASI({ pendingAbilityScoreImprovements: 1, stats: { str: 16, dex: 10, con: 16, int: 8, wis: 12, cha: 13 }, baseStats: { str: 16, dex: 10, con: 16, int: 8, wis: 12, cha: 13 } });
+  const result2 = applyFeat(sheet2, 'Resilient', { abilityChoice: 'str' });
+  const strCount = result2.proficiencies.savingThrows.filter(s => s === 'str').length;
+  eq('no duplicate str save prof', strCount, 1);
+}
+
+// ============================================================
+// GROUP 19: applyFeat — Skilled (3 skill/tool choices, freely mixed)
+// ============================================================
+console.log('\n=== applyFeat: Skilled ===');
+{
+  throws('wrong choice count throws', () => applyFeat(makeFighterWithASI(), 'Skilled', { skillChoices: ['Perception'] }), 'requires exactly 3');
+  throws('invalid skill name throws', () => applyFeat(makeFighterWithASI(), 'Skilled', { skillChoices: ['Not A Skill', 'Perception', 'Stealth'] }), 'not a valid PHB skill');
+
+  const sheet = makeFighterWithASI(); // skills: ['Athletics','Intimidation']
+  const result = applyFeat(sheet, 'Skilled', {
+    skillChoices: ['Perception', 'Stealth'],
+    toolChoices: ["Thieves' Tools"],
+  });
+  assert('Perception added', result.proficiencies.skills.includes('Perception' as any));
+  assert('Stealth added', result.proficiencies.skills.includes('Stealth' as any));
+  assert("Thieves' Tools added", result.proficiencies.tools.includes("Thieves' Tools"));
+  assert('existing Athletics preserved', result.proficiencies.skills.includes('Athletics' as any));
+  eq('Skilled has no ability bump', result.stats.str, sheet.stats.str);
+}
+
+// ============================================================
+// GROUP 20: applyFeat — Linguist (INT+1 plus 3 languages)
+// ============================================================
+console.log('\n=== applyFeat: Linguist ===');
+{
+  throws('wrong language count throws', () => applyFeat(makeFighterWithASI(), 'Linguist', { languageChoices: ['Elvish'] }), 'requires exactly 3');
+
+  const sheet = makeFighterWithASI(); // languages: ['Common','Dwarvish'], int: 8
+  const result = applyFeat(sheet, 'Linguist', { languageChoices: ['Elvish', 'Orc', 'Sylvan'] });
+  eq('INT raised by 1', result.stats.int, 9);
+  for (const lang of ['Elvish', 'Orc', 'Sylvan']) {
+    assert(`${lang} added`, result.languages.includes(lang));
+  }
+  assert('Common preserved', result.languages.includes('Common'));
+}
+
+// ============================================================
+// GROUP 21: applyFeat — Heavily/Moderately/Lightly Armored (armor prof grant)
+// ============================================================
+console.log('\n=== applyFeat: Armor Proficiency Feats ===');
+{
+  const noArmorSheet = makeFighterWithASI({
+    proficiencies: {
+      armor: [], weapons: ['simple-melee','simple-ranged','martial-melee','martial-ranged'],
+      tools: [], savingThrows: ['str','con'], skills: ['Athletics','Intimidation'], expertise: [],
+    },
+  });
+  const result = applyFeat(noArmorSheet, 'Heavily Armored', { abilityChoice: 'str' });
+  assert('heavy armor proficiency granted', result.proficiencies.armor.includes('heavy'));
+  eq('STR raised by 1', result.stats.str, 18);
+
+  const result2 = applyFeat(noArmorSheet, 'Moderately Armored', { abilityChoice: 'dex' });
+  assert('medium armor proficiency granted', result2.proficiencies.armor.includes('medium'));
+  assert('shield proficiency granted', result2.proficiencies.armor.includes('shield'));
+}
+
+// ============================================================
+// GROUP 22: applyFeat — Tough (immediate HP bonus + future level-up bonus)
+// ============================================================
+console.log('\n=== applyFeat: Tough ===');
+{
+  const sheet = makeFighterWithASI(); // level 4, maxHP 40
+  const result = applyFeat(sheet, 'Tough');
+  eq('maxHP raised by 2x level (8)', result.maxHP, 48);
+  eq('currentHP raised by 2x level (8)', result.currentHP, 48);
+  eq('Tough has no ability bump', result.stats.str, sheet.stats.str);
+
+  // Future level-ups should also gain the extra +2, and popLevel should
+  // reverse it correctly since it's folded into the same hpGained value.
+  const fighter1 = { ...makeFighter1(), feats: ['Tough'] };
+  const leveledUp = applyLevelUp(fighter1, 'Fighter', 'average');
+  // Fighter d10, con 16 (+3 mod): floor(10/2)+1+3 = 9, +2 Tough = 11
+  eq('level-up HP includes Tough bonus', leveledUp.sheet.maxHP - fighter1.maxHP, 11);
+  eq('record.hpGained includes Tough bonus', leveledUp.hpGained, 11);
+
+  const popped = popLevel(leveledUp.sheet);
+  eq('popLevel reverses full hpGained incl. Tough bonus', popped.sheet.maxHP, fighter1.maxHP);
+}
+
+// ============================================================
+// GROUP 23: applyFeat — ASI consumption accounting
+// ============================================================
+console.log('\n=== applyFeat: ASI Consumption ===');
+{
+  throws(
+    'no pending ASI throws',
+    () => applyFeat(makeFighterWithASI({ pendingAbilityScoreImprovements: 0, pendingASIHalfPoints: 0 }), 'Keen Mind'),
+    'No pending Ability Score Improvement'
+  );
+  throws(
+    'half-point-only pending insufficient for a feat',
+    () => applyFeat(makeFighterWithASI({ pendingAbilityScoreImprovements: 0, pendingASIHalfPoints: 1 }), 'Keen Mind'),
+    'No pending Ability Score Improvement'
+  );
+
+  // 2 full pending ASIs: feat consumes exactly one, leaving one behind
+  const sheet = makeFighterWithASI({ pendingAbilityScoreImprovements: 2 });
+  const result = applyFeat(sheet, 'Keen Mind');
+  eq('one ASI consumed, one remains', result.pendingAbilityScoreImprovements, 1);
+}
+
+// ============================================================
+// GROUP 24: applyFeat — duplicate feats blocked (except Elemental Adept)
+// ============================================================
+console.log('\n=== applyFeat: Duplicate Feat Handling ===');
+{
+  const sheet = makeFighterWithASI({ feats: ['Keen Mind'], pendingAbilityScoreImprovements: 1 });
+  throws('retaking the same feat throws', () => applyFeat(sheet, 'Keen Mind'), 'already has the');
+
+  const eaSheet = makeFighterWithASI({ feats: ['Elemental Adept'], pendingAbilityScoreImprovements: 1 });
+  const result = applyFeat(eaSheet, 'Elemental Adept');
+  eq('Elemental Adept can be retaken', result.feats.filter(f => f === 'Elemental Adept').length, 2);
+}
+
+// ============================================================
+// GROUP 25: applyFeat — unknown feat name
+// ============================================================
+console.log('\n=== applyFeat: Unknown Feat ===');
+{
+  throws('unknown feat name throws', () => applyFeat(makeFighterWithASI(), 'Not A Real Feat'), 'Unknown feat');
+}
+
+// ============================================================
+// GROUP 26: applyFeat — registry sanity (42 PHB feats, every name resolves)
+// ============================================================
+console.log('\n=== applyFeat: Registry Sanity ===');
+{
+  eq('42 PHB feats registered', FEAT_NAMES.length, 42);
+  let allResolve = true;
+  for (const n of FEAT_NAMES) {
+    const f = getFeat(n);
+    if (!f || !f.description || f.description.length < 10) { allResolve = false; break; }
+  }
+  assert('every feat resolves with a real description', allResolve);
+}
+
+// ============================================================
+// GROUP 27: applyFeat — pure function guarantee
+// ============================================================
+console.log('\n=== applyFeat: Pure Function Guarantee ===');
+{
+  const sheet = makeFighterWithASI();
+  const frozen = JSON.stringify(sheet);
+  applyFeat(sheet, 'Keen Mind');
+  eq('applyFeat: input unchanged', JSON.stringify(sheet), frozen);
 }
 
 // ============================================================

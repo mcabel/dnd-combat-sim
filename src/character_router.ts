@@ -34,7 +34,8 @@ import {
 import { ValidationError }            from './characters/validator';
 import { buildCombatant, buildWarnings } from './characters/builder';
 import { applyLevelUp, popLevel, bootstrapLevelHistory } from './characters/leveler';
-import { applyASI, chooseSubclass }   from './characters/improvements';
+import { applyASI, applyFeat, chooseSubclass } from './characters/improvements';
+import { listFeats }                   from './characters/feat_data';
 import { spawnMonster, Raw5etoolsMonster } from './parser/fivetools';
 import { simulate }                    from './scenarios/simulate';
 import { Combatant }                   from './types/core';
@@ -558,7 +559,52 @@ router.post('/characters/:id/applyasi', async (req: Request, res: Response) => {
 });
 
 // ============================================================
-// POST /api/characters/:id/choosesubclass
+// POST /api/characters/:id/applyfeat
+// Apply a feat chosen instead of an Ability Score Improvement (PHB p.165).
+// Consumes one full pending ASI (same accounting as applyasi amount=2).
+//
+// Request:  { featName: string; abilityChoice?: string;
+//              skillChoices?: string[]; toolChoices?: string[];
+//              languageChoices?: string[] }
+// Response: { character: CharacterSheet; featName: string;
+//              pendingAbilityScoreImprovements: number; pendingASIHalfPoints: number }
+// ============================================================
+router.post('/characters/:id/applyfeat', async (req: Request, res: Response) => {
+  try {
+    const id   = String(req.params.id);
+    const body = req.body ?? {};
+
+    const featName = body.featName;
+    if (!featName || typeof featName !== 'string') {
+      return res.status(400).json({ error: 'featName (string) is required.' });
+    }
+
+    const sheet = loadCharacter(id);
+    if (!sheet) {
+      return res.status(404).json({ error: `Character not found: ${id}` });
+    }
+
+    const updated = applyFeat(sheet, featName, {
+      abilityChoice:   typeof body.abilityChoice === 'string' ? body.abilityChoice : undefined,
+      skillChoices:    Array.isArray(body.skillChoices) ? body.skillChoices : undefined,
+      toolChoices:     Array.isArray(body.toolChoices) ? body.toolChoices : undefined,
+      languageChoices: Array.isArray(body.languageChoices) ? body.languageChoices : undefined,
+    });
+
+    await saveCharacter(updated);
+
+    return res.json({
+      character: updated,
+      featName,
+      pendingAbilityScoreImprovements: updated.pendingAbilityScoreImprovements ?? 0,
+      pendingASIHalfPoints:            updated.pendingASIHalfPoints ?? 0,
+    });
+  } catch (err) {
+    return handleError(res, err);
+  }
+});
+
+
 // Set the subclass for a class on a saved character.
 //
 // Rules:
@@ -1005,6 +1051,13 @@ router.get('/races', (_req: Request, res: Response) => {
 router.get('/backgrounds', (_req: Request, res: Response) => {
   const backgrounds = BACKGROUND_NAMES.map(name => BACKGROUND_DATA[name]);
   return res.json({ backgrounds });
+});
+
+// ---- GET /api/feats -------------------------------------------
+// Returns all 42 PHB 2014 feats (name, prerequisite, description, and
+// any sheet-applicable mechanical hooks — see feat_data.ts).
+router.get('/feats', (_req: Request, res: Response) => {
+  return res.json({ feats: listFeats() });
 });
 
 // ---- Spell data cache (lazy-loaded from testDataSpells/) -----

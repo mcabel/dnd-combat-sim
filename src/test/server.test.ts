@@ -1568,6 +1568,106 @@ async function run() {
     assert(byName['Soldier'].languageChoices === 0, 'Soldier has no language choices');
   });
 
+  // ── GET /api/feats ──────────────────────────────────────────
+  await test('GET /api/feats returns 42 PHB feats', async () => {
+    const { status, json } = await request(BASE, '/api/feats');
+    assert(status === 200, `Expected 200, got ${status}`);
+    assert(Array.isArray(json.feats) && json.feats.length === 42, `Expected 42 feats, got ${json.feats?.length}`);
+  });
+
+  await test('GET /api/feats entries have required fields', async () => {
+    const { json } = await request(BASE, '/api/feats');
+    const f = json.feats.find((x: any) => x.name === 'Tough');
+    assert(!!f, 'Tough feat present');
+    assert(typeof f.description === 'string' && f.description.length > 10, 'Tough has a description');
+    assert(f.hpPerLevel === 2, `Tough hpPerLevel should be 2, got ${f.hpPerLevel}`);
+    const athlete = json.feats.find((x: any) => x.name === 'Athlete');
+    assert(JSON.stringify(athlete.abilityChoice.options) === JSON.stringify(['str','dex']), 'Athlete offers STR/DEX');
+  });
+
+  // ── POST /api/characters/:id/applyfeat ──────────────────────
+  {
+    let featCharId = '';
+
+    await test('setup: create Fighter 1 and level to 4 for applyfeat tests', async () => {
+      const created = await request(BASE, '/api/characters', 'POST', {
+        name: 'FeatTestDummy', race: 'Human', background: 'Soldier', alignment: 'Lawful Neutral',
+        firstClass: 'Fighter',
+        classLevels: [{ className: 'Fighter', level: 1 }],
+        subclassChoices: {},
+        experiencePoints: 0,
+        baseStats: { str: 15, dex: 13, con: 14, int: 8, wis: 12, cha: 10 },
+        stats:     { str: 15, dex: 13, con: 14, int: 8, wis: 12, cha: 10 },
+        maxHP: 12, currentHP: 12, temporaryHP: 0,
+        armorClass: 16, acFormula: 'Chain Mail: 16', speed: 30,
+        hitDice: [{ className: 'Fighter', dieSides: 10, total: 1, remaining: 1 }],
+        proficiencies: {
+          armor: ['light','medium','heavy','shield'],
+          weapons: ['simple-melee','simple-ranged','martial-melee','martial-ranged'],
+          tools: [], savingThrows: ['str','con'], skills: [], expertise: [],
+        },
+        languages: ['Common'],
+        resources: { secondWind: { max: 1, remaining: 1 } },
+        equipment: [{ name: 'Longsword', quantity: 1, equipped: true, category: 'weapon' }],
+        gold: 10,
+        level1Features: [], allFeatures: [], feats: [], backgroundFeature: '', exhaustionLevel: 0,
+      });
+      assert(created.status === 201, `create expected 201, got ${created.status}: ${JSON.stringify(created.json)}`);
+      featCharId = created.json.character.id;
+      for (let i = 0; i < 3; i++) {
+        const { status, json } = await request(BASE, `/api/${featCharId}/levelup`, 'POST', {
+          className: 'Fighter', hpRollMethod: 'average',
+        });
+        assert(status === 200, `levelup #${i+1} expected 200, got ${status}: ${JSON.stringify(json)}`);
+      }
+      const { json: cur } = await request(BASE, `/api/characters/${featCharId}`, 'GET');
+      assert(cur.character?.classLevels?.[0]?.level === 4, `Expected level 4, got ${cur.character?.classLevels?.[0]?.level}`);
+      assert((cur.character?.pendingAbilityScoreImprovements ?? 0) >= 1, 'Fighter 4 should have a pending ASI');
+    });
+
+    await test('POST /applyfeat 400 without featName', async () => {
+      const { status } = await request(BASE, `/api/characters/${featCharId}/applyfeat`, 'POST', {});
+      assert(status === 400, `Expected 400, got ${status}`);
+    });
+
+    await test('POST /applyfeat 400/500 on unknown feat name', async () => {
+      const { status } = await request(BASE, `/api/characters/${featCharId}/applyfeat`, 'POST', { featName: 'Not A Real Feat' });
+      assert(status >= 400, `Expected an error status, got ${status}`);
+    });
+
+    await test('POST /applyfeat 400/500 without required ability choice', async () => {
+      const { status } = await request(BASE, `/api/characters/${featCharId}/applyfeat`, 'POST', { featName: 'Athlete' });
+      assert(status >= 400, `Expected an error status, got ${status}`);
+    });
+
+    await test('POST /applyfeat applies Resilient (ability choice + save proficiency)', async () => {
+      const { json: cur } = await request(BASE, `/api/characters/${featCharId}`, 'GET');
+      const wisBefore = cur.character.stats.wis;
+
+      const { status, json } = await request(BASE, `/api/characters/${featCharId}/applyfeat`, 'POST', {
+        featName: 'Resilient', abilityChoice: 'wis',
+      });
+      assert(status === 200, `Expected 200, got ${status}: ${JSON.stringify(json)}`);
+      assert(json.character.stats.wis === wisBefore + 1, `Expected WIS ${wisBefore+1}, got ${json.character.stats.wis}`);
+      assert(json.character.proficiencies.savingThrows.includes('wis'), 'WIS save proficiency granted');
+      assert(json.character.feats.includes('Resilient'), 'Resilient recorded in feats[]');
+      assert(json.character.allFeatures.some((f: any) => f.name === 'Resilient' && f.source === 'feat'), 'Resilient feature recorded');
+      assert(json.character.pendingAbilityScoreImprovements === 0, 'ASI consumed');
+    });
+
+    await test('POST /applyfeat 400/500 retaking the same feat', async () => {
+      const { status } = await request(BASE, `/api/characters/${featCharId}/applyfeat`, 'POST', {
+        featName: 'Resilient', abilityChoice: 'int',
+      });
+      assert(status >= 400, `Expected an error status (no pending ASI anyway), got ${status}`);
+    });
+
+    await test('cleanup: delete feat test character', async () => {
+      const { deleteCharacter } = require('../characters/storage');
+      try { deleteCharacter(featCharId); } catch {}
+    });
+  }
+
   // ── POST /api/characters/create-level0 ────────────────────
   {
     const BASE_SCORES = { str: 10, dex: 14, con: 12, int: 13, wis: 11, cha: 8 };
