@@ -334,6 +334,19 @@ export function buildCombatant(
   // treats undefined and [] the same — both return false for any name lookup).
   if (sheet.eldritchInvocations && sheet.eldritchInvocations.length > 0) {
     combatant.eldritchInvocations = [...sheet.eldritchInvocations];
+
+    // ── Session 41 Task #16: Eldritch Spear invocation ──
+    // PHB p.111: "When you cast Eldritch Blast, its range is 300 feet."
+    // The default EB range is 120 ft (per the SPELL_DB entry). When the
+    // Warlock has Eldritch Spear, patch the EB Action's reach + range
+    // to 300 ft. This is a metadata-only change — no engine hook needed.
+    if (combatant.eldritchInvocations.includes('Eldritch Spear')) {
+      const ebAction = combatant.actions.find(a => a.name === 'Eldritch Blast');
+      if (ebAction) {
+        ebAction.reach = 300;
+        ebAction.range = { normal: 300, long: 300 };
+      }
+    }
   }
 
   return combatant;

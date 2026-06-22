@@ -111,4 +111,16 @@ export const metadata = {
   agonizingBlastV1Implemented: true as const,
   graspOfHadarV1Implemented: true as const,
   lanceOfLethargyV1Implemented: true as const,
+  /**
+   * Session 41 Task #16: Three more invocations are NOW registered:
+   *   - Eldritch Spear (PHB p.111): EB range 300 ft (builder patches range)
+   *   - Eldritch Mind (TCE p.71): advantage on concentration saves (utils)
+   *   - Thirsting Blade (PHB p.111): extra attack with Pact Weapon (v1.5:
+   *     descriptor only — engine integration is future work)
+   * Eldritch Spear and Eldritch Mind are fully wired; Thirsting Blade is
+   * metadata-only (no combat effect yet).
+   */
+  eldritchSpearV1Implemented: true as const,
+  eldritchMindV1Implemented: true as const,
+  thirstingBladeV1Registered: true as const,  // engine integration is future work
 } as const;

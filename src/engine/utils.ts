@@ -916,13 +916,21 @@ export function voluntaryEndConcentration(caster: Combatant): void {
  * DC = max(10, floor(damageTaken / 2)). PHB p.203.
  * Returns true if concentration is maintained.
  * Automatically breaks concentration on failure.
+ *
+ * Session 41 Task #16: Eldritch Mind (TCE p.71) — advantage on
+ * concentration saves. The check is inlined here (rather than importing
+ * hasInvocation from _invocations.ts) to avoid a circular dependency
+ * (utils.ts ↔ _invocations.ts ↔ combat.ts ↔ utils.ts).
  */
 export function rollConcentrationSave(caster: Combatant, damageTaken: number): boolean {
   if (!caster.concentration?.active) return true; // not concentrating
   const dc = Math.max(10, Math.floor(damageTaken / 2));
   const conMod = abilityMod(caster.con);
   // War Caster / Resilient feats not modelled at level 1
-  const roll = rollDie(20);
+  // Eldritch Mind (TCE p.71): advantage on concentration saves. Inlined
+  // check to avoid circular dependency on _invocations.ts.
+  const hasEldritchMind = caster.eldritchInvocations?.includes('Eldritch Mind') ?? false;
+  const roll = hasEldritchMind ? rollWithAdvantage() : rollDie(20);
   const total = roll + conMod;
   if (total < dc) {
     breakConcentration(caster);
