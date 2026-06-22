@@ -478,6 +478,18 @@ export function effectiveMaxHP(c: Combatant): number {
 // ---- Conditions ---------------------------------------------
 
 export function addCondition(target: Combatant, condition: Condition): void {
+  // ── Session 47 Task #29-follow-up-3: Nature's Ward (Land Druid 10) ──
+  // PHB p.68: "Starting at 10th level, you can't be charmed or frightened by
+  // fey or elementals. You are also immune to poison and disease."
+  //
+  // v1 wiring: blanket immunity to the 'poisoned' condition. The fey/elemental
+  // charm/frighten immunity requires source-creature-type tracking (not
+  // available in addCondition's signature) — documented as a v1 simplification.
+  // Disease immunity is a no-op (diseases are not tracked in v1 — see Lesser
+  // Restoration v1 simplification).
+  if (condition === 'poisoned' && target.classFeatures?.includes("Nature's Ward")) {
+    return; // immune — do not apply the condition
+  }
   target.conditions.add(condition);
   // Cascade: incapacitated implies can't take actions
   if (condition === 'paralyzed' || condition === 'stunned' || condition === 'petrified') {

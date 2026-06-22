@@ -71,6 +71,13 @@ export function applySpellEffect(
       break;
 
     case 'condition_apply':
+      // Session 47 Task #29-follow-up-3: Nature's Ward (Land Druid 10) immunity.
+      // PHB p.68: immune to poison. If the target has Nature's Ward, skip
+      // applying the 'poisoned' condition. The fey/elemental charm/frighten
+      // immunity is not checked here (requires source-creature-type tracking).
+      if (effect.payload.condition === 'poisoned' && target.classFeatures?.includes("Nature's Ward")) {
+        break; // immune — do not apply
+      }
       target.conditions.add(effect.payload.condition!);
       break;
 
