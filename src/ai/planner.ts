@@ -4848,6 +4848,7 @@ function maxAttackCount(
 }
 
 // ── Session 44 Task #27: planExtraAction — smarter Action Surge tactics ──
+// ── Session 45 Task #27-follow-up: added Dash + Disengage surge options ──
 //
 // Evaluates multiple surge options in priority order and returns the best
 // PlannedAction to take as the Action Surge extra action, or null if no
@@ -4868,24 +4869,53 @@ function maxAttackCount(
 //    (Cure Wounds is 1 action), and the spell slot is consumed by the
 //    engine's cureWounds case in executePlannedAction.
 //
-// 2. DEFAULT EXTRA ATTACK:
+// 2. DASH SURGE (Session 45 Task #27-follow-up):
+//    Triggers when the planned main action is NOT an attack (e.g. it's a
+//    self-buff spell like Mage Armor) AND no living enemy is within the
+//    combatant's longest melee reach (5 ft default). The surge grants
+//    extra movement to close distance. This is tactically superior to
+//    the default "no surge" path — Dashing to close range means the
+//    combatant can attack NEXT turn instead of still being out of reach.
+//
+//    PHB p.192: Dash gives additional movement equal to your speed.
+//    PHB p.72: Action Surge grants "one additional action" — Dash is a
+//    valid action. The engine's 'dash' case adds effectiveSpeed(actor)
+//    to budget.movementFt.
+//
+//    Note: this option fires AFTER heal-self but BEFORE the default
+//    attack. It only triggers when the main action was NOT an attack —
+//    if the main action WAS an attack, the default extra Attack surge
+//    is more valuable (extra damage).
+//
+// 3. DISENGAGE SURGE (Session 45 Task #27-follow-up):
+//    Triggers when the combatant is surrounded (≥ 2 adjacent enemies)
+//    AND HP is below 50% AND the main action was NOT an attack (we
+//    already healed via Option 1 if we could; if we're here, we don't
+//    have Cure Wounds or slots). The surge Disengages so the combatant
+//    can move away without provoking opportunity attacks.
+//
+//    PHB p.192: Disengage prevents opportunity attacks for the rest of
+//    the turn. PHB p.72: Action Surge can grant this as an extra action.
+//
+//    This is a defensive option — when the fighter is low on HP, can't
+//    heal, and is surrounded, the best move is to retreat.
+//
+// 4. DEFAULT EXTRA ATTACK:
 //    Triggers when plan.action is an Attack and the target is alive.
 //    Clones the main Attack action with the same attackCount (re-applies
 //    Thirsting Blade / Extra Attack logic). This is the original v1
 //    behaviour from Session 43 Task #23.
 //
-// 3. Returns null if neither option applies — no surge planned.
+// 5. Returns null if no option applies — no surge planned.
 //
-// Future extension points (not implemented in v1.5):
-//   - Surge to Dash when no enemy is in reach (close distance faster)
+// Future extension points (still not implemented):
 //   - Surge to cast a defensive spell (Shield of Faith, Mirror Image)
-//   - Surge to Disengage when surrounded and low HP
 //   - Surge for a different spell (e.g. Fireball) when main action was Attack
 function planExtraAction(
   self: Combatant,
   plan: TurnPlan,
   target: Combatant | null,
-  _battlefield: Battlefield,
+  battlefield: Battlefield,
 ): PlannedAction | null {
   if (!self.resources?.actionSurge || self.resources.actionSurge.remaining <= 0) {
     return null;
@@ -4918,7 +4948,55 @@ function planExtraAction(
     }
   }
 
-  // ── Option 2: Default extra Attack on the same target ──
+  // ── Option 2: Dash surge — close distance when no enemy in reach ──
+  // Session 45 Task #27-follow-up. Triggers when the main action was NOT
+  // an Attack (e.g. a self-buff like Mage Armor was cast) AND no living
+  // enemy is within 5 ft (the standard melee reach). The surge grants
+  // extra movement to close distance for the next turn.
+  //
+  // This option does NOT trigger when the main action WAS an attack —
+  // in that case the default extra Attack (Option 4) is more valuable.
+  const mainWasAttack = plan.action?.type === 'attack';
+  if (!mainWasAttack) {
+    // Check if any living enemy is within 5 ft (melee reach).
+    const enemies = livingEnemiesOf(self, battlefield);
+    const enemyInReach = enemies.some(e => !e.isDead && !e.isUnconscious && distanceFt(self.pos, e.pos) <= 5);
+    if (!enemyInReach && enemies.length > 0) {
+      // No enemy in reach — Dash to close distance.
+      return {
+        type: 'dash',
+        action: null,
+        targetId: null,
+        description: `${self.name} uses Action Surge — Dash to close distance`,
+      };
+    }
+  }
+
+  // ── Option 3: Disengage surge — retreat when surrounded and low HP ──
+  // Session 45 Task #27-follow-up. Triggers when:
+  //   - HP < 50% (we're hurt)
+  //   - ≥ 2 adjacent enemies (we're surrounded)
+  //   - Main action was NOT an attack (we already tried to heal via
+  //     Option 1; if we're here, we don't have Cure Wounds or slots)
+  //   - Main action was NOT already Disengage (no point Disengaging twice)
+  //
+  // The Disengage action lets us move away without provoking opportunity
+  // attacks (PHB p.192). Combined with the moveAfter from planMovement,
+  // this lets the fighter retreat to a safer position.
+  const mainWasDisengage = plan.action?.type === 'disengage';
+  if (!mainWasAttack && !mainWasDisengage && hpRatio < 0.5) {
+    const adjEnemies = adjacentEnemyCount(self, battlefield);
+    if (adjEnemies >= 2) {
+      return {
+        type: 'disengage',
+        action: null,
+        targetId: null,
+        description: `${self.name} uses Action Surge — Disengage to retreat (surrounded, low HP)`,
+      };
+    }
+  }
+
+  // ── Option 4: Default extra Attack on the same target ──
   // Original v1 behaviour — clone the main Attack action. The attackCount
   // is re-applied via the same Thirsting Blade / Extra Attack logic as the
   // main action (see "Session 44 Task #30" comment above for the non-stacking
