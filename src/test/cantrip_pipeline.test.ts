@@ -519,20 +519,20 @@ console.log('\n--- 15. End-to-end Sacred Flame via cantrip pipeline ---');
   assert('15b. Sacred Flame attackType = save', sfAction?.attackType === 'save');
   eq('15c. Sacred Flame saveDC = 13', sfAction?.saveDC, 13);
 
+  // Use a high-DC override so the save always fails (the original sfAction
+  // has DC 13, which the goblin could pass ~35% of the time — flaky).
+  // Override the saveDC to 30 to guarantee failure.
+  const sfActionForcedFail = { ...sfAction!, saveDC: 30 };
   const goblin = makeGoblin('goblin', { pos: { x: 5, y: 0, z: 0 }, dex: 8 });
   const bf = makeBF([combatant, goblin]);
   const state = makeState(bf);
 
-  // Force a failed save (true = crit for attack rolls; for saves, this is
-  // passed to rollSave which interprets it as "force fail" via the same
-  // isCritOverride parameter — verified by checking damage is dealt)
-  resolveAttack(combatant, goblin, sfAction!, state, true);
+  resolveAttack(combatant, goblin, sfActionForcedFail, state);
 
-  // Sacred Flame: 1d8 radiant on failed save. If save failed, damage 1..8.
-  // If save succeeded, damage 0 (no half-damage cantrip in v1 model).
-  // With isCritOverride=true forcing fail, damage should be 1..8.
+  // Sacred Flame: 1d8 radiant on failed save. DC 30 → always fails.
+  // Damage should be 1..8.
   const dmgDealt = 100 - goblin.currentHP;
-  assert('15d. Sacred Flame dealt damage (1..8) on failed save',
+  assert('15d. Sacred Flame dealt damage (1..8) on failed save (DC 30)',
     dmgDealt >= 1 && dmgDealt <= 8, `got ${dmgDealt}`);
 }
 
