@@ -446,6 +446,18 @@ export function buildCombatant(
     (combatant.resources as any).draconicPresence = { max: 1, remaining: 1 };
   }
 
+  // ── Session 49 Task #29-follow-up-3c: Natural Recovery (Land Druid 2) ──
+  // PHB p.68: "Starting at 2nd level, you can recover some of your expended
+  // spell slots after a short rest." The total slots recovered = half druid
+  // level (rounded up), max 5th level. Once used, must finish a long rest.
+  // Tracked as usesRemaining=1; consumed by shortRest() in engine/utils.ts;
+  // reset by longRest(). The feature is flag-only until the simulator's
+  // shortRest hook fires (which auto-recovers the lowest-level expended slots).
+  if (combatant.classFeatures?.includes('Natural Recovery')) {
+    if (!combatant.resources) combatant.resources = {} as any;
+    (combatant.resources as any).naturalRecovery = { usesRemaining: 1 };
+  }
+
   return combatant;
 }
 

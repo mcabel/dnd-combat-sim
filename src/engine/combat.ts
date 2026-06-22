@@ -1257,6 +1257,42 @@ export function resolveAttack(
     return;
   }
 
+  // ── Session 49 Task #29-follow-up-3c: Nature's Sanctuary (Land Druid 14) ──
+  // PHB p.68: "When a beast or plant creature attacks you, that creature must
+  // make a Wisdom saving throw against your druid spell save DC. On a failed
+  // save, the creature must choose a different target or lose the attack."
+  //
+  // This fires PER ATTACK — each time a beast/plant targets the Land Druid 14+
+  // with an attack, the attacker must WIS save. On fail, the attack is lost
+  // (no damage, no resource consumption). The save DC = the druid's spell save
+  // DC, computed here from WIS + prof + 8 (druid casting, PHB p.66).
+  if (target.classFeatures?.includes("Nature's Sanctuary")
+      && (attacker.creatureType === 'beast' || attacker.creatureType === 'plant')
+      && !attacker.isDead && !attacker.isUnconscious) {
+    // Compute the druid's spell save DC. Prefer the target's spell action
+    // saveDC; fall back to 8 + prof + WIS mod (druid casting).
+    const targetSpellAction = target.actions.find(a => a.saveDC !== null && a.saveDC !== undefined);
+    const targetProf = target.level ? Math.ceil(target.level / 4) + 1
+                                    : proficiencyBonus(target.cr);
+    const sanctuaryDC = targetSpellAction?.saveDC
+      ?? (8 + targetProf + abilityMod(target.wis));
+
+    const sanctuarySave = rollSaveReactable(state, target, attacker, 'wis', sanctuaryDC);
+    if (sanctuarySave.success) {
+      log(state, 'save_success', target.id,
+        `${attacker.name} resists Nature's Sanctuary (WIS ${sanctuarySave.total} vs DC ${sanctuaryDC}) — attack proceeds!`,
+        attacker.id, sanctuarySave.roll);
+    } else {
+      log(state, 'save_fail', target.id,
+        `${attacker.name} succumbs to Nature's Sanctuary (WIS ${sanctuarySave.total} vs DC ${sanctuaryDC}) — loses attack against ${target.name}!`,
+        attacker.id, sanctuarySave.roll);
+      log(state, 'action', target.id,
+        `Nature's Sanctuary: ${attacker.name} cannot bring itself to attack ${target.name}.`,
+        attacker.id);
+      return;  // attack canceled — no damage, no resource consumed
+    }
+  }
+
   // Pack Tactics: advantage if ally adjacent to target (MM)
   const packTacticsAdvantage = hasPackTacticsAdvantage(attacker, target, bf);
 

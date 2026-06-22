@@ -1315,6 +1315,31 @@ export function shortRest(c: Combatant): void {
   if (r.secondWind) r.secondWind.remaining = r.secondWind.max;
   // Arcane Recovery: can be used once per day during a short rest
   // (wizard player decision — mark available, actual use is separate)
+
+  // ── Session 49 Task #29-follow-up-3c: Natural Recovery (Land Druid 2) ──
+  // PHB p.68: recover spell slots equal to half druid level (rounded up),
+  // max 5th level, once per long rest. v1 simplification: auto-recover the
+  // lowest-level expended slots first (maximizes number of slots regained).
+  // The druid's classLevels['Druid'] gives the druid level; falls back to
+  // total level for monoclass. Slots above 5th level are NOT recoverable.
+  if (r.naturalRecovery && r.naturalRecovery.usesRemaining > 0
+      && c.classFeatures?.includes('Natural Recovery')
+      && r.spellSlots) {
+    const druidLevel = c.classLevels?.['Druid'] ?? c.level ?? 1;
+    let budget = Math.ceil(druidLevel / 2);  // PHB p.68: rounded up
+    // Iterate slots from 1st to 5th level; recover expended slots until budget
+    // is exhausted. Each slot costs its level in budget (e.g. recovering a 3rd-
+    // level slot costs 3 from the budget).
+    for (let lvl = 1; lvl <= 5 && budget > 0; lvl++) {
+      const slot = r.spellSlots[lvl];
+      if (!slot) continue;
+      while (slot.remaining < slot.max && budget >= lvl) {
+        slot.remaining++;
+        budget -= lvl;
+      }
+    }
+    r.naturalRecovery.usesRemaining = 0;  // consume the use
+  }
 }
 
 /**
@@ -1374,6 +1399,8 @@ export function longRest(c: Combatant): void {
   if (r.bardicInspiration) r.bardicInspiration.remaining = r.bardicInspiration.max;
   if (r.layOnHands)        r.layOnHands.remaining        = r.layOnHands.pool;
   if (r.arcaneRecovery)    r.arcaneRecovery.usesRemaining = 1;
+  // Session 49 Task #29-follow-up-3c: Land Druid Natural Recovery resets on long rest.
+  if (r.naturalRecovery)   r.naturalRecovery.usesRemaining = 1;
   // Hit dice: recover up to half max (round up). PHB p.186.
   if (r.hitDice) {
     const toRecover = Math.ceil(r.hitDice.max / 2);

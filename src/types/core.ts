@@ -383,6 +383,13 @@ export interface PlayerResources {
   // Wizard
   arcaneRecovery?:     { usesRemaining: number };             // 1/day, short rest
 
+  // ── Session 49 Task #29-follow-up-3c: Land Druid Natural Recovery ──
+  // Land Druid 2 (PHB p.68): recover spell slots equal to half druid level
+  // (rounded up) on a short rest, once per long rest. Slots must be 5th level
+  // or lower. Tracked as usesRemaining=1; consumed on short-rest use; reset on
+  // long rest.
+  naturalRecovery?:    { usesRemaining: number };             // 1/day, short rest
+
   // Warlock Dark One's Blessing temp HP on kill
   darkOnesBlessing?:   { amount: number };
 
