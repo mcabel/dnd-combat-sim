@@ -56,11 +56,21 @@ export function rollWithDisadvantage(sides = 20): number {
 /**
  * Roll a d20 attack roll, applying advantage/disadvantage.
  * Returns { roll, total, isCrit, isFumble }.
+ *
+ * ── Session 45 Task #29-follow-up: critRange parameter ──
+ * PHB default: crit on a natural 20. Some features expand this:
+ *   - Fighter Champion "Improved Critical" (PHB p.72) → crit on 19-20
+ *   - Fighter Champion "Superior Critical" (PHB p.72) → crit on 18-20
+ * The caller passes the LOWEST natural roll that still crits (default 20).
+ * Spell attacks don't benefit from these features (Improved Critical
+ * specifies "weapon attacks"), so spell attack callers should leave
+ * critRange at its default (20).
  */
 export function rollAttack(
   hitBonus: number,
   hasAdvantage: boolean,
-  hasDisadvantage: boolean
+  hasDisadvantage: boolean,
+  critRange: number = 20,
 ): { roll: number; total: number; isCrit: boolean; isFumble: boolean } {
   // Advantage and disadvantage cancel out (PHB p.173)
   let roll: number;
@@ -74,7 +84,7 @@ export function rollAttack(
   return {
     roll,
     total: roll + hitBonus,
-    isCrit: roll === 20,
+    isCrit: roll >= critRange,
     isFumble: roll === 1,
   };
 }

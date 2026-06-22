@@ -30,6 +30,8 @@ import {
 } from './movement';
 import { planTurn, planLegendaryAction, shouldTakeOpportunityAttack } from '../ai/planner';
 import { shouldSmite, applyDivineSmite, tickRage, consumeSpellSlot, hasSpellSlot, hasInnateSpellUse } from '../ai/resources';
+// ── Session 45 Task #29-follow-up: Champion Improved Critical / Superior Critical ──
+import { hasFeature } from '../characters/builder';
 // TG-008: Reaction spell subsystem
 import { REACTION_SPELLS, ReactionSpellDescriptor } from '../spells/_reaction_registry';
 import {
@@ -1514,7 +1516,22 @@ export function resolveAttack(
       target.id, mirrorRoll);
   }
 
-  const result = rollAttack(shillelaghHitBonus, advantage, disadvantage);
+  // ── Session 45 Task #29-follow-up: Champion crit range expansion ──
+  // PHB p.72: Fighter Champion "Improved Critical" → crit on 19-20 (level 3+).
+  // PHB p.72: Fighter Champion "Superior Critical" → crit on 18-20 (level 15+).
+  // These apply ONLY to weapon attacks (melee/ranged), NOT spell attacks
+  // (Improved Critical specifies "weapon attacks"). The caller of rollAttack
+  // for spell attacks leaves critRange at its default (20).
+  let critRange = 20;
+  if (action.attackType === 'melee' || action.attackType === 'ranged') {
+    if (hasFeature(attacker, 'Superior Critical')) {
+      critRange = 18;
+    } else if (hasFeature(attacker, 'Improved Critical')) {
+      critRange = 19;
+    }
+  }
+
+  const result = rollAttack(shillelaghHitBonus, advantage, disadvantage, critRange);
 
   // Vicious Mockery one-shot consume: the debuff applies to exactly one attack
   // roll (PHB p.285). Consume it now — whether the attack hit or missed — so
@@ -1597,7 +1614,15 @@ export function resolveAttack(
     const naturalAC = acFloor > 0 ? Math.max(target.ac, acFloor) : target.ac;
     effectiveAC = naturalAC + (target.wardingBond ? 1 : 0) + (los?.coverACBonus ?? 0) + getActiveAcBonus(target);
   }
-  let hits = isCritOverride ?? attackHits(result.roll, result.total, effectiveAC);
+  // ── Session 45 Task #29-follow-up: a critical hit is ALWAYS a hit ──
+  // PHB p.194: "If the d20 roll for an attack is a 20, the attack hits
+  // regardless of any modifiers or the target's AC." Expanded crit ranges
+  // (Champion Improved Critical = 19-20, Superior Critical = 18-20) extend
+  // this auto-hit property to the expanded crit range — a critical hit is
+  // by definition a hit. The attackHits() helper only knows about nat 20,
+  // so we short-circuit here when result.isCrit is true (set by rollAttack
+  // using the attacker's critRange).
+  let hits = isCritOverride ?? (result.isCrit || attackHits(result.roll, result.total, effectiveAC));
 
   // ── TG-008: Shield / Silvery Barbs reaction trigger (PHB p.275 / SCC p.38) ──
   // When the attack HITS, the target may react with Shield (+5 AC, can flip
