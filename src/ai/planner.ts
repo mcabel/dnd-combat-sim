@@ -4708,74 +4708,31 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
   // Don't overwrite a self-buff action (e.g. mageArmor) already planned above.
   if (!plan.action) plan.action = chosenAction;
 
-  // ── Session 42 Task #18: Thirsting Blade (extra attack) ──
-  // PHB p.111: "You can attack with your pact weapon twice, instead of
-  // once, whenever you take the Attack action on your turn."
-  // Conditions: Warlock has Thirsting Blade invocation + Pact of the Blade
-  // boon + the planned action is a melee weapon attack.
-  // v1 simplification: assumes ANY melee attack from a Thirsting Blade
-  // Warlock is a pact weapon attack (no isPactWeapon Action flag needed).
-  if (
-    plan.action &&
-    plan.action.type === 'attack' &&
-    plan.action.action &&
-    plan.action.action.attackType === 'melee' &&
-    hasInvocation(self, 'Thirsting Blade') &&
-    self.pactBoon === 'blade'
-  ) {
-    plan.action.attackCount = 2;
-  }
-
-  // ── Session 43 Task #24: Extra Attack for martial classes ──
-  // PHB p.72 (Fighter), p.49 (Barbarian), p.85 (Monk), p.85 (Paladin),
-  // p.92 (Ranger): "Beginning at 5th level, you can attack twice, instead
-  // of once, whenever you take the Attack action on your turn."
-  // Fighter 11 (Extra Attack (2)) → 3 attacks; Fighter 20 (Extra Attack (3))
-  // → 4 attacks. Bard 6 (Valor/Swords) → 2 attacks — the leveler now models
-  // subclass-specific Extra Attack grants via SUBCLASS_FEATURES (Session 44
-  // Task #29). We check for the feature name strings set by the leveler.
+  // ── Session 42 Task #18 + Session 43 Task #24 + Session 44 Task #30 ──
+  // ── Session 45 Task #30-follow-up: maxAttackCount() helper ──
   //
-  // This applies to ANY Attack action (melee OR ranged), unlike Thirsting
-  // Blade which is melee-only. The attackCount loop in executePlannedAction
-  // already handles both attack types.
+  // All "extra attacks per Attack action" sources funnel through a single
+  // helper, maxAttackCount(self, action), defined near the bottom of this
+  // file. The helper returns the highest applicable attackCount from any
+  // source (Thirsting Blade, Extra Attack, Extra Attack (2), Extra Attack (3)).
   //
-  // ── Session 44 Task #30: Thirsting Blade + Extra Attack non-stacking ──
-  // RAW, Thirsting Blade (Warlock 5+, PHB p.111) and Extra Attack
-  // (Fighter/Barbarian/Monk/Paladin/Ranger 5+, PHB p.72/49/85/85/92;
-  // Bard Valor/Swords 6, PHB p.55 / XGE p.15) do NOT stack — both set
-  // the same "attack twice with the Attack action" property. A Warlock 5
-  // / Fighter 5 multiclass has both features, but they still only attack
-  // twice (NOT three times). The relevant SAC ruling (Sage Advice
-  // Compendium v2.7, "Does the Fighter's Extra Attack feature and the
-  // warlock's Thirsting Blade invocation stack?") confirms these don't
-  // add together — only the higher of the two applies.
+  // RAW (Sage Advice Compendium v2.7): Thirsting Blade (Warlock 5+, PHB
+  // p.111) and Extra Attack (Fighter/Barbarian/Monk/Paladin/Ranger 5+,
+  // PHB p.72/49/85/85/92; Bard Valor/Swords 6, PHB p.55 / XGE p.15) do
+  // NOT stack — they all set the same "attack N times with the Attack
+  // action" property. A Warlock 5 / Fighter 11 multiclass with both
+  // Thirsting Blade (=2) and Extra Attack (2) (=3) attacks THREE times,
+  // not two or five.
   //
-  // Implementation: we DON'T overwrite attackCount if Thirsting Blade
-  // already set it. Since Thirsting Blade = 2 and Extra Attack = 2
-  // (for martial 5+), they would set the same value. But the guard is
-  // important for higher-tier Fighter Extra Attack:
-  //   - Warlock 5 / Fighter 11 has Thirsting Blade (=2) AND Extra Attack (2)
-  //     (=3). RAW, Extra Attack (2) should "win" (the higher-tier feature
-  //     supersedes). However, our current guard lets Thirsting Blade win
-  //     (2 attacks instead of 3) because the Thirsting Blade check runs
-  //     FIRST and the Extra Attack check is gated by attackCount ===
-  //     undefined. This is a known v1 simplification — it under-models
-  //     the rare Warlock/Fighter-11 multiclass case.
-  //   - Future: replace the order-dependent guards with a single
-  //     maxAttackCount() helper that returns the highest applicable
-  //     attackCount from any source (Thirsting Blade = 2, Extra Attack =
-  //     2, Extra Attack (2) = 3, Extra Attack (3) = 4).
-  if (
-    plan.action &&
-    plan.action.type === 'attack' &&
-    plan.action.attackCount === undefined
-  ) {
-    if (hasFeature(self, 'Extra Attack (3)')) {
-      plan.action.attackCount = 4;   // Fighter 20
-    } else if (hasFeature(self, 'Extra Attack (2)')) {
-      plan.action.attackCount = 3;   // Fighter 11
-    } else if (hasFeature(self, 'Extra Attack')) {
-      plan.action.attackCount = 2;   // Fighter/Barbarian/Monk/Paladin/Ranger 5, Bard Valor/Swords 6
+  // Pre-Session-45 implementation had an order-dependent guard (Thirsting
+  // Blade ran first and set attackCount=2, then Extra Attack (2) skipped
+  // because attackCount was already set). This silently under-modeled
+  // the Warlock 5 / Fighter 11 case. The maxAttackCount() helper fixes
+  // this by returning the MAX across all sources.
+  if (plan.action && plan.action.type === 'attack') {
+    const best = maxAttackCount(self, plan.action);
+    if (best !== undefined) {
+      plan.action.attackCount = best;
     }
   }
 
@@ -4829,6 +4786,65 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
   }
 
   return plan;
+}
+
+// ── Session 45 Task #30-follow-up: maxAttackCount() helper ──────────────────
+//
+// Returns the highest applicable "attacks per Attack action" count from any
+// RAW source, or undefined if no source applies. This replaces the previous
+// order-dependent guard chain (Thirsting Blade check → Extra Attack check)
+// which silently under-modeled the Warlock 5 / Fighter 11 multiclass case
+// (a character with both Thirsting Blade [=2] and Extra Attack (2) [=3]
+// should attack 3 times, not 2).
+//
+// Sources (PHB 2014 + XGE):
+//   - Thirsting Blade (Warlock 5+, PHB p.111, Pact of the Blade):
+//       2 attacks — MELEE ONLY (pact weapon attacks). Skipped for ranged.
+//   - Extra Attack (Fighter/Barbarian/Monk/Paladin/Ranger 5+, PHB
+//       p.72/49/85/85/92; Bard Valor/Swords 6, PHB p.55 / XGE p.15):
+//       2 attacks — ANY Attack action (melee OR ranged).
+//   - Extra Attack (2) (Fighter 11, PHB p.72): 3 attacks.
+//   - Extra Attack (3) (Fighter 20, PHB p.72): 4 attacks.
+//
+// RAW non-stacking (Sage Advice Compendium v2.7): all these features set
+// the same "attack N times with the Attack action" property; they do NOT
+// add together. Only the HIGHEST applies. Hence the max() aggregation.
+//
+// Note: Thirsting Blade is melee-only ("you can attack with your pact
+// weapon twice" — PHB p.111), while Extra Attack applies to any Attack
+// action ("you can attack twice, instead of once, whenever you take the
+// Attack action on your turn" — PHB p.72). The action parameter lets us
+// distinguish: a ranged Attack action from a Thirsting Blade Warlock does
+// NOT get the +1 attack from Thirsting Blade, but DOES get the +1 from
+// Extra Attack if the character also has martial levels.
+//
+// Returns undefined if no source applies — caller should leave
+// action.attackCount unset (the engine defaults to 1 attack).
+function maxAttackCount(
+  self: Combatant,
+  action: PlannedAction | null | undefined,
+): number | undefined {
+  if (!action || action.type !== 'attack' || !action.action) {
+    return undefined;
+  }
+
+  const isMelee = action.action.attackType === 'melee';
+  const hasThirstingBlade =
+    isMelee &&
+    hasInvocation(self, 'Thirsting Blade') &&
+    self.pactBoon === 'blade';
+
+  let best = 0;
+  if (hasThirstingBlade) best = Math.max(best, 2);
+  if (hasFeature(self, 'Extra Attack (3)')) {
+    best = Math.max(best, 4);   // Fighter 20
+  } else if (hasFeature(self, 'Extra Attack (2)')) {
+    best = Math.max(best, 3);   // Fighter 11
+  } else if (hasFeature(self, 'Extra Attack')) {
+    best = Math.max(best, 2);   // martial 5+ / Bard Valor/Swords 6
+  }
+
+  return best > 0 ? best : undefined;
 }
 
 // ── Session 44 Task #27: planExtraAction — smarter Action Surge tactics ──
@@ -4919,26 +4935,14 @@ function planExtraAction(
       targetId: target.id,
       description: `${self.name} uses Action Surge — extra Attack`,
     };
-    // Re-apply the attackCount logic (mirrors the block above for plan.action).
-    // Thirsting Blade (melee + Pact of the Blade + invocation)
-    if (
-      surgeAction.action !== null &&
-      surgeAction.action.attackType === 'melee' &&
-      hasInvocation(self, 'Thirsting Blade') &&
-      self.pactBoon === 'blade'
-    ) {
-      surgeAction.attackCount = 2;
-    }
-    // Extra Attack features (Fighter/Barbarian/Monk/Paladin/Ranger 5+,
-    // Bard Valor/Swords 6 — see SUBCLASS_FEATURES table in leveler.ts)
-    if (surgeAction.attackCount === undefined) {
-      if (hasFeature(self, 'Extra Attack (3)')) {
-        surgeAction.attackCount = 4;   // Fighter 20
-      } else if (hasFeature(self, 'Extra Attack (2)')) {
-        surgeAction.attackCount = 3;   // Fighter 11
-      } else if (hasFeature(self, 'Extra Attack')) {
-        surgeAction.attackCount = 2;   // martial 5+ / Bard Valor/Swords 6
-      }
+    // Re-apply the attackCount logic via the shared maxAttackCount() helper.
+    // The surge Action is a fresh Attack that benefits from the same
+    // Thirsting Blade / Extra Attack features as the main Action (PHB p.72:
+    // Action Surge grants "one additional action" — the additional Attack
+    // action triggers Extra Attack again).
+    const surgeBest = maxAttackCount(self, surgeAction);
+    if (surgeBest !== undefined) {
+      surgeAction.attackCount = surgeBest;
     }
     return surgeAction;
   }
