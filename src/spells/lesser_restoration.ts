@@ -33,7 +33,7 @@
 import { Combatant, Battlefield, Condition } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
 import { chebyshev3D } from '../engine/movement';
-import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
+import { consumeSpellSlot, hasSpellSlot, hasInnateSpellUse, consumeInnateSpellUse } from '../ai/resources';
 
 // ---- Metadata -----------------------------------------------
 
@@ -84,7 +84,10 @@ function emit(
  *
  * Preconditions:
  *   - Caster has 'Lesser Restoration' in their actions
- *   - Caster has at least one 2nd-level-or-higher slot available
+ *   - Caster has at least one 2nd-level-or-higher slot available OR has
+ *     an innate spellcasting use of Lesser Restoration remaining
+ *     (Session 45 Task #20-follow-up: supports the Couatl's 3/day innate
+ *     casting — MM p.43)
  *   - At least 1 valid ally target exists within 5 ft with a removable condition
  *     (blinded, deafened, paralyzed, or poisoned)
  *
@@ -93,7 +96,8 @@ function emit(
  */
 export function shouldCast(caster: Combatant, bf: Battlefield): Combatant | null {
   if (!caster.actions.some(a => a.name === 'Lesser Restoration')) return null;
-  if (!hasSpellSlot(caster, 2)) return null;
+  // ── Session 45 Task #20-follow-up: accept innate spell uses as alternative ──
+  if (!hasSpellSlot(caster, 2) && !hasInnateSpellUse(caster, 'Lesser Restoration')) return null;
 
   const candidates: Array<{ c: Combatant; hpPct: number; dist: number }> = [];
 
@@ -129,7 +133,9 @@ export function shouldCast(caster: Combatant, bf: Battlefield): Combatant | null
 
 /**
  * Execute Lesser Restoration:
- *  1. Consume a 2nd-level spell slot.
+ *  1. Consume a 2nd-level spell slot — OR, if no slot is available, consume
+ *     an innate spellcasting use (Session 45 Task #20-follow-up: supports
+ *     the Couatl's 3/day innate casting — MM p.43).
  *  2. Remove ALL of blinded/deafened/paralyzed/poisoned from the target
  *     (v1 simplification — canon removes only ONE condition; v1 removes
  *     all for simplicity).
@@ -143,7 +149,13 @@ export function execute(
   target: Combatant,
   state: EngineState,
 ): void {
-  consumeSpellSlot(caster, 2);
+  // ── Session 45 Task #20-follow-up: innate spell use fallback ──
+  // Mirrors cure_wounds.ts / shield.ts pattern: try spell slot first,
+  // fall back to innate spellcasting use if no slot is available.
+  const slotUsed = consumeSpellSlot(caster, 2);
+  if (slotUsed === null) {
+    consumeInnateSpellUse(caster, 'Lesser Restoration');
+  }
 
   emit(
     state, 'action', caster.id,

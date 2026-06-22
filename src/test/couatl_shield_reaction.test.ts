@@ -195,9 +195,14 @@ console.log('\n=== 3. Couatl has Lesser Restoration in innateSpellcasting (track
   const couatl = createCouatl(caster, 7);
   eq('Lesser Restoration max = 3', couatl.resources!.innateSpellcasting!['Lesser Restoration'].max, 3);
   eq('Lesser Restoration remaining = 3', couatl.resources!.innateSpellcasting!['Lesser Restoration'].remaining, 3);
-  // No Action object (needs condition tracking — out of v1 scope)
+  // Session 45 Task #20-follow-up: now HAS an Action object (innate-aware
+  // shouldCast/execute wired).
   const lrAction = couatl.actions.find(a => a.name === 'Lesser Restoration');
-  assert('Lesser Restoration has NO Action object (condition tracking pending)', lrAction === undefined);
+  assert('Lesser Restoration HAS Action object (Session 45 Task #20-follow-up)', lrAction !== undefined);
+  if (lrAction) {
+    eq('Lesser Restoration costType = action', lrAction.costType, 'action');
+    eq('Lesser Restoration reach = 5 (touch)', lrAction.reach, 5);
+  }
 }
 
 console.log('\n=== 4. Couatl has Protection from Poison in innateSpellcasting (tracked) ===');
@@ -206,8 +211,14 @@ console.log('\n=== 4. Couatl has Protection from Poison in innateSpellcasting (t
   const couatl = createCouatl(caster, 7);
   eq('Protection from Poison max = 3', couatl.resources!.innateSpellcasting!['Protection from Poison'].max, 3);
   eq('Protection from Poison remaining = 3', couatl.resources!.innateSpellcasting!['Protection from Poison'].remaining, 3);
+  // Session 45 Task #20-follow-up: now HAS an Action object (innate-aware
+  // shouldCast/execute wired).
   const ppAction = couatl.actions.find(a => a.name === 'Protection from Poison');
-  assert('Protection from Poison has NO Action object (condition tracking pending)', ppAction === undefined);
+  assert('Protection from Poison HAS Action object (Session 45 Task #20-follow-up)', ppAction !== undefined);
+  if (ppAction) {
+    eq('Protection from Poison costType = action', ppAction.costType, 'action');
+    eq('Protection from Poison reach = 5 (touch)', ppAction.reach, 5);
+  }
 }
 
 console.log('\n=== 5. hasInnateSpellUse(couatl, "Shield") returns true ===');
