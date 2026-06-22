@@ -42,7 +42,7 @@
 // ============================================================
 
 import { Combatant, Battlefield, ActiveEffect } from '../types/core';
-import { CombatEvent, EngineState } from '../engine/combat';
+import { CombatEvent, EngineState, rollAbilityCheckReactable } from '../engine/combat';
 import { removeEffectById } from '../engine/spell_effects';
 import { rollDie, abilityMod } from '../engine/utils';
 import { chebyshev3D } from '../engine/movement';
@@ -252,9 +252,29 @@ export function execute(
         target.id,
       );
     } else {
-      // Ability check vs DC 13
-      const check = rollAbilityCheck(caster);
-      const success = check >= V1_FLAT_DC;
+      // Ability check vs DC 13 (v1 flat DC)
+      // Session 43 Task #26: use rollAbilityCheckReactable so Silvery Barbs
+      // can fire on a successful check. The opponent is the target creature
+      // (whose effect is being dispelled) — they might cast Silvery Barbs
+      // to protect their buff if the dispel came from an enemy.
+      //
+      // PHB p.233: "make an ability check using your spellcasting ability".
+      // The local spellcastingMod() helper returns max(INT, WIS, CHA) mod.
+      // The canonical rollAbilityCheck takes a specific ability — we pass
+      // 'int' as the v1 default (Wizards are the typical dispellers).
+      // No proficiency per PHB p.233 (isProficient=false).
+      const spellcastingAbility: 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha' = 'int';
+      const checkResult = rollAbilityCheckReactable(
+        state,
+        caster,    // checker (the one making the ability check)
+        target,    // opponent (the target creature — might protect their buff)
+        spellcastingAbility,
+        V1_FLAT_DC,
+        false,     // no proficiency (PHB p.233 explicit)
+        'dispel magic',
+      );
+      const check = checkResult.total;
+      const success = checkResult.success;
 
       if (success) {
         removeEffectById(target.id, effect.id, state.battlefield);
@@ -262,14 +282,14 @@ export function execute(
 
         emit(
           state, 'condition_remove', caster.id,
-          `${caster.name} dispels ${target.name}'s ${effect.spellName}! (check ${check} vs DC ${V1_FLAT_DC})`,
+          `${caster.name} dispels ${target.name}'s ${effect.spellName}! (check ${check} vs DC ${V1_FLAT_DC}${checkResult.negated ? ' — Silvery Barbs did NOT flip' : ''})`,
           target.id,
           check,
         );
       } else {
         emit(
           state, 'save_success', caster.id,
-          `${caster.name} fails to dispel ${target.name}'s ${effect.spellName} (check ${check} vs DC ${V1_FLAT_DC})`,
+          `${caster.name} fails to dispel ${target.name}'s ${effect.spellName} (check ${check} vs DC ${V1_FLAT_DC}${checkResult.negated ? ' — Silvery Barbs FLIPPED success to failure!' : ''})`,
           target.id,
           check,
         );

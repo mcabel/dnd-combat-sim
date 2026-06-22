@@ -21,6 +21,7 @@ import {
   teamHasNoAttackCapability, canDealDamage, makeImprovisedUnarmed, makeImprovisedWeapon,
   effectiveSpeed, rollDie, abilityMod, proficiencyBonus,
   rollDiceString as rollBoomingBladeDice,
+  rollAbilityCheck,  // Session 43 Task #26: for rollAbilityCheckReactable
 } from './utils';
 import {
   chebyshev3D, distanceFt, euclideanDistFt, canReach, estimateMoveCostFt,
@@ -1038,6 +1039,108 @@ export function rollGrappleContestReactable(
   }
 
   return true;
+}
+
+// ============================================================
+// Session 43 Task #26: rollAbilityCheckReactable — Silvery Barbs
+// ability-check-success trigger for Counterspell and Dispel Magic.
+//
+// Wraps `rollAbilityCheck` from utils.ts and fires an
+// `incoming_ability_check_success` reaction trigger when the checker
+// succeeds on the ability check. The reactor is the OPPONENT (the one
+// who would cast Silvery Barbs to force a reroll). If Silvery Barbs
+// negates (reroll flips the check to failure), this wrapper returns
+// success=false so the caller's "check failed" branch runs.
+//
+// Used for:
+//   - Counterspell L4+ ability check (DC 10 + spell level, INT/WIS/CHA)
+//     The opponent is the original spellcaster (trigger.caster in the
+//     incoming_spell trigger) who wants the Counterspell to fail.
+//   - Dispel Magic non-concentration effect check (DC 13 flat)
+//     The opponent is the target creature whose effect is being
+//     dispelled — they might want to protect their buff.
+// ============================================================
+
+/**
+ * Roll an ability check with reaction-trigger support.
+ *
+ * Calls `rollAbilityCheck(checker, ability, dc, isProficient)` to compute
+ * the raw check result. If the check succeeds AND the opponent has a
+ * reaction spell (Silvery Barbs) available, fires the
+ * `incoming_ability_check_success` trigger. If the reaction negates
+ * (lower-of-two-d20s reroll flips success to failure), returns
+ * success=false so the caller's "check failed" branch runs.
+ *
+ * @param state        Engine state (for triggerReactions + logging)
+ * @param checker      The creature making the ability check
+ * @param opponent     The creature who would cast Silvery Barbs to negate
+ *                     (e.g. original spellcaster for Counterspell, target
+ *                     creature for Dispel Magic)
+ * @param ability      The ability used (str/dex/con/int/wis/cha)
+ * @param dc           The DC of the check
+ * @param isProficient Whether the checker adds proficiency (default false)
+ * @param contestType  Description of the check (e.g. "counterspell", "dispel magic")
+ * @returns { roll, total, success, negated }
+ *   - roll: raw d20 (1-20)
+ *   - total: d20 + ability mod + (proficiency if applicable)
+ *   - success: whether the check succeeds AFTER any reaction
+ *   - negated: true if a reaction flipped success → failure
+ */
+export function rollAbilityCheckReactable(
+  state: EngineState,
+  checker: Combatant,
+  opponent: Combatant,
+  ability: 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha',
+  dc: number,
+  isProficient: boolean = false,
+  contestType: string = 'ability check',
+): { roll: number; total: number; success: boolean; negated: boolean } {
+  // Roll the check using the canonical rollAbilityCheck (utils.ts).
+  const result = rollAbilityCheck(checker, ability, dc, isProficient);
+
+  // Only fire the trigger if the checker succeeded — Silvery Barbs forces
+  // a reroll, which can only flip success → failure (not the reverse).
+  if (!result.success) {
+    return { roll: result.roll, total: result.total, success: false, negated: false };
+  }
+
+  // Don't fire if the opponent is the checker (self-check — shouldn't happen).
+  if (opponent.id === checker.id) {
+    return { roll: result.roll, total: result.total, success: true, negated: false };
+  }
+
+  // Don't fire if the opponent is dead/unconscious (can't react).
+  if (opponent.isDead || opponent.isUnconscious) {
+    return { roll: result.roll, total: result.total, success: true, negated: false };
+  }
+
+  // Don't fire if the opponent has already used their reaction this round.
+  if (opponent.budget.reactionUsed) {
+    return { roll: result.roll, total: result.total, success: true, negated: false };
+  }
+
+  // Fire the trigger with REAL roll values. The reroll logic in
+  // silvery_barbs.ts uses trigger.roll to compute lower-of-two-d20s.
+  // There's no "opponent total" for an ability check vs DC (unlike a
+  // contest), so we set opponentTotal to dc — the reroll flips when
+  // newCheckerTotal <= dc (which is exactly "the check now fails").
+  const outcome = triggerReactions(state, opponent, {
+    kind: 'incoming_ability_check_success',
+    checker,
+    opponent,
+    ability,
+    roll: result.roll,
+    total: result.total,
+    opponentTotal: dc,  // the threshold for the check to flip to failure
+    contestType,
+  });
+
+  // If the reaction negated the check, the checker did NOT succeed.
+  if (outcome?.kind === 'negated') {
+    return { roll: result.roll, total: result.total, success: false, negated: true };
+  }
+
+  return { roll: result.roll, total: result.total, success: true, negated: false };
 }
 
 // ============================================================

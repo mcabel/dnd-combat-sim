@@ -313,8 +313,11 @@ console.log('\n--- Section 5: High attack roll rarely flips ---');
     const outcome = executeReaction(caster, state, makeAttackHitTrigger(attacker, swordAction, 20, 40, 15, true));
     if (outcome.kind === 'negated') negatedCount++;
   }
-  // Only nat-1 rerolls can negate (5% chance). Allow 0-6 (wide margin for randomness).
-  assert('High-bonus attack: reroll only negates on nat 1 (0-6 negations)', negatedCount <= 6,
+  // Only nat-1 rerolls can negate (5% chance per trial). Over 50 trials,
+  // mean = 2.5, std = 1.54. Allow 0-10 (5 std above mean — P(>10) ≈ 1e-7,
+  // effectively never fails). The original 0-6 threshold was 2.3 std above
+  // mean and would fail ~1.2% of CI runs (one red X observed on Task #23).
+  assert('High-bonus attack: reroll only negates on nat 1 (0-10 negations)', negatedCount <= 10,
     `negated=${negatedCount}`);
 }
 
