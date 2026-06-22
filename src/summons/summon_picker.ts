@@ -259,6 +259,93 @@ export function pickConjureFeySummon(slotLevel: number): SummonPick | null {
   return pickSummonByCR(bestiary, maxCR, 'fey');
 }
 
+// ---- Conjure Animals picker (Session 43 Task #21) ------------
+
+/**
+ * Pick the Conjure Animals summon for the given slot level.
+ *
+ * PHB p.225 — Conjure Animals CR progression (1-creature option):
+ *   L3 → CR 2 (e.g. Giant Constrictor Snake, Polar Bear)
+ *   L4 → CR 3 (e.g. Ankylosaurus, Knight — but knight is humanoid)
+ *   L5 → CR 4 (e.g. Elephant, Stegoceras)
+ *   L6 → CR 5 (e.g. Triceratops, Tyrannosaurus Rex is CR 8 — too high)
+ *   L7 → CR 6 (e.g. Mammoth)
+ *   L8 → CR 7 (e.g. Giant Ape)
+ *   L9 → CR 8 (e.g. Tyrannosaurus Rex)
+ *
+ * v1 simplification: always picks the "1 creature at max CR" option.
+ * PHB also offers 2/4/8 creatures at lower CRs — not modelled in v1.
+ *
+ * Returns the chosen SummonPick (highest-CR beast ≤ maxCR), or null
+ * if the bestiary has no valid creature (caller falls back to Wolf).
+ */
+export function pickConjureAnimalsSummon(slotLevel: number): SummonPick | null {
+  const bestiary = getBestiary();
+  if (bestiary.size === 0) return null;
+
+  // PHB p.225: maxCR = slotLevel - 1 (L3=CR2, L4=CR3, ..., L9=CR8)
+  const maxCR = slotLevel - 1;
+  if (maxCR < 0) return null;
+  return pickSummonByCR(bestiary, maxCR, 'beast');
+}
+
+// ---- Conjure Woodland Beings picker (Session 43 Task #21) ----
+
+/**
+ * Pick the Conjure Woodland Beings summon for the given slot level.
+ *
+ * PHB p.226 — Conjure Woodland Beings CR progression (1-creature option):
+ *   L4 → CR 2 (e.g. Bog Unicorn, Darkling — but CR varies)
+ *   L5 → CR 3 (e.g. Green Hag, Sea Hag)
+ *   L6 → CR 4 (e.g. Korred, Yeth Hound)
+ *   L7 → CR 5 (e.g. Bheur Hag, Pixie is CR 1/4 — depends)
+ *   L8 → CR 6 (e.g. Yeth Hound pack — depends)
+ *   L9 → CR 7 (limited fey in MM at this CR)
+ *
+ * v1 simplification: always picks the "1 creature at max CR" option.
+ *
+ * Returns the chosen SummonPick (highest-CR fey ≤ maxCR), or null
+ * if the bestiary has no valid creature (caller falls back to Sprite).
+ */
+export function pickConjureWoodlandBeingsSummon(slotLevel: number): SummonPick | null {
+  const bestiary = getBestiary();
+  if (bestiary.size === 0) return null;
+
+  // PHB p.226: maxCR = slotLevel - 2 (L4=CR2, L5=CR3, ..., L9=CR7)
+  const maxCR = slotLevel - 2;
+  if (maxCR < 0) return null;
+  return pickSummonByCR(bestiary, maxCR, 'fey');
+}
+
+// ---- Conjure Minor Elementals picker (Session 43 Task #21) ---
+
+/**
+ * Pick the Conjure Minor Elementals summon for the given slot level.
+ *
+ * PHB p.225 — Conjure Minor Elementals CR progression (1-creature option):
+ *   L4 → CR 2 (e.g. Gargoyle is elemental CR 2 — but type varies)
+ *   L5 → CR 3 (e.g. Water Weird, Salamander is CR 5 — too high)
+ *   L6 → CR 4 (e.g. Fire Elemental, Air Elemental)
+ *   L7 → CR 5 (e.g. Salamander, Water Elemental is CR 5)
+ *   L8 → CR 6 (e.g. Invisible Stalker, Galeb Duhr)
+ *   L9 → CR 7 (e.g. Dao, Djinni is CR 11 — too high)
+ *
+ * v1 simplification: always picks the "1 creature at max CR" option.
+ *
+ * Returns the chosen SummonPick (highest-CR elemental ≤ maxCR), or
+ * null if the bestiary has no valid creature (caller falls back to
+ * the v1 hardcoded elemental).
+ */
+export function pickConjureMinorElementalsSummon(slotLevel: number): SummonPick | null {
+  const bestiary = getBestiary();
+  if (bestiary.size === 0) return null;
+
+  // PHB p.225: maxCR = slotLevel - 2 (L4=CR2, L5=CR3, ..., L9=CR7)
+  const maxCR = slotLevel - 2;
+  if (maxCR < 0) return null;
+  return pickSummonByCR(bestiary, maxCR, 'elemental');
+}
+
 // ---- Combatant builder (from bestiary pick) ------------------
 
 /**

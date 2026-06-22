@@ -12,9 +12,15 @@
 
 import { shouldCast, execute, metadata, createWolf } from '../spells/conjure_animals';
 import { parseCR, pickCreaturesByCR, CONJURE_ANIMALS_OPTIONS, DEFAULT_CA_OPTION } from '../summons/cr_picker';
+import { setBestiaryForTesting } from '../summons/summon_picker';
 import { removeEffectsFromCaster } from '../engine/spell_effects';
 import { Combatant, Action, PlayerResources, Vec3 } from '../types/core';
 import { Raw5etoolsMonster } from '../parser/fivetools';
+
+// Session 43 Task #21: force empty bestiary so the v1 hardcoded fallback
+// (2 Wolves) is exercised. The bestiary-driven path is tested separately
+// in bestiary_integration.test.ts and conjure_animals_bestiary.test.ts.
+setBestiaryForTesting(new Map());
 
 let passed = 0, failed = 0;
 

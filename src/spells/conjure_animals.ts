@@ -55,6 +55,8 @@ import { removeEffectsFromCaster } from '../engine/spell_effects';
 import { startConcentration, rollDie } from '../engine/utils';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 import { CONJURE_ANIMALS_OPTIONS, DEFAULT_CA_OPTION } from '../summons/cr_picker';
+// Session 43 Task #21: bestiary-driven summon selection.
+import { pickConjureAnimalsSummon, buildSummonCombatant } from '../summons/summon_picker';
 
 // ---- Metadata -----------------------------------------------
 
@@ -267,7 +269,35 @@ export function execute(
   }
   startConcentration(caster, 'Conjure Animals');
 
-  // v1: always conjure 2 Wolves (CR 1/4 × 2) — the most iconic option
+  // Session 43 Task #21: bestiary-driven summon selection.
+  // Tries to pick the appropriate beast from the bestiary based on slot
+  // level (L3 → CR 2, L4 → CR 3, ..., L9 → CR 8). Falls back to 2 Wolves
+  // (v1 hardcoded) if the bestiary is not loaded or no matching creature.
+  //
+  // v1 simplification: picks the "1 creature at max CR" option from the
+  // PHB table. The 2/4/8-creature options are not modelled in v1.
+  const pick = pickConjureAnimalsSummon(slotLevel);
+
+  if (pick) {
+    // Bestiary-driven: spawn 1 creature at the picked CR.
+    const summon = buildSummonCombatant(pick, caster, 'Conjure Animals');
+    state.battlefield.combatants.set(summon.id, summon);
+    if (!state.battlefield.pendingInitiativeInserts) {
+      state.battlefield.pendingInitiativeInserts = [];
+    }
+    state.battlefield.pendingInitiativeInserts.push({
+      combatantId: summon.id,
+      insertAfterId: caster.id,
+    });
+    emit(
+      state, 'action', caster.id,
+      `${caster.name} casts Conjure Animals (slot L${slotLevel})! ${pick.name} (CR ${pick.cr}) appears with ${summon.maxHP} HP, AC ${summon.ac}.`,
+      summon.id,
+    );
+    return;
+  }
+
+  // Fallback: v1 hardcoded 2 Wolves (CR 1/4 × 2).
   const WOLF_COUNT = 2;
   const wolfIds: string[] = [];
 

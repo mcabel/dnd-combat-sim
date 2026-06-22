@@ -59,6 +59,8 @@ import { removeEffectsFromCaster } from '../engine/spell_effects';
 import { startConcentration } from '../engine/utils';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 import { CONJURE_MINOR_ELEMENTALS_OPTIONS, DEFAULT_CME_OPTION } from '../summons/cr_picker';
+// Session 43 Task #21: bestiary-driven summon selection.
+import { pickConjureMinorElementalsSummon, buildSummonCombatant } from '../summons/summon_picker';
 
 // ---- Metadata -----------------------------------------------
 
@@ -277,7 +279,36 @@ export function execute(
   }
   startConcentration(caster, 'Conjure Minor Elementals');
 
-  // v1: always conjure 4 Mud Mephits (CR 1/4 × 4) — the most iconic option
+  // Session 43 Task #21: bestiary-driven summon selection.
+  // Tries to pick the appropriate elemental from the bestiary based on
+  // slot level (L4 → CR 2, L5 → CR 3, ..., L9 → CR 7). Falls back to
+  // 4 Mud Mephits (v1 hardcoded) if the bestiary is not loaded or no
+  // matching creature.
+  //
+  // v1 simplification: picks the "1 creature at max CR" option from the
+  // PHB table. The 2/4/8-creature options are not modelled in v1.
+  const pick = pickConjureMinorElementalsSummon(slotLevel);
+
+  if (pick) {
+    // Bestiary-driven: spawn 1 creature at the picked CR.
+    const summon = buildSummonCombatant(pick, caster, 'Conjure Minor Elementals');
+    state.battlefield.combatants.set(summon.id, summon);
+    if (!state.battlefield.pendingInitiativeInserts) {
+      state.battlefield.pendingInitiativeInserts = [];
+    }
+    state.battlefield.pendingInitiativeInserts.push({
+      combatantId: summon.id,
+      insertAfterId: caster.id,
+    });
+    emit(
+      state, 'action', caster.id,
+      `${caster.name} casts Conjure Minor Elementals (slot L${slotLevel})! ${pick.name} (CR ${pick.cr}) appears with ${summon.maxHP} HP, AC ${summon.ac}.`,
+      summon.id,
+    );
+    return;
+  }
+
+  // Fallback: v1 hardcoded 4 Mud Mephits (CR 1/4 × 4).
   // (PHB lists up to 8 CR 1/4 elementals; v1 spawns 4 for a manageable footprint)
   const MEPHIT_COUNT = 4;
   const mephitIds: string[] = [];
