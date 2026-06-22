@@ -333,6 +333,7 @@ export function pcToCombatant(
   const sp = raw.spellcasting;
   if (sp) {
     const spellNames: string[] = [
+      ...(sp.cantrips ?? []),       // Session 41: cantrips now processed (Task #15)
       ...(sp.preparedSpells ?? []),
       ...(sp.spells_1st ?? []),
       ...(sp.spellbook ?? []),

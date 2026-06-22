@@ -5010,6 +5010,295 @@ export const SPELL_DB: Record<string, SpellTemplate> = {
     bonusAction: true,
   },
 
+  // ---- Combat Cantrips (slotLevel: 0) --------------------------
+  // Added in Session 41 to support the cantrip pipeline in pcToCombatant
+  // (Task #15 from Session 40 handover). Previously, cantrips only worked
+  // if they were duplicated in the weapons array (as pc_stat_blocks_lv1.json
+  // does for level-1 PCs). With these entries, cantrips in
+  // spellcasting.cantrips are now converted to Actions automatically.
+  //
+  // Damage values below are the BASE cantrip damage (1st-level caster);
+  // the AI planner / parser is expected to scale at 5/11/17. slotLevel: 0
+  // means the action never consumes a spell slot (the AI slot-gate skips
+  // slotLevel > 0 spells when out of slots, so cantrips always pass).
+  //
+  // Riders (slow on Ray of Frost, pull on Thorn Whip, prone on Sapping
+  // Sting, etc.) are NOT modeled here — they're applied by the per-cantrip
+  // engine modules (e.g. src/spells/ray_of_frost.ts) which fire from
+  // CANTRIP_EFFECTS in src/engine/cantrip_effects.ts. The SPELL_DB entry
+  // just provides the basic attack/save/damage template.
+
+  'fire bolt': {
+    // Ranged spell attack, 120 ft, 1d10 fire. No rider.
+    attackType: 'spell',
+    rangeNormal: 120,
+    damage: { count: 1, sides: 10, bonus: 0, average: avg(1, 10, 0) },
+    damageType: 'fire',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 0,
+  },
+
+  'eldritch blast': {
+    // Ranged spell attack, 120 ft, 1d10 force. Riders (Repelling Blast,
+    // Agonizing Blast, Grasp of Hadar, Lance of Lethargy) fire from
+    // _invocations.ts based on the attacker's eldritchInvocations list.
+    attackType: 'spell',
+    rangeNormal: 120,
+    damage: { count: 1, sides: 10, bonus: 0, average: avg(1, 10, 0) },
+    damageType: 'force',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 0,
+  },
+
+  'ray of frost': {
+    // Ranged spell attack, 60 ft, 1d8 cold. Rider: -10 ft speed (in cantrip_effects.ts).
+    attackType: 'spell',
+    rangeNormal: 60,
+    damage: { count: 1, sides: 8, bonus: 0, average: avg(1, 8, 0) },
+    damageType: 'cold',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 0,
+  },
+
+  'sacred flame': {
+    // No attack roll, DEX save, 60 ft, 1d8 radiant. No rider.
+    attackType: 'save',
+    rangeNormal: 60,
+    damage: { count: 1, sides: 8, bonus: 0, average: avg(1, 8, 0) },
+    damageType: 'radiant',
+    saveAbility: 'dex',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 0,
+  },
+
+  'vicious mockery': {
+    // No attack roll, WIS save, 60 ft, 1d4 psychic. Rider: disadvantage on
+    // target's next attack roll (in cantrip_effects.ts).
+    attackType: 'save',
+    rangeNormal: 60,
+    damage: { count: 1, sides: 4, bonus: 0, average: avg(1, 4, 0) },
+    damageType: 'psychic',
+    saveAbility: 'wis',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 0,
+  },
+
+  'poison spray': {
+    // No attack roll, CON save, 10 ft, 1d12 poison. No rider.
+    attackType: 'save',
+    rangeNormal: 10,
+    damage: { count: 1, sides: 12, bonus: 0, average: avg(1, 12, 0) },
+    damageType: 'poison',
+    saveAbility: 'con',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 0,
+  },
+
+  'chill touch': {
+    // Ranged spell attack, 120 ft, 1d8 necrotic. Rider: target can't
+    // regain HP (in cantrip_effects.ts).
+    attackType: 'spell',
+    rangeNormal: 120,
+    damage: { count: 1, sides: 8, bonus: 0, average: avg(1, 8, 0) },
+    damageType: 'necrotic',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 0,
+  },
+
+  'toll the dead': {
+    // No attack roll, WIS save, 60 ft, 1d8 necrotic (or 1d12 if target
+    // missing HP). v1 simplification: always 1d8 — the planner can't see
+    // current HP to decide which die to use; the cantrip_effects engine
+    // module handles the actual roll.
+    attackType: 'save',
+    rangeNormal: 60,
+    damage: { count: 1, sides: 8, bonus: 0, average: avg(1, 8, 0) },
+    damageType: 'necrotic',
+    saveAbility: 'wis',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 0,
+  },
+
+  'produce flame': {
+    // Ranged spell attack, 30 ft, 1d8 fire. No rider.
+    attackType: 'spell',
+    rangeNormal: 30,
+    damage: { count: 1, sides: 8, bonus: 0, average: avg(1, 8, 0) },
+    damageType: 'fire',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 0,
+  },
+
+  'thorn whip': {
+    // Melee spell attack, 30 ft, 1d6 piercing. Rider: pull target up to
+    // 10 ft (in cantrip_effects.ts).
+    attackType: 'spell',
+    rangeNormal: 30,
+    damage: { count: 1, sides: 6, bonus: 0, average: avg(1, 6, 0) },
+    damageType: 'piercing',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 0,
+  },
+
+  'acid splash': {
+    // No attack roll, DEX save, 60 ft, 1d6 acid. v1 simplification: single
+    // target only (PHB allows up to 2 creatures within 5 ft of each other).
+    attackType: 'save',
+    rangeNormal: 60,
+    damage: { count: 1, sides: 6, bonus: 0, average: avg(1, 6, 0) },
+    damageType: 'acid',
+    saveAbility: 'dex',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 0,
+  },
+
+  'thunderclap': {
+    // No attack roll, CON save, 5 ft self-centered AoE, 1d6 thunder.
+    attackType: 'save',
+    rangeNormal: 5,
+    damage: { count: 1, sides: 6, bonus: 0, average: avg(1, 6, 0) },
+    damageType: 'thunder',
+    saveAbility: 'con',
+    isAoE: true,
+    aoeRadius: 5,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 0,
+  },
+
+  'sword burst': {
+    // No attack roll, STR save, 5 ft self-centered AoE, 1d6 force.
+    attackType: 'save',
+    rangeNormal: 5,
+    damage: { count: 1, sides: 6, bonus: 0, average: avg(1, 6, 0) },
+    damageType: 'force',
+    saveAbility: 'str',
+    isAoE: true,
+    aoeRadius: 5,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 0,
+  },
+
+  'lightning lure': {
+    // No attack roll, DEX save, 30 ft, 1d8 lightning. Rider: pull target
+    // 10 ft (in cantrip_effects.ts).
+    attackType: 'save',
+    rangeNormal: 30,
+    damage: { count: 1, sides: 8, bonus: 0, average: avg(1, 8, 0) },
+    damageType: 'lightning',
+    saveAbility: 'dex',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 0,
+  },
+
+  'infestation': {
+    // No attack roll, CON save, 30 ft, 1d6 poison. Rider: target moves 5 ft
+    // in random direction (in cantrip_effects.ts).
+    attackType: 'save',
+    rangeNormal: 30,
+    damage: { count: 1, sides: 6, bonus: 0, average: avg(1, 6, 0) },
+    damageType: 'poison',
+    saveAbility: 'con',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 0,
+  },
+
+  'mind sliver': {
+    // No attack roll, INT save, 60 ft, 1d6 psychic. Rider: -1d4 to target's
+    // next save (in cantrip_effects.ts).
+    attackType: 'save',
+    rangeNormal: 60,
+    damage: { count: 1, sides: 6, bonus: 0, average: avg(1, 6, 0) },
+    damageType: 'psychic',
+    saveAbility: 'int',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 0,
+  },
+
+  'primal savagery': {
+    // Melee spell attack, 5 ft touch, 1d10 acid. No rider.
+    attackType: 'spell',
+    rangeNormal: 5,
+    damage: { count: 1, sides: 10, bonus: 0, average: avg(1, 10, 0) },
+    damageType: 'acid',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 0,
+  },
+
+  'shocking grasp': {
+    // Melee spell attack, 5 ft touch, 1d8 lightning. Rider: target can't
+    // take reactions (in cantrip_effects.ts).
+    attackType: 'spell',
+    rangeNormal: 5,
+    damage: { count: 1, sides: 8, bonus: 0, average: avg(1, 8, 0) },
+    damageType: 'lightning',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 0,
+  },
+
+  'sapping sting': {
+    // No attack roll, CON save, 30 ft, 1d6 necrotic. Rider: knock target
+    // prone (in cantrip_effects.ts).
+    attackType: 'save',
+    rangeNormal: 30,
+    damage: { count: 1, sides: 6, bonus: 0, average: avg(1, 6, 0) },
+    damageType: 'necrotic',
+    saveAbility: 'con',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 0,
+  },
+
+  'create bonfire': {
+    // No attack roll, DEX save, 5 ft (creates a 5-ft cube bonfire), 1d8 fire.
+    // v1 simplification: single-target model (the actual bonfire is a
+    // persistent area; the cantrip_effects engine module handles that).
+    attackType: 'save',
+    rangeNormal: 5,
+    damage: { count: 1, sides: 8, bonus: 0, average: avg(1, 8, 0) },
+    damageType: 'fire',
+    saveAbility: 'dex',
+    isAoE: true,
+    aoeRadius: 5,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 0,
+  },
+
 };
 
 // ---- Lookup helper ------------------------------------------
