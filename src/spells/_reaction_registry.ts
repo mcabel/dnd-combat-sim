@@ -105,7 +105,10 @@ export const REACTION_SPELLS: ReactionSpellDescriptor[] = [
   {
     name: 'Shield',
     level: 1,
-    triggerKinds: ['incoming_attack_hit'],
+    // Session 37: added 'targeted_by_magic_missile' for Shield's PHB p.275
+    // "targeted by Magic Missile" trigger (in addition to the original
+    // 'incoming_attack_hit' "hit by an attack" trigger).
+    triggerKinds: ['incoming_attack_hit', 'targeted_by_magic_missile'],
     shouldCast: shouldCastShieldReaction,
     execute: executeShieldReaction,
   },

@@ -31,6 +31,10 @@ import { planTurn, planLegendaryAction, shouldTakeOpportunityAttack } from '../a
 import { shouldSmite, applyDivineSmite, tickRage, consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 // TG-008: Reaction spell subsystem
 import { REACTION_SPELLS, ReactionSpellDescriptor } from '../spells/_reaction_registry';
+import {
+  fireEldritchBlastHitInvocations,
+  fireEldritchBlastDamageInvocations,
+} from '../spells/_invocations';
 import { consumeRider as consumeAbsorbElementsRider } from '../spells/absorb_elements';
 import { isControlledMount, mountDeathRiderCheck, isIndependentMount } from '../summons/mount';
 import { checkMountedCombatant, checkProtectionStyle, checkInterceptionReduction } from './mount_redirect';
@@ -840,6 +844,8 @@ function triggerReactions(
   if (trigger.kind === 'incoming_attack_hit' && trigger.attacker.id === reactor.id) return null;
   if (trigger.kind === 'incoming_damage' && trigger.attacker.id === reactor.id) return null;
   if (trigger.kind === 'incoming_spell' && trigger.caster.id === reactor.id) return null;
+  // Session 37: Shield vs Magic Missile — don't Shield against your own MM.
+  if (trigger.kind === 'targeted_by_magic_missile' && trigger.caster.id === reactor.id) return null;
 
   // Iterate the registry in order; fire the first matching spell.
   for (const spell of REACTION_SPELLS) {
@@ -1409,6 +1415,22 @@ export function resolveAttack(
   if (action.damage) {
     let dmg = rollDamage(action.damage, isCrit);
 
+    // ── Session 39: Eldritch Invocation — Agonizing Blast ──
+    // PHB p.110: "When you cast Eldritch Blast, add your Charisma modifier
+    // to the damage it deals on a hit." Pre-damage hook fired AFTER the
+    // base roll, BEFORE other riders. The bonus is flat (NOT dice, so NOT
+    // doubled on crit per PHB p.196). The hook checks the attacker's
+    // eldritchInvocations list; no-op if Agonizing Blast isn't known.
+    if (action.name === 'Eldritch Blast') {
+      const invDmg = fireEldritchBlastDamageInvocations(attacker, target);
+      if (invDmg > 0) {
+        dmg += invDmg;
+        log(state, 'action', attacker.id,
+          `${attacker.name} adds Agonizing Blast bonus (+${invDmg} force) to ${target.name}!`,
+          target.id, invDmg);
+      }
+    }
+
     // Divine Smite: Paladin expends a spell slot on a hit (PHB p.85)
     if (attacker.resources?.divineSmite && shouldSmite(attacker, target, isCrit)) {
       const smiteDmg = applyDivineSmite(attacker, isCrit);
@@ -1738,6 +1760,16 @@ export function resolveAttack(
     }
     // Apply cantrip special effects (e.g., Thorn Whip pull, Ray of Frost slow)
     applyCantripEffect(attacker, target, action.name, state);
+    // ── Session 38: Eldritch Invocation — Repelling Blast ──
+    // PHB p.111: "When you hit a creature with Eldritch Blast, you can push
+    // the creature up to 10 feet away from you in a straight line." Fires
+    // AFTER damage is dealt, BEFORE checkDeath (so even a target about to
+    // drop to 0 HP gets pushed — the push triggers on hit, not on kill).
+    // The hook internally checks the attacker's eldritchInvocations list;
+    // it's a no-op if the attacker doesn't have Repelling Blast.
+    if (action.name === 'Eldritch Blast') {
+      fireEldritchBlastHitInvocations(attacker, target, state);
+    }
     applyWardingBondRedirect(target, dealt, state);
     checkDeath(target, state);
   }
@@ -2110,7 +2142,18 @@ export function executeMove(
 
 // ---- Execute a PlannedAction --------------------------------
 
-function executePlannedAction(
+/**
+ * Execute a single PlannedAction for `actor` against the current battlefield
+ * state. This is the per-turn action executor called by `runCombat`'s main
+ * loop; it dispatches to the appropriate spell/attack/movement branch via
+ * the `switch (plan.type)` statement.
+ *
+ * Exported (Session 37) so tests can drive a SPECIFIC dispatch path
+ * (e.g. `case 'magicMissile':` with a Shield reaction) without needing
+ * to set up a full multi-round `runCombat` scenario. The function is
+ * otherwise unchanged — it was already the single-turn executor.
+ */
+export function executePlannedAction(
   actor: Combatant,
   plan: PlannedAction,
   state: EngineState
@@ -2465,6 +2508,34 @@ function executePlannedAction(
       // Slot consumed inside executeMagicMissile.
       const mmTarget = plan.targetId ? bf.combatants.get(plan.targetId) : null;
       if (!mmTarget || mmTarget.isDead || mmTarget.isUnconscious) break;
+
+      // ── Session 37: Shield "targeted by Magic Missile" reaction (PHB p.275) ──
+      // Magic Missile auto-hits (no attack roll), so it bypasses the
+      // `incoming_attack_hit` trigger in resolveAttack. Fire a dedicated
+      // `targeted_by_magic_missile` trigger here so Shield can negate ALL
+      // darts aimed at mmTarget. If Shield negates, the MM slot is still
+      // consumed (the spell was cast — PHB p.228 resource rule), but no
+      // damage is dealt to the Shield-caster.
+      //
+      // v1: MM targets a single creature (all darts at one target), so
+      // Shield blocks the entire volley. Multi-target MM + per-dart Shield
+      // blocking is a future enhancement.
+      const mmOutcome = triggerReactions(state, mmTarget, {
+        kind: 'targeted_by_magic_missile',
+        caster: actor,
+        target: mmTarget,
+        dartCount: 3,  // MM default (L1); upcast +1 dart/level not modelled
+      });
+      if (mmOutcome && mmOutcome.kind === 'negated') {
+        // Shield blocked all MM darts. MM slot is still consumed (spell was cast).
+        consumeSpellSlot(actor, 1);
+        actor.budget.actionUsed = true;
+        log(state, 'action', actor.id,
+          `${actor.name}'s Magic Missile was BLOCKED by ${mmTarget.name}'s Shield! (slot consumed, no damage)`,
+          mmTarget.id);
+        break;
+      }
+
       executeMagicMissile(actor, mmTarget, state);
       break;
     }
@@ -2844,13 +2915,14 @@ function executePlannedAction(
 
     case 'invisibility': {
       // Invisibility — PHB p.254: action, touch, concentration 1 hr.
-      // Grants invisible condition. v1: ends-on-attack NOT modelled.
-      const invTargetId = plan.targetId;
-      const invTarget = invTargetId ? bf.combatants.get(invTargetId) ?? null : null;
-      const liveTarget = invTarget && !invTarget.isDead && !invTarget.isUnconscious
-        ? invTarget
-        : shouldCastInvisibility(actor, bf);
-      if (liveTarget) executeInvisibility(actor, liveTarget, state);
+      // Grants invisible condition. Session 32: ends-on-attack NOW modelled.
+      // Session 35: upcast NOW modelled — shouldCast returns Combatant[]
+      // (1-N targets based on highest available slot level). The plan.targetId
+      // is the primary target; execute re-queries for all targets.
+      const invTargets = shouldCastInvisibility(actor, bf);
+      if (invTargets && invTargets.length > 0) {
+        executeInvisibility(actor, invTargets, state);
+      }
       break;
     }
 

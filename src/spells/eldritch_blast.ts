@@ -93,4 +93,22 @@ export const metadata = {
   multiBeamV1Implemented: false as const,
   /** Components: V + S (no M). */
   components: { v: true, s: true, m: false } as const,
+  /**
+   * Session 38: Repelling Blast invocation is NOW supported. When a
+   * Warlock with 'Repelling Blast' in their `eldritchInvocations` list
+   * hits with Eldritch Blast, the target is pushed 10 ft away (PHB p.111).
+   * The push fires in resolveAttack after damage, before checkDeath.
+   * See src/spells/_invocations.ts for the invocation registry.
+   */
+  repellingBlastV1Implemented: true as const,
+  /**
+   * Session 39: Three more EB-augmenting invocations are NOW supported:
+   *   - Agonizing Blast (PHB p.110): +CHA mod to EB damage (pre-damage hook)
+   *   - Grasp of Hadar (PHB p.111): pull 10 ft toward caster on EB hit
+   *   - Lance of Lethargy (XGE p.157): reduce target speed 10 ft on EB hit
+   * See src/spells/_invocations.ts for the invocation registry.
+   */
+  agonizingBlastV1Implemented: true as const,
+  graspOfHadarV1Implemented: true as const,
+  lanceOfLethargyV1Implemented: true as const,
 } as const;

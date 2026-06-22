@@ -1539,17 +1539,21 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
   // PHB p.254: action, touch, concentration 1 hr. Grants invisible condition
   // (advantage on attacks, disadvantage on attacks vs them). v1: ends-on-
   // attack NOT modelled. Priority: defensive buff for squishy allies.
+  // Session 35: upcast NOW modelled — shouldCast returns Combatant[] (1-N
+  // targets based on highest available slot level).
   if (!plan.action && self.actions.some(a => a.name === 'Invisibility')) {
-    const invTarget = shouldCastInvisibility(self, battlefield);
-    if (invTarget) {
+    const invTargets = shouldCastInvisibility(self, battlefield);
+    if (invTargets && invTargets.length > 0) {
+      const primary = invTargets[0];
+      const names = invTargets.map(t => t.name).join(', ');
       plan.action = {
         type: 'invisibility',
         action: null,
-        targetId: invTarget.id,
-        description: `${self.name} casts Invisibility on ${invTarget.name}`,
+        targetId: primary.id,
+        description: `${self.name} casts Invisibility on ${names}`,
       };
-      plan.targetId = invTarget.id;
-      plan.bonusAction = planBonusAction(self, invTarget, battlefield);
+      plan.targetId = primary.id;
+      plan.bonusAction = planBonusAction(self, primary, battlefield);
       return plan;
     }
   }

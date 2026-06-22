@@ -746,6 +746,59 @@ router.post('/characters/:id/longrest', async (req: Request, res: Response) => {
       r.wildShape.remaining = r.wildShape.max;
       restored.push('Wild Shape uses restored');
     }
+    // Fighter — Indomitable (long rest only, PHB p.72)
+    if (r.indomitable && r.indomitable.remaining < r.indomitable.max) {
+      r.indomitable.remaining = r.indomitable.max;
+      restored.push('Indomitable restored');
+    }
+    // Paladin — Cleansing Touch (long rest only, PHB p.91)
+    if (r.cleansingTouch && r.cleansingTouch.remaining < r.cleansingTouch.max) {
+      r.cleansingTouch.remaining = r.cleansingTouch.max;
+      restored.push('Cleansing Touch restored');
+    }
+    // Warlock — Mystic Arcanum (long rest only, PHB p.110)
+    if (r.mysticArcanum) {
+      const ma = r.mysticArcanum;
+      const anyUsed = !ma.l6 || !ma.l7 || !ma.l8 || !ma.l9;
+      // Only flip back to true the levels that have actually been unlocked
+      // (an unlocked-but-unused level is already true; a not-yet-unlocked
+      // level is undefined and must stay undefined, not become true).
+      if (ma.l6 === false) ma.l6 = true;
+      if (ma.l7 === false) ma.l7 = true;
+      if (ma.l8 === false) ma.l8 = true;
+      if (ma.l9 === false) ma.l9 = true;
+      if (anyUsed) restored.push('Mystic Arcanum restored');
+    }
+    // Wizard — Spell Mastery (long rest only, PHB p.117)
+    if (r.spellMastery && r.spellMastery.remaining < r.spellMastery.max) {
+      r.spellMastery.remaining = r.spellMastery.max;
+      restored.push('Spell Mastery restored');
+    }
+    // Artificer — Flash of Genius (long rest only, TCE p.16)
+    if (r.flashOfGenius && r.flashOfGenius.remaining < r.flashOfGenius.max) {
+      r.flashOfGenius.remaining = r.flashOfGenius.max;
+      restored.push('Flash of Genius restored');
+    }
+    // Artificer — Spell-Storing Item (TCE p.16)
+    if (r.spellStoringItem && r.spellStoringItem.remaining < r.spellStoringItem.max) {
+      r.spellStoringItem.remaining = r.spellStoringItem.max;
+      restored.push('Spell-Storing Item charges restored');
+    }
+    // Artificer — Soul of Artifice (long rest only, TCE p.17)
+    if (r.soulOfArtifice && r.soulOfArtifice.remaining < r.soulOfArtifice.max) {
+      r.soulOfArtifice.remaining = r.soulOfArtifice.max;
+      restored.push('Soul of Artifice restored');
+    }
+    // Dragonborn — Breath Weapon (short or long rest, PHB p.34)
+    if (r.breathWeapon && r.breathWeapon.remaining < r.breathWeapon.max) {
+      r.breathWeapon.remaining = r.breathWeapon.max;
+      restored.push('Breath Weapon restored');
+    }
+    // Half-Orc — Relentless Endurance (long rest only, PHB p.41)
+    if (r.relentlessEndurance && r.relentlessEndurance.remaining < r.relentlessEndurance.max) {
+      r.relentlessEndurance.remaining = r.relentlessEndurance.max;
+      restored.push('Relentless Endurance restored');
+    }
 
     // Exhaustion: reduce by 1 on long rest (PHB p.291)
     if (updated.exhaustionLevel && updated.exhaustionLevel > 0) {
@@ -766,8 +819,9 @@ router.post('/characters/:id/longrest', async (req: Request, res: Response) => {
 // ============================================================
 // POST /api/characters/:id/shortrest
 // Apply a short rest: spend hit dice to recover HP, recharge
-// short-rest resources (Second Wind, Warlock pact slots,
-// Bardic Inspiration at lv5+, Channel Divinity, Ki points).
+// short-rest resources (Second Wind, Action Surge, Warlock pact slots,
+// Bardic Inspiration at lv5+, Channel Divinity, Ki points, Wild Shape,
+// Dragonborn Breath Weapon).
 // Body:     { hitDiceToSpend?: number }    (default 0)
 // Response: { character: CharacterSheet; hpRegained: number; hdSpent: number; restored: string[] }
 // ============================================================
@@ -862,6 +916,12 @@ router.post('/characters/:id/shortrest', async (req: Request, res: Response) => 
     if (r.wildShape && r.wildShape.remaining < r.wildShape.max) {
       r.wildShape.remaining = r.wildShape.max;
       restored.push('Wild Shape uses restored');
+    }
+
+    // Dragonborn — Breath Weapon (short or long rest, PHB p.34)
+    if (r.breathWeapon && r.breathWeapon.remaining < r.breathWeapon.max) {
+      r.breathWeapon.remaining = r.breathWeapon.max;
+      restored.push('Breath Weapon restored');
     }
 
     updated.updatedAt = new Date().toISOString();

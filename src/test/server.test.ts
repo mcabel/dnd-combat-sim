@@ -846,6 +846,56 @@ async function run() {
     }
   });
 
+  await test('POST /api/characters/:id/shortrest restores Dragonborn Breath Weapon', async () => {
+    const dbId   = 'aaaaaaaa-bbbb-4ccc-8ddd-ee0000000009';
+    const dbFile = path.join(process.cwd(), 'characters', `${dbId}.json`);
+    const base   = JSON.parse(fs.readFileSync(PALADIN_FILE, 'utf-8'));
+    base.id        = dbId;
+    base.race       = 'Dragonborn';
+    base.classLevels = [{ className: 'Fighter', level: 1 }];
+    base.firstClass  = 'Fighter';
+    base.resources   = { breathWeapon: { max: 1, remaining: 0 } };
+    base.levelHistory = [];
+    fs.writeFileSync(dbFile, JSON.stringify(base));
+    try {
+      const { status, json } = await request(BASE, `/api/characters/${dbId}/shortrest`, 'POST', {});
+      assert(status === 200, `Expected 200, got ${status}. Body: ${JSON.stringify(json)}`);
+      assert(json.character.resources.breathWeapon.remaining === 1, 'Breath Weapon restored on short rest');
+      assert(json.restored.some((r: string) => r.includes('Breath Weapon')), 'restored[] mentions Breath Weapon');
+    } finally {
+      if (fs.existsSync(dbFile)) fs.unlinkSync(dbFile);
+    }
+  });
+
+  await test('POST /api/characters/:id/longrest restores Indomitable, Cleansing Touch, Mystic Arcanum, Relentless Endurance', async () => {
+    const fId   = 'aaaaaaaa-bbbb-4ccc-8ddd-ee0000000010';
+    const fFile = path.join(process.cwd(), 'characters', `${fId}.json`);
+    const base  = JSON.parse(fs.readFileSync(PALADIN_FILE, 'utf-8'));
+    base.id        = fId;
+    base.race       = 'Half-Orc';
+    base.classLevels = [{ className: 'Fighter', level: 9 }];
+    base.firstClass  = 'Fighter';
+    base.resources   = {
+      indomitable:         { max: 1, remaining: 0 },
+      cleansingTouch:       { max: 2, remaining: 0 },
+      mysticArcanum:        { l6: false },
+      relentlessEndurance:  { max: 1, remaining: 0 },
+    };
+    base.levelHistory = [];
+    fs.writeFileSync(fFile, JSON.stringify(base));
+    try {
+      const { status, json } = await request(BASE, `/api/characters/${fId}/longrest`, 'POST', {});
+      assert(status === 200, `Expected 200, got ${status}. Body: ${JSON.stringify(json)}`);
+      assert(json.character.resources.indomitable.remaining === 1, 'Indomitable restored');
+      assert(json.character.resources.cleansingTouch.remaining === 2, 'Cleansing Touch restored');
+      assert(json.character.resources.mysticArcanum.l6 === true, 'Mystic Arcanum l6 restored to available');
+      assert(json.character.resources.relentlessEndurance.remaining === 1, 'Relentless Endurance restored');
+    } finally {
+      if (fs.existsSync(fFile)) fs.unlinkSync(fFile);
+    }
+  });
+
+
   await test('POST /api/characters/:id/shortrest does NOT restore Bardic Inspiration without Font of Inspiration', async () => {
     const bardId   = 'aaaaaaaa-bbbb-4ccc-8ddd-ee0000000003';
     const bardFile = path.join(process.cwd(), 'characters', `${bardId}.json`);

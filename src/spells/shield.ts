@@ -22,15 +22,26 @@
 //   - `cleanup` is unchanged — called by `resetBudget` at start of the
 //     caster's next turn to remove the +5 AC effect.
 //
+// Session 37: Magic Missile blocking IS NOW implemented. A dedicated
+//   `targeted_by_magic_missile` trigger kind fires in the `case
+//   'magicMissile':` dispatch in combat.ts, BEFORE executeMagicMissile.
+//   Shield's shouldCastReaction accepts this trigger and always casts
+//   (Shield blocks ALL MM darts per PHB p.275). executeReaction applies
+//   the +5 AC effect AND returns `{ kind: 'negated' }` so the dispatch
+//   skips the damage loop. The MM slot is still consumed (the spell was
+//   cast — PHB p.228 resource rule).
+//
 // v1 simplifications:
-//   - Magic Missile blocking is NOT implemented (Magic Missile auto-hits
-//     via the `action.hitBonus === null` branch in resolveAttack, which
-//     bypasses the hit decision where Shield fires). A future enhancement
-//     would add a separate "targeted by Magic Missile" trigger.
 //   - Shield's `shouldCastReaction` only fires when +5 AC WILL flip the
 //     hit to a miss (tactically optimal — never wastes a slot). A human
 //     player might cast Shield even when it won't flip the hit, just for
-//     the round-long +5 AC; the AI is stricter.
+//     the round-long +5 AC; the AI is stricter. (This gating applies to
+//     the `incoming_attack_hit` trigger only — for `targeted_by_magic_missile`,
+//     Shield always casts since it blocks ALL MM damage unconditionally.)
+//   - MM currently targets a single creature (all darts at one target).
+//     Shield blocks the entire volley. Multi-target MM + per-dart Shield
+//     blocking is a future enhancement (would require per-dart trigger
+//     firing inside executeMagicMissile's dart loop).
 // ============================================================
 
 import { Combatant, Battlefield, ReactionTrigger, ReactionOutcome } from '../types/core';
@@ -47,6 +58,7 @@ export const metadata = {
   rangeFt: 0,           // self
   concentration: false,
   castingTime: 'reaction',
+  shieldMagicMissileBlockingV1Implemented: true,  // Session 37: MM blocking NOW modelled
 } as const;
 
 // ---- Trigger-aware shouldCast (TG-008) ----------------------
@@ -54,25 +66,43 @@ export const metadata = {
 /**
  * Returns true if `caster` should cast Shield in response to `trigger`.
  *
- * Tactical rule (v1): only cast when the +5 AC WILL flip the hit to a
- * miss. This avoids wasting a spell slot when Shield wouldn't help.
+ * Two trigger kinds are accepted (PHB p.275: "When you are hit by an
+ * attack or targeted by Magic Missile"):
  *
- * PHB p.275: "Reaction: When you are hit by an attack or targeted by
- * Magic Missile." v1 handles only the "hit by an attack" trigger.
+ *   1. `incoming_attack_hit` — Tactical rule (v1): only cast when the
+ *      +5 AC WILL flip the hit to a miss (`attackTotal < effectiveAC + 5`).
+ *      Avoids wasting a slot when Shield wouldn't help.
+ *
+ *   2. `targeted_by_magic_missile` (Session 37) — Always cast. Shield
+ *      blocks ALL Magic Missile damage unconditionally (PHB p.275: "acts
+ *      as a shield against Magic Missile"). No tactical gating needed —
+ *      blocking ~10.5 avg force damage + gaining round-long +5 AC is
+ *      always worth a L1 slot.
+ *
+ * Common guards (both triggers): don't cast if already under Shield
+ * (no benefit to recasting), don't cast against self.
  */
 export function shouldCastReaction(
   caster: Combatant,
   _bf: Battlefield,
   trigger: ReactionTrigger,
 ): boolean {
-  if (trigger.kind !== 'incoming_attack_hit') return false;
-  // Only worth casting if the +5 AC flips the hit to a miss.
-  // If attackTotal >= effectiveAC + 5, the attack still hits even with
-  // Shield — wasting the slot. (A human might still cast for the round-
-  // long +5, but the AI is stricter.)
-  if (trigger.attackTotal >= trigger.effectiveAC + 5) return false;
-  // Don't cast Shield against ourselves (shouldn't happen, but guard).
-  if (trigger.attacker.id === caster.id) return false;
+  if (trigger.kind === 'incoming_attack_hit') {
+    // Only worth casting if the +5 AC flips the hit to a miss.
+    // If attackTotal >= effectiveAC + 5, the attack still hits even with
+    // Shield — wasting the slot. (A human might still cast for the round-
+    // long +5, but the AI is stricter.)
+    if (trigger.attackTotal >= trigger.effectiveAC + 5) return false;
+    // Don't cast Shield against ourselves (shouldn't happen, but guard).
+    if (trigger.attacker.id === caster.id) return false;
+  } else if (trigger.kind === 'targeted_by_magic_missile') {
+    // Session 37: Shield blocks ALL MM damage — always cast (no tactical
+    // gating). Don't cast against our own MM (triggerReactions already
+    // guards this, but double-check for direct callers).
+    if (trigger.caster.id === caster.id) return false;
+  } else {
+    return false;  // Shield only responds to these two trigger kinds
+  }
   // Already under Shield? No benefit to recasting.
   const alreadyActive = caster.activeEffects.some((e: any) => e.spellName === 'Shield');
   if (alreadyActive) return false;
@@ -83,43 +113,75 @@ export function shouldCastReaction(
 
 /**
  * Execute Shield reaction. Returns `{ kind: 'negated' }` — the engine
- * will re-evaluate `hits` with the new +5 AC and skip damage if the
- * attack now misses.
+ * will either re-evaluate `hits` with the new +5 AC (for
+ * `incoming_attack_hit`) and skip damage if the attack now misses, OR
+ * skip the Magic Missile damage loop entirely (for
+ * `targeted_by_magic_missile`).
  *
- * PHB p.275: "+5 bonus to AC, including against the triggering attack."
+ * PHB p.275: "+5 bonus to AC, including against the triggering attack.
+ * The spell also acts as a shield against Magic Missile."
  */
 export function executeReaction(
   caster: Combatant,
   state: EngineState,
   trigger: ReactionTrigger,
 ): ReactionOutcome {
-  if (trigger.kind !== 'incoming_attack_hit') return { kind: 'no_effect' };
+  if (trigger.kind === 'incoming_attack_hit') {
+    consumeSpellSlot(caster, 1);
+    caster.budget.reactionUsed = true;
 
-  consumeSpellSlot(caster, 1);
-  caster.budget.reactionUsed = true;
+    applySpellEffect(caster, {
+      casterId: caster.id,
+      spellName: 'Shield',
+      effectType: 'ac_bonus',
+      payload: { acBonus: 5 },
+      sourceIsConcentration: false,
+    });
 
-  applySpellEffect(caster, {
-    casterId: caster.id,
-    spellName: 'Shield',
-    effectType: 'ac_bonus',
-    payload: { acBonus: 5 },
-    sourceIsConcentration: false,
-  });
+    const triggerName = trigger.action.name;
+    state.log.events.push({
+      round: state.battlefield.round ?? 0,
+      actorId: caster.id,
+      type: 'action',
+      targetId: trigger.attacker.id,
+      description: `${caster.name} casts Shield (+5 AC, negates ${triggerName} hit — ${trigger.attackTotal} vs AC ${trigger.effectiveAC}+5=${trigger.effectiveAC + 5})!`,
+    });
 
-  const triggerName = trigger.action.name;
-  state.log.events.push({
-    round: state.battlefield.round ?? 0,
-    actorId: caster.id,
-    type: 'action',
-    targetId: trigger.attacker.id,
-    description: `${caster.name} casts Shield (+5 AC, negates ${triggerName} hit — ${trigger.attackTotal} vs AC ${trigger.effectiveAC}+5=${trigger.effectiveAC + 5})!`,
-  });
+    // The +5 AC may or may not flip the hit to a miss — but we already
+    // gated in shouldCastReaction on the flip happening, so we can safely
+    // report 'negated'. The engine will re-evaluate hits and skip damage
+    // if the new AC exceeds attackTotal.
+    return { kind: 'negated', detail: 'Shield +5 AC may flip hit to miss' };
+  }
 
-  // The +5 AC may or may not flip the hit to a miss — but we already
-  // gated in shouldCastReaction on the flip happening, so we can safely
-  // report 'negated'. The engine will re-evaluate hits and skip damage
-  // if the new AC exceeds attackTotal.
-  return { kind: 'negated', detail: 'Shield +5 AC may flip hit to miss' };
+  if (trigger.kind === 'targeted_by_magic_missile') {
+    // Session 37: Shield blocks ALL Magic Missile damage.
+    consumeSpellSlot(caster, 1);
+    caster.budget.reactionUsed = true;
+
+    applySpellEffect(caster, {
+      casterId: caster.id,
+      spellName: 'Shield',
+      effectType: 'ac_bonus',
+      payload: { acBonus: 5 },
+      sourceIsConcentration: false,
+    });
+
+    state.log.events.push({
+      round: state.battlefield.round ?? 0,
+      actorId: caster.id,
+      type: 'action',
+      targetId: trigger.caster.id,
+      description: `${caster.name} casts Shield — blocks ${trigger.dartCount} Magic Missile dart${trigger.dartCount !== 1 ? 's' : ''} from ${trigger.caster.name}! (+5 AC until start of next turn)`,
+    });
+
+    // 'negated' tells the `case 'magicMissile':` dispatch to skip the
+    // damage loop entirely. The MM slot is consumed by the dispatch site
+    // (not here) — the spell was cast, just blocked.
+    return { kind: 'negated', detail: `Shield blocked ${trigger.dartCount} Magic Missile dart(s)` };
+  }
+
+  return { kind: 'no_effect' };
 }
 
 // ---- Legacy shouldCast (backwards compat) -------------------

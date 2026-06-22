@@ -14,7 +14,7 @@
 //   7. Greater Invisibility persists through spell casts
 // ============================================================
 
-import { shouldCast as shouldCastInvis, execute as executeInvis, metadata as invisMetadata } from '../spells/invisibility';
+import { shouldCast as shouldCastInvis, execute as executeInvis, metadata as invisMetadata, executeSingle as executeInvisSingle } from '../spells/invisibility';
 import { shouldCast as shouldCastGI, execute as executeGI, metadata as giMetadata } from '../spells/greater_invisibility';
 import { resolveAttack } from '../engine/combat';
 import { removeEffectsFromCaster } from '../engine/spell_effects';
@@ -203,7 +203,7 @@ console.log('\n=== 2. Invisibility sets breaksOnAttackOrCast: true ===\n');
   const state = makeState(bf);
 
   // Wizard casts Invisibility on self (touch range includes self)
-  executeInvis(caster, caster, state);
+  executeInvisSingle(caster, caster, state);
 
   // Find the Invisibility effect on the caster
   const invisEffect = caster.activeEffects.find(e => e.spellName === 'Invisibility');
@@ -228,7 +228,7 @@ console.log('\n=== 3. Invisibility ends on weapon attack ===\n');
   const bf = makeBF([caster, enemy]);
   const state = makeState(bf);
 
-  executeInvis(caster, caster, state);
+  executeInvisSingle(caster, caster, state);
   assert('Caster invisible before attack', caster.conditions.has('invisible'));
 
   // Wizard attacks the enemy with longsword (force hit via isCritOverride=true)
@@ -262,7 +262,7 @@ console.log('\n=== 4. Invisibility ends on spell attack ===\n');
   const bf = makeBF([caster, enemy]);
   const state = makeState(bf);
 
-  executeInvis(caster, caster, state);
+  executeInvisSingle(caster, caster, state);
   assert('Caster invisible before spell attack', caster.conditions.has('invisible'));
 
   // Wizard casts Firebolt at the enemy (attackType='spell' — triggers break-on-attack)
@@ -381,7 +381,7 @@ console.log('\n=== 8. Concentration break ends both spells ===\n');
   const bf = makeBF([caster, enemy]);
   const state = makeState(bf);
 
-  executeInvis(caster, caster, state);
+  executeInvisSingle(caster, caster, state);
   assert('Caster invisible before concentration break', caster.conditions.has('invisible'));
 
   removeEffectsFromCaster(caster.id, bf);

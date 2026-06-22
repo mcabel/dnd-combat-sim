@@ -144,6 +144,18 @@ export interface ActiveEffect {
     // the caster's concentration breaks (sourceIsConcentration: true).
     dieCount?: number;                // e.g. 4 for 4d4
     damageType?: DamageType;          // e.g. 'slashing' for Cloud of Daggers
+    // ── Session 36 — Protection from Energy innate-resistance fix ──────
+    // When the Protection from Energy sentinel (damage_zone dieCount=0 on
+    // the target) is applied, the spell may or may not have actually pushed
+    // a new entry into target.resistances:
+    //   - addedResistance === true  → spell pushed a new entry; _undoEffect
+    //     should splice it back out on concentration break.
+    //   - addedResistance === false → target had INNATE resistance to the
+    //     same type (idempotent push was a no-op); _undoEffect must NOT
+    //     splice (would wrongly remove the innate entry).
+    //   - undefined → legacy sentinels (pre-Session 36) assume true for
+    //     backwards compat (the pre-fix behavior spliced unconditionally).
+    addedResistance?: boolean;
     // ── Session 17 additions (level-2 batch 3) ─────────────────────────
     // saveDC + saveAbility: if present, the start-of-turn damage tick rolls
     // a save; on success, the damage is halved (PHB p.242 Flaming Sphere:
@@ -474,6 +486,14 @@ export interface Combatant {
   // Class resources (PCs only — null for monsters)
   resources: PlayerResources | null;
 
+  // ── Session 38 — Warlock Eldritch Invocations ──
+  // List of Eldritch Invocation names this combatant knows (PHB p.110).
+  // Populated by the parser/leveler for Warlock PCs; undefined or empty for
+  // non-Warlocks. Checked by the engine at invocation trigger points (e.g.
+  // Repelling Blast fires after an Eldritch Blast hit if 'Repelling Blast'
+  // is in this list).
+  eldritchInvocations?: string[];
+
   // Temporary HP (absorbs damage before real HP)
   tempHP: number;
 
@@ -593,6 +613,16 @@ export interface Combatant {
   // Ray of Frost (PHB p.271): speed reduction scratch state.
   _rayOfFrostOriginalSpeed?: number;
   _hasRayOfFrost?: boolean;
+
+  // ── Session 39 — Lance of Lethargy Eldritch Invocation (XGE p.157) ──
+  // Speed reduction scratch state. Mirrors Ray of Frost's pattern:
+  //   - _lanceOfLethargyOriginalSpeed: stored the first time the invocation
+  //     hits (prevents double-store on multi-hit / multi-caster scenarios)
+  //   - _hasLanceOfLethargy: flag indicating the speed is currently reduced
+  // Cleanup is inlined in resetBudget (utils.ts) to avoid a circular
+  // dependency (utils.ts ↔ _invocations.ts).
+  _lanceOfLethargyOriginalSpeed?: number;
+  _hasLanceOfLethargy?: boolean;
 
   // ---- Armor material (for cantrips like Shocking Grasp, PHB p.275) ----
   // True when the creature wears metal armor (chain shirt, scale mail, breastplate,
@@ -1836,6 +1866,31 @@ export type ReactionTrigger =
       fallerIds: string[];
       /** Fall height in feet. */
       fallHeightFt: number;
+    }
+  // ── Session 37 — Shield "targeted by Magic Missile" trigger ──
+  // PHB p.275 Shield: "Reaction: When you are hit by an attack or targeted
+  // by Magic Missile." The `incoming_attack_hit` trigger covers the first
+  // half; this trigger covers the second half.
+  //
+  // Magic Missile (PHB p.257) auto-hits — it has no attack roll, so it
+  // bypasses the `incoming_attack_hit` trigger point in resolveAttack.
+  // Instead, the `case 'magicMissile':` dispatch in combat.ts fires this
+  // trigger for the target BEFORE calling executeMagicMissile. If Shield
+  // negates, the dispatch skips the damage loop (MM slot is still consumed
+  // — the spell was cast, just blocked).
+  //
+  // v1 simplification: MM currently targets a single creature (all darts
+  // aimed at one target per the AI heuristic). Shield blocks ALL darts.
+  // If MM ever supports multi-target darts, Shield would only block darts
+  // aimed at the Shield-caster (per-dart blocking — future enhancement).
+  | {
+      kind: 'targeted_by_magic_missile';
+      /** The creature casting Magic Missile. */
+      caster: Combatant;
+      /** The creature being targeted by Magic Missile (potential reactor). */
+      target: Combatant;
+      /** Number of darts aimed at `target` (informational; Shield blocks all regardless). */
+      dartCount: number;
     };
 
 /**

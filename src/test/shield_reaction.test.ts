@@ -1,11 +1,13 @@
 // ============================================================
-// shield_reaction.test.ts — Shield reaction spell module (TG-008)
+// shield_reaction.test.ts — Shield reaction spell module (TG-008 + Session 37)
 // PHB p.275: 1st-level abjuration, reaction
-// Trigger: Being hit by an attack (or targeted by Magic Missile — v1: not modelled)
-// Effect: +5 AC until start of next turn, including against the triggering attack.
+// Trigger: Being hit by an attack OR targeted by Magic Missile (Session 37)
+// Effect: +5 AC until start of next turn, including against the triggering
+//         attack. Also blocks ALL Magic Missile damage.
 //
 // Tests cover the NEW trigger-aware functions (shouldCastReaction /
 // executeReaction) and the legacy functions (shouldCast / execute / cleanup).
+// Session 37 adds section 8: Magic Missile blocking tests.
 // ============================================================
 
 import {
@@ -13,7 +15,7 @@ import {
   shouldCast as shouldCastLegacy, execute as executeLegacy,
 } from '../spells/shield';
 import { Combatant, Action, PlayerResources, Battlefield, ReactionTrigger } from '../types/core';
-import { EngineState } from '../engine/combat';
+import { EngineState, executePlannedAction } from '../engine/combat';
 import { getActiveAcBonus } from '../engine/spell_effects';
 
 let passed = 0, failed = 0;
@@ -100,6 +102,8 @@ eq('metadata.school', metadata.school, 'abjuration');
 eq('metadata.rangeFt', metadata.rangeFt, 0);
 eq('metadata.concentration', metadata.concentration, false);
 eq('metadata.castingTime', metadata.castingTime, 'reaction');
+eq('metadata.shieldMagicMissileBlockingV1Implemented (Session 37)',
+  (metadata as any).shieldMagicMissileBlockingV1Implemented, true);
 
 // ============================================================
 // Section 2: shouldCastReaction — tactical gating
@@ -376,6 +380,265 @@ console.log('\n--- Section 9: Legacy shouldCast / execute ---');
   eq('Legacy execute: +5 AC applied', getActiveAcBonus(caster), 5);
   const logMsg = state.log.events.some(e => e.description.includes('casts Shield'));
   assert('Legacy execute: logged', logMsg);
+}
+
+// ============================================================
+// Section 8: Magic Missile blocking (Session 37)
+// PHB p.275: "When you are hit by an attack or targeted by Magic Missile."
+// Shield blocks ALL Magic Missile damage + grants +5 AC until start of
+// next turn. Tests cover shouldCastReaction + executeReaction with the
+// `targeted_by_magic_missile` trigger kind, plus end-to-end dispatch.
+// ============================================================
+console.log('\n--- Section 8: Magic Missile blocking (Session 37) ---');
+
+function makeMagicMissileTrigger(caster: Combatant, target: Combatant, dartCount = 3): ReactionTrigger {
+  return {
+    kind: 'targeted_by_magic_missile',
+    caster,
+    target,
+    dartCount,
+  };
+}
+
+// 8a. shouldCastReaction: true for targeted_by_magic_missile (always cast — blocks all MM)
+{
+  const mmCaster = makeCombatant('mage', { faction: 'enemy', pos: { x: 5, y: 0, z: 0 } });
+  const shielder = makeCombatant('wiz', {
+    actions: [SHIELD_ACTION], resources: withSlots(2),
+    faction: 'party', pos: { x: 0, y: 0, z: 0 },
+  });
+  const bf = makeBF([mmCaster, shielder]);
+  const trigger = makeMagicMissileTrigger(mmCaster, shielder);
+  eq('8a. shouldCastReaction true for MM trigger', shouldCastReaction(shielder, bf, trigger), true);
+}
+
+// 8b. shouldCastReaction: false if caster targets self with MM (don't Shield own MM)
+{
+  const mmCaster = makeCombatant('mage', {
+    actions: [SHIELD_ACTION], resources: withSlots(2),
+  });
+  const bf = makeBF([mmCaster]);
+  // MM caster targets themselves (weird edge case) — Shield should not fire
+  const trigger = makeMagicMissileTrigger(mmCaster, mmCaster);
+  eq('8b. shouldCastReaction false (self-targeted MM)', shouldCastReaction(mmCaster, bf, trigger), false);
+}
+
+// 8c. shouldCastReaction: false if Shield already active (no benefit to recasting)
+{
+  const mmCaster = makeCombatant('mage', { faction: 'enemy', pos: { x: 5, y: 0, z: 0 } });
+  const shielder = makeCombatant('wiz', {
+    actions: [SHIELD_ACTION], resources: withSlots(2),
+    faction: 'party', pos: { x: 0, y: 0, z: 0 },
+    activeEffects: [{
+      id: 'eff_1', casterId: 'wiz', spellName: 'Shield',
+      effectType: 'ac_bonus', payload: { acBonus: 5 },
+      sourceIsConcentration: false,
+    } as any],
+  });
+  const bf = makeBF([mmCaster, shielder]);
+  const trigger = makeMagicMissileTrigger(mmCaster, shielder);
+  eq('8c. shouldCastReaction false (Shield already active)', shouldCastReaction(shielder, bf, trigger), false);
+}
+
+// 8d. shouldCastReaction: false for other trigger kinds (Shield only responds to attack-hit + MM)
+{
+  const shielder = makeCombatant('wiz', {
+    actions: [SHIELD_ACTION], resources: withSlots(2),
+  });
+  const bf = makeBF([shielder]);
+  // Construct a falling trigger (Shield should NOT respond to this)
+  const fallingTrigger: ReactionTrigger = {
+    kind: 'falling', fallerIds: ['wiz'], fallHeightFt: 50,
+  };
+  eq('8d. shouldCastReaction false for falling trigger',
+    shouldCastReaction(shielder, bf, fallingTrigger), false);
+}
+
+// 8e. executeReaction: consumes slot, marks reaction used, applies +5 AC, returns negated
+{
+  const mmCaster = makeCombatant('mage', { faction: 'enemy', pos: { x: 5, y: 0, z: 0 } });
+  const shielder = makeCombatant('wiz', {
+    name: 'Wizard', actions: [SHIELD_ACTION], resources: withSlots(2),
+    faction: 'party', pos: { x: 0, y: 0, z: 0 },
+  });
+  const bf = makeBF([mmCaster, shielder]);
+  const state = makeState(bf);
+  const trigger = makeMagicMissileTrigger(mmCaster, shielder, 3);
+
+  const outcome = executeReaction(shielder, state, trigger);
+
+  eq('8e. outcome is negated', outcome.kind, 'negated');
+  eq('8e. slot consumed', shielder.resources!.spellSlots![1].remaining, 1);
+  eq('8e. reaction used', shielder.budget.reactionUsed, true);
+  eq('8e. +5 AC applied', getActiveAcBonus(shielder), 5);
+  // Log mentions Shield + Magic Missile + dart count
+  const logEvent = state.log.events.find(e =>
+    e.type === 'action' && e.description.includes('Shield') && e.description.includes('Magic Missile'));
+  assert('8e. log event mentions Shield + Magic Missile', logEvent !== undefined);
+  assert('8e. log event mentions 3 darts', !!(logEvent && logEvent.description.includes('3')));
+}
+
+// 8f. executeReaction: Shield effect has correct spellName + sourceIsConcentration=false
+{
+  const mmCaster = makeCombatant('mage', { faction: 'enemy' });
+  const shielder = makeCombatant('wiz', {
+    actions: [SHIELD_ACTION], resources: withSlots(2),
+  });
+  const bf = makeBF([mmCaster, shielder]);
+  const state = makeState(bf);
+  const trigger = makeMagicMissileTrigger(mmCaster, shielder);
+  executeReaction(shielder, state, trigger);
+
+  const shieldEffect = shielder.activeEffects.find(e => e.spellName === 'Shield');
+  assert('8f. Shield effect attached', shieldEffect !== undefined);
+  eq('8f. Shield effect type is ac_bonus', shieldEffect?.effectType, 'ac_bonus');
+  eq('8f. Shield effect acBonus', shieldEffect?.payload.acBonus, 5);
+  eq('8f. Shield effect sourceIsConcentration', shieldEffect?.sourceIsConcentration, false);
+  eq('8f. Shield effect casterId is self', shieldEffect?.casterId, 'wiz');
+}
+
+// 8g. executeReaction: cleanup removes the Shield effect (same as attack-hit path)
+{
+  const mmCaster = makeCombatant('mage', { faction: 'enemy' });
+  const shielder = makeCombatant('wiz', {
+    actions: [SHIELD_ACTION], resources: withSlots(2),
+  });
+  const bf = makeBF([mmCaster, shielder]);
+  const state = makeState(bf);
+  const trigger = makeMagicMissileTrigger(mmCaster, shielder);
+  executeReaction(shielder, state, trigger);
+  assert('8g. Shield active before cleanup', getActiveAcBonus(shielder) === 5);
+  cleanup(shielder);
+  eq('8g. Shield removed after cleanup', getActiveAcBonus(shielder), 0);
+}
+
+// 8h. End-to-end: Magic Missile dispatch with Shield → no damage, MM slot consumed,
+//     Shield slot consumed, reaction used, +5 AC active on the target.
+//     This tests the `case 'magicMissile':` dispatch in combat.ts.
+{
+  // Build a Wizard (Shield caster) + Mage (Magic Missile caster).
+  // We drive the dispatch directly via executePlannedAction.
+  const MM_ACTION: Action = {
+    name: 'Magic Missile', costType: 'action', attackType: 'spell',
+    isMultiattack: false, reach: 0, range: { normal: 120, long: 120 },
+    hitBonus: null, damage: { count: 1, sides: 4, bonus: 1, average: 3 },
+    damageType: 'force', saveDC: null, saveAbility: null,
+    isAoE: false, isControl: false, requiresConcentration: false,
+    slotLevel: 1, legendaryCost: 0, description: 'Magic Missile',
+  };
+  const mage = makeCombatant('mage', {
+    name: 'Mage', faction: 'enemy', pos: { x: 5, y: 0, z: 0 },
+    actions: [MM_ACTION], resources: withSlots(2),
+  });
+  const wiz = makeCombatant('wiz', {
+    name: 'Wizard', faction: 'party', pos: { x: 0, y: 0, z: 0 },
+    actions: [SHIELD_ACTION], resources: withSlots(2),
+    currentHP: 50, maxHP: 50,
+  });
+  const bf = makeBF([mage, wiz]);
+  const state = makeState(bf);
+
+  const hpBefore = wiz.currentHP;
+  executePlannedAction(mage, {
+    type: 'magicMissile', targetId: 'wiz',
+    action: MM_ACTION, spellName: 'Magic Missile',
+  } as any, state);
+
+  // Shield fired → no damage to Wizard
+  eq('8h. Wizard took NO damage (Shield blocked MM)', wiz.currentHP, hpBefore);
+  // MM slot consumed (spell was cast)
+  eq('8h. Mage MM slot consumed', mage.resources!.spellSlots![1].remaining, 1);
+  // Shield slot consumed (reaction fired)
+  eq('8h. Wizard Shield slot consumed', wiz.resources!.spellSlots![1].remaining, 1);
+  // Reaction used
+  eq('8h. Wizard reaction used', wiz.budget.reactionUsed, true);
+  // +5 AC active on Wizard
+  eq('8h. +5 AC active on Wizard', getActiveAcBonus(wiz), 5);
+  // Log mentions the block
+  const blockLog = state.log.events.some(e =>
+    e.description.includes('BLOCKED') && e.description.includes('Shield'));
+  assert('8h. block logged', blockLog);
+}
+
+// 8i. End-to-end: Magic Missile WITHOUT Shield → damage applies normally
+//     (control: Shield trigger doesn't fire when target has no Shield)
+{
+  const MM_ACTION: Action = {
+    name: 'Magic Missile', costType: 'action', attackType: 'spell',
+    isMultiattack: false, reach: 0, range: { normal: 120, long: 120 },
+    hitBonus: null, damage: { count: 1, sides: 4, bonus: 1, average: 3 },
+    damageType: 'force', saveDC: null, saveAbility: null,
+    isAoE: false, isControl: false, requiresConcentration: false,
+    slotLevel: 1, legendaryCost: 0, description: 'Magic Missile',
+  };
+  const mage = makeCombatant('mage', {
+    name: 'Mage', faction: 'enemy', pos: { x: 5, y: 0, z: 0 },
+    actions: [MM_ACTION], resources: withSlots(2),
+  });
+  // Fighter has NO Shield action — MM damage applies normally
+  const fighter = makeCombatant('fighter', {
+    name: 'Fighter', faction: 'party', pos: { x: 0, y: 0, z: 0 },
+    actions: [], resources: null,
+    currentHP: 100, maxHP: 100,
+  });
+  const bf = makeBF([mage, fighter]);
+  const state = makeState(bf);
+
+  const hpBefore = fighter.currentHP;
+  executePlannedAction(mage, {
+    type: 'magicMissile', targetId: 'fighter',
+    action: MM_ACTION, spellName: 'Magic Missile',
+  } as any, state);
+
+  // MM dealt damage (3 darts × 1d4+1 = 6..18 force damage)
+  const dmgTaken = hpBefore - fighter.currentHP;
+  assert('8i. Fighter took damage (no Shield, MM hit normally)', dmgTaken >= 6 && dmgTaken <= 18,
+    `got ${dmgTaken}`);
+  // No Shield effect on fighter
+  eq('8i. no Shield effect on fighter', getActiveAcBonus(fighter), 0);
+}
+
+// 8j. End-to-end: Shield blocks MM but Shield already active from earlier → no recast,
+//     MM damage applies (Shield is already active but MM auto-hits, so +5 AC doesn't
+//     help — Shield's MM-blocking is a one-time reaction, not a passive aura).
+//     Actually PHB p.275: "acts as a shield against Magic Missile" — this is the
+//     REACTION effect, not a passive aura. If Shield is already active (from a prior
+//     attack-hit reaction this round), the caster can't react again (reaction budget
+//     used). So MM damage applies. This tests the reaction-budget gating.
+{
+  const MM_ACTION: Action = {
+    name: 'Magic Missile', costType: 'action', attackType: 'spell',
+    isMultiattack: false, reach: 0, range: { normal: 120, long: 120 },
+    hitBonus: null, damage: { count: 1, sides: 4, bonus: 1, average: 3 },
+    damageType: 'force', saveDC: null, saveAbility: null,
+    isAoE: false, isControl: false, requiresConcentration: false,
+    slotLevel: 1, legendaryCost: 0, description: 'Magic Missile',
+  };
+  const mage = makeCombatant('mage', {
+    name: 'Mage', faction: 'enemy', pos: { x: 5, y: 0, z: 0 },
+    actions: [MM_ACTION], resources: withSlots(2),
+  });
+  const wiz = makeCombatant('wiz', {
+    name: 'Wizard', faction: 'party', pos: { x: 0, y: 0, z: 0 },
+    actions: [SHIELD_ACTION], resources: withSlots(2),
+    currentHP: 100, maxHP: 100,
+    // Already used reaction this round (e.g. Shielded against a prior attack)
+    budget: { movementFt: 30, actionUsed: false, bonusActionUsed: false,
+              reactionUsed: true, freeObjectUsed: false },
+  });
+  const bf = makeBF([mage, wiz]);
+  const state = makeState(bf);
+
+  const hpBefore = wiz.currentHP;
+  executePlannedAction(mage, {
+    type: 'magicMissile', targetId: 'wiz',
+    action: MM_ACTION, spellName: 'Magic Missile',
+  } as any, state);
+
+  // Reaction already used → Shield can't fire → MM damage applies
+  const dmgTaken = hpBefore - wiz.currentHP;
+  assert('8j. Wizard took damage (reaction already used, Shield can\'t fire)',
+    dmgTaken >= 6 && dmgTaken <= 18, `got ${dmgTaken}`);
 }
 
 // ============================================================

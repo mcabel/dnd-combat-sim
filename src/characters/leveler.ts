@@ -177,6 +177,63 @@ const WARLOCK_PACT_SLOTS: [number, number][] = [
   /* 20 */ [4, 5],
 ];
 
+/**
+ * Warlock Eldritch Invocations known by level (PHB p.108).
+ * Index = warlock level (1–20). Value = max invocations known.
+ *
+ *   Lv 1:  0   (no invocations yet — feature unlocks at level 2)
+ *   Lv 2:  2   (gain Eldritch Invocations feature, choose 2)
+ *   Lv 3-4: 2
+ *   Lv 5:  3   (+1 invocation)
+ *   Lv 6:  3
+ *   Lv 7:  4   (+1 invocation)
+ *   Lv 8:  4
+ *   Lv 9:  5   (+1 invocation)
+ *   Lv 10-11: 5
+ *   Lv 12: 6   (+1 invocation)
+ *   Lv 13-14: 6
+ *   Lv 15: 7   (+1 invocation)
+ *   Lv 16-17: 7
+ *   Lv 18: 8   (+1 invocation)
+ *   Lv 19-20: 8
+ *
+ * Used by chooseEldritchInvocations() in improvements.ts to enforce the
+ * "max invocations known" cap when the player picks invocations.
+ */
+const WARLOCK_INVOCATION_SLOTS: number[] = [
+  /* 0  */ 0,
+  /* 1  */ 0,
+  /* 2  */ 2,
+  /* 3  */ 2,
+  /* 4  */ 2,
+  /* 5  */ 3,
+  /* 6  */ 3,
+  /* 7  */ 4,
+  /* 8  */ 4,
+  /* 9  */ 5,
+  /* 10 */ 5,
+  /* 11 */ 5,
+  /* 12 */ 6,
+  /* 13 */ 6,
+  /* 14 */ 6,
+  /* 15 */ 7,
+  /* 16 */ 7,
+  /* 17 */ 7,
+  /* 18 */ 8,
+  /* 19 */ 8,
+  /* 20 */ 8,
+];
+
+/**
+ * Return the maximum number of Eldritch Invocations a Warlock of the
+ * given level can know. Returns 0 for level < 2 (the feature unlocks
+ * at Warlock 2). Levels are clamped to 1–20.
+ */
+export function getMaxInvocationSlots(warlockLevel: number): number {
+  const clamped = Math.min(Math.max(Math.floor(warlockLevel), 0), 20);
+  return WARLOCK_INVOCATION_SLOTS[clamped] ?? 0;
+}
+
 /** Classes that contribute fully (1:1) to combined caster level. */
 const FULL_CASTERS = new Set<ClassName>(['Bard','Cleric','Druid','Sorcerer','Wizard']);
 /** Classes that contribute half their levels (rounded down) to combined caster level. */
@@ -515,6 +572,12 @@ function updateResources(
         const aCur = res.actionSurge ? Math.min(res.actionSurge.remaining, aMax) : aMax;
         res.actionSurge = { max: aMax, remaining: aCur };
       }
+      // Indomitable: 1 use @lv9, 2 @lv13, 3 @lv17 (long rest only, PHB p.72)
+      if (newClassLevel >= 9) {
+        const iMax = newClassLevel >= 17 ? 3 : newClassLevel >= 13 ? 2 : 1;
+        const iCur = res.indomitable ? Math.min(res.indomitable.remaining, iMax) : iMax;
+        res.indomitable = { max: iMax, remaining: iCur };
+      }
       break;
     }
     case 'Paladin': {
@@ -523,6 +586,12 @@ function updateResources(
       res.layOnHands = { pool, remaining: pool };
       // Divine Smite unlocks at level 2
       if (newClassLevel >= 2) res.divineSmite = true;
+      // Cleansing Touch: CHA-mod uses (min 1), unlocks @lv14 (long rest only, PHB p.91)
+      if (newClassLevel >= 14) {
+        const ctMax = Math.max(1, chaMod);
+        const ctCur = res.cleansingTouch ? Math.min(res.cleansingTouch.remaining, ctMax) : ctMax;
+        res.cleansingTouch = { max: ctMax, remaining: ctCur };
+      }
       break;
     }
     case 'Rogue': {
@@ -536,6 +605,12 @@ function updateResources(
     case 'Wizard': {
       // Arcane Recovery: 1 use per day
       res.arcaneRecovery = { usesRemaining: 1 };
+      // Spell Mastery: 2 free casts/long rest of the 2 chosen spells, unlocks @lv18 (PHB p.117)
+      if (newClassLevel >= 18) {
+        const smMax = 2;
+        const smCur = res.spellMastery ? Math.min(res.spellMastery.remaining, smMax) : smMax;
+        res.spellMastery = { max: smMax, remaining: smCur };
+      }
       break;
     }
     case 'Cleric': {
@@ -567,10 +642,63 @@ function updateResources(
       }
       break;
     }
+    case 'Warlock': {
+      // Mystic Arcanum: one free cast/long rest of a chosen spell at each level,
+      // unlocked individually at lv11 (6th), lv13 (7th), lv15 (8th), lv17 (9th) (PHB p.110).
+      // Newly-unlocked levels start "available" (true); already-tracked levels keep
+      // whatever used/available state the player left them in. Levels not yet
+      // unlocked are left undefined (NOT defaulted to false) so a later level-up
+      // can still tell "never unlocked" apart from "unlocked and used".
+      const ma: { l6?: boolean; l7?: boolean; l8?: boolean; l9?: boolean } = { ...(res.mysticArcanum ?? {}) };
+      if (newClassLevel >= 11 && ma.l6 === undefined) ma.l6 = true;
+      if (newClassLevel >= 13 && ma.l7 === undefined) ma.l7 = true;
+      if (newClassLevel >= 15 && ma.l8 === undefined) ma.l8 = true;
+      if (newClassLevel >= 17 && ma.l9 === undefined) ma.l9 = true;
+      if (newClassLevel >= 11) res.mysticArcanum = ma;
+      break;
+    }
+    case 'Artificer': {
+      // Flash of Genius: INT-mod uses (min 1), unlocks @lv7 (long rest only, TCE p.16)
+      if (newClassLevel >= 7) {
+        const intMod = abilityModifier(sheet.stats.int);
+        const fgMax = Math.max(1, intMod);
+        const fgCur = res.flashOfGenius ? Math.min(res.flashOfGenius.remaining, fgMax) : fgMax;
+        res.flashOfGenius = { max: fgMax, remaining: fgCur };
+      }
+      // Spell-Storing Item: 2/day, unlocks @lv11 (modeled as long-rest recharge, TCE p.16)
+      if (newClassLevel >= 11) {
+        const ssiMax = 2;
+        const ssiCur = res.spellStoringItem ? Math.min(res.spellStoringItem.remaining, ssiMax) : ssiMax;
+        res.spellStoringItem = { max: ssiMax, remaining: ssiCur };
+      }
+      // Soul of Artifice: 1 use, unlocks @lv20 (long rest only, TCE p.17)
+      if (newClassLevel >= 20) {
+        res.soulOfArtifice = { max: 1, remaining: res.soulOfArtifice ? res.soulOfArtifice.remaining : 1 };
+      }
+      break;
+    }
     default:
       break;
   }
 
+  return res;
+}
+
+/**
+ * Grant race-based per-rest resources. Called once, when a character takes
+ * their very first level (currentTotal === 0 in applyLevelUp) — these are
+ * innate traits granted at creation, not re-granted on subsequent level-ups.
+ */
+function initRaceResources(sheet: CharacterSheet): CharacterResources {
+  const res = { ...sheet.resources };
+  if (sheet.race === 'Dragonborn') {
+    // Breath Weapon (short or long rest, PHB p.34)
+    res.breathWeapon = { max: 1, remaining: 1 };
+  }
+  if (sheet.race === 'Half-Orc') {
+    // Relentless Endurance (long rest only, PHB p.41)
+    res.relentlessEndurance = { max: 1, remaining: 1 };
+  }
   return res;
 }
 
@@ -729,6 +857,14 @@ export function applyLevelUp(
   // ---- Update resources ------------------------------------
 
   updated.resources = updateResources(updated, cn, newClassLevel);
+
+  // Race-granted per-rest resources (Dragonborn Breath Weapon, Half-Orc
+  // Relentless Endurance) are granted once, at character creation — not
+  // re-granted on every level-up. currentTotal === 0 means this push is
+  // the character's very first level.
+  if (currentTotal === 0) {
+    updated.resources = initRaceResources(updated);
+  }
 
   // ---- Update spell slots ----------------------------------
 
@@ -1115,5 +1251,6 @@ export {
   HALF_CASTER_SLOTS,
   ARTIFICER_SLOTS,
   WARLOCK_PACT_SLOTS,
+  WARLOCK_INVOCATION_SLOTS,
   computeStandardSlots,
 };

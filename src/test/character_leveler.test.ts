@@ -1664,6 +1664,93 @@ console.log('\n=== 23. Artificer ===\n');
   assert('Multiclass into Artificer succeeds with INT 14', noThrow);
 }
 
+{
+  // --- 24a. Fighter Indomitable: 1@9, 2@13, 3@17 (long rest only, PHB p.72) ---
+  let f = makeFighter({ classLevels: [{ className: 'Fighter', level: 8 }], hitDice: [{ className: 'Fighter', dieSides: 10, total: 8, remaining: 8 }] });
+  let r = applyLevelUp(f, 'Fighter'); // -> 9
+  eq('Indomitable unlocks @lv9 with 1 use', r.sheet.resources.indomitable?.max, 1);
+  r = applyLevelUp(r.sheet, 'Fighter'); // -> 10
+  r = applyLevelUp(r.sheet, 'Fighter'); // -> 11
+  r = applyLevelUp(r.sheet, 'Fighter'); // -> 12
+  r = applyLevelUp(r.sheet, 'Fighter'); // -> 13
+  eq('Indomitable max becomes 2 @lv13', r.sheet.resources.indomitable?.max, 2);
+  for (let i = 0; i < 4; i++) r = applyLevelUp(r.sheet, 'Fighter'); // -> 17
+  eq('Indomitable max becomes 3 @lv17', r.sheet.resources.indomitable?.max, 3);
+}
+
+{
+  // --- 24b. Paladin Cleansing Touch: CHA-mod uses, unlocks @lv14 (PHB p.91) ---
+  let p = makePaladin({ classLevels: [{ className: 'Paladin', level: 13 }], hitDice: [{ className: 'Paladin', dieSides: 10, total: 13, remaining: 13 }] });
+  assert('No Cleansing Touch before lv14', !p.resources.cleansingTouch);
+  const r = applyLevelUp(p, 'Paladin'); // -> 14
+  // CHA 15 -> mod +2
+  eq('Cleansing Touch unlocks @lv14 with CHA-mod (2) uses', r.sheet.resources.cleansingTouch?.max, 2);
+}
+
+{
+  // --- 24c. Warlock Mystic Arcanum: unlocks l6/l7/l8/l9 @ 11/13/15/17 (PHB p.110) ---
+  let w = makeWarlock({ classLevels: [{ className: 'Warlock', level: 10 }], hitDice: [{ className: 'Warlock', dieSides: 8, total: 10, remaining: 10 }] });
+  let r = applyLevelUp(w, 'Warlock'); // -> 11
+  eq('Mystic Arcanum l6 unlocks @lv11', r.sheet.resources.mysticArcanum?.l6, true);
+  eq('Mystic Arcanum l7 not yet unlocked @lv11', r.sheet.resources.mysticArcanum?.l7, undefined);
+  for (let i = 0; i < 2; i++) r = applyLevelUp(r.sheet, 'Warlock'); // -> 13
+  eq('Mystic Arcanum l7 unlocks @lv13', r.sheet.resources.mysticArcanum?.l7, true);
+  eq('Mystic Arcanum l6 still true (untouched)', r.sheet.resources.mysticArcanum?.l6, true);
+  for (let i = 0; i < 2; i++) r = applyLevelUp(r.sheet, 'Warlock'); // -> 15
+  eq('Mystic Arcanum l8 unlocks @lv15', r.sheet.resources.mysticArcanum?.l8, true);
+  for (let i = 0; i < 2; i++) r = applyLevelUp(r.sheet, 'Warlock'); // -> 17
+  eq('Mystic Arcanum l9 unlocks @lv17', r.sheet.resources.mysticArcanum?.l9, true);
+
+  // Using a level (set to false) and leveling further shouldn't reset it back to true
+  const used = { ...r.sheet, resources: { ...r.sheet.resources, mysticArcanum: { ...r.sheet.resources.mysticArcanum!, l6: false } } };
+  eq('Mystic Arcanum l6 state preserved across no further unlocks', used.resources.mysticArcanum?.l6, false);
+}
+
+{
+  // --- 24d. Wizard Spell Mastery: 2 free casts/long rest, unlocks @lv18 (PHB p.117) ---
+  let wz = makeWizard({ classLevels: [{ className: 'Wizard', level: 17 }], hitDice: [{ className: 'Wizard', dieSides: 6, total: 17, remaining: 17 }] });
+  assert('No Spell Mastery before lv18', !wz.resources.spellMastery);
+  const r = applyLevelUp(wz, 'Wizard'); // -> 18
+  eq('Spell Mastery unlocks @lv18 with 2 uses', r.sheet.resources.spellMastery?.max, 2);
+}
+
+{
+  // --- 24e. Artificer: Flash of Genius (INT mod @lv7), Spell-Storing Item (@lv11), Soul of Artifice (@lv20) ---
+  let art = makeArtificer({ classLevels: [{ className: 'Artificer', level: 6 }], hitDice: [{ className: 'Artificer', dieSides: 8, total: 6, remaining: 6 }] });
+  let r = applyLevelUp(art, 'Artificer'); // -> 7
+  // INT 17 -> mod +3
+  eq('Flash of Genius unlocks @lv7 with INT-mod (3) uses', r.sheet.resources.flashOfGenius?.max, 3);
+
+  for (let i = 0; i < 4; i++) r = applyLevelUp(r.sheet, 'Artificer'); // -> 11
+  eq('Spell-Storing Item unlocks @lv11 with 2 charges', r.sheet.resources.spellStoringItem?.max, 2);
+
+  for (let i = 0; i < 9; i++) r = applyLevelUp(r.sheet, 'Artificer'); // -> 20
+  eq('Soul of Artifice unlocks @lv20 with 1 use', r.sheet.resources.soulOfArtifice?.max, 1);
+}
+
+{
+  // --- 24f. Race-granted resources: Dragonborn Breath Weapon, Half-Orc Relentless
+  //          Endurance — granted once, at the character's very first level only ---
+  const dragonborn0 = makeFighter({ race: 'Dragonborn', classLevels: [], hitDice: [], resources: {} });
+  eq('Dragonborn starts at level 0 for this test', totalLevel(dragonborn0), 0);
+  const dr = applyLevelUp(dragonborn0, 'Fighter');
+  eq('Dragonborn gains Breath Weapon at first level', dr.sheet.resources.breathWeapon?.max, 1);
+  assert('Dragonborn does not get Relentless Endurance', !dr.sheet.resources.relentlessEndurance);
+
+  const halfOrc0 = makeFighter({ race: 'Half-Orc', classLevels: [], hitDice: [], resources: {} });
+  const hr = applyLevelUp(halfOrc0, 'Fighter');
+  eq('Half-Orc gains Relentless Endurance at first level', hr.sheet.resources.relentlessEndurance?.max, 1);
+  assert('Half-Orc does not get Breath Weapon', !hr.sheet.resources.breathWeapon);
+
+  const human0 = makeFighter({ race: 'Human', classLevels: [], hitDice: [], resources: {} });
+  const hu = applyLevelUp(human0, 'Fighter');
+  assert('Human gets neither race resource', !hu.sheet.resources.breathWeapon && !hu.sheet.resources.relentlessEndurance);
+
+  // Race resource shouldn't be re-granted/reset on subsequent level-ups
+  const dr2 = applyLevelUp(dr.sheet, 'Fighter');
+  eq('Breath Weapon not re-touched on later level-ups', dr2.sheet.resources.breathWeapon?.max, 1);
+}
+
 // ---- Results ------------------------------------------------
 
 console.log(`\nResults: ${passed} passed, ${failed} failed`);

@@ -18,7 +18,7 @@
 
 import { applySpellEffect, removeEffectsFromCaster, _resetEffectIdCounter } from '../engine/spell_effects';
 import { querySelf, queryVulnerability } from '../engine/adv_system';
-import { shouldCast, execute } from '../spells/invisibility';
+import { shouldCast, execute, executeSingle } from '../spells/invisibility';
 import { Combatant, Action, PlayerResources, Vec3 } from '../types/core';
 
 let passed = 0, failed = 0;
@@ -241,7 +241,7 @@ console.log('\n--- Section 5: Integration — Invisibility spell ---');
   const bf = makeBF([caster, ally]);
   const state = makeState(bf);
 
-  execute(caster, ally, state);
+  executeSingle(caster, ally, state);
 
   // Verify invisible condition
   assert('5a: ally has invisible condition', ally.conditions.has('invisible'));

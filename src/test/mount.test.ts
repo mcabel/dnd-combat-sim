@@ -141,7 +141,10 @@ console.log('\n=== 3. Mount Death Rider Save ===\n');
     if (result === 'prone') { prone++; nimbleRider.conditions.delete('prone'); }
     else safe++;
   }
-  assert('High DEX: mostly safe on mount death (≥60%)', safe >= 60,
+  // DEX 17 mod +3 → needs 7+ on d20 = 70% success. With 100 iterations,
+  // std dev ≈ 4.58, so 99.95% CI lower bound is ~56. Threshold 55 gives
+  // a ~0.05% false-fail rate (vs ~1.5% at threshold 60).
+  assert('High DEX: mostly safe on mount death (≥55%)', safe >= 55,
     `safe=${safe}/100`);
 
   // Low DEX target
