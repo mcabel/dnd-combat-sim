@@ -266,4 +266,5 @@ tsc --noEmit: 0 errors.
 
 - **Before this session:** Latest commit (ae5f71d, Session 39 handover CI update) was green (Test Suite `success`).
 - **Session 40 commit (8708a33):** Test Suite `success` ✅. The work is additive (1 new CharacterSheet field + 1 new table + 1 new helper + 1 new function + 1 builder patch + 1 new test file). All 69 integration test assertions pass locally (5 stable runs), and 28 baseline test files pass (no regressions). The only engine path modified is the `buildCombatant()` function — a no-op for non-Warlock sheets (the `if (sheet.eldritchInvocations && sheet.eldritchInvocations.length > 0)` guard short-circuits when the field is undefined or empty).
-- **Final state:** All green on the latest commit (8708a33). No red X.
+- **Handover commit (33c1ba7 — this file):** Test Suite `success` ✅. No code changes (markdown-only), so the green result from 8708a33 carries forward.
+- **Final state:** All green on the latest commit (33c1ba7). No red X.
