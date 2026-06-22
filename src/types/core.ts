@@ -403,6 +403,11 @@ export interface PlayerResources {
   // Optional — absent for monsters and legacy test combatants.
   hitDice?: { max: number; remaining: number; dieSides: number };
 
+  // ── Session 47 Task #29-follow-up-4: Monk Wholeness of Body ──
+  // Open Hand Monk 6 (PHB p.79): self-heal action, 3 × monk level HP,
+  // once per long rest. Tracked as max=1/remaining=1; consumed when used.
+  wholenessOfBody?: { max: number; remaining: number };
+
   // Innate Spellcasting (MM p.10–11; e.g. Couatl, Drow, Druidic casters).
   // Per-spell uses-per-day tracker. Used by monsters with at-will or
   // N/day innate spellcasting. The spell names MUST match the Action.name
@@ -465,6 +470,14 @@ export interface Combatant {
   // Jack of All Trades, etc.). Monsters leave this undefined — their
   // proficiency is derived from CR via proficiencyBonus(cr).
   level?: number;
+
+  // ── Session 47 Task #29-follow-up-4: Per-class levels for PCs ──
+  // Optional. Set by buildCombatant from the sheet's classLevels array.
+  // Maps class name → level (e.g. { Monk: 6, Fighter: 2 }). Used by
+  // features that depend on a specific class's level (e.g. Wholeness of
+  // Body heals 3 × monk level, not 3 × total level). Monsters leave this
+  // undefined.
+  classLevels?: Record<string, number>;
 
   // Position (grid squares; 1 square = 5ft)
   pos: Vec3;
@@ -1567,6 +1580,7 @@ export interface PlannedAction {
     | 'attack' | 'cast' | 'dash' | 'disengage' | 'dodge'
     | 'help' | 'hide' | 'ready' | 'shove' | 'grapple' | 'escapeGrapple'
     | 'secondWind' | 'rage' | 'layOnHands' | 'bardicInspiration'
+    | 'wholenessOfBody'  // Open Hand Monk 6 — self-heal 3×monk level, 1/long rest (PHB p.79)
     | 'spellHeal'    // legacy — no longer dispatched; retained for test compatibility
     | 'cureWounds'  // Cure Wounds — action, 1d8+mod heal per slot level, touch range (PHB p.230)
     | 'faerieFire'     // Faerie Fire AoE control (concentration)

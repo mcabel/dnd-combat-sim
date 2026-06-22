@@ -390,6 +390,28 @@ export function buildCombatant(
     combatant.level = totalLevel;
   }
 
+  // ── Session 47 Task #29-follow-up-4: Per-class levels transfer ──
+  // Store a map of class name → level (e.g. { Monk: 6, Fighter: 2 }). Used by
+  // features that depend on a specific class's level (e.g. Wholeness of Body
+  // heals 3 × monk level, not 3 × total level). Monsters leave this undefined.
+  if (sheet.classLevels.length > 0) {
+    const clMap: Record<string, number> = {};
+    for (const cl of sheet.classLevels) {
+      clMap[cl.className] = cl.level;
+    }
+    combatant.classLevels = clMap;
+  }
+
+  // ── Session 47 Task #29-follow-up-4: Wholeness of Body resource ──
+  // Open Hand Monk 6 (PHB p.79): self-heal 3 × monk level, once per long rest.
+  // The feature is tracked in classFeatures by the leveler. Here we set the
+  // resource (max 1, remaining 1) when the combatant has the feature. The
+  // engine consumes one use when the wholenessOfBody action executes.
+  if (combatant.classFeatures?.includes('Wholeness of Body')) {
+    if (!combatant.resources) combatant.resources = {} as any;
+    (combatant.resources as any).wholenessOfBody = { max: 1, remaining: 1 };
+  }
+
   return combatant;
 }
 

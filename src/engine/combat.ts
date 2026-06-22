@@ -2944,6 +2944,36 @@ export function executePlannedAction(
       }
       break;
     }
+    case 'wholenessOfBody': {
+      // ── Session 47 Task #29-follow-up-4: Open Hand Monk 6 (PHB p.79) ──
+      // Self-heal action: restore 3 × monk level HP. Once per long rest
+      // (v1: once per combat — tracked via resources.wholenessOfBody).
+      //
+      // The target is always self (plan.targetId = actor.id from the planner).
+      // The heal amount = 3 × monk level (from combatant.classLevels['Monk']).
+      // The resource is consumed here (remaining 1 → 0).
+      if (actor.resources?.wholenessOfBody && actor.resources.wholenessOfBody.remaining > 0) {
+        const monkLevel = actor.classLevels?.['Monk'] ?? actor.level ?? 1;
+        const healAmount = 3 * monkLevel;
+        const wasUnconscious = actor.isUnconscious;
+        const healed = applyHeal(actor, healAmount);
+        if (wasUnconscious && healed > 0) {
+          log(state, 'condition_remove', actor.id,
+            `${actor.name} regains consciousness!`, actor.id);
+        }
+        // Consume the resource
+        actor.resources.wholenessOfBody.remaining -= 1;
+        log(state, 'action', actor.id, plan.description);
+        log(state, 'heal', actor.id,
+          `${actor.name} restores ${healed} HP from Wholeness of Body (3 × monk lv ${monkLevel})`,
+          actor.id, healed);
+      } else {
+        // No uses remaining — shouldn't happen (planner guards this), but
+        // log a no-op to avoid silent failure.
+        log(state, 'action', actor.id, `${plan.description} (no uses remaining — no-op)`);
+      }
+      break;
+    }
     case 'spellHeal': {
       // Cure Wounds (action) or Healing Word (bonus action).
       // PHB p.230 / p.250: 1d8+WIS or 1d4+WIS; restores HP to a touched/nearby creature.

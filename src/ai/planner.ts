@@ -817,6 +817,39 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
     }
   }
 
+  // ── Session 47 Task #29-follow-up-4: Wholeness of Body (Open Hand Monk 6) ──
+  // PHB p.79: "At 6th level, you gain the ability to heal yourself. As an
+  // action, you can regain hit points equal to three times your monk level."
+  // Once per long rest (v1: once per combat).
+  //
+  // Priority: BEFORE self-preserve (retreat/dodge) — if the monk has a free
+  // self-heal available, use it instead of running away. This is tactically
+  // superior: healing 18+ HP (3 × monk level 6) at 10% HP is better than
+  // disengaging and remaining at 10% HP. The self-preserve check will still
+  // fire on subsequent turns when the resource is exhausted.
+  //
+  // Only fires for Open Hand Monk 6+ (feature tracked in classFeatures by
+  // the leveler; resource set by buildCombatant). HP < 50% threshold matches
+  // the heal-self surge in planExtraAction.
+  if (self.resources?.wholenessOfBody && self.resources.wholenessOfBody.remaining > 0
+      && hasFeature(self, 'Wholeness of Body')) {
+    const hpRatio = self.maxHP > 0 ? self.currentHP / self.maxHP : 1;
+    if (hpRatio < 0.5) {
+      plan.action = {
+        type: 'wholenessOfBody',
+        action: null,
+        targetId: self.id,   // self-heal
+        description: `${self.name} uses Wholeness of Body to heal self`,
+      };
+      plan.targetId = self.id;
+      // Note: no target needed (self-heal). Still compute bonus action.
+      // Find any living enemy for planBonusAction context.
+      const anyEnemy = livingEnemiesOf(self, battlefield)[0] ?? null;
+      plan.bonusAction = planBonusAction(self, anyEnemy, battlefield);
+      return plan;
+    }
+  }
+
   // === SELF-PRESERVE CHECK (Smart only) ===
   if (self.aiProfile === 'smart') {
     const preserve = selfPreserveDecision(self, battlefield);
@@ -946,6 +979,10 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
       return plan;
     }
   }
+
+  // ── Session 47 Task #29-follow-up-4: Wholeness of Body moved to BEFORE
+  // self-preserve check (see above, ~line 820). This ensures the monk uses
+  // the free self-heal before retreating.
 
   // === WARDING BOND (action buff) — protect an adjacent ally before combat heats up ===
   // Cast once, early in the fight. Requires resources.wardingBond.remaining > 0 and
