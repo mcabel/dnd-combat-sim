@@ -456,6 +456,14 @@ export interface CharacterSheet {
   // hooks (Repelling Blast, Agonizing Blast, Grasp of Hadar, Lance of
   // Lethargy) can fire.
   eldritchInvocations?: string[];
+
+  // ---- Pact Boon (PHB p.108, Warlock level 3) ----------------
+  // Set by choosePactBoon() in improvements.ts at Warlock level 3.
+  // 'chain' = Pact of the Chain (familiar variant)
+  // 'blade' = Pact of the Blade (pact weapon — enables Thirsting Blade)
+  // 'tome'  = Pact of the Tome (3 cantrips from any class list)
+  // The builder transfers this to Combatant.pactBoon at runtime.
+  pactBoon?: 'chain' | 'blade' | 'tome';
 }
 
 // ---- Party --------------------------------------------------

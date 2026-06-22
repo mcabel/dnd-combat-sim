@@ -2364,7 +2364,24 @@ export function executePlannedAction(
           effectiveTarget.id);
       }
       log(state, 'action', actor.id, plan.description, effectiveTarget.id ?? undefined);
-      resolveAttack(actor, effectiveTarget, plan.action, state);
+      // ── Session 42 Task #18: Thirsting Blade / Extra Attack ──
+      // PHB p.111: "You can attack with your pact weapon twice, instead of
+      // once, whenever you take the Attack action on your turn."
+      // The planner sets plan.attackCount = 2 when the actor has Thirsting
+      // Blade + Pact of the Blade + melee attack. Default is 1 (single attack).
+      // Loop resolveAttack this many times — each attack is independent
+      // (separate attack roll, damage roll, death check). The target may
+      // die mid-loop; subsequent attacks are skipped if the target is dead.
+      const attackCount = plan.attackCount ?? 1;
+      for (let i = 0; i < attackCount; i++) {
+        if (effectiveTarget.isDead || effectiveTarget.isUnconscious) break;
+        resolveAttack(actor, effectiveTarget, plan.action, state);
+        if (attackCount > 1 && i < attackCount - 1) {
+          log(state, 'action', actor.id,
+            `${actor.name} makes attack ${i + 2}/${attackCount} (Extra Attack / Thirsting Blade)`,
+            effectiveTarget.id ?? undefined);
+        }
+      }
       break;
     }
 

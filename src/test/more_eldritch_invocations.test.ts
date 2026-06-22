@@ -285,8 +285,8 @@ console.log('\n--- 7. Thirsting Blade — can be chosen ---');
 // ============================================================
 console.log('\n--- 8. Thirsting Blade metadata flag ---');
 {
-  eq('8a. thirstingBladeV1Registered = true',
-    (ebMetadata as any).thirstingBladeV1Registered, true);
+  eq('8a. thirstingBladeV1Implemented = true (Session 42 Task #18: fully wired)',
+    (ebMetadata as any).thirstingBladeV1Implemented, true);
   eq('8b. eldritchSpearV1Implemented = true',
     (ebMetadata as any).eldritchSpearV1Implemented, true);
   eq('8c. eldritchMindV1Implemented = true',
@@ -384,7 +384,7 @@ console.log('\n--- 12. EB metadata flags ---');
   // Session 41 Task #16 new
   eq('12e. eldritchSpearV1Implemented', m.eldritchSpearV1Implemented, true);
   eq('12f. eldritchMindV1Implemented', m.eldritchMindV1Implemented, true);
-  eq('12g. thirstingBladeV1Registered', m.thirstingBladeV1Registered, true);
+  eq('12g. thirstingBladeV1Implemented (Session 42 Task #18)', m.thirstingBladeV1Implemented, true);
 }
 
 // ============================================================

@@ -506,6 +506,14 @@ export interface Combatant {
   // is in this list).
   eldritchInvocations?: string[];
 
+  // ── Session 42 — Warlock Pact Boon (PHB p.108) ──
+  // 'chain' = Pact of the Chain (familiar variant)
+  // 'blade' = Pact of the Blade (creates a pact weapon — enables Thirsting Blade)
+  // 'tome'  = Pact of the Tome (3 cantrips from any class list)
+  // Set at Warlock level 3 via choosePactBoon() in improvements.ts.
+  // The engine checks this for Thirsting Blade (requires 'blade').
+  pactBoon?: 'chain' | 'blade' | 'tome';
+
   // Temporary HP (absorbs damage before real HP)
   tempHP: number;
 
@@ -1796,6 +1804,15 @@ export interface PlannedAction {
   action: Action | null;
   targetId: string | null;
   description: string;
+  // ── Session 42 — Thirsting Blade / Extra Attack ──────────────────────
+  // Number of attacks to make when executing this plan. Default 1 (single
+  // attack). Set to 2 by the planner when the actor has Thirsting Blade
+  // (Warlock invocation) AND Pact of the Blade AND the action is a melee
+  // weapon attack. The engine's case 'attack': branch loops resolveAttack
+  // this many times.
+  // Future: generalize to support Fighter 5+ Extra Attack (2), Fighter 11+
+  // Extra Attack (3), etc.
+  attackCount?: number;
   // For healing actions (secondWind, layOnHands, spellHeal): HP restored this action.
   healAmount?: number;
   // ── Session 19 — generic spell dispatch ──────────────────────────────

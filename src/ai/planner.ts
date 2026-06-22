@@ -274,6 +274,8 @@ import { shouldCast as shouldCastFindGreaterSteed }    from '../spells/find_grea
 
 // ── Session 19 — bulk-implementation generic dispatch (262 new spells) ────
 import { GENERIC_SPELL_LIST } from '../spells/_generic_registry';
+// ── Session 42 Task #18 — Thirsting Blade check ──
+import { hasInvocation } from '../spells/_invocations';
 import { selectAction, selfPreserveDecision, selectLegendaryAction } from './actions';
 import {
   canReach, bestAdjacentPos, bestRangedPosition,
@@ -4703,6 +4705,24 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
 
   // Don't overwrite a self-buff action (e.g. mageArmor) already planned above.
   if (!plan.action) plan.action = chosenAction;
+
+  // ── Session 42 Task #18: Thirsting Blade (extra attack) ──
+  // PHB p.111: "You can attack with your pact weapon twice, instead of
+  // once, whenever you take the Attack action on your turn."
+  // Conditions: Warlock has Thirsting Blade invocation + Pact of the Blade
+  // boon + the planned action is a melee weapon attack.
+  // v1 simplification: assumes ANY melee attack from a Thirsting Blade
+  // Warlock is a pact weapon attack (no isPactWeapon Action flag needed).
+  if (
+    plan.action &&
+    plan.action.type === 'attack' &&
+    plan.action.action &&
+    plan.action.action.attackType === 'melee' &&
+    hasInvocation(self, 'Thirsting Blade') &&
+    self.pactBoon === 'blade'
+  ) {
+    plan.action.attackCount = 2;
+  }
 
   // === MOVEMENT ===
   const { moveBefore, moveAfter } = planMovement(self, target, chosenAction, battlefield);

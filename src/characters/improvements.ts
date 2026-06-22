@@ -495,3 +495,65 @@ export function chooseEldritchInvocations(
     updatedAt: new Date().toISOString(),
   };
 }
+
+
+// ============================================================
+// choosePactBoon
+// ============================================================
+//
+// PHB p.108: "At 3rd level, your otherworldly patron bestows a gift
+// upon you for your loyal service. You gain one of the following
+// features of your choice: Pact of the Chain, Pact of the Blade,
+// or Pact of the Tome."
+//
+// Session 42 Task #18: Pact Boon tracking for Thirsting Blade.
+// Thirsting Blade (PHB p.111) requires Pact of the Blade — it gives
+// two attacks with the pact weapon instead of one when taking the
+// Attack action. The planner checks pactBoon === 'blade' +
+// hasInvocation('Thirsting Blade') to set attackCount = 2.
+// ============================================================
+
+/**
+ * Record a Pact Boon selection for a Warlock.
+ *
+ * Rules enforced:
+ *   - sheet must have Warlock level >= 3 (Pact Boon unlocks at level 3)
+ *   - pactBoon must not already be set (no re-picking)
+ *   - boon must be 'chain', 'blade', or 'tome'
+ *
+ * @param sheet   Current character sheet
+ * @param boon    Pact Boon choice ('chain' | 'blade' | 'tome')
+ * @returns Updated sheet (new object, no mutation)
+ * @throws Error if validation fails
+ */
+export function choosePactBoon(
+  sheet: CharacterSheet,
+  boon: 'chain' | 'blade' | 'tome',
+): CharacterSheet {
+  // Validate Warlock level >= 3
+  const warlockEntry = sheet.classLevels.find(cl => cl.className === 'Warlock');
+  if (!warlockEntry) {
+    throw new Error(
+      `Cannot choose Pact Boon: character has no Warlock class levels.`
+    );
+  }
+  if (warlockEntry.level < 3) {
+    throw new Error(
+      `Cannot choose Pact Boon: Warlock level ${warlockEntry.level} is below 3 ` +
+      `(Pact Boon unlocks at Warlock 3).`
+    );
+  }
+
+  // Prevent overwriting an existing choice
+  if (sheet.pactBoon) {
+    throw new Error(
+      `Pact Boon is already set to "${sheet.pactBoon}". Cannot change once chosen.`
+    );
+  }
+
+  return {
+    ...sheet,
+    pactBoon: boon,
+    updatedAt: new Date().toISOString(),
+  };
+}

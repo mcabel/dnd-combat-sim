@@ -223,28 +223,30 @@ export const ELDRITCH_INVOCATIONS: Record<string, EldritchInvocation> = {
     // No hooks — applied in rollConcentrationSave via hasInvocation check.
   },
 
-  // ── Thirsting Blade (PHB p.111) ── [Session 41 Task #16]
+  // ── Thirsting Blade (PHB p.111) ── [Session 42 Task #18]
   // "You can attack with your pact weapon twice, instead of once,
   //  whenever you take the Attack action on your turn."
   //
-  // v1.5 scope: descriptor + metadata flag only. The engine integration
-  // (modifying the AI planner to plan two attacks when the Warlock takes
-  // the Attack action with their Pact Weapon) is future work — it
-  // requires:
-  //   1. A "Pact Weapon" Action flag (so the engine knows which weapon
-  //      gets the extra attack)
-  //   2. Planner changes to plan two attacks instead of one when the
-  //      invocation is present
-  //   3. Pact of the Blade prerequisite tracking (the Warlock must have
-  //      the Pact of the Blade feature to choose Thirsting Blade)
+  // Session 42 Task #18: NOW FULLY IMPLEMENTED. The planner checks
+  // hasInvocation(self, 'Thirsting Blade') + self.pactBoon === 'blade'
+  // + melee attack → sets plan.attackCount = 2. The engine's
+  // executePlannedAction case 'attack' branch loops resolveAttack
+  // attackCount times (default 1).
   //
-  // For now, the invocation can be chosen via chooseEldritchInvocations
-  // (it's in the registry), but it has no combat effect. Future sessions
-  // will wire the engine integration.
+  // Prerequisites:
+  //   - Warlock level 5+ (invocation slot)
+  //   - Pact of the Blade boon (choosePactBoon(sheet, 'blade'))
+  //   - Thirsting Blade chosen in eldritchInvocations
+  //   - Melee weapon attack (attackType === 'melee')
+  //
+  // v1 simplification: assumes ANY melee attack from a Thirsting Blade
+  // Warlock is a pact weapon attack. No isPactWeapon Action flag needed.
+  // Future: add isPactWeapon flag for stricter RAW compliance.
   'Thirsting Blade': {
     name: 'Thirsting Blade',
     description: 'You can attack with your pact weapon twice, instead of once, whenever you take the Attack action on your turn.',
-    // No hooks — engine integration is future work (see comment above).
+    // No hooks — the planner + engine handle the extra attack via
+    // plan.attackCount (see src/ai/planner.ts + src/engine/combat.ts).
   },
 
   // Future invocations can be added here:

@@ -115,12 +115,13 @@ export const metadata = {
    * Session 41 Task #16: Three more invocations are NOW registered:
    *   - Eldritch Spear (PHB p.111): EB range 300 ft (builder patches range)
    *   - Eldritch Mind (TCE p.71): advantage on concentration saves (utils)
-   *   - Thirsting Blade (PHB p.111): extra attack with Pact Weapon (v1.5:
-   *     descriptor only — engine integration is future work)
-   * Eldritch Spear and Eldritch Mind are fully wired; Thirsting Blade is
-   * metadata-only (no combat effect yet).
+   *   - Thirsting Blade (PHB p.111): extra attack with Pact Weapon
+   * Session 42 Task #18: Thirsting Blade is NOW FULLY IMPLEMENTED
+   * (was V1Registered/metadata-only in Session 41). The planner sets
+   * plan.attackCount = 2 for melee attacks when the Warlock has
+   * Thirsting Blade + Pact of the Blade; the engine loops resolveAttack.
    */
   eldritchSpearV1Implemented: true as const,
   eldritchMindV1Implemented: true as const,
-  thirstingBladeV1Registered: true as const,  // engine integration is future work
+  thirstingBladeV1Implemented: true as const,  // Session 42 Task #18: fully wired (was V1Registered)
 } as const;

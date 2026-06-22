@@ -349,6 +349,14 @@ export function buildCombatant(
     }
   }
 
+  // ── Session 42 Task #18: Pact Boon transfer ──
+  // Transfer the Warlock's Pact Boon choice (chain/blade/tome) to the
+  // Combatant so the planner can check it for Thirsting Blade (requires
+  // 'blade'). No-op for non-Warlocks (pactBoon is undefined).
+  if (sheet.pactBoon) {
+    combatant.pactBoon = sheet.pactBoon;
+  }
+
   return combatant;
 }
 
