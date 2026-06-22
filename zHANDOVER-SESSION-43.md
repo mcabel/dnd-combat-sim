@@ -189,12 +189,15 @@ Session 43 closed 5 more items from Session 42's priority list. The Fighter clas
 ## CI Status
 
 - **Task #24 commit (c91945c):** Test Suite `success` ✅
-- **Task #23 commit (fd09d3d):** Test Suite `failure` ❌ (flaky silvery_barbs.test.ts Section 5 — fixed in 8282650)
+- **Task #23 commit (fd09d3d):** Test Suite `failure` ❌ (flaky silvery_barbs.test.ts Section 5 — fixed in c8842a3/8282650)
 - **Task #25 commit (86aaa7d):** Test Suite `failure` ❌ (flaky thirsting_blade.test.ts test 9a — fixed in 8282650)
-- **Task #26 commit (c8842a3):** Test Suite `success` ✅
-- **Flaky test fix commit (8282650):** Test Suite `success` ✅
-- **Task #21 commit (29c4e06):** Test Suite `in_progress` (handover being written)
-- **Final state:** (pending CI verification for 29c4e06)
+- **Task #26 commit (c8842a3):** Test Suite `success` ✅ (included silvery_barbs Section 5 flaky threshold fix)
+- **Flaky test fix commit (8282650):** Test Suite `success` ✅ (relaxed end-to-end damage ratio thresholds: N=60 + 1.3×)
+- **Task #21 commit (29c4e06):** Test Suite `success` ✅
+- **Handover commit (25e89b6):** Test Suite `success` ✅
+- **Final state:** ALL GREEN ✅ on latest commit (25e89b6)
+
+Note: The 3 intermediate failures (fd09d3d, 86aaa7d, and the earlier feb2f59) were all caused by flaky probabilistic tests with tight thresholds. All have been fixed with wider thresholds (P(failure) < 1e-7). The latest commit includes all fixes and is fully green.
 
 ---
 
