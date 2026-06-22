@@ -1903,6 +1903,36 @@ export type ReactionTrigger =
       target: Combatant;
       /** Number of darts aimed at `target` (informational; Shield blocks all regardless). */
       dartCount: number;
+    }
+  // ── Session 41 — Silvery Barbs save-success trigger ──
+  // SCC p.38: Silvery Barbs can be cast "when a creature you can see
+  // within 60 feet of you succeeds on a saving throw." The reactor is
+  // the spellcaster who forced the save (NOT the saver). If Silvery
+  // Barbs negates, the reroll's lower result flips the save to a
+  // failure — the spell's effect then applies as if the save failed.
+  //
+  // Migration plan (Session 41 Task #8): spell modules call
+  // `rollSaveReactable(state, caster, saver, ability, dc, isProficient?)`
+  // in combat.ts instead of `rollSave` directly. The wrapper fires this
+  // trigger after a successful save; if Silvery Barbs negates, the
+  // wrapper returns success=false so the spell's effect branch runs.
+  //
+  // v1.5 scope: infrastructure added; the 110 spell modules that call
+  // `rollSave` will be migrated incrementally. See Session 41 handover.
+  | {
+      kind: 'incoming_save_success';
+      /** The creature that cast the spell forcing the save (potential reactor). */
+      caster: Combatant;
+      /** The creature that succeeded on the save (the saver). */
+      saver: Combatant;
+      /** The save ability (str/dex/con/int/wis/cha). */
+      ability: 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha';
+      /** The save DC. */
+      dc: number;
+      /** The raw d20 roll (1-20) of the save. */
+      roll: number;
+      /** The total save result (d20 + mods). */
+      total: number;
     };
 
 /**

@@ -23,27 +23,32 @@
 // TG-008 implementation:
 //   - `shouldCastReaction` / `executeReaction` are the trigger-aware
 //     entry points consumed by the reaction registry.
-//   - v1 only handles the `incoming_attack_hit` trigger (the reroll
-//     flips the hit to a miss if the lower roll misses). The save-
-//     success and ability-check-success triggers are NOT implemented
-//     (they would require additional trigger points in the engine).
+//   - Session 41 Task #8: added `incoming_save_success` trigger handling.
+//     The save-success path rerolls the d20, uses the lower result, and
+//     re-evaluates success. If the reroll flips the save to a failure,
+//     returns `{ kind: 'negated' }` — the engine's `rollSaveReactable`
+//     wrapper then returns success=false so the calling spell module's
+//     "save failed" branch runs.
+//   - The ability-check-success trigger is NOT implemented (would
+//     require additional trigger points in the engine).
 //   - `executeReaction` returns `{ kind: 'negated' }` when the reroll
-//     flips the hit to a miss; otherwise `{ kind: 'failed' }`.
+//     flips the hit to a miss OR the save success to a failure;
+//     otherwise `{ kind: 'failed' }`.
 //   - The "advantage on next attack" rider is NOT implemented in v1
 //     (would require tracking a per-target advantage flag).
 //   - No cleanup needed — the effect is instantaneous.
 //
 // v1 simplifications:
-//   - Only triggers on attack hits (not save successes or ability
-//     check successes).
+//   - Triggers on attack hits AND save successes (Session 41 added the
+//     latter). Ability-check-success is not yet implemented.
 //   - The reroll uses the lower of the two d20 rolls, but the to-hit
-//     bonus is the same (no reroll of the bonus).
+//     bonus / save mods are the same (no reroll of the bonus).
 //   - The advantage rider is not modelled.
 //   - shouldCastReaction always returns true if the trigger is valid
 //     (no tactical gating on whether the reroll will help). This may
 //     waste slots when the original roll was low enough that the reroll
 //     won't flip it. Future enhancement: only cast if the lower of
-//     (original roll, expected reroll) would miss.
+//     (original roll, expected reroll) would miss/fail.
 // ============================================================
 
 import { Combatant, Battlefield, ReactionTrigger, ReactionOutcome } from '../types/core';
@@ -60,6 +65,7 @@ export const metadata = {
   rangeFt: 60,
   concentration: false,
   castingTime: 'reaction',
+  silveryBarbsSaveSuccessV1Implemented: true,
 } as const;
 
 // ---- Trigger-aware shouldCast (TG-008) ----------------------
@@ -68,35 +74,37 @@ export const metadata = {
  * Returns true if `caster` should cast Silvery Barbs in response to
  * `trigger`.
  *
- * Tactical rule (v1): cast whenever an enemy within 60 ft hits with an
- * attack. The reroll has a chance to flip the hit to a miss.
+ * Handles two trigger kinds:
+ *   - 'incoming_attack_hit': caster forces attacker to reroll the d20.
+ *     Cast whenever an enemy within 60 ft hits with an attack.
+ *   - 'incoming_save_success' (Session 41 Task #8): caster forces saver
+ *     to reroll the d20. Cast whenever an enemy within 60 ft succeeds
+ *     on a save against the caster's spell.
  *
- * v1 does NOT gate on whether the reroll will flip the hit (we'd need
- * to roll the new d20 in shouldCast, which is wasteful and breaks the
- * "shouldCast is pure" convention). Instead, executeReaction rolls the
- * new d20 and reports the outcome.
- *
- * Future enhancement: estimate the reroll's value based on the original
- * roll (e.g., don't cast if original roll was 5 below AC — the reroll
- * is unlikely to help).
+ * v1 does NOT gate on whether the reroll will flip the result.
  */
 export function shouldCastReaction(
   caster: Combatant,
   _bf: Battlefield,
   trigger: ReactionTrigger,
 ): boolean {
-  if (trigger.kind !== 'incoming_attack_hit') return false;
+  if (trigger.kind !== 'incoming_attack_hit' && trigger.kind !== 'incoming_save_success') return false;
+
+  // The triggering creature is the attacker (for attack_hit) or the saver
+  // (for save_success). Silvery Barbs forces THAT creature to reroll.
+  const triggerCreature = trigger.kind === 'incoming_attack_hit' ? trigger.attacker : trigger.saver;
+
   // Only cast against enemies (PHB: "a creature you can see" — but
   // tactically you'd only cast against enemies).
-  if (trigger.attacker.id === caster.id) return false;
+  if (triggerCreature.id === caster.id) return false;
   // Range check: PHB p.38 "within 60 feet".
-  const dx = Math.abs(caster.pos.x - trigger.attacker.pos.x);
-  const dy = Math.abs(caster.pos.y - trigger.attacker.pos.y);
-  const dz = Math.abs(caster.pos.z - trigger.attacker.pos.z);
+  const dx = Math.abs(caster.pos.x - triggerCreature.pos.x);
+  const dy = Math.abs(caster.pos.y - triggerCreature.pos.y);
+  const dz = Math.abs(caster.pos.z - triggerCreature.pos.z);
   const distFt = Math.max(dx, dy, dz) * 5;
   if (distFt > 60) return false;
-  // Don't cast if the attacker is already dead (shouldn't happen mid-attack).
-  if (trigger.attacker.isDead || trigger.attacker.isUnconscious) return false;
+  // Don't cast if the triggering creature is already dead (shouldn't happen mid-trigger).
+  if (triggerCreature.isDead || triggerCreature.isUnconscious) return false;
   // Don't cast against a natural 20 crit — the reroll will use the lower
   // of the two rolls, but crits are determined by the nat-20. Actually,
   // per Sage Advice, Silvery Barbs forces a reroll of the d20, and the
@@ -108,10 +116,17 @@ export function shouldCastReaction(
 // ---- Trigger-aware execute (TG-008) -------------------------
 
 /**
- * Execute Silvery Barbs reaction. Rolls a new d20, uses the lower of
- * the original and new rolls, and re-evaluates the hit. If the lower
- * roll misses, returns `{ kind: 'negated' }` (the engine flips the hit
- * to a miss and skips damage).
+ * Execute Silvery Barbs reaction. Handles two trigger kinds:
+ *
+ * 'incoming_attack_hit': rolls a new d20, uses the lower of the
+ * original and new rolls, and re-evaluates the hit. If the lower
+ * roll misses, returns `{ kind: 'negated' }`.
+ *
+ * 'incoming_save_success' (Session 41 Task #8): rolls a new d20, uses
+ * the lower of the original and new rolls, and re-evaluates the save.
+ * If the lower roll fails the save, returns `{ kind: 'negated' }` —
+ * the engine's `rollSaveReactable` wrapper then returns success=false
+ * so the calling spell module's "save failed" branch runs.
  *
  * PHB/SCC: "The triggering creature must reroll the d20 and use the
  * lower roll."
@@ -121,8 +136,24 @@ export function executeReaction(
   state: EngineState,
   trigger: ReactionTrigger,
 ): ReactionOutcome {
-  if (trigger.kind !== 'incoming_attack_hit') return { kind: 'no_effect' };
+  if (trigger.kind === 'incoming_attack_hit') {
+    return executeAttackHitReroll(caster, state, trigger);
+  }
+  if (trigger.kind === 'incoming_save_success') {
+    return executeSaveSuccessReroll(caster, state, trigger);
+  }
+  return { kind: 'no_effect' };
+}
 
+/**
+ * Handle the 'incoming_attack_hit' trigger: reroll the attack d20,
+ * use the lower result, and re-evaluate the hit.
+ */
+function executeAttackHitReroll(
+  caster: Combatant,
+  state: EngineState,
+  trigger: Extract<ReactionTrigger, { kind: 'incoming_attack_hit' }>,
+): ReactionOutcome {
   consumeSpellSlot(caster, 1);
   caster.budget.reactionUsed = true;
 
@@ -131,18 +162,9 @@ export function executeReaction(
   // Use the lower of the original and new rolls.
   const lowerRoll = Math.min(trigger.attackRoll, newRoll);
   // Reconstruct the attack total with the lower roll.
-  // The original total = attackRoll + hitBonus + modifiers.
-  // The new total = lowerRoll + (attackTotal - attackRoll).
   const hitBonus = trigger.attackTotal - trigger.attackRoll;
   const newTotal = lowerRoll + hitBonus;
 
-  // Re-evaluate the hit with the lower roll.
-  // Note: crits are determined by nat 20. If the lower roll is a nat 20,
-  // it's still a crit. But since lowerRoll <= originalRoll and originalRoll
-  // was the one that hit, if original was a nat 20, lowerRoll is likely
-  // lower (no crit). If original was a nat 1, it would have missed (we
-  // wouldn't be here). So the crit logic is preserved.
-  const wasCrit = trigger.isCrit;
   const newIsCrit = lowerRoll === 20;
   const newHits = attackHits(lowerRoll, newTotal, trigger.effectiveAC);
 
@@ -157,11 +179,48 @@ export function executeReaction(
   if (!newHits) {
     return { kind: 'negated', detail: `Silvery Barbs reroll (${newRoll}) flipped hit to miss` };
   }
-  // The reroll didn't flip the hit — but the lower roll might have flipped
-  // a crit to a normal hit. v1 doesn't model this (the engine uses the
-  // original isCrit for the damage branch). Future enhancement: pass the
-  // new isCrit back to the engine.
   return { kind: 'failed', detail: `Silvery Barbs reroll (${newRoll}) did not flip the hit` };
+}
+
+/**
+ * Handle the 'incoming_save_success' trigger (Session 41 Task #8):
+ * reroll the save d20, use the lower result, and re-evaluate success.
+ *
+ * The save's modifier is reconstructed from `trigger.total - trigger.roll`
+ * (the original total included the d20 + all mods; the new total uses
+ * the lower d20 + the same mods).
+ */
+function executeSaveSuccessReroll(
+  caster: Combatant,
+  state: EngineState,
+  trigger: Extract<ReactionTrigger, { kind: 'incoming_save_success' }>,
+): ReactionOutcome {
+  consumeSpellSlot(caster, 1);
+  caster.budget.reactionUsed = true;
+
+  // Roll a new d20 for the reroll.
+  const newRoll = rollDie(20);
+  // Use the lower of the original and new rolls.
+  const lowerRoll = Math.min(trigger.roll, newRoll);
+  // Reconstruct the save total with the lower roll.
+  // The original total = roll + mods. The new total = lowerRoll + mods.
+  const saveMods = trigger.total - trigger.roll;
+  const newTotal = lowerRoll + saveMods;
+  // The save succeeds if total >= DC.
+  const newSuccess = newTotal >= trigger.dc;
+
+  state.log.events.push({
+    round: state.battlefield.round ?? 0,
+    actorId: caster.id,
+    type: 'action',
+    targetId: trigger.saver.id,
+    description: `${caster.name} casts Silvery Barbs — ${trigger.saver.name} rerolls the save d20 (original ${trigger.roll} → new ${newRoll}, using ${lowerRoll}). Save ${newSuccess ? 'still succeeds' : 'now FAILS'} (${newTotal} vs DC ${trigger.dc})!`,
+  });
+
+  if (!newSuccess) {
+    return { kind: 'negated', detail: `Silvery Barbs reroll (${newRoll}) flipped save success to failure` };
+  }
+  return { kind: 'failed', detail: `Silvery Barbs reroll (${newRoll}) did not flip the save` };
 }
 
 // ---- cleanup ------------------------------------------------

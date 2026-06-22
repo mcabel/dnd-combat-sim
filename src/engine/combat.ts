@@ -846,6 +846,11 @@ function triggerReactions(
   if (trigger.kind === 'incoming_spell' && trigger.caster.id === reactor.id) return null;
   // Session 37: Shield vs Magic Missile — don't Shield against your own MM.
   if (trigger.kind === 'targeted_by_magic_missile' && trigger.caster.id === reactor.id) return null;
+  // Session 41: Silvery Barbs save-success — the reactor IS the spellcaster
+  // who forced the save (trigger.caster). Silvery Barbs is cast BY the
+  // spellcaster to force the saver to reroll, so the self-trigger guard
+  // does NOT apply here. The shouldCastReaction function already rejects
+  // self-saves (caster === saver) explicitly.
 
   // Iterate the registry in order; fire the first matching spell.
   for (const spell of REACTION_SPELLS) {
@@ -860,6 +865,90 @@ function triggerReactions(
     return spell.execute(reactor, state, trigger);
   }
   return null;
+}
+
+// ============================================================
+// Session 41 Task #8: rollSaveReactable — Silvery Barbs trigger
+//
+// Wraps `rollSave` from utils.ts and fires an `incoming_save_success`
+// reaction trigger after a successful save. The reactor is the spell
+// caster who forced the save (NOT the saver — Silvery Barbs is cast
+// by the spellcaster to force a reroll of the enemy's successful save).
+//
+// If Silvery Barbs (or any future 'incoming_save_success' reaction)
+// negates the save success, this wrapper returns success=false so
+// the calling spell module's "save failed" branch runs.
+//
+// Migration plan: spell modules call `rollSaveReactable(state, caster, saver, ability, dc, isProficient?)`
+// instead of `rollSave(saver, ability, dc, isProficient?)`. The wrapper
+// is a drop-in replacement: same return shape ({roll, total, success}),
+// plus the reaction-trigger side effect.
+//
+// v1.5 scope (Session 41): infrastructure added. The 110 spell modules
+// that call `rollSave` directly will be migrated incrementally — this
+// session migrates fireball, burning_hands, and sacred_flame as proof
+// of concept. Future sessions migrate the rest.
+// ============================================================
+
+/**
+ * Roll a saving throw with reaction-trigger support.
+ *
+ * Calls `rollSave(saver, ability, dc, isProficient)` to compute the
+ * raw save result. If the save succeeds AND a reaction spell (Silvery
+ * Barbs) is available to the caster, fires the `incoming_save_success`
+ * trigger. If the reaction negates (reroll flips to fail), returns
+ * success=false so the caller's "save failed" branch runs.
+ *
+ * @param state        Engine state (for triggerReactions + logging)
+ * @param caster       The creature that forced the save (potential reactor)
+ * @param saver        The creature making the save
+ * @param ability      Save ability (str/dex/con/int/wis/cha)
+ * @param dc           Save DC
+ * @param isProficient True if the saver is proficient in the save
+ * @returns { roll, total, success } — same shape as rollSave
+ */
+export function rollSaveReactable(
+  state: EngineState,
+  caster: Combatant,
+  saver: Combatant,
+  ability: 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha',
+  dc: number,
+  isProficient = false,
+): { roll: number; total: number; success: boolean } {
+  const result = rollSave(saver, ability, dc, isProficient);
+
+  // Only fire the trigger if the save succeeded — Silvery Barbs forces
+  // a reroll, which can only flip success → failure (not the reverse).
+  if (!result.success) return result;
+
+  // Don't fire the trigger if the caster is the saver (self-save can't
+  // be Silvery Barbs'd — the caster would be reacting to their own save).
+  if (caster.id === saver.id) return result;
+
+  // Don't fire if the caster is dead/unconscious (can't react).
+  if (caster.isDead || caster.isUnconscious) return result;
+
+  // Don't fire if the caster has already used their reaction this round.
+  if (caster.budget.reactionUsed) return result;
+
+  // Fire the trigger.
+  const outcome = triggerReactions(state, caster, {
+    kind: 'incoming_save_success',
+    caster,
+    saver,
+    ability,
+    dc,
+    roll: result.roll,
+    total: result.total,
+  });
+
+  // If the reaction negated the save, return success=false so the
+  // caller's "save failed" branch runs.
+  if (outcome?.kind === 'negated') {
+    return { ...result, success: false };
+  }
+
+  return result;
 }
 
 // ============================================================
@@ -974,7 +1063,11 @@ export function resolveAttack(
 
   // Save-based attacks (no attack roll)
   if (action.attackType === 'save' && action.saveDC !== null && action.saveAbility !== null) {
-    const save = rollSave(target, action.saveAbility, action.saveDC);
+    // Session 41 Task #8: use rollSaveReactable so Silvery Barbs can fire
+    // on save success. The "caster" is the attacker (spellcaster who forced
+    // the save). If Silvery Barbs negates, save.success becomes false and
+    // the save-fail branch runs (full damage instead of half).
+    const save = rollSaveReactable(state, attacker, target, action.saveAbility, action.saveDC);
     log(state, save.success ? 'save_success' : 'save_fail', attacker.id,
       `${target.name} ${save.success ? 'succeeds' : 'fails'} DC ${action.saveDC} ${action.saveAbility} save (rolled ${save.total})`,
       target.id, save.roll);
