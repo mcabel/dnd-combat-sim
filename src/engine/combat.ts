@@ -2389,11 +2389,27 @@ export function executeMove(
 
   if (posKey(mover.pos) === posKey(dest)) return; // already there
 
+  // ── Session 48 Task #29-follow-up-3b: Land's Stride (Land Druid 6) ──
+  // PHB p.68: "moving through nonmagical difficult terrain costs you no
+  // extra movement." When the mover has Land's Stride, wrap the terrainFn
+  // to treat 'difficult' as 'normal' (no extra cost). 'water' terrain is
+  // NOT affected (Land's Stride is about difficult terrain and plants,
+  // not swimming). v1 simplification: all difficult terrain is treated
+  // as nonmagical (no magical-difficult-terrain tracking).
+  const baseTerrainFn = makeTerrainFn(bf);
+  const hasLandsStride = hasFeature(mover, "Land's Stride");
+  const effectiveTerrainFn = hasLandsStride
+    ? (pos: Vec3) => {
+        const t = baseTerrainFn(pos);
+        return t === 'difficult' ? 'normal' : t;  // ignore difficult terrain
+      }
+    : baseTerrainFn;
+
   const cost = estimateMoveCostFt(
     mover.pos, dest,
     mover.burrowSpeed !== null,
     mover.swimSpeed !== null,
-    makeTerrainFn(bf)
+    effectiveTerrainFn
   );
 
   if (!spendMovement(mover, cost)) {
