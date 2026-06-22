@@ -362,25 +362,43 @@ console.log('\n--- 8. Engine skips second attack if target dies ---');
   let warlock5 = levelWarlockTo(makeWarlock1(), 5);
   warlock5 = choosePactBoon(warlock5, 'blade');
   warlock5 = chooseEldritchInvocations(warlock5, ['Thirsting Blade', 'Agonizing Blast', 'Eldritch Spear']);
-  const warlock = buildCombatant(warlock5, { x: 0, y: 0, z: 0 });
 
-  // Enemy with 1 HP — first attack kills it
-  const enemy = makeEnemy('enemy', { pos: { x: 1, y: 0, z: 0 }, maxHP: 1, currentHP: 1 });
-  const bf = makeBF([warlock, enemy]);
-  const state = makeState(bf);
+  // The warlock has ~+5 attack vs AC 10, so the first attack hits ~80%
+  // of the time (misses only on natural 1, 2, 3, 4). To make this test
+  // deterministic, retry the (fresh) execution until the first attack
+  // HITS — then we can verify the engine skips the second attack when
+  // the target dies mid-loop. With up to 10 retries, the chance of
+  // NEVER hitting first is 0.2^10 ≈ 1e-7.
+  let attackEventCount = 0;
+  let enemyDead = false;
+  for (let attempt = 0; attempt < 10; attempt++) {
+    // Fresh combatant + enemy + state each attempt (the warlock's
+    // budget.actionUsed flag is consumed by executePlannedAction, so
+    // we need a fresh warlock each iteration).
+    const warlock = buildCombatant(warlock5, { x: 0, y: 0, z: 0 });
+    const enemy = makeEnemy('enemy', { pos: { x: 1, y: 0, z: 0 }, maxHP: 1, currentHP: 1 });
+    const bf = makeBF([warlock, enemy]);
+    const state = makeState(bf);
 
-  const plan = planTurn(warlock, bf);
-  if (plan.action) {
+    const plan = planTurn(warlock, bf);
+    if (!plan.action) continue;
     executePlannedAction(warlock, plan.action, state);
+
+    const events = state.log.events.filter((e: any) =>
+      (e.type === 'attack_hit' || e.type === 'attack_miss' || e.type === 'attack_crit') &&
+      e.actorId === warlock.id
+    );
+    // "first attack hit" = first event is attack_hit or attack_crit (not miss)
+    const firstAttackHit = events.length > 0 && events[0].type !== 'attack_miss';
+    if (!firstAttackHit) continue;  // retry on miss
+
+    attackEventCount = events.length;
+    enemyDead = enemy.isDead;
+    break;  // got a deterministic outcome
   }
 
-  // Only 1 attack event (second skipped because target is dead)
-  const attackEvents = state.log.events.filter((e: any) =>
-    (e.type === 'attack_hit' || e.type === 'attack_miss' || e.type === 'attack_crit') &&
-    e.actorId === warlock.id
-  );
-  eq('8a. only 1 attack event (target died on first)', attackEvents.length, 1);
-  assert('8b. enemy is dead', enemy.isDead);
+  eq('8a. only 1 attack event (target died on first)', attackEventCount, 1);
+  assert('8b. enemy is dead', enemyDead);
 }
 
 // ============================================================
