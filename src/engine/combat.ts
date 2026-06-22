@@ -4976,6 +4976,35 @@ export function runCombat(
       // Reset budget (movement, action, bonus, reaction)
       resetBudget(actor);
 
+      // ── Session 46 Task #29-follow-up-2: Survivor (Champion 18) regen ──
+      // PHB p.73: "At 18th level, you attain the pinnacle of resilience in
+      // battle. At the start of each of your turns, you regain hit points
+      // equal to 5 + your Constitution modifier, provided you have at least
+      // 1 hit point and are below half your hit point maximum."
+      //
+      // This fires at the very start of the actor's turn, right after
+      // resetBudget and BEFORE damage-zone ticks (so a Champion at 1 HP
+      // can survive a Cloud of Daggers tick if the regen brings them
+      // above 0 — though the zone damage applies after, so they might
+      // still go down). The regen does NOT fire if the actor is at 0 HP
+      // (dead or unconscious) or at/above half HP.
+      if (!actor.isDead && !actor.isUnconscious && actor.currentHP > 0
+          && actor.currentHP < Math.floor(actor.maxHP / 2)
+          && hasFeature(actor, 'Survivor')) {
+        const conMod = abilityMod(actor.con);
+        const regenAmount = 5 + conMod;
+        if (regenAmount > 0) {
+          const before = actor.currentHP;
+          actor.currentHP = Math.min(actor.maxHP, actor.currentHP + regenAmount);
+          const healed = actor.currentHP - before;
+          if (healed > 0) {
+            log(state, 'heal', actor.id,
+              `${actor.name} regains ${healed} HP from Survivor (Champion 18) — ${before} → ${actor.currentHP}`,
+              actor.id, healed);
+          }
+        }
+      }
+
       // ── Cloud of Daggers / damage_zone start-of-turn tick (PHB p.222) ────
       // PHB p.222: "A creature takes 4d4 slashing damage when it enters the
       // spell's area for the first time on a turn or STARTS ITS TURN THERE."

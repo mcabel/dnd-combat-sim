@@ -459,6 +459,13 @@ export interface Combatant {
   int: number; wis: number; cha: number;
   cr: number | null;                      // null for PCs
 
+  // ── Session 46 Task #29-follow-up-2: Character level for PCs ──
+  // Optional. Set by buildCombatant from the sheet's total class level.
+  // Used by features that depend on proficiency bonus (Remarkable Athlete,
+  // Jack of All Trades, etc.). Monsters leave this undefined — their
+  // proficiency is derived from CR via proficiencyBonus(cr).
+  level?: number;
+
   // Position (grid squares; 1 square = 5ft)
   pos: Vec3;
 

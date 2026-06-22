@@ -672,16 +672,58 @@ export function effectiveSpeed(c: Combatant): number {
 // ---- Initiative --------------------------------------------
 
 /**
+ * Compute the proficiency bonus for a Combatant.
+ *
+ * For PCs (cr=null with the `level` field set by buildCombatant), uses the
+ * character-level table (PHB p.15): level 1-4 → +2, 5-8 → +3, 9-12 → +4,
+ * 13-16 → +5, 17-20 → +6.
+ *
+ * For monsters (cr set) or legacy PCs without the `level` field, falls back
+ * to the CR-based `proficiencyBonus(cr)` table.
+ *
+ * Session 46 Task #29-follow-up-2: needed for Remarkable Athlete (Champion 7)
+ * which adds half proficiency (rounded up) to STR/DEX/CON ability checks
+ * including initiative.
+ */
+export function combatantProfBonus(c: Combatant): number {
+  // PC: use character level if available (set by buildCombatant)
+  if (c.cr === null && c.level !== undefined && c.level > 0) {
+    const lvl = c.level;
+    if (lvl <= 4) return 2;
+    if (lvl <= 8) return 3;
+    if (lvl <= 12) return 4;
+    if (lvl <= 16) return 5;
+    return 6;
+  }
+  // Monster or legacy: use CR-based table
+  return proficiencyBonus(c.cr);
+}
+
+/**
  * Roll initiative for all combatants and return an ordered array of IDs.
  * Ties between combatants of different factions: monsters go last (SAC/DM convention).
  * Ties within same faction: random.
+ *
+ * Session 46 Task #29-follow-up-2: Remarkable Athlete (Champion 7) adds
+ * half proficiency bonus (rounded up) to initiative (a DEX ability check
+ * that doesn't normally add proficiency). PHB p.72: "you can add half your
+ * proficiency bonus (rounded up) to any Strength, Dexterity, or Constitution
+ * check you make that doesn't already use your proficiency bonus."
  */
 export function rollInitiative(battlefield: Battlefield): string[] {
   const entries: { id: string; init: number; tieBreaker: number }[] = [];
 
   for (const [id, c] of battlefield.combatants) {
     const dexMod = abilityMod(c.dex);
-    const roll = rollDie(20) + dexMod;
+    // Remarkable Athlete (Champion 7): +ceil(prof/2) to DEX checks w/o prof.
+    // Initiative is a DEX check that doesn't use proficiency by default.
+    // Inlined hasFeature check to avoid circular dependency with builder.ts.
+    let initBonus = dexMod;
+    if (c.classFeatures?.includes('Remarkable Athlete')) {
+      const prof = combatantProfBonus(c);
+      initBonus += Math.ceil(prof / 2);
+    }
+    const roll = rollDie(20) + initBonus;
     entries.push({ id, init: roll, tieBreaker: Math.random() });
   }
 

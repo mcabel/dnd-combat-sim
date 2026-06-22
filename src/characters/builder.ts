@@ -379,6 +379,17 @@ export function buildCombatant(
     combatant.classFeatures = [...new Set(classFeatureNames)];
   }
 
+  // ── Session 46 Task #29-follow-up-2: Character level transfer ──
+  // Store the PC's total character level on the Combatant so engine features
+  // that depend on proficiency bonus (Remarkable Athlete, Jack of All Trades,
+  // etc.) can compute it without access to the CharacterSheet. The total
+  // level is the sum of all class levels (e.g. Fighter 7 / Wizard 3 = 10).
+  // Monsters leave this undefined (their proficiency is CR-based).
+  const totalLevel = sheet.classLevels.reduce((sum, cl) => sum + cl.level, 0);
+  if (totalLevel > 0) {
+    combatant.level = totalLevel;
+  }
+
   return combatant;
 }
 
