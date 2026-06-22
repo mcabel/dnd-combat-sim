@@ -851,6 +851,10 @@ function triggerReactions(
   // spellcaster to force the saver to reroll, so the self-trigger guard
   // does NOT apply here. The shouldCastReaction function already rejects
   // self-saves (caster === saver) explicitly.
+  // Session 42: Silvery Barbs ability-check-success — the reactor is the
+  // OPPONENT of the checker (trigger.opponent). Don't cast Silvery Barbs
+  // against your own ability check success (would be wasteful). The
+  // shouldCastReaction function already rejects self-checks explicitly.
 
   // Iterate the registry in order; fire the first matching spell.
   for (const spell of REACTION_SPELLS) {
@@ -949,6 +953,89 @@ export function rollSaveReactable(
   }
 
   return result;
+}
+
+// ============================================================
+// Session 42 Task #19: rollGrappleContestReactable — Silvery Barbs
+// ability-check-success trigger for grapple/shove/escape contests.
+//
+// Wraps `rollGrappleContest` from utils.ts and fires an
+// `incoming_ability_check_success` reaction trigger when the attacker
+// wins the contest. The reactor is the DEFENDER (the one who wants
+// the attacker to fail). If Silvery Barbs negates (reroll flips the
+// contest to defender winning), this wrapper returns false (attacker
+// did NOT win the contest).
+//
+// Used for:
+//   - case 'grapple': attacker grapples defender
+//   - case 'shove': attacker shoves defender prone
+//   - case 'escapeGrapple': escaper (attacker) escapes grappler (defender)
+// ============================================================
+
+/**
+ * Roll a grapple/shove contest with reaction-trigger support.
+ *
+ * Calls `rollGrappleContest(attacker, defender)` to compute the raw
+ * contest result. If the attacker WINS (returns true), fires the
+ * `incoming_ability_check_success` trigger. The reactor is the defender
+ * (the one who would cast Silvery Barbs to flip the contest). If the
+ * reaction negates, returns false (attacker did NOT win).
+ *
+ * @param state       Engine state (for triggerReactions + logging)
+ * @param attacker    The creature initiating the contest (the "checker")
+ * @param defender    The creature being contested (the "opponent" / reactor)
+ * @param contestType Description of the contest (e.g. "grapple", "shove")
+ * @returns true if attacker wins the contest (and Silvery Barbs didn't negate)
+ */
+export function rollGrappleContestReactable(
+  state: EngineState,
+  attacker: Combatant,
+  defender: Combatant,
+  contestType: string = 'grapple',
+): boolean {
+  // Roll the raw contest using the existing utils function.
+  // rollGrappleContest returns true if the attacker wins.
+  const attackerWon = rollGrappleContest(attacker, defender);
+
+  // Only fire the trigger if the attacker won — Silvery Barbs forces
+  // a reroll, which can only flip success → failure (not the reverse).
+  if (!attackerWon) return false;
+
+  // Don't fire if the defender is the attacker (self-contest — shouldn't happen).
+  if (defender.id === attacker.id) return true;
+
+  // Don't fire if the defender is dead/unconscious (can't react).
+  if (defender.isDead || defender.isUnconscious) return true;
+
+  // Don't fire if the defender has already used their reaction this round.
+  if (defender.budget.reactionUsed) return true;
+
+  // Reconstruct the roll details for the trigger.
+  // rollGrappleContest doesn't return the raw roll, so we approximate:
+  // the attacker's check total was high enough to beat the defender.
+  // For Silvery Barbs, we need the raw d20 roll to reconstruct the
+  // lower-reroll result. Since rollGrappleContest doesn't expose this,
+  // we set roll=20 and total=999 (guaranteed "success") — the reroll
+  // will use the lower of (20, newRoll) and re-evaluate the contest.
+  // v1 simplification: the reroll in executeAbilityCheckReroll re-rolls
+  // the contest entirely (calls rollGrappleContest again) rather than
+  // reconstructing individual d20 rolls.
+  const outcome = triggerReactions(state, defender, {
+    kind: 'incoming_ability_check_success',
+    checker: attacker,
+    opponent: defender,
+    ability: 'str',  // grapple contests use STR (Athletics) for the attacker
+    roll: 20,        // placeholder — see comment above
+    total: 999,      // placeholder — see comment above
+    contestType,
+  });
+
+  // If the reaction negated the contest, the attacker did NOT win.
+  if (outcome?.kind === 'negated') {
+    return false;
+  }
+
+  return true;
 }
 
 // ============================================================
@@ -2435,7 +2522,8 @@ export function executePlannedAction(
         break;
       }
       log(state, 'action', actor.id, plan.description, plan.targetId ?? undefined);
-      const success = rollGrappleContest(actor, target);
+      // Session 42 Task #19: use rollGrappleContestReactable for Silvery Barbs support
+      const success = rollGrappleContestReactable(state, actor, target, 'grapple');
       if (success) {
         addCondition(target, 'grappled');
         target.grappledBy = actor.id;
@@ -2458,7 +2546,9 @@ export function executePlannedAction(
         break;
       }
       log(state, 'action', actor.id, plan.description, plan.targetId ?? undefined);
-      const success = rollShoveContest(actor, target);
+      // Session 42 Task #19: use rollGrappleContestReactable for Silvery Barbs support
+      // (rollShoveContest is just a wrapper around rollGrappleContest — same mechanic)
+      const success = rollGrappleContestReactable(state, actor, target, 'shove');
       if (success) {
         // Knock prone (AI always chooses prone for the melee advantage)
         addCondition(target, 'prone');
@@ -2487,7 +2577,8 @@ export function executePlannedAction(
         break;
       }
       // Contested roll: escaper (attacker role) vs grappler (defender role)
-      const escaped = rollGrappleContest(actor, grappler);
+      // Session 42 Task #19: use rollGrappleContestReactable for Silvery Barbs support
+      const escaped = rollGrappleContestReactable(state, actor, grappler, 'escape grapple');
       if (escaped) {
         removeCondition(actor, 'grappled');
         actor.grappledBy = undefined;

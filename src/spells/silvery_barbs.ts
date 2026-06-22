@@ -29,6 +29,11 @@
 //     returns `{ kind: 'negated' }` — the engine's `rollSaveReactable`
 //     wrapper then returns success=false so the calling spell module's
 //     "save failed" branch runs.
+//   - Session 42 Task #19: added `incoming_ability_check_success` trigger
+//     handling for grapple/shove/escape contests. The ability-check path
+//     re-rolls the contest (calls rollGrappleContest again internally)
+//     and returns `{ kind: 'negated' }` if the reroll flips the contest
+//     to the defender winning.
 //   - The ability-check-success trigger is NOT implemented (would
 //     require additional trigger points in the engine).
 //   - `executeReaction` returns `{ kind: 'negated' }` when the reroll
@@ -54,7 +59,7 @@
 import { Combatant, Battlefield, ReactionTrigger, ReactionOutcome } from '../types/core';
 import { EngineState } from '../engine/combat';
 import { consumeSpellSlot } from '../ai/resources';
-import { rollDie, attackHits } from '../engine/utils';
+import { rollDie, attackHits, rollGrappleContest } from '../engine/utils';
 
 // ---- Metadata -----------------------------------------------
 
@@ -66,6 +71,7 @@ export const metadata = {
   concentration: false,
   castingTime: 'reaction',
   silveryBarbsSaveSuccessV1Implemented: true,
+  silveryBarbsAbilityCheckSuccessV1Implemented: true,
 } as const;
 
 // ---- Trigger-aware shouldCast (TG-008) ----------------------
@@ -74,12 +80,15 @@ export const metadata = {
  * Returns true if `caster` should cast Silvery Barbs in response to
  * `trigger`.
  *
- * Handles two trigger kinds:
+ * Handles three trigger kinds:
  *   - 'incoming_attack_hit': caster forces attacker to reroll the d20.
  *     Cast whenever an enemy within 60 ft hits with an attack.
  *   - 'incoming_save_success' (Session 41 Task #8): caster forces saver
  *     to reroll the d20. Cast whenever an enemy within 60 ft succeeds
  *     on a save against the caster's spell.
+ *   - 'incoming_ability_check_success' (Session 42 Task #19): opponent
+ *     forces checker to reroll. Cast whenever an enemy within 60 ft
+ *     succeeds on a grapple/shove/escape contest against the caster.
  *
  * v1 does NOT gate on whether the reroll will flip the result.
  */
@@ -88,11 +97,25 @@ export function shouldCastReaction(
   _bf: Battlefield,
   trigger: ReactionTrigger,
 ): boolean {
-  if (trigger.kind !== 'incoming_attack_hit' && trigger.kind !== 'incoming_save_success') return false;
+  if (
+    trigger.kind !== 'incoming_attack_hit' &&
+    trigger.kind !== 'incoming_save_success' &&
+    trigger.kind !== 'incoming_ability_check_success'
+  ) return false;
 
-  // The triggering creature is the attacker (for attack_hit) or the saver
-  // (for save_success). Silvery Barbs forces THAT creature to reroll.
-  const triggerCreature = trigger.kind === 'incoming_attack_hit' ? trigger.attacker : trigger.saver;
+  // The triggering creature is:
+  //   - attacker (for attack_hit)
+  //   - saver (for save_success)
+  //   - checker (for ability_check_success)
+  // Silvery Barbs forces THAT creature to reroll.
+  let triggerCreature: Combatant;
+  if (trigger.kind === 'incoming_attack_hit') {
+    triggerCreature = trigger.attacker;
+  } else if (trigger.kind === 'incoming_save_success') {
+    triggerCreature = trigger.saver;
+  } else {
+    triggerCreature = trigger.checker;
+  }
 
   // Only cast against enemies (PHB: "a creature you can see" — but
   // tactically you'd only cast against enemies).
@@ -105,11 +128,6 @@ export function shouldCastReaction(
   if (distFt > 60) return false;
   // Don't cast if the triggering creature is already dead (shouldn't happen mid-trigger).
   if (triggerCreature.isDead || triggerCreature.isUnconscious) return false;
-  // Don't cast against a natural 20 crit — the reroll will use the lower
-  // of the two rolls, but crits are determined by the nat-20. Actually,
-  // per Sage Advice, Silvery Barbs forces a reroll of the d20, and the
-  // lower result is used. A nat 20 rerolled to a 5 would mean the 5 is
-  // used (no crit). So Silvery Barbs CAN negate a crit. v1 allows it.
   return true;
 }
 
@@ -141,6 +159,9 @@ export function executeReaction(
   }
   if (trigger.kind === 'incoming_save_success') {
     return executeSaveSuccessReroll(caster, state, trigger);
+  }
+  if (trigger.kind === 'incoming_ability_check_success') {
+    return executeAbilityCheckSuccessReroll(caster, state, trigger);
   }
   return { kind: 'no_effect' };
 }
@@ -221,6 +242,54 @@ function executeSaveSuccessReroll(
     return { kind: 'negated', detail: `Silvery Barbs reroll (${newRoll}) flipped save success to failure` };
   }
   return { kind: 'failed', detail: `Silvery Barbs reroll (${newRoll}) did not flip the save` };
+}
+
+/**
+ * Handle the 'incoming_ability_check_success' trigger (Session 42 Task #19):
+ * re-roll the grapple/shove/escape contest. Since `rollGrappleContest`
+ * doesn't expose the raw d20 rolls, we re-roll the entire contest and
+ * check if the defender now wins.
+ *
+ * v1 simplification: instead of reconstructing the original d20 + mods
+ * (which `rollGrappleContest` doesn't expose), we re-roll the contest
+ * by calling `rollGrappleContest` again. If the reroll flips the contest
+ * (defender now wins), returns `{ kind: 'negated' }` — the engine's
+ * `rollGrappleContestReactable` wrapper then returns false (attacker
+ * did NOT win).
+ *
+ * PHB/SCC: "The triggering creature must reroll the d20 and use the
+ * lower roll." v1 approximates this by re-rolling the entire contest.
+ */
+function executeAbilityCheckSuccessReroll(
+  caster: Combatant,
+  state: EngineState,
+  trigger: Extract<ReactionTrigger, { kind: 'incoming_ability_check_success' }>,
+): ReactionOutcome {
+  consumeSpellSlot(caster, 1);
+  caster.budget.reactionUsed = true;
+
+  // v1 simplification: re-roll the contest by calling rollGrappleContest
+  // again. The original contest was attacker vs defender (checker vs
+  // opponent). The reroll uses the same participants.
+  // rollGrappleContest is imported at the top of this file from ../engine/utils.
+
+  // Re-roll the contest: if the checker (attacker) wins again, the
+  // reroll didn't flip it. If the opponent (defender) wins, the reroll
+  // flipped the contest → negated.
+  const checkerWonReroll = rollGrappleContest(trigger.checker, trigger.opponent);
+
+  state.log.events.push({
+    round: state.battlefield.round ?? 0,
+    actorId: caster.id,
+    type: 'action',
+    targetId: trigger.checker.id,
+    description: `${caster.name} casts Silvery Barbs — ${trigger.checker.name} rerolls the ${trigger.contestType} contest vs ${trigger.opponent.name}. Contest ${checkerWonReroll ? 'still succeeds' : 'now FAILS'}!`,
+  });
+
+  if (!checkerWonReroll) {
+    return { kind: 'negated', detail: `Silvery Barbs reroll flipped ${trigger.contestType} contest to defender winning` };
+  }
+  return { kind: 'failed', detail: `Silvery Barbs reroll did not flip the ${trigger.contestType} contest` };
 }
 
 // ---- cleanup ------------------------------------------------

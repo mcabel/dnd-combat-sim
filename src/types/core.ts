@@ -1950,6 +1950,34 @@ export type ReactionTrigger =
       roll: number;
       /** The total save result (d20 + mods). */
       total: number;
+    }
+  // ── Session 42 — Silvery Barbs ability-check-success trigger ──
+  // SCC p.38: Silvery Barbs can be cast "when a creature you can see
+  // within 60 feet of you succeeds on a saving throw OR an ability check."
+  // The reactor is the OPPONENT of the checker (the one who wants the
+  // check to fail). If Silvery Barbs negates, the reroll's lower result
+  // flips the contest outcome.
+  //
+  // v1 scope: grapple/shove/escape-grapple contests. The "checker" is the
+  // attacker (the one making the ability check); the "opponent" is the
+  // defender (the one who would cast Silvery Barbs to flip the contest).
+  // Future: extend to Counterspell and Dispel Magic ability checks.
+  | {
+      kind: 'incoming_ability_check_success';
+      /** The creature that made the ability check (the "checker"). */
+      checker: Combatant;
+      /** The opponent of the checker (the one who would cast Silvery Barbs
+       *  to flip the contest). For grapple: the defender. For escape
+       *  grapple: the grappler. */
+      opponent: Combatant;
+      /** The ability used for the check (str/dex/con/int/wis/cha). */
+      ability: 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha';
+      /** The raw d20 roll (1-20) of the check. */
+      roll: number;
+      /** The total check result (d20 + mods). */
+      total: number;
+      /** Description of the contest (e.g. "grapple", "shove", "escape grapple"). */
+      contestType: string;
     };
 
 /**
