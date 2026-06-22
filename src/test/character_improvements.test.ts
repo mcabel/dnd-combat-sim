@@ -547,6 +547,31 @@ console.log('\n=== applyFeat: Pure Function Guarantee ===');
 }
 
 // ============================================================
+// GROUP 28: spell-granting feats — registry flags and featSpellChoices schema
+// ============================================================
+console.log('\n=== applyFeat: Spell-Granting Feat Flags ===');
+{
+  // Exactly three PHB feats grant spells
+  const spellGranters = FEAT_NAMES.filter(n => getFeat(n)?.grantsSpells);
+  eq('exactly 3 PHB feats grant spells', spellGranters.length, 3);
+  assert('Magic Initiate is one', spellGranters.includes('Magic Initiate'));
+  assert('Ritual Caster is one', spellGranters.includes('Ritual Caster'));
+  assert('Spell Sniper is one',  spellGranters.includes('Spell Sniper'));
+
+  // Non-spell feats are not flagged
+  assert('Keen Mind does not grant spells', !getFeat('Keen Mind')?.grantsSpells);
+  assert('Tough does not grant spells',     !getFeat('Tough')?.grantsSpells);
+
+  // featSpellChoices is optional on a sheet that doesn't need it
+  const plain = makeFighterWithASI();
+  assert('featSpellChoices absent on plain sheet', plain.featSpellChoices === undefined);
+
+  // After applying a non-spell feat, featSpellChoices is still absent
+  const result = applyFeat(plain, 'Keen Mind');
+  assert('featSpellChoices still absent after non-spell feat', result.featSpellChoices === undefined);
+}
+
+// ============================================================
 // Results
 // ============================================================
 console.log(`\nResults: ${passed} passed, ${failed} failed`);

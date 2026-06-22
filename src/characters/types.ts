@@ -417,6 +417,14 @@ export interface CharacterSheet {
   level1Features: CharacterFeature[];   // Features from race + class at level 1
   allFeatures: CharacterFeature[];      // All features across all levels (grows as you level up)
   feats: string[];                      // Feat names (resolved from registry at runtime)
+  /**
+   * Spell choices for feats that grant spells (Magic Initiate, Ritual Caster,
+   * Spell Sniper). Keyed by feat name; value is an array of chosen spell names.
+   * These are feat-granted spells, not class spell-slot spells — they are
+   * stored separately and do not consume class slots per their respective feat
+   * descriptions. Absent key = player hasn't made the choice yet.
+   */
+  featSpellChoices?: Record<string, string[]>;
   backgroundFeature: string;            // Background feature description
 
   // Status
