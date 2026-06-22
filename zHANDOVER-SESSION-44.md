@@ -8,7 +8,7 @@
 
 ## Session Summary
 
-Session 44 closed the remaining 5 items from Session 43's priority list. The Bard class now gets Extra Attack at Bard 6 for the College of Valor and College of Swords subclasses (PHB p.55, XGE p.15). The planner documents the SAC v2.7 ruling that Thirsting Blade and Extra Attack do not stack (with the known v1 simplification noted for Warlock 5/Fighter 11). All three multi-creature Conjure spells (Animals, Woodland Beings, Minor Elementals) now support the 2/4/8-creature options at base/higher slot levels, capped at 8 creatures per cast for v1.5 battlefield-bloat control. Action Surge now evaluates multiple surge options (heal-self when low on HP, default extra Attack otherwise) via the new `planExtraAction()` helper. The Couatl (from Conjure Celestial) now casts Shield as a reaction using innate-spell uses (3/day), with Lesser Restoration and Protection from Poison tracked for future condition-based casting.
+Session 44 closed 5 more items from Session 43's priority list. Bard College of Valor/Swords now grants Extra Attack at Bard 6 (via a new SUBCLASS_FEATURES table in the leveler). Thirsting Blade + Extra Attack non-stacking is now documented (SAC v2.7 ruling + known v1 simplification). All 3 multi-target Conjure spells (Animals, Woodland Beings, Minor Elementals) now support the "8 creatures at CR 1/4" PHB option when the bestiary is loaded, capped at 8 per cast. Action Surge now evaluates a heal-self option (surge to cast Cure Wounds when HP < 50%) before falling back to the default extra Attack. The Couatl summon can now cast Shield as a reaction via innate spellcasting (3/day), enabled by extending triggerReactions to accept innate spell uses as an alternative to spell slots.
 
 | Component | Status | Lines |
 |-----------|--------|-------|
@@ -40,116 +40,92 @@ Session 44 closed the remaining 5 items from Session 43's priority list. The Bar
 
 ## Architecture
 
-### Task #29: Bard Extra Attack (Valor / Swords)
+### Task #29: Bard Extra Attack (Valor/Swords)
 
-**Problem:** Session 43 Task #24 added Extra Attack for all martial base classes (Fighter, Barbarian, Paladin, Ranger, Monk) at level 5+. Bard 6 (College of Valor or College of Swords) also gets Extra Attack, but this is a *subclass* feature (PHB p.55 "Extra Attack" for College of Valor, XGE p.15 for College of Swords), not a base-class feature. The leveler had no concept of subclass-specific feature grants — `LEVEL_FEATURES` was indexed only by class name. The planner's `hasFeature(self, 'Extra Attack')` check would have worked IF the feature were granted, but it wasn't for Bard subclasses.
-
-**Solution:**
-1. Added a new `SUBCLASS_FEATURES` table to `src/characters/leveler.ts`, indexed by `classSubclass` key (e.g. `"bard.college-of-valor"`, `"bard.college-of-swords"`). Each entry is a map of `level → featureName[]`. Bard Valor/Swords both gain `Extra Attack` at level 6.
-2. Added `resolveSubclassFeatures(className, subclass, level)` that:
-   - Normalises subclass aliases (`"Valor"` → `"College of Valor"`, `"Swords"` → `"College of Swords"`) using an alias map.
-   - Lowercases + concatenates `class.subclass-key` for lookup.
-   - Returns the list of feature names that should be granted at any level ≤ `level`.
-3. Exported `getSubclassFeaturesForLevels(className, subclass, fromLevel, toLevel)` so `chooseSubclass` can retroactively grant features for already-attained levels (handles late subclass pick at Bard 7+).
-4. `applyLevelUp` now consults `SUBCLASS_FEATURES` (in addition to `LEVEL_FEATURES`) when the subclass is already set, so the Bard gets `Extra Attack` added to `allFeatures` on the level-up that hits Bard 6.
-5. `chooseSubclass` in `src/characters/improvements.ts` calls `getSubclassFeaturesForLevels` for all levels the character has already attained in the class, and appends any missing features to `allFeatures`. This means picking Valor subclass at Bard 7 (after the level that should have granted Extra Attack) still works correctly.
-6. The planner's existing `hasFeature(self, 'Extra Attack')` check (added in Session 43) now matches the Bard subclass feature because `classFeatures` is populated from `allFeatures` (filtered to source `class` OR `subclass`).
-
-**End-to-end test result:** Bard 6 (Valor) deals 2.17× damage vs Bard 6 (Lore) when both are forced into melee with a goblin — Extra Attack is working end-to-end. College of Lore Bard 6 correctly gets NO Extra Attack (no feature in `allFeatures`, planner sets no `attackCount`).
-
-### Task #30: Thirsting Blade + Extra Attack Non-Stacking (Documentation)
-
-**Problem:** A Warlock 5 / Fighter 5 multiclass has BOTH `Thirsting Blade` (Warlock invocation, melee attackCount = 2) and `Extra Attack` (Fighter class feature, any-attack attackCount = 2). RAW (SAC v2.7), these do NOT stack — both set the same "attack twice" property, so only the higher applies, and the character makes 2 attacks (not 3). The current planner behaviour is correct (Thirsting Blade is checked first and sets `attackCount = 2`, then the Extra Attack check skips because `attackCount` is already set), but this is incidental rather than documented, and it has a known v1 simplification: a Warlock 5 / Fighter 11 multiclass SHOULD get 3 attacks (Extra Attack (2) supersedes Thirsting Blade per SAC v2.7) but v1 gives only 2 (Thirsting Blade wins because it's checked first).
+**Problem:** Bard College of Valor (PHB p.55) and College of Swords (XGE p.15) grant Extra Attack at Bard 6, but the leveler only modelled base-class features. `chooseSubclass()` picked a subclass name without granting any subclass features, so `hasFeature(self, 'Extra Attack')` in the planner never matched for Bard subclasses.
 
 **Solution:**
-1. Expanded the existing planner comment in `src/ai/planner.ts` (Session 43 Task #24 block) to explain:
-   - SAC v2.7 ruling: Thirsting Blade and Extra Attack do NOT stack.
-   - Both set the same "attack twice" property — only the higher of the two applies.
-   - Known v1 simplification: Warlock 5 / Fighter 11 gets 2 attacks (Thirsting Blade wins) instead of RAW 3 (Extra Attack (2) should supersede).
-   - Future improvement: replace the order-dependent guards with a single `maxAttackCount()` helper that returns the highest applicable attackCount from any source (Thirsting Blade = 2, Extra Attack = 2, Extra Attack (2) = 3, Extra Attack (3) = 4).
-2. Added a cross-reference in the Action Surge `extraAction` planning block (Session 43 Task #23) so future readers see the same note when they encounter the surge-attack re-application of `attackCount`.
-3. No behaviour change, no new tests required (pure documentation).
+1. Added a `SUBCLASS_FEATURES` table in `leveler.ts`, keyed by `[className][subclassName][level]` → array of feature names. Initial entries: `Bard['College of Valor'][6] = ['Extra Attack']` and `Bard['College of Swords'][6] = ['Extra Attack']`.
+2. `resolveSubclassFeatures(className, subclassName, fromLevel, toLevel)` returns the union of features granted in the level range, with alias normalisation: bare "Valor"/"Swords" → "College of Valor"/"College of Swords".
+3. Exported `getSubclassFeaturesForLevels()` as the public helper used by both `applyLevelUp` (when subclass is already chosen) and `chooseSubclass` (for retroactive grants).
+4. `applyLevelUp` now appends subclass features to `classFeatures` when crossing a threshold level.
+5. `chooseSubclass` in `improvements.ts` retroactively grants features for levels the character has already attained — handles the late-subclass-pick case (e.g. a Bard who hit level 7 before picking Valor at level 3).
 
-### Task #28: Multi-Creature Conjure Spell Options
+**End-to-end test result:** Bard 6 Valor deals 2.17× damage vs Bard 6 Lore (Extra Attack working end-to-end through the planner and engine).
 
-**Problem:** Session 43 Task #21 wired bestiary-driven single-creature pickers to all 5 Conjure spells, but only modelled the "1 creature at max CR" option from the PHB table. The 2/4/8-creature options (e.g. 8 Wolves at CR 1/4 for L3 Conjure Animals, 8 Sprites at CR 1/4 for L3 Conjure Woodland Beings, 8 Mud Mephits at CR 1/4 for L3 Conjure Minor Elementals) were not modelled — they're tactically very different (battlefield control via body count) and a v1.5 priority.
+### Task #30: Document Thirsting Blade + Extra Attack non-stacking
 
-**Solution:**
-1. Added `MAX_SUMMONS_PER_CAST = 8` constant in `src/summons/summon_picker.ts`. The PHB "At Higher Levels" wording allows up to 16 (L5) or 24 (L7) creatures, but we cap at 8 to avoid battlefield bloat and turn-resolution slowdown. This is a v1.5 simplification — raising the cap is a future-extension item.
-2. Added `conjureSlotMultiplier(slotLevel) → 1 | 2 | 3` per the PHB "At Higher Levels" wording: when cast at one level higher than minimum, the creature count doubles; two levels higher, it triples.
-3. Added `pickSummonPack(maxCR, creatureType, count) → SummonPick[]` — a generic helper that returns `count` identical `SummonPick` objects (all the same creature species, suitable for the "pack" wording in the PHB table). Returns `[]` if no matching creature is found.
-4. Added 3 multi-creature pickers, one per Conjure spell:
-   - `pickConjureAnimalsSummonMulti(slotLevel)` — 8 beasts at CR 1/4 (L3 base), scaling to 16/24 (capped to 8) at L5/L7.
-   - `pickConjureWoodlandBeingsSummonMulti(slotLevel)` — 8 fey at CR 1/4 (L3 base).
-   - `pickConjureMinorElementalsSummonMulti(slotLevel)` — 8 elementals at CR 1/4 (L4 base; L6 → 16, L8 → 24, both capped to 8).
-5. Wired each Conjure spell's `execute()` function to prefer the multi-picker → single-picker → v1 hardcoded fallback:
-   - `conjure_animals.execute` → `pickConjureAnimalsSummonMulti` → `pickConjureAnimalsSummon` → 2 Wolves fallback.
-   - `conjure_woodland_beings.execute` → `pickConjureWoodlandBeingsSummonMulti` → `pickConjureWoodlandBeingsSummon` → 4 Sprites fallback.
-   - `conjure_minor_elementals.execute` → `pickConjureMinorElementalsSummonMulti` → `pickConjureMinorElementalsSummon` → 4 Mud Mephits fallback.
-6. Spawned creatures are placed in 8 pre-defined hex offsets around the caster (or fewer, if the pack is smaller than 8). Each summoned creature gets a `#1`, `#2`, ... `#N` suffix on its name to distinguish them on the battlefield and in the log.
+**Problem:** A Warlock 5 / Fighter 5 multiclass has both Thirsting Blade (sets `attackCount = 2`) and Extra Attack (also sets `attackCount = 2`). The planner's order-dependent check means whichever fires first wins; in current code Thirsting Blade runs first, so the Extra Attack branch skips. RAW they don't stack (SAC v2.7), so the result is correct — but the rationale was undocumented and a future reader could mistakenly think this is a bug.
 
-**End-to-end test result:** Casting L3 Conjure Animals with a populated bestiary spawns 8 Wolves (CR 1/4), each at a unique offset around the caster, each with a distinct name suffix, each inserted into the initiative order at the caster's roll -1. Casting L5 Conjure Animals still spawns 8 (capped from 16). Casting with an empty bestiary falls through to the v1 hardcoded 2-Wolves fallback. All 55 multi-picker assertions pass.
+**Solution:** Pure documentation. Expanded the existing Session 43 Task #24 planner comment block to explain:
+- SAC v2.7 ruling: Thirsting Blade and Extra Attack both set the same "attack twice" property; they do NOT add together.
+- Known v1 simplification: a Warlock 5 / Fighter 11 gets 2 attacks (Thirsting Blade wins) instead of RAW 3 (Extra Attack (2) should supersede), because the Thirsting Blade check runs first and sets `attackCount = 2`, then the Extra Attack (2) branch sees `attackCount` already set and skips.
+- Future improvement: replace the order-dependent guards with a single `maxAttackCount()` helper that returns the highest applicable `attackCount` from any source (Thirsting Blade = 2, Extra Attack = 2, Extra Attack (2) = 3, Extra Attack (3) = 4).
 
-### Task #27: Smarter Action Surge Tactics (Heal-Self)
+### Task #28: Multi-creature Conjure spell options
 
-**Problem:** Session 43 Task #23 implemented Action Surge as "always surge for an extra Attack on the same target." This is suboptimal in many situations — e.g. a low-HP Fighter with a multiclass dip in Cleric would rather surge to cast `Cure Wounds` on self than make one more attack that might miss and leave them dead next turn. The original v1 implementation had no mechanism to evaluate alternative surge options.
+**Problem:** Session 43 Task #21 wired bestiary pickers to all 5 Conjure spells but only modelled the "1 creature at max CR" option from the PHB table. The 2/4/8-creature options (e.g. 8 Wolves at CR 1/4 for L3 Conjure Animals) were explicitly out of v1 scope.
 
 **Solution:**
-1. Added `planExtraAction(self, plan, target, battlefield) → PlannedAction | null` helper function in `src/ai/planner.ts`. This is the central place where Action Surge tactics live — adding a new surge option means adding a new branch to this function.
-2. Surge options evaluated in priority order (first match wins):
-   - **Option 1 — HEAL-SELF SURGE:** `self.currentHP < 50% of maxHP` AND `self.actions` contains `'Cure Wounds'` AND `hasSpellSlot(self, 1)` is true → return a `Cure Wounds` surge action targeting `self`. This covers the Fighter/Cleric multiclass case where the Fighter is bloodied and has healing available.
-   - **Option 2 — DEFAULT EXTRA ATTACK:** `plan.action.type === 'attack'` AND `target` is alive → clone the main Attack action (original v1 behaviour, preserved for backward compat and the common case).
-3. Refactored the inline surge logic in `planTurn` to call `planExtraAction()` instead of inlining the attack-clone. The result is set on `plan.extraAction`.
-4. The heal-self check runs AFTER `planBonusAction` (which may trigger `Second Wind` and heal the fighter above 50%, correctly suppressing the surge-to-heal — this is the desired RAW-consistent behaviour since Second Wind is a bonus action and would naturally be used first if available).
-5. Documented future extension points in the planner comment:
-   - Surge to `Dash` when no enemy is in melee reach (close distance).
-   - Surge to cast a defensive spell (`Shield of Faith`, `Barkskin`).
-   - Surge to `Disengage` when surrounded and need to retreat.
-   - Surge to cast a different spell when the main action was an Attack (full-caster flexibility).
+1. Added `MAX_SUMMONS_PER_CAST = 8` constant — a v1.5 simplification. PHB allows up to 16 (L5) and 24 (L7) creatures per cast, but capping at 8 avoids battlefield bloat and keeps the engine tractable.
+2. Added `conjureSlotMultiplier(slotLevel)` returning the PHB "At Higher Levels" multiplier: L3-4 → 1×, L5-6 → 2×, L7-9 → 3×.
+3. Added `pickSummonPack(maxCR, creatureType, count)` — returns `count` identical `SummonPick` objects (all the same creature species). Used for the "N identical creatures" option.
+4. Added 3 multi-creature pickers:
+   - `pickConjureAnimalsSummonMulti(slotLevel)` — 8 beasts at CR 1/4
+   - `pickConjureWoodlandBeingsSummonMulti(slotLevel)` — 8 fey at CR 1/4
+   - `pickConjureMinorElementalsSummonMulti(slotLevel)` — 8 elementals at CR 1/4
+5. Updated the 3 Conjure spell execute functions to prefer the multi-picker → single-picker → v1 hardcoded fallback. Spawned creatures are placed in 8 offsets around the caster and named with a `#1..#N` suffix.
 
-**End-to-end test result:** Fighter 2 / Cleric 1 at 5/20 HP with a L1 spell slot available surges to cast Cure Wounds on self (heals ~5 HP), not to make an extra attack. The same character at 20/20 HP surges to make an extra attack (default behaviour). A pure Fighter 2 at 5/20 HP without `Cure Wounds` in their action list surges to attack (Option 1 doesn't match, falls through to Option 2). The 49%/50% HP boundary is correctly handled (50% HP = NOT below threshold, so no heal-self surge). All 26 surge-tactics assertions pass.
+**End-to-end test result:** L3 Conjure Animals with a populated bestiary spawns exactly 8 Wolves; L5 Conjure Animals would spawn 16 Wolves but is capped at 8. The single-picker fallback path still works when the bestiary is empty.
+
+### Task #27: Smarter Action Surge tactics (heal-self)
+
+**Problem:** Session 43 Task #23 added Action Surge support but the v1 surge logic always cloned the main Attack action. A low-HP Fighter would surge to attack instead of surging to heal — tactically suboptimal.
+
+**Solution:**
+1. Added `planExtraAction(self, plan, target, battlefield)` helper in `planner.ts`. Evaluates surge options in priority order (first match wins):
+   - **Option 1 (heal-self):** `self.currentHP < 50% of maxHP` AND `self.actions` has `'Cure Wounds'` AND `hasSpellSlot(self, 1)` → return a Cure Wounds surge action targeting self.
+   - **Option 2 (default extra Attack):** `plan.action.type === 'attack'` AND target alive → clone the main Attack action (original v1 behaviour).
+2. Refactored the inline surge logic in `planTurn` to call `planExtraAction()`.
+3. Important ordering: the heal-self check runs AFTER `planBonusAction`, so if Second Wind already healed the fighter above 50% during the bonus-action phase, the surge-to-heal correctly does NOT fire. This is the intended RAW-correct behaviour.
+4. Documented future extension points: surge to Dash when no enemy in reach, surge to cast a defensive spell (Shield of Faith), surge to Disengage when surrounded, surge for a different spell when the main action was Attack.
+
+**End-to-end test result:** A Fighter/Cleric 5 at 49% HP with a Cure Wounds action and a L1 slot surges to cast Cure Wounds on self (HP rises above 50%); a healthy Fighter still surges for an extra Attack.
 
 ### Task #20: Couatl Shield via reaction_registry
 
-**Problem:** Session 41 Task #2 added the Couatl as a Conjure Celestial summon, but only modelled its melee attack and its `Bless` spell. The Couatl (MM p.43) also has innate spellcasting with 3/day `Shield`, `Lesser Restoration`, and `Protection from Poison`. `Shield` is a reaction (cast when hit by an attack, +5 AC for the rest of the turn) — this requires integration with the `reaction_registry` (added in Session 42 Task #19) that previously only worked for spell-slot-consuming reactions. The Couatl has no spell slots, only innate uses.
+**Problem:** Session 41 Task #2 added the Couatl summon with innate spellcasting tracked, but only 1 of its 3 innate spells (Shield) was missing an Action object — and even Shield couldn't actually fire because `triggerReactions` checked for spell slots, not innate uses. The Couatl had `innateSpellcasting.Shield = { max: 3, remaining: 3 }` but the reaction pipeline ignored it.
 
 **Solution:**
-1. Added `Shield` as an `Action` on the Couatl in `src/spells/conjure_celestial.ts`:
-   - `costType: 'reaction'` (so the engine treats it as a reaction, not a regular action).
-   - `innate: true` flag (so the engine knows this is an innate spell, not a slot-based one).
-   - Description documents the +5 AC self-buff for 1 round.
-2. Added `'Shield'`, `'Lesser Restoration'`, and `'Protection from Poison'` to the Couatl's `resources.innateSpellcasting` map (3/day each per MM p.43). The innateSpellcasting map shape is `{ name: { max, remaining } }`.
-3. `Lesser Restoration` and `Protection from Poison` are tracked on the resources map but have NO `Action` object yet — they require condition tracking (blinded/deafened/paralyzed/poisoned for Lesser Restoration; poisoned for Protection from Poison) which is out of v1 scope per the Session 41 handover. This is a documented follow-up item.
-4. Updated `triggerReactions` in `src/engine/combat.ts` to accept innate spell uses as an alternative to spell slots. The previous guard was `if (!hasSpellSlot(reactor, spell.level)) continue;` — this is now `if (!hasSpellSlot(reactor, spell.level) && !hasInnateSpellUse(reactor, spell.name)) continue;`. Imported `hasInnateSpellUse` from `summons/innate_spellcasting.ts` (or wherever the helper lives — the import is correct per the build).
-5. Updated `src/spells/shield.ts` `executeReaction` to consume the innate use when no spell slot is available. The previous code was `consumeSpellSlot(caster, 1)` — this is now `if (consumeSpellSlot(caster, 1) === null) { consumeInnateSpellUse(caster, 'Shield'); }`. This mirrors the `cure_wounds.ts` pattern (which already supported both slots and innate uses for healing via the Couatl's Restoration spells). Imported `consumeInnateSpellUse` in `shield.ts`.
-6. Updated `src/test/conjure_celestial.test.ts` assertion: the Couatl's actions count was 5, now 6 (the new `Shield` action was added).
+1. Added a Shield `Action` object to the Couatl in `conjure_celestial.ts`: `costType: 'reaction'`, `slotLevel: 0` (innate), self-buff granting +5 AC until start of next turn. Tracks the 3/day limit via the existing `innateSpellcasting` resource.
+2. Added `'Shield'`, `'Lesser Restoration'`, and `'Protection from Poison'` to the Couatl's `resources.innateSpellcasting` (3/day each per MM p.43). Lesser Restoration and Protection from Poison are tracked but have NO Action object — they need condition tracking for blinded/deafened/paralyzed/poisoned, which is out of v1 scope.
+3. Updated `triggerReactions` in `combat.ts` to accept innate spell uses as an alternative to spell slots. New gate: `!hasSpellSlot(reactor, spell.level) && !hasInnateSpellUse(reactor, spell.name) → continue`. Imported `hasInnateSpellUse`.
+4. Updated `shield.ts` `executeReaction` to consume the innate use when no spell slot is available — mirrors the `cure_wounds.ts` pattern: `if (consumeSpellSlot(caster, 1) === null) { consumeInnateSpellUse(caster, 'Shield'); }`. Imported `consumeInnateSpellUse`.
 
-**End-to-end test result:** Couatl summoned via Conjure Celestial at L9 has a `Shield` action with `costType: 'reaction'` and `innate: true`. When an enemy attacks the Couatl and hits, `triggerReactions` fires the Shield reaction (because `hasInnateSpellUse(couatl, 'Shield')` returns true). The reaction's `executeReaction` consumes one innate use (3 → 2 → 1 → 0). The Couatl's AC is boosted by +5 for the rest of the turn. The attack outcome is logged as `'negated'` (since the +5 AC pushed the total above the attack roll). When all 3 innate uses are depleted, `hasInnateSpellUse` returns false and the reaction is correctly suppressed. All 33 Couatl-Shield assertions pass.
+**End-to-end test result:** A Couatl hit by an attack with an unused reaction and Shield uses remaining casts Shield (AC +5), the attack is negated, and the use counter decrements 3 → 2 → 1 → 0. After all 3 uses are spent, the Couatl no longer casts Shield.
 
 ---
 
 ## Files Changed
 
-### New files (3)
+### New files (4)
 - `src/test/bard_extra_attack.test.ts` — 23 assertions across 16 sections
 - `src/test/conjure_multi.test.ts` — 55 assertions across 20 sections
 - `src/test/action_surge_heal.test.ts` — 26 assertions across 15 sections
 - `src/test/couatl_shield_reaction.test.ts` — 33 assertions across 15 sections
 
-### Modified files (8)
-- `src/characters/leveler.ts` — `SUBCLASS_FEATURES` table, `resolveSubclassFeatures()`, `getSubclassFeaturesForLevels()` exported, `applyLevelUp` consults subclass features
-- `src/characters/improvements.ts` — `chooseSubclass` retroactively grants subclass features for already-attained levels
-- `src/ai/planner.ts` — Thirsting Blade + Extra Attack non-stacking documentation (Task #30), `planExtraAction()` helper for Action Surge tactics (Task #27)
-- `src/summons/summon_picker.ts` — `MAX_SUMMONS_PER_CAST`, `conjureSlotMultiplier()`, `pickSummonPack()`, 3 multi-creature pickers (Task #28)
-- `src/spells/conjure_animals.ts` — wire `pickConjureAnimalsSummonMulti` → single-picker → v1 fallback
-- `src/spells/conjure_woodland_beings.ts` — wire `pickConjureWoodlandBeingsSummonMulti` → single-picker → v1 fallback
-- `src/spells/conjure_minor_elementals.ts` — wire `pickConjureMinorElementalsSummonMulti` → single-picker → v1 fallback
-- `src/spells/conjure_celestial.ts` — Couatl `Shield` action + `Lesser Restoration` / `Protection from Poison` innate tracking (Task #20)
-- `src/engine/combat.ts` — `triggerReactions` accepts innate spell uses as alternative to slots; imported `hasInnateSpellUse`
-- `src/spells/shield.ts` — `executeReaction` consumes innate use as fallback; imported `consumeInnateSpellUse`
-
-### Modified test files (1)
-- `src/test/conjure_celestial.test.ts` — updated Couatl actions count 5 → 6 for new `Shield` action
+### Modified files (11)
+- `src/characters/leveler.ts` — SUBCLASS_FEATURES table, resolveSubclassFeatures(), getSubclassFeaturesForLevels(), applyLevelUp consults subclass features
+- `src/characters/improvements.ts` — chooseSubclass retroactively grants subclass features
+- `src/ai/planner.ts` — Task #30 expanded comment, planExtraAction() helper for Task #27
+- `src/summons/summon_picker.ts` — MAX_SUMMONS_PER_CAST, conjureSlotMultiplier(), pickSummonPack(), 3 multi-pickers
+- `src/spells/conjure_animals.ts` — wire pickConjureAnimalsSummonMulti
+- `src/spells/conjure_woodland_beings.ts` — wire pickConjureWoodlandBeingsSummonMulti
+- `src/spells/conjure_minor_elementals.ts` — wire pickConjureMinorElementalsSummonMulti
+- `src/spells/conjure_celestial.ts` — Shield Action + innate tracking for Couatl
+- `src/engine/combat.ts` — triggerReactions accepts innate spell uses; imported hasInnateSpellUse
+- `src/spells/shield.ts` — executeReaction consumes innate use as fallback; imported consumeInnateSpellUse
+- `src/test/conjure_celestial.test.ts` — updated action count (5→6) for new Shield action
 
 ---
 
@@ -158,31 +134,40 @@ Session 44 closed the remaining 5 items from Session 43's priority list. The Bar
 | Check | Status |
 |-------|--------|
 | `tsc --noEmit` | ✅ 0 errors |
-| `bard_extra_attack.test.ts` (23 assertions, 16 sections) | ✅ All pass |
-| `conjure_multi.test.ts` (55 assertions, 20 sections) | ✅ All pass |
-| `action_surge_heal.test.ts` (26 assertions, 15 sections) | ✅ All pass |
-| `couatl_shield_reaction.test.ts` (33 assertions, 15 sections) | ✅ All pass |
-| `conjure_celestial.test.ts` (159+2 assertions) | ✅ All pass (updated) |
-| `action_surge.test.ts` (28 assertions, Session 43) | ✅ All pass (no regression) |
-| `extra_attack.test.ts` (36 assertions, Session 43) | ✅ All pass (no regression) |
-| `thirsting_blade.test.ts` (24 assertions, Session 43) | ✅ All pass (no regression) |
-| All 9 conjure-related test files | ✅ All pass (no regressions) |
-| All 21 reaction + Couatl + conjure + combat regression tests | ✅ All pass (no regressions) |
-| Baseline tests (combat, mechanics, character_*, ai, integration, parser, pc, engine, resources, scenario, reaction_registry, shield_reaction, concentration_enforcement, protection_from_energy, cantrip_pipeline, more_eldritch_invocations, eldritch_invocations, eldritch_invocations_integration, bestiary_integration, summons) | ✅ All pass — no regressions |
+| `couatl_innate_spellcasting.test.ts` | ✅ All pass |
+| `couatl_shield_reaction.test.ts` (33 assertions) | ✅ All pass |
+| `shield_reaction.test.ts` | ✅ All pass |
+| `reaction_registry.test.ts` | ✅ All pass |
+| `shield_simple.test.ts` | ✅ All pass |
+| `conjure_celestial.test.ts` | ✅ All pass |
+| `bestiary_integration.test.ts` | ✅ All pass |
+| `silvery_barbs.test.ts` | ✅ All pass |
+| `silvery_barbs_ability_check.test.ts` | ✅ All pass |
+| `silvery_barbs_save_success.test.ts` | ✅ All pass |
+| `silvery_barbs_counterspell_dispel.test.ts` | ✅ All pass |
+| `counterspell.test.ts` | ✅ All pass |
+| `absorb_elements.test.ts` | ✅ All pass |
+| `combat.test.ts` | ✅ All pass |
+| `engine.test.ts` | ✅ All pass |
+| `action_surge.test.ts` | ✅ All pass |
+| `action_surge_heal.test.ts` (26 assertions) | ✅ All pass |
+| `bard_extra_attack.test.ts` (23 assertions) | ✅ All pass |
+| `conjure_multi.test.ts` (55 assertions) | ✅ All pass |
+| `extra_attack.test.ts` | ✅ All pass |
+| `thirsting_blade.test.ts` | ✅ All pass |
+| Baseline tests (ai, integration, mechanics, parser, pc, resources, scenario, character_improvements, character_leveler, character_builder, character_storage, cantrip_pipeline, cantrip_planner, concentration_enforcement, protection_from_energy, dispel_magic, conjure_animals, conjure_elemental, conjure_fey, conjure_minor_elementals, conjure_woodland_beings, summons) | ✅ All pass — no regressions |
 
 ---
 
 ## CI Status
 
-- **Task #29 commit (dff87f2):** Test Suite `success` ✅
-- **Task #30 commit (ac64d58):** Test Suite `success` ✅
-- **Task #28 commit (e64914a):** Test Suite `success` ✅
-- **Task #27 commit (4397884):** Test Suite `success` ✅
-- **Task #20 commit (6289306):** Test Suite `success` ✅ — all 4 checks (deploy, report-build-status, build, test) `success`
-- **Handover commit (see below):** Test Suite `success` ✅ — all 4 checks (deploy, report-build-status, build, test) `success`
-- **Final state:** ALL GREEN ✅ on latest commit
-
-Note: Unlike Session 43 (which had 3 intermediate CI red X's due to flaky probabilistic tests with tight thresholds), Session 44 had zero CI failures across all 5 task commits. The flaky-test threshold fixes from Session 43 (N=60 + 1.3× damage-ratio thresholds, relaxed silvery_barbs Section 5 threshold) carried forward and held firm.
+- **Task #29 commit (dff87f2):** deploy `success` ✅ / report-build-status `success` ✅ / build `success` ✅ / test `success` ✅
+- **Task #30 commit (ac64d58):** deploy `success` ✅ / report-build-status `success` ✅ / build `success` ✅ / test `success` ✅
+- **Task #28 commit (e64914a):** deploy `success` ✅ / report-build-status `success` ✅ / build `success` ✅ / test `success` ✅
+- **Task #27 commit (4397884):** deploy `success` ✅ / report-build-status `success` ✅ / build `success` ✅ / test `success` ✅
+- **Task #20 commit (6289306):** deploy `success` ✅ / report-build-status `success` ✅ / build `success` ✅ / test `success` ✅
+- **Handover commit (<sha>):** see below — populated after step 4 push
+- **Final state:** ALL GREEN ✅ on latest commit (no red X's across Session 44)
 
 ---
 
@@ -190,17 +175,17 @@ Note: Unlike Session 43 (which had 3 intermediate CI red X's due to flaky probab
 
 (Updated from Session 43 — items 29, 30, 28, 27, 20 now closed by Session 44.)
 
-22. **Devil's Sight invocation** (continuation of Task #16) — Still deferred. See in magical darkness 120 ft. Requires LOS engine changes (out of v1 scope; deferred until LOS system supports magical darkness).
+22. **Devil's Sight invocation** (continuation of Task #16) — Still deferred. See in magical darkness 120 ft. Requires LOS engine changes for magical darkness (out of v1 scope; deferred until LOS system supports it).
 
-27 follow-up. **Extend `planExtraAction` with more surge options** (surfaced by Session 44 Task #27) — v1.5 evaluates heal-self and default-attack. Future options to add: surge to `Dash` when no enemy is in melee reach; surge to cast a defensive spell (`Shield of Faith`, `Barkskin`); surge to `Disengage` when surrounded; surge to cast a different spell when the main action was an Attack.
+27-follow-up. **Extend planExtraAction with more surge options** (NEW — surfaced by Session 44 Task #27) — Current implementation handles 2 options (heal-self + default Attack). Future: surge to Dash when no enemy in reach, surge to cast defensive spell like Shield of Faith, surge to Disengage when surrounded, surge for a different spell when main action was Attack.
 
-28 follow-up. **Raise `MAX_SUMMONS_PER_CAST` above 8** (surfaced by Session 44 Task #28) — v1.5 caps at 8 for battlefield-bloat control. PHB allows 16 (L5) / 24 (L7). Raise the cap once the engine supports batched summon turn-resolution (group initiative rolls, batched attack resolution, batched AoE damage) so a 24-Wolf pack doesn't dominate the turn order.
+28-follow-up. **Raise MAX_SUMMONS_PER_CAST above 8** (NEW — surfaced by Session 44 Task #28) — PHB allows 16/24 creatures at L5/L7 but v1.5 caps at 8 to avoid battlefield bloat. Raise the cap once the engine supports batched summon turn-resolution.
 
-29 follow-up. **Add more subclass features to `SUBCLASS_FEATURES` table** (surfaced by Session 44 Task #29) — v1.5 only models Bard College of Valor/Swords Extra Attack. The `SUBCLASS_FEATURES` table is ready to receive more entries: Battle Master maneuvers (Fighter 3), Land Circle ritual casting (Druid 2), Cleric Divine Strike (Cleric 8), Paladin Sacred Weapon (Oath of Devotion 9), etc.
+29-follow-up. **Add more subclass features to SUBCLASS_FEATURES table** (NEW — surfaced by Session 44 Task #29) — Only Bard Valor/Swords Extra Attack is currently in the table. Future: Battle Master maneuvers (Fighter 3), Land Circle ritual casting (Druid 2), Monk tradition features (Way of Open Hand, etc.).
 
-20 follow-up. **Add condition tracking for `Lesser Restoration` + `Protection from Poison`** (surfaced by Session 44 Task #20) — The Couatl's innate `Lesser Restoration` (cures blinded/deafened/paralyzed/poisoned) and `Protection from Poison` (grants poison resistance + advantage on saves vs. poison) are tracked on `innateSpellcasting` resources but have no `Action` object. They require a condition-tracking system on `Combatant` (status effects array, source-tagged so we know which can be removed by which spell). Out of v1 scope; deferred until conditions are modelled.
+20-follow-up. **Add condition tracking for Lesser Restoration + Protection from Poison** (NEW — surfaced by Session 44 Task #20) — The Couatl now tracks these innate uses but has no Action to cast them. Needs blinded/deafened/paralyzed/poisoned conditions modelled in the engine so the Couatl can reactively remove them from allies.
 
-30 follow-up. **Replace order-dependent Thirsting Blade + Extra Attack guards with `maxAttackCount()` helper** (surfaced by Session 44 Task #30) — v1.5 uses order-dependent guards (Thirsting Blade checked first, then Extra Attack skips if `attackCount` is already set). This is correct for the common case but has a known v1 simplification: Warlock 5 / Fighter 11 gets 2 attacks (Thirsting Blade wins) instead of RAW 3 (Extra Attack (2) should supersede per SAC v2.7). Replacing the guards with a single `maxAttackCount(combatant, action)` helper that returns the highest applicable attackCount from any source (Thirsting Blade = 2, Extra Attack = 2, Extra Attack (2) = 3, Extra Attack (3) = 4) would fix this edge case and make the code clearer.
+30-follow-up. **Replace order-dependent Thirsting Blade + Extra Attack guards with maxAttackCount() helper** (NEW — surfaced by Session 44 Task #30) — Currently Thirsting Blade check runs first and sets `attackCount = 2`, then Extra Attack (2) skips because `attackCount` is set. Future: a `maxAttackCount()` helper that returns the highest applicable `attackCount` from any source (so a Warlock 5 / Fighter 11 correctly gets 3 attacks).
 
 ---
 
@@ -247,8 +232,8 @@ Session 44 Task #20: Couatl innate spells — Shield via reaction_registry
 
 ## Generic Registry Count
 
-- `SPELL_DB`: ~170 entries (unchanged from Session 43).
-- `_reaction_registry.ts`: 6 reaction spells (unchanged). Shield now works for innate casters like the Couatl (the `executeReaction` consumption path was extended to fall back from spell slots to innate uses).
-- `_invocations.ts`: 7 Eldritch Invocations (unchanged). Thirsting Blade is fully implemented and its non-stacking interaction with Extra Attack is now documented.
-- `WARLOCK_INVOCATION_SLOTS`: 21 entries (unchanged from Session 40).
-- `summon_picker.ts`: 9 picker functions (was 6 — added `pickSummonPack`, `pickConjureAnimalsSummonMulti`, `pickConjureWoodlandBeingsSummonMulti`, `pickConjureMinorElementalsSummonMulti`).
+- `SPELL_DB`: ~170 entries (unchanged).
+- `_reaction_registry.ts`: 6 reaction spells (unchanged; Shield now works for innate casters like the Couatl via the `hasInnateSpellUse` fallback in `triggerReactions`).
+- `_invocations.ts`: 7 Eldritch Invocations (unchanged).
+- `WARLOCK_INVOCATION_SLOTS`: 21 entries (unchanged).
+- `summon_picker.ts`: 10 picker functions (was 6 — added `pickSummonPack`, `conjureSlotMultiplier`, `pickConjureAnimalsSummonMulti`, `pickConjureWoodlandBeingsSummonMulti`, `pickConjureMinorElementalsSummonMulti`; plus the `MAX_SUMMONS_PER_CAST` constant).
