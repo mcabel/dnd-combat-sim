@@ -1591,6 +1591,10 @@ router.post('/characters/create-level0', async (req: Request, res: Response) => 
       resources:  {},
       equipment:  [],
       gold:       bgEntry.gold,
+      cp:         0,
+      sp:         0,
+      ep:         0,
+      pp:         0,
 
       // Features — none yet
       level1Features: [],

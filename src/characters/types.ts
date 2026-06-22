@@ -411,7 +411,11 @@ export interface CharacterSheet {
   resources: CharacterResources;
   spellcasting?: SpellcastingInfo;
   equipment: EquipmentItem[];
-  gold: number;
+  gold: number;   // gp (gold pieces) — PHB p.143
+  cp?: number;    // copper pieces  (1 cp = 1/100 gp)
+  sp?: number;    // silver pieces  (1 sp = 1/10 gp)
+  ep?: number;    // electrum pieces (1 ep = 1/2 gp)
+  pp?: number;    // platinum pieces (1 pp = 10 gp)
 
   // Features
   level1Features: CharacterFeature[];   // Features from race + class at level 1

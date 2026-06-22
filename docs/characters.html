@@ -443,8 +443,24 @@ button.full { width: 100%; padding: 11px; font-size: 13px; }
         <input type="text" id="cf-alignment" placeholder="Lawful Good"/>
       </div>
       <div>
-        <label>Gold (gp)</label>
-        <input type="number" id="cf-gold" value="10" min="0"/>
+        <label>Currency</label>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <label style="font-size:11px;color:var(--muted)" title="Copper pieces">
+            <input type="number" id="cf-cp" value="0" min="0" style="width:52px"/> cp
+          </label>
+          <label style="font-size:11px;color:var(--muted)" title="Silver pieces">
+            <input type="number" id="cf-sp" value="0" min="0" style="width:52px"/> sp
+          </label>
+          <label style="font-size:11px;color:var(--muted)" title="Electrum pieces">
+            <input type="number" id="cf-ep" value="0" min="0" style="width:52px"/> ep
+          </label>
+          <label style="font-size:11px;color:var(--muted)" title="Gold pieces">
+            <input type="number" id="cf-gold" value="10" min="0" style="width:52px"/> gp
+          </label>
+          <label style="font-size:11px;color:var(--muted)" title="Platinum pieces">
+            <input type="number" id="cf-pp" value="0" min="0" style="width:52px"/> pp
+          </label>
+        </div>
       </div>
     </div>
 
@@ -1631,17 +1647,26 @@ function renderEquipment(c) {
     html += `</div>`;
   }
 
-  // Gold (editable)
-  html += `<div style="display:flex;align-items:center;gap:6px;margin-bottom:${items.length?6:0}px">
-    <span style="font-size:13px">💰</span>
-    <input type="number" id="gold-input-${c.id}" value="${gold}" min="0" step="0.01"
-      style="width:80px;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-family:var(--mono);font-size:12px;padding:3px 6px;outline:none"
-      onchange="saveGold('${c.id}', this.value)"
-      onblur="saveGold('${c.id}', this.value)"
-      onkeydown="if(event.key==='Enter')this.blur()"
-      title="Click to edit gold"/>
-    <span style="font-size:12px;color:var(--muted)">gp</span>
-  </div>`;
+  // Currency row (cp / sp / ep / gp / pp — PHB p.143)
+  const COINS = [
+    { key: 'cp', label: 'cp', title: 'Copper',   val: c.cp   ?? 0 },
+    { key: 'sp', label: 'sp', title: 'Silver',   val: c.sp   ?? 0 },
+    { key: 'ep', label: 'ep', title: 'Electrum', val: c.ep   ?? 0 },
+    { key: 'gp', label: 'gp', title: 'Gold',     val: gold },
+    { key: 'pp', label: 'pp', title: 'Platinum', val: c.pp   ?? 0 },
+  ];
+  html += `<div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:${items.length?6:0}px">
+    <span style="font-size:13px" title="Currency">💰</span>`;
+  for (const coin of COINS) {
+    html += `<label style="display:flex;align-items:center;gap:3px;font-size:11px;color:var(--muted)" title="${coin.title} pieces">
+      <input type="number" id="coin-${coin.key}-${c.id}" value="${coin.val}" min="0" step="1"
+        style="width:58px;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-family:var(--mono);font-size:11px;padding:2px 5px;outline:none;-moz-appearance:textfield"
+        onchange="saveCurrency('${c.id}')"
+        onblur="saveCurrency('${c.id}')"
+        onkeydown="if(event.key==='Enter')this.blur()"
+      />${coin.label}</label>`;
+  }
+  html += `</div>`;
 
   // Full gear list (collapsible)
   if (items.length > 0) {
@@ -1847,24 +1872,29 @@ async function toggleAttuned(charId, idx) {
   }
 }
 
-// ── Gold editing ──────────────────────────────────────────────
-async function saveGold(charId, rawVal) {
-  const gold = parseFloat(rawVal);
-  if (isNaN(gold) || gold < 0) { showBanner('Invalid gold amount', 'error'); return; }
+// ── Currency editing (cp / sp / ep / gp / pp) ─────────────────
+async function saveCurrency(charId) {
+  const readCoin = key => {
+    const el = document.getElementById(`coin-${key}-${charId}`);
+    const v = parseInt(el?.value ?? '', 10);
+    return isNaN(v) || v < 0 ? 0 : v;
+  };
+  const gold = readCoin('gp');
+  const cp   = readCoin('cp');
+  const sp   = readCoin('sp');
+  const ep   = readCoin('ep');
+  const pp   = readCoin('pp');
   try {
     const r = await fetch(`/api/characters/${charId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ gold })
+      body: JSON.stringify({ gold, cp, sp, ep, pp })
     });
-    if (!r.ok) { showBanner('Failed to save gold', 'error'); return; }
+    if (!r.ok) { showBanner('Failed to save currency', 'error'); return; }
     const { character: c } = await r.json();
     if (S.charDetail && S.charDetail.id === charId) S.charDetail = c;
-    // update input value in case server normalized
-    const inp = document.getElementById(`gold-input-${charId}`);
-    if (inp) inp.value = c.gold;
   } catch (e) {
-    showBanner('Network error saving gold', 'error');
+    showBanner('Network error saving currency', 'error');
   }
 }
 
@@ -3137,6 +3167,10 @@ function editChar() {
   document.getElementById('cf-background').value = c.background;
   document.getElementById('cf-alignment').value = c.alignment || '';
   document.getElementById('cf-gold').value = c.gold || 0;
+  document.getElementById('cf-cp').value   = c.cp  ?? 0;
+  document.getElementById('cf-sp').value   = c.sp  ?? 0;
+  document.getElementById('cf-ep').value   = c.ep  ?? 0;
+  document.getElementById('cf-pp').value   = c.pp  ?? 0;
   document.getElementById('cf-hp').value = c.maxHP;
   document.getElementById('cf-ac').value = c.armorClass;
   document.getElementById('cf-speed').value = c.speed;
@@ -3282,6 +3316,10 @@ function newChar() {
   });
   document.getElementById('cf-class').value = 'Fighter';
   document.getElementById('cf-gold').value = '10';
+  document.getElementById('cf-cp').value   = '0';
+  document.getElementById('cf-sp').value   = '0';
+  document.getElementById('cf-ep').value   = '0';
+  document.getElementById('cf-pp').value   = '0';
   onClassChange();
   document.getElementById('char-form-card').classList.remove('hidden');
   document.getElementById('char-detail-card').classList.add('hidden');
@@ -3356,6 +3394,10 @@ async function saveCharForm() {
   const ac     = parseInt(document.getElementById('cf-ac').value)||10;
   const speed  = parseInt(document.getElementById('cf-speed').value)||30;
   const gold   = parseFloat(document.getElementById('cf-gold').value)||0;
+  const cp     = parseInt(document.getElementById('cf-cp')?.value||'0', 10)||0;
+  const sp     = parseInt(document.getElementById('cf-sp')?.value||'0', 10)||0;
+  const ep     = parseInt(document.getElementById('cf-ep')?.value||'0', 10)||0;
+  const pp     = parseInt(document.getElementById('cf-pp')?.value||'0', 10)||0;
   const wpnName = document.getElementById('cf-weapon').value.trim() || 'Dagger';
   const wpnCat  = document.getElementById('cf-weapon-cat').value;
   const armName = document.getElementById('cf-armor').value.trim();
@@ -3397,7 +3439,7 @@ async function saveCharForm() {
       ...(armName && armCat !== 'none' ? [{ name: armName, quantity: 1, equipped: true, category: armCat === 'shield' ? 'shield' : 'armor' }] : []),
       ...getExtraEquipRows(),
     ],
-    gold,
+    gold, cp, sp, ep, pp,
     level1Features: [],
     allFeatures: [],
     feats: [],
