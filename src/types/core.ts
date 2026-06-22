@@ -514,6 +514,16 @@ export interface Combatant {
   // The engine checks this for Thirsting Blade (requires 'blade').
   pactBoon?: 'chain' | 'blade' | 'tome';
 
+  // ── Session 43 — Class Features (for Extra Attack, etc.) ──
+  // List of class/subclass feature NAMES the combatant has (e.g. 'Extra Attack',
+  // 'Extra Attack (2)', 'Extra Attack (3)', 'Action Surge (1/rest)', etc.).
+  // Populated by buildCombatant() from sheet.allFeatures (filtered to source
+  // 'class' or 'subclass'). Undefined for monsters (no class features).
+  // Checked by the planner to set attackCount for Extra Attack (Fighter 5+,
+  // Paladin 5+, Ranger 5+, Barbarian 5+, Monk 5+) and Extra Attack (2)/(3)
+  // for Fighter 11/20.
+  classFeatures?: string[];
+
   // Temporary HP (absorbs damage before real HP)
   tempHP: number;
 

@@ -276,6 +276,8 @@ import { shouldCast as shouldCastFindGreaterSteed }    from '../spells/find_grea
 import { GENERIC_SPELL_LIST } from '../spells/_generic_registry';
 // ── Session 42 Task #18 — Thirsting Blade check ──
 import { hasInvocation } from '../spells/_invocations';
+// ── Session 43 Task #24 — Extra Attack feature check ──
+import { hasFeature } from '../characters/builder';
 import { selectAction, selfPreserveDecision, selectLegendaryAction } from './actions';
 import {
   canReach, bestAdjacentPos, bestRangedPosition,
@@ -4722,6 +4724,37 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
     self.pactBoon === 'blade'
   ) {
     plan.action.attackCount = 2;
+  }
+
+  // ── Session 43 Task #24: Extra Attack for martial classes ──
+  // PHB p.72 (Fighter), p.49 (Barbarian), p.85 (Monk), p.85 (Paladin),
+  // p.92 (Ranger): "Beginning at 5th level, you can attack twice, instead
+  // of once, whenever you take the Attack action on your turn."
+  // Fighter 11 (Extra Attack (2)) → 3 attacks; Fighter 20 (Extra Attack (3))
+  // → 4 attacks. Bard 6 (Valor/Swords) → 2 attacks, but the leveler does
+  // not currently model subclass-specific Extra Attack grants — only base
+  // class features. We check for the feature name strings set by the leveler.
+  //
+  // This applies to ANY Attack action (melee OR ranged), unlike Thirsting
+  // Blade which is melee-only. The attackCount loop in executePlannedAction
+  // already handles both attack types.
+  //
+  // We DON'T overwrite attackCount if Thirsting Blade already set it to 2
+  // (the values would be the same for a Warlock 5 / Fighter 5 multiclass,
+  // but this guard future-proofs against higher-tier Fighter Extra Attack
+  // values colliding with the Warlock-only Thirsting Blade).
+  if (
+    plan.action &&
+    plan.action.type === 'attack' &&
+    plan.action.attackCount === undefined
+  ) {
+    if (hasFeature(self, 'Extra Attack (3)')) {
+      plan.action.attackCount = 4;   // Fighter 20
+    } else if (hasFeature(self, 'Extra Attack (2)')) {
+      plan.action.attackCount = 3;   // Fighter 11
+    } else if (hasFeature(self, 'Extra Attack')) {
+      plan.action.attackCount = 2;   // Fighter/Barbarian/Monk/Paladin/Ranger 5
+    }
   }
 
   // === MOVEMENT ===

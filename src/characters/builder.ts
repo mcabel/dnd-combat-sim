@@ -357,7 +357,40 @@ export function buildCombatant(
     combatant.pactBoon = sheet.pactBoon;
   }
 
+  // ── Session 43 Task #24: Class features transfer ──
+  // Transfer the names of all class/subclass features the character has
+  // gained via leveling (e.g. 'Extra Attack', 'Action Surge (1/rest)',
+  // 'Cunning Action', etc.). The planner checks this list to set
+  // attackCount for Extra Attack (Fighter/Paladin/Ranger/Barbarian/Monk 5+,
+  // Fighter 11+ = 3 attacks, Fighter 20 = 4 attacks). Monsters have no
+  // class features, so this is undefined for them.
+  //
+  // We include source 'class' and 'subclass' features (NOT 'race' — racial
+  // traits are already in combatant.traits). We dedupe by name in case the
+  // same feature appears multiple times (e.g. multi-class characters).
+  const classFeatureNames = sheet.allFeatures
+    .filter(f => f.source === 'class' || f.source === 'subclass')
+    .map(f => f.name);
+  if (classFeatureNames.length > 0) {
+    combatant.classFeatures = [...new Set(classFeatureNames)];
+  }
+
   return combatant;
+}
+
+/**
+ * Check if a combatant has a specific class/subclass feature by name.
+ * Returns true if the feature name is in the combatant's `classFeatures`
+ * list (populated by buildCombatant from sheet.allFeatures).
+ *
+ * Examples: 'Extra Attack', 'Extra Attack (2)', 'Action Surge (1/rest)',
+ * 'Cunning Action', 'Jack of All Trades', etc.
+ *
+ * Returns false for monsters (no classFeatures list) and for combatants
+ * that don't have the named feature.
+ */
+export function hasFeature(combatant: Combatant, featureName: string): boolean {
+  return combatant.classFeatures?.includes(featureName) ?? false;
 }
 
 /**
