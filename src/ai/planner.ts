@@ -4811,36 +4811,108 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
     }
   }
 
-  // ── Session 43 Task #23: Action Surge (Fighter 2+, PHB p.72) ──
+  // ── Session 43 Task #23 / Session 44 Task #27: Action Surge (Fighter 2+, PHB p.72) ──
   // "On your turn, you can take one additional action on top of your regular
-  // action and a possible bonus action." v1: if the Fighter has an actionSurge
-  // use available, plan an extra Attack on the same target. The attackCount
-  // for this extra Attack is set by the same Extra Attack logic as the main
-  // action (so Fighter 5+ gets 2 attacks from main + 2 from surge = 4 total).
+  // action and a possible bonus action."
   //
-  // Conditions:
-  //   - self.resources.actionSurge.remaining > 0 (use available)
-  //   - plan.action is set (we have something to do this turn)
-  //   - plan.action.type === 'attack' (v1 only surges for extra attacks —
-  //     surging to cast a second spell is suboptimal in most cases since
-  //     it would consume another spell slot; future: smarter logic)
-  //   - target is alive (avoid planning a surge against a dead target —
-  //     the engine would skip it anyway, but no point planning it)
+  // Session 43 Task #23 added the basic surge: clone the main Attack action.
+  // Session 44 Task #27 introduces planExtraAction() which evaluates multiple
+  // surge options in priority order:
+  //   1. Heal-self surge — if HP < 50% and Cure Wounds is known + slot available
+  //   2. Default extra Attack — clone the main Attack action (original v1 behaviour)
   //
   // The engine's executeTurnPlan calls executePlannedAction again for
   // plan.extraAction and consumes one actionSurge use.
+  const surgeAction = planExtraAction(self, plan, target, battlefield);
+  if (surgeAction) {
+    plan.extraAction = surgeAction;
+  }
+
+  return plan;
+}
+
+// ── Session 44 Task #27: planExtraAction — smarter Action Surge tactics ──
+//
+// Evaluates multiple surge options in priority order and returns the best
+// PlannedAction to take as the Action Surge extra action, or null if no
+// surge is appropriate (no use available, no eligible option).
+//
+// Options evaluated (first match wins):
+//
+// 1. HEAL-SELF SURGE (highest priority):
+//    Triggers when self.currentHP < 50% of self.maxHP AND the combatant
+//    has a 'Cure Wounds' action AND has at least one L1+ spell slot.
+//    Returns a PlannedAction with type 'cureWounds' targeting self.
+//    This is most useful for Fighter/Cleric multiclass characters or
+//    Eldritch Knights with Magic Initiate (Cleric) — pure Fighters don't
+//    have Cure Wounds and fall through to the default surge option.
+//
+//    PHB p.72: "you can take one additional action on your turn" — this
+//    includes casting a spell. The spell's normal casting time applies
+//    (Cure Wounds is 1 action), and the spell slot is consumed by the
+//    engine's cureWounds case in executePlannedAction.
+//
+// 2. DEFAULT EXTRA ATTACK:
+//    Triggers when plan.action is an Attack and the target is alive.
+//    Clones the main Attack action with the same attackCount (re-applies
+//    Thirsting Blade / Extra Attack logic). This is the original v1
+//    behaviour from Session 43 Task #23.
+//
+// 3. Returns null if neither option applies — no surge planned.
+//
+// Future extension points (not implemented in v1.5):
+//   - Surge to Dash when no enemy is in reach (close distance faster)
+//   - Surge to cast a defensive spell (Shield of Faith, Mirror Image)
+//   - Surge to Disengage when surrounded and low HP
+//   - Surge for a different spell (e.g. Fireball) when main action was Attack
+function planExtraAction(
+  self: Combatant,
+  plan: TurnPlan,
+  target: Combatant | null,
+  _battlefield: Battlefield,
+): PlannedAction | null {
+  if (!self.resources?.actionSurge || self.resources.actionSurge.remaining <= 0) {
+    return null;
+  }
+
+  // ── Option 1: Heal-self surge ──
+  // Triggers when HP is below 50% AND the combatant knows Cure Wounds
+  // AND has a spell slot available to cast it.
+  //
+  // We use self.actions to check if Cure Wounds is in the combatant's
+  // spell list. Pure Fighters won't have this action, so they skip
+  // straight to the default surge option.
+  //
+  // NOTE: This check runs AFTER planBonusAction, which may have triggered
+  // Second Wind (mutating self.currentHP). If Second Wind already healed
+  // the fighter above 50%, the heal-self surge won't fire — which is the
+  // correct behaviour (no need to waste a surge on healing if Second Wind
+  // already covered it). Tests that isolate the heal-self surge should
+  // drain Second Wind uses before calling planTurn.
+  const hpRatio = self.maxHP > 0 ? self.currentHP / self.maxHP : 1;
+  if (hpRatio < 0.5) {
+    const cureWoundsAction = self.actions.find(a => a.name === 'Cure Wounds');
+    if (cureWoundsAction && hasSpellSlot(self, 1)) {
+      return {
+        type: 'cureWounds',
+        action: cureWoundsAction,
+        targetId: self.id,   // self-heal
+        description: `${self.name} uses Action Surge — casts Cure Wounds on self`,
+      };
+    }
+  }
+
+  // ── Option 2: Default extra Attack on the same target ──
+  // Original v1 behaviour — clone the main Attack action. The attackCount
+  // is re-applied via the same Thirsting Blade / Extra Attack logic as the
+  // main action (see "Session 44 Task #30" comment above for the non-stacking
+  // RAW ruling and known v1 simplification).
   if (
-    self.resources?.actionSurge &&
-    self.resources.actionSurge.remaining > 0 &&
     plan.action &&
     plan.action.type === 'attack' &&
     plan.action.action &&
     target && !target.isDead && !target.isUnconscious
   ) {
-    // Clone the main attack action for the surge. We reset attackCount to
-    // undefined here so the same Extra Attack / Thirsting Blade logic can
-    // re-apply (the planner's attackCount-setting block ran before this
-    // extraAction is created, so we manually re-apply below).
     const surgeAction: PlannedAction = {
       type: 'attack',
       action: plan.action.action,
@@ -4848,8 +4920,6 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
       description: `${self.name} uses Action Surge — extra Attack`,
     };
     // Re-apply the attackCount logic (mirrors the block above for plan.action).
-    // See "Session 44 Task #30" comment above for the Thirsting Blade + Extra
-    // Attack non-stacking RAW ruling and known v1 simplification.
     // Thirsting Blade (melee + Pact of the Blade + invocation)
     if (
       surgeAction.action !== null &&
@@ -4870,10 +4940,11 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
         surgeAction.attackCount = 2;   // martial 5+ / Bard Valor/Swords 6
       }
     }
-    plan.extraAction = surgeAction;
+    return surgeAction;
   }
 
-  return plan;
+  // No eligible surge option.
+  return null;
 }
 
 /**
