@@ -395,6 +395,18 @@ export interface PlayerResources {
   // Recovered on long rest: up to half max (round up), per PHB p.186.
   // Optional — absent for monsters and legacy test combatants.
   hitDice?: { max: number; remaining: number; dieSides: number };
+
+  // Innate Spellcasting (MM p.10–11; e.g. Couatl, Drow, Druidic casters).
+  // Per-spell uses-per-day tracker. Used by monsters with at-will or
+  // N/day innate spellcasting. The spell names MUST match the Action.name
+  // of the corresponding spell Action in the combatant's actions list.
+  // The AI planner checks both spell slots AND innate uses when deciding
+  // whether to cast a spell (see ai/resources.ts: hasInnateSpellUse).
+  // At-will innate spells (e.g. Detect Magic) are not tracked here —
+  // they're modeled as slotLevel: 0 Actions that don't consume anything.
+  innateSpellcasting?: {
+    [spellName: string]: { max: number; remaining: number };
+  };
 }
 
 // ---- Save-fail tracker (Contagion / Flesh to Stone) -----------

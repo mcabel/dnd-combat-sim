@@ -232,7 +232,10 @@ console.log('\n=== 3. createCouatl — combatant creation ===\n');
   eq('Couatl HP is 97', couatl.maxHP, 97);
   eq('Couatl currentHP equals maxHP', couatl.currentHP, couatl.maxHP);
   eq('Couatl AC is 19', couatl.ac, 19);
-  eq('Couatl aiProfile is attackNearest', couatl.aiProfile, 'attackNearest');
+  // Session 41 Task #2: aiProfile switched from 'attackNearest' to 'smart'
+  // so the AI planner can invoke shouldCastBless / shouldCastCureWounds
+  // via the innate spellcasting pipeline.
+  eq('Couatl aiProfile is smart (Session 41 innate spellcasting)', couatl.aiProfile, 'smart');
   eq('Couatl speed is 30', couatl.speed, 30);
   eq('Couatl flySpeed is 90', couatl.flySpeed, 90);
   eq('Couatl STR is 16', couatl.str, 16);
@@ -243,10 +246,18 @@ console.log('\n=== 3. createCouatl — combatant creation ===\n');
   eq('Couatl CHA is 18', couatl.cha, 18);
   eq('Couatl CR is 4', couatl.cr, 4);
 
-  // Attack actions (Couatl has 2: Bite + Constrict)
-  eq('Couatl has 2 attack actions', couatl.actions.length, 2);
-  eq('Couatl first attack is Bite (primary)', couatl.actions[0].name, 'Bite');
-  eq('Couatl second attack is Constrict', couatl.actions[1].name, 'Constrict');
+  // Attack + Innate Spell Actions (Session 41 Task #2):
+  //   - Bite (poison/unconscious)
+  //   - Constrict (grapple/restrain)
+  //   - Bless (innate 3/day, concentration buff)
+  //   - Cure Wounds (innate 3/day, heal)
+  //   - Sanctuary (innate 3/day, bonus-action ward)
+  eq('Couatl has 5 actions (2 attacks + 3 innate spells)', couatl.actions.length, 5);
+  eq('Couatl first action is Bite (primary)', couatl.actions[0].name, 'Bite');
+  eq('Couatl second action is Constrict', couatl.actions[1].name, 'Constrict');
+  eq('Couatl third action is Bless (innate)', couatl.actions[2].name, 'Bless');
+  eq('Couatl fourth action is Cure Wounds (innate)', couatl.actions[3].name, 'Cure Wounds');
+  eq('Couatl fifth action is Sanctuary (innate)', couatl.actions[4].name, 'Sanctuary');
 
   // Bite (primary, melee)
   const bite = couatl.actions[0];

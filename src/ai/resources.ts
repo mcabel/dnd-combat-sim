@@ -56,6 +56,55 @@ export function hasSpellSlot(caster: Combatant, minLevel = 1): boolean {
   return false;
 }
 
+// ---- Innate Spellcasting (monster N/day spells) ---------------
+
+/**
+ * Check if the caster has an innate spellcasting use remaining for the
+ * given spell name. Innate spells (MM p.10–11) are tracked separately
+ * from spell slots — they're per-spell-per-day counters, used by
+ * monsters like the Couatl (3/day bless, cure wounds, etc.) or Drow
+ * (1/day each of Levitate, etc.).
+ *
+ * Returns true if `caster.resources.innateSpellcasting[spellName].remaining > 0`.
+ * Returns false if resources are absent or the spell isn't tracked.
+ */
+export function hasInnateSpellUse(caster: Combatant, spellName: string): boolean {
+  const r = caster.resources;
+  if (!r) return false;
+  const entry = r.innateSpellcasting?.[spellName];
+  if (!entry) return false;
+  return entry.remaining > 0;
+}
+
+/**
+ * Consume one innate spellcasting use of the given spell name.
+ * Decrements `resources.innateSpellcasting[spellName].remaining`.
+ * Returns true if a use was consumed, false if none remained (or the
+ * spell isn't tracked on this caster).
+ *
+ * Caller is responsible for checking hasInnateSpellUse() first.
+ */
+export function consumeInnateSpellUse(caster: Combatant, spellName: string): boolean {
+  const r = caster.resources;
+  if (!r) return false;
+  const entry = r.innateSpellcasting?.[spellName];
+  if (!entry || entry.remaining <= 0) return false;
+  entry.remaining--;
+  return true;
+}
+
+/**
+ * Check if the caster can cast the given spell — either via a spell
+ * slot of at least `minLevel`, OR via an innate spellcasting use.
+ *
+ * Used by shouldCastBless / shouldCastCureWounds / etc. to support
+ * monsters with innate spellcasting (Couatl, Drow, etc.) that don't
+ * have standard spell slots.
+ */
+export function canCastSpell(caster: Combatant, spellName: string, minLevel = 1): boolean {
+  return hasSpellSlot(caster, minLevel) || hasInnateSpellUse(caster, spellName);
+}
+
 // ---- Rage (Barbarian) ---------------------------------------
 
 /**
@@ -314,26 +363,26 @@ function healSpellTarget(
 
 /**
  * True if the caster should spend an action on Cure Wounds this turn.
- * Only fires when a slot is available AND a valid heal target exists.
+ * Only fires when a slot OR innate use is available AND a valid heal target exists.
  */
 export function shouldCastCureWounds(
   caster: Combatant,
   battlefield: Battlefield
 ): Combatant | null {
-  if (!hasSpellSlot(caster)) return null;
+  if (!hasSpellSlot(caster) && !hasInnateSpellUse(caster, 'Cure Wounds')) return null;
   // Cure Wounds is Touch range (5ft)
   return healSpellTarget(caster, 5, battlefield);
 }
 
 /**
  * True if the caster should spend a BONUS action on Healing Word this turn.
- * Only fires when a slot is available AND a valid heal target exists.
+ * Only fires when a slot OR innate use is available AND a valid heal target exists.
  */
 export function shouldCastHealingWord(
   caster: Combatant,
   battlefield: Battlefield
 ): Combatant | null {
-  if (!hasSpellSlot(caster)) return null;
+  if (!hasSpellSlot(caster) && !hasInnateSpellUse(caster, 'Healing Word')) return null;
   // Healing Word is 60ft range
   return healSpellTarget(caster, 60, battlefield);
 }
@@ -348,7 +397,13 @@ export function spellHealPlan(
   targetId: string,
   isHealingWord: boolean
 ): PlannedAction {
-  consumeSpellSlot(caster, 1);
+  // Consume a spell slot if available; otherwise fall back to innate spellcasting.
+  // Used for both Healing Word and Cure Wounds (innate spellcasting support — Session 41 Task #2).
+  const spellName = isHealingWord ? 'Healing Word' : 'Cure Wounds';
+  const slotUsed = consumeSpellSlot(caster, 1);
+  if (slotUsed === null) {
+    consumeInnateSpellUse(caster, spellName);
+  }
   const sides  = isHealingWord ? 4 : 8;
   const roll   = rollDie(sides);
   const mod    = abMod(caster.wis);

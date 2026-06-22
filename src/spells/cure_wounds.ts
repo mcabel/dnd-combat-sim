@@ -20,7 +20,7 @@ import { Combatant, Battlefield } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
 import { rollDie, applyHeal, abilityMod } from '../engine/utils';
 import { chebyshev3D } from '../engine/movement';
-import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
+import { consumeSpellSlot, hasSpellSlot, hasInnateSpellUse, consumeInnateSpellUse } from '../ai/resources';
 
 // ---- Metadata -----------------------------------------------
 
@@ -79,7 +79,8 @@ export function shouldCast(
   bf: Battlefield,
 ): Combatant | null {
   if (!caster.actions.some(a => a.name === 'Cure Wounds')) return null;
-  if (!hasSpellSlot(caster, 1)) return null;
+  // Allow innate spellcasting as alternative to slots (Couatl MM p.43, Session 41 Task #2)
+  if (!hasSpellSlot(caster, 1) && !hasInnateSpellUse(caster, 'Cure Wounds')) return null;
 
   const inRange    = (c: Combatant) => chebyshev3D(caster.pos, c.pos) * 5 <= metadata.rangeFt;
   const validTarget = (c: Combatant) => !c.isUndead; // PHB p.230: no effect on undead
@@ -150,7 +151,13 @@ export function execute(
     return;
   }
 
-  consumeSpellSlot(caster, 1);
+  // Consume a spell slot if available; otherwise fall back to innate spellcasting.
+  // The Couatl (and similar monsters) cast Cure Wounds via innate spellcasting (3/day),
+  // not spell slots — see Session 41 Task #2.
+  const slotUsed = consumeSpellSlot(caster, 1);
+  if (slotUsed === null) {
+    consumeInnateSpellUse(caster, 'Cure Wounds');
+  }
 
   emit(
     state, 'action', caster.id,

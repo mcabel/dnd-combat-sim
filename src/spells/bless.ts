@@ -19,7 +19,7 @@ import { CombatEvent, EngineState } from '../engine/combat';
 import { applySpellEffect, removeEffectsFromCaster } from '../engine/spell_effects';
 import { startConcentration } from '../engine/utils';
 import { chebyshev3D } from '../engine/movement';
-import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
+import { consumeSpellSlot, hasSpellSlot, hasInnateSpellUse, consumeInnateSpellUse } from '../ai/resources';
 
 // ---- Metadata -----------------------------------------------
 
@@ -73,9 +73,10 @@ export function shouldCast(caster: Combatant, bf: Battlefield): Combatant[] | nu
   // Never interrupt active concentration
   if (caster.concentration?.active) return null;
 
-  // Must have the spell and a free slot
+  // Must have the spell and either a free slot OR an innate spellcasting use
+  // (innate spells are used by monsters like the Couatl — MM p.43)
   if (!caster.actions.some(a => a.name === 'Bless')) return null;
-  if (!hasSpellSlot(caster, 1)) return null;
+  if (!hasSpellSlot(caster, 1) && !hasInnateSpellUse(caster, 'Bless')) return null;
 
   const selfEntry = bf.combatants.get(caster.id);
   const candidates: Array<{ c: Combatant; dist: number }> = [];
@@ -125,7 +126,13 @@ export function execute(
   targets: Combatant[],
   state: EngineState,
 ): void {
-  consumeSpellSlot(caster, 1);
+  // Consume a spell slot if available; otherwise fall back to innate spellcasting.
+  // The Couatl (and similar monsters) cast Bless via innate spellcasting (3/day),
+  // not spell slots — see Session 41 Task #2.
+  const slotUsed = consumeSpellSlot(caster, 1);
+  if (slotUsed === null) {
+    consumeInnateSpellUse(caster, 'Bless');
+  }
 
   // Safety: clean up any stale concentration before starting new
   if (caster.concentration?.active) {
