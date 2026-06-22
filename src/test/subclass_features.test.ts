@@ -465,12 +465,14 @@ console.log('\n--- 19. Champion 3 weapon crits on 19-20 ---');
   assert('19a. combatant has Improved Critical feature',
     hasFeature(fighter, 'Improved Critical'));
 
-  // Run 200 attacks; count crits. With critRange=19, expected crit rate
-  // is 2/20 = 10%. With critRange=20, expected 1/20 = 5%. We use a wide
-  // threshold (7% crit rate) to distinguish — Champion should exceed it.
+  // Run 600 attacks; count crits. With critRange=19, expected crit rate
+  // is 2/20 = 10%. With critRange=20, expected 1/20 = 5%. We use a 6%
+  // threshold to distinguish — Champion should exceed it.
+  // N=600 gives std dev ≈ 1.22%, so P(rate < 6%) ≈ P(Z < -3.3) ≈ 0.05%.
+  // (Previous N=200 with 7% threshold was flaky — P(fail) ≈ 3%.)
   let critCount = 0;
   let totalAttacks = 0;
-  for (let i = 0; i < 200; i++) {
+  for (let i = 0; i < 600; i++) {
     const freshFighter = buildCombatant(f, { x: 0, y: 0, z: 0 });
     const enemy = makeEnemy(`e${i}`, { pos: { x: 1, y: 0, z: 0 }, ac: 30 });
     const bf = makeBF([freshFighter, enemy]);
@@ -489,8 +491,8 @@ console.log('\n--- 19. Champion 3 weapon crits on 19-20 ---');
   const critRate = totalAttacks > 0 ? critCount / totalAttacks : 0;
   console.log(`    Champion crit rate: ${(critRate * 100).toFixed(1)}% (${critCount}/${totalAttacks})`);
   // Improved Critical → 10% expected. Vanilla → 5% expected.
-  // Threshold 7% splits them with margin for RNG variance at N=200.
-  assert(`19b. Champion crit rate > 7% (Improved Critical)`, critRate > 0.07);
+  // Threshold 6% splits them with margin for RNG variance at N=600.
+  assert(`19b. Champion crit rate > 6% (Improved Critical)`, critRate > 0.06);
 }
 
 // ============================================================
@@ -503,9 +505,10 @@ console.log('\n--- 20. Champion 15 weapon crits on 18-20 ---');
   assert('20a. combatant has Superior Critical feature',
     hasFeature(fighter, 'Superior Critical'));
 
+  // N=600, expected 15%, std ≈ 1.46%, P(rate < 11%) ≈ P(Z < -2.7) ≈ 0.35%.
   let critCount = 0;
   let totalAttacks = 0;
-  for (let i = 0; i < 200; i++) {
+  for (let i = 0; i < 600; i++) {
     const freshFighter = buildCombatant(f, { x: 0, y: 0, z: 0 });
     const enemy = makeEnemy(`e${i}`, { pos: { x: 1, y: 0, z: 0 }, ac: 30 });
     const bf = makeBF([freshFighter, enemy]);
@@ -523,8 +526,8 @@ console.log('\n--- 20. Champion 15 weapon crits on 18-20 ---');
   const critRate = totalAttacks > 0 ? critCount / totalAttacks : 0;
   console.log(`    Champion 15 crit rate: ${(critRate * 100).toFixed(1)}% (${critCount}/${totalAttacks})`);
   // Superior Critical → 15% expected. Improved Critical → 10% expected.
-  // Threshold 12% splits them with margin.
-  assert(`20b. Champion 15 crit rate > 12% (Superior Critical)`, critRate > 0.12);
+  // Threshold 11% splits them with margin.
+  assert(`20b. Champion 15 crit rate > 11% (Superior Critical)`, critRate > 0.11);
 }
 
 // ============================================================
