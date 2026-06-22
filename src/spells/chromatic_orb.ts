@@ -55,7 +55,7 @@
 
 import { Combatant, Battlefield, DamageType } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
-import { rollAttack, rollDie, applyDamageWithTempHP, abilityMod } from '../engine/utils';
+import { rollAttack, rollDie, applyDamageWithTempHP, abilityMod, elementalAffinityBonus } from '../engine/utils';
 import { chebyshev3D, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 
@@ -267,11 +267,17 @@ export function execute(
   );
 
   // 3d8 <chosen type> damage; crit doubles the dice (PHB p.196).
-  const dmg = rollDamage(result.isCrit);
+  // Session 49 Task #29-follow-up-5c-2: Elemental Affinity (Draconic Sorcerer 6)
+  // applies to the dynamically-picked damage type — EA bonus only fires when
+  // the picked type matches the caster's draconic ancestry (acid/cold/fire/
+  // lightning/poison). 'thunder' is NOT a draconic ancestry type, so EA
+  // never fires for thunder orbs.
+  const eaBonus = elementalAffinityBonus(caster, damageType);
+  const dmg = rollDamage(result.isCrit) + eaBonus;
   const dealt = applyDamageWithTempHP(target, dmg, damageType);
   emit(
     state, 'damage', caster.id,
-    `Chromatic Orb: ${target.name} takes ${dealt} ${damageType} damage (${metadata.dieCount}d${metadata.dieSides}=${dmg}${result.isCrit ? ', CRIT doubled' : ''})`,
+    `Chromatic Orb: ${target.name} takes ${dealt} ${damageType} damage (${metadata.dieCount}d${metadata.dieSides}=${dmg}${result.isCrit ? ', CRIT doubled' : ''}${eaBonus > 0 ? `, +${eaBonus} EA` : ''})`,
     target.id, dealt,
   );
 }

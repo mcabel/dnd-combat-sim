@@ -28,7 +28,7 @@
 
 import { Combatant, Battlefield } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
-import { rollDie, applyDamageWithTempHP } from '../engine/utils';
+import { rollDie, applyDamageWithTempHP, elementalAffinityBonus } from '../engine/utils';
 import { chebyshev3D, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 
@@ -110,7 +110,11 @@ export function execute(caster: Combatant, targets: Combatant[], state: EngineSt
     const target = targets[i];
     if (!target || target.isDead || target.isUnconscious) continue;
 
-    const dmg = rollDamage();
+    // Session 49 Task #29-follow-up-5c-2: Elemental Affinity (Draconic
+    // Sorcerer 6) adds +CHA mod per target — auto-hit so no save halving;
+    // the EA bonus is added to every target's damage roll directly.
+    const eaBonus = elementalAffinityBonus(caster, metadata.damageType);
+    const dmg = rollDamage() + eaBonus;
     const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);
     const label = i === 0 ? 'Primary bolt' : `Arc ${i}`;
     emit(
