@@ -31,6 +31,7 @@ import { planTurn, planLegendaryAction, shouldTakeOpportunityAttack } from '../a
 import { shouldSmite, applyDivineSmite, tickRage, consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 // TG-008: Reaction spell subsystem
 import { REACTION_SPELLS, ReactionSpellDescriptor } from '../spells/_reaction_registry';
+import { fireEldritchBlastHitInvocations } from '../spells/_invocations';
 import { consumeRider as consumeAbsorbElementsRider } from '../spells/absorb_elements';
 import { isControlledMount, mountDeathRiderCheck, isIndependentMount } from '../summons/mount';
 import { checkMountedCombatant, checkProtectionStyle, checkInterceptionReduction } from './mount_redirect';
@@ -1740,6 +1741,16 @@ export function resolveAttack(
     }
     // Apply cantrip special effects (e.g., Thorn Whip pull, Ray of Frost slow)
     applyCantripEffect(attacker, target, action.name, state);
+    // ── Session 38: Eldritch Invocation — Repelling Blast ──
+    // PHB p.111: "When you hit a creature with Eldritch Blast, you can push
+    // the creature up to 10 feet away from you in a straight line." Fires
+    // AFTER damage is dealt, BEFORE checkDeath (so even a target about to
+    // drop to 0 HP gets pushed — the push triggers on hit, not on kill).
+    // The hook internally checks the attacker's eldritchInvocations list;
+    // it's a no-op if the attacker doesn't have Repelling Blast.
+    if (action.name === 'Eldritch Blast') {
+      fireEldritchBlastHitInvocations(attacker, target, state);
+    }
     applyWardingBondRedirect(target, dealt, state);
     checkDeath(target, state);
   }

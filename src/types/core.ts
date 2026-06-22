@@ -486,6 +486,14 @@ export interface Combatant {
   // Class resources (PCs only — null for monsters)
   resources: PlayerResources | null;
 
+  // ── Session 38 — Warlock Eldritch Invocations ──
+  // List of Eldritch Invocation names this combatant knows (PHB p.110).
+  // Populated by the parser/leveler for Warlock PCs; undefined or empty for
+  // non-Warlocks. Checked by the engine at invocation trigger points (e.g.
+  // Repelling Blast fires after an Eldritch Blast hit if 'Repelling Blast'
+  // is in this list).
+  eldritchInvocations?: string[];
+
   // Temporary HP (absorbs damage before real HP)
   tempHP: number;
 
