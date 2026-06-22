@@ -1888,8 +1888,48 @@ function buildResourceLines(res) {
   if (res.actionSurge)       parts.push(resBtns('Action Surge', res.actionSurge.remaining, res.actionSurge.max, 'actionSurge', 'remaining'));
   if (res.sorceryPoints)     parts.push(resBtns('Sorc.Pts', res.sorceryPoints.remaining, res.sorceryPoints.max, 'sorceryPoints', 'remaining'));
   if (res.wildShape)         parts.push(resBtns('Wild Shape', res.wildShape.remaining, res.wildShape.max, 'wildShape', 'remaining'));
+  if (res.indomitable)       parts.push(resBtns('Indomitable', res.indomitable.remaining, res.indomitable.max, 'indomitable', 'remaining'));
+  if (res.cleansingTouch)    parts.push(resBtns('Cleansing Touch', res.cleansingTouch.remaining, res.cleansingTouch.max, 'cleansingTouch', 'remaining'));
+  if (res.spellMastery)      parts.push(resBtns('Spell Mastery', res.spellMastery.remaining, res.spellMastery.max, 'spellMastery', 'remaining'));
+  if (res.flashOfGenius)     parts.push(resBtns('Flash of Genius', res.flashOfGenius.remaining, res.flashOfGenius.max, 'flashOfGenius', 'remaining'));
+  if (res.spellStoringItem)  parts.push(resBtns('Spell-Storing Item', res.spellStoringItem.remaining, res.spellStoringItem.max, 'spellStoringItem', 'remaining'));
+  if (res.soulOfArtifice)    parts.push(resBtns('Soul of Artifice', res.soulOfArtifice.remaining, res.soulOfArtifice.max, 'soulOfArtifice', 'remaining'));
+  if (res.breathWeapon)      parts.push(resBtns('Breath Weapon', res.breathWeapon.remaining, res.breathWeapon.max, 'breathWeapon', 'remaining'));
+  if (res.relentlessEndurance) parts.push(resBtns('Relentless Endurance', res.relentlessEndurance.remaining, res.relentlessEndurance.max, 'relentlessEndurance', 'remaining'));
+  if (res.mysticArcanum)     parts.push(buildMysticArcanumBtns(res.mysticArcanum));
 
   return parts.length ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;align-items:center">${parts.join('')}</div>` : '';
+}
+
+// Mystic Arcanum is 4 independent booleans (one per spell level 6-9), not a
+// numeric pool, so it gets its own small toggle row instead of resBtns().
+function buildMysticArcanumBtns(ma) {
+  const levels = [['l6','6th'], ['l7','7th'], ['l8','8th'], ['l9','9th']];
+  const btns = levels
+    .filter(([key]) => ma[key] !== undefined)
+    .map(([key, label]) => {
+      const available = !!ma[key];
+      const color = available ? '#4caf50' : 'var(--muted)';
+      return `<button onclick="toggleMysticArcanum('${key}')" title="${available ? 'Mark used' : 'Mark available (long rest)'}" ` +
+        `style="background:none;border:1px solid var(--border);border-radius:8px;padding:1px 6px;font-size:10px;cursor:pointer;color:${color}">${label} Arcanum ${available ? '\u2713' : '\u2717'}</button>`;
+    }).join('');
+  return btns ? `<span style="display:inline-flex;gap:3px">${btns}</span>` : '';
+}
+
+async function toggleMysticArcanum(key) {
+  if (!S.charDetail) return;
+  const ma = S.charDetail.resources?.mysticArcanum;
+  if (!ma || ma[key] === undefined) return;
+  const updatedRes = { ...S.charDetail.resources, mysticArcanum: { ...ma, [key]: !ma[key] } };
+  try {
+    const data = await api(`/api/characters/${S.charDetail.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ resources: updatedRes }),
+    });
+    S.charDetail = data.character;
+    renderCharDetail();
+  } catch(e) { showBanner('Failed to update resource', 'error'); }
 }
 
 // ── Resource Spend/Restore ─────────────────────────────────────

@@ -215,6 +215,30 @@ export interface CharacterResources {
   sorceryPoints?:     { max: number; remaining: number };
   // Druid — Wild Shape (short or long rest, PHB p.66; unlocks at lv2)
   wildShape?:         { max: number; remaining: number };
+  // Fighter — Indomitable (long rest only, PHB p.72; 1 use @lv9, 2 @lv13, 3 @lv17)
+  indomitable?:       { max: number; remaining: number };
+  // Paladin — Cleansing Touch (long rest only, PHB p.91; unlocks @lv14, CHA-mod uses)
+  cleansingTouch?:    { max: number; remaining: number };
+  // Warlock — Mystic Arcanum (long rest only, PHB p.110): one free cast per long rest
+  // of the chosen 6th/7th/8th/9th-level spell, unlocked individually at lv11/13/15/17.
+  // Each key is undefined until unlocked (a real third state, distinct from
+  // used=false/available=true), then a boolean: true = available, false = used.
+  mysticArcanum?:     { l6?: boolean; l7?: boolean; l8?: boolean; l9?: boolean };
+  // Wizard — Spell Mastery (long rest only, PHB p.117; unlocks @lv18, 2 chosen spells
+  // become castable at will at their lowest level without expending a slot — modeled
+  // here as 2 "free casts" per long rest since the sheet doesn't track which 2 spells).
+  spellMastery?:      { max: number; remaining: number };
+  // Artificer — Flash of Genius (long rest only, TCE p.16; unlocks @lv7, INT-mod uses)
+  flashOfGenius?:     { max: number; remaining: number };
+  // Artificer — Spell-Storing Item (TCE p.16; unlocks @lv11, "twice per day" — modeled
+  // as a long-rest recharge since the sheet has no shorter time-tracking unit)
+  spellStoringItem?:  { max: number; remaining: number };
+  // Artificer — Soul of Artifice (long rest only, TCE p.17; unlocks @lv20, 1 use)
+  soulOfArtifice?:    { max: number; remaining: number };
+  // Dragonborn — Breath Weapon (short or long rest, PHB p.34; granted at character creation)
+  breathWeapon?:      { max: number; remaining: number };
+  // Half-Orc — Relentless Endurance (long rest only, PHB p.41; granted at character creation)
+  relentlessEndurance?: { max: number; remaining: number };
 }
 
 /** Named features from race, class, subclass, background */
