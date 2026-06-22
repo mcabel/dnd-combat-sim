@@ -8,9 +8,9 @@
 // Coverage:
 //   1. conjureSlotMultiplier() returns correct PHB multiplier
 //   2. pickConjureAnimalsSummonMulti(L3) returns 8 picks (1× multiplier)
-//   3. pickConjureAnimalsSummonMulti(L5) returns 8 picks (capped from 16)
-//   4. pickConjureAnimalsSummonMulti(L7) returns 8 picks (capped from 24)
-//   5. pickConjureAnimalsSummonMulti(L9) returns 8 picks (capped)
+//   3. pickConjureAnimalsSummonMulti(L5) returns 16 picks (2× multiplier, under cap)
+//   4. pickConjureAnimalsSummonMulti(L7) returns 24 picks (3× multiplier, cap raised Session 46)
+//   5. pickConjureAnimalsSummonMulti(L9) returns 24 picks (capped at 24)
 //   6. All picks in a pack are the same creature (same name)
 //   7. Picks are CR 1/4 beasts (within the "8 CR 1/4" option cap)
 //   8. pickConjureAnimalsSummonMulti returns [] when bestiary is empty
@@ -19,13 +19,15 @@
 //  11. pickConjureMinorElementalsSummonMulti(L4) returns 8 elemental picks
 //  12. pickConjureMinorElementalsSummonMulti returns [] when bestiary empty
 //  13. conjure_animals.execute spawns 8 creatures when bestiary loaded (L3)
-//  14. conjure_animals.execute spawns 8 creatures when bestiary loaded (L5)
+//  14. conjure_animals.execute spawns 16 creatures when bestiary loaded (L5)
 //  15. conjure_animals.execute falls back to 2 Wolves when bestiary empty
 //  16. conjure_woodland_beings.execute spawns 8 creatures when bestiary loaded
 //  17. conjure_minor_elementals.execute spawns 8 creatures when bestiary loaded
 //  18. Each spawned creature has isSummon=true and summonerId set
 //  19. Spawned creatures are inserted into initiative after the caster
 //  20. Log entry mentions the count and creature name
+//
+// Session 46 Task #28-follow-up-2: cap raised 16 → 24, so L7/L9 now return 24.
 //
 // Run: npx ts-node src/test/conjure_multi.test.ts
 // ============================================================
@@ -157,28 +159,30 @@ console.log('\n=== 2. pickConjureAnimalsSummonMulti(L3) returns 8 picks ===');
   }
 }
 
-console.log('\n=== 3. pickConjureAnimalsSummonMulti(L5) returns 16 picks (cap raised Session 45) ===');
+console.log('\n=== 3. pickConjureAnimalsSummonMulti(L5) returns 16 picks (2× multiplier, under cap) ===');
 {
   setBestiaryForTesting(null);
   const picks = pickConjureAnimalsSummonMulti(5);
-  // PHB multiplier 2× yields 16. Session 45 Task #28-follow-up raised the
-  // cap from 8 to 16, so L5 now returns the full 16 (PHB-accurate).
-  eq('L5 returns 16 picks (cap raised)', picks.length, MAX_SUMMONS_PER_CAST);
+  // PHB multiplier 2× yields 16. Under the cap of 24 (Session 46 Task #28-follow-up-2),
+  // so L5 returns the full 16 (PHB-accurate).
+  eq('L5 returns 16 picks (2× multiplier)', picks.length, 16);
 }
 
-console.log('\n=== 4. pickConjureAnimalsSummonMulti(L7) returns 16 picks (capped from 24) ===');
+console.log('\n=== 4. pickConjureAnimalsSummonMulti(L7) returns 24 picks (cap raised Session 46) ===');
 {
   setBestiaryForTesting(null);
   const picks = pickConjureAnimalsSummonMulti(7);
-  // PHB multiplier 3× would yield 24, but MAX_SUMMONS_PER_CAST caps at 16
-  eq('L7 returns 16 picks (capped from 24)', picks.length, MAX_SUMMONS_PER_CAST);
+  // PHB multiplier 3× yields 24. Session 46 Task #28-follow-up-2 raised
+  // the cap from 16 to 24, so L7 now returns the full 24 (PHB-accurate).
+  eq('L7 returns 24 picks (cap raised)', picks.length, MAX_SUMMONS_PER_CAST);
 }
 
-console.log('\n=== 5. pickConjureAnimalsSummonMulti(L9) returns 16 picks (capped) ===');
+console.log('\n=== 5. pickConjureAnimalsSummonMulti(L9) returns 24 picks (capped at 24) ===');
 {
   setBestiaryForTesting(null);
   const picks = pickConjureAnimalsSummonMulti(9);
-  eq('L9 returns 16 picks (capped)', picks.length, MAX_SUMMONS_PER_CAST);
+  // PHB multiplier 3× yields 24, cap now 24 → 24 (PHB-accurate)
+  eq('L9 returns 24 picks (capped at 24)', picks.length, MAX_SUMMONS_PER_CAST);
 }
 
 console.log('\n=== 6. All picks in a pack are the same creature ===');
@@ -223,7 +227,7 @@ console.log('\n=== 9. pickConjureWoodlandBeingsSummonMulti(L4) returns 8 fey pic
   if (picks.length > 0) {
     console.log(`    Picked fey: ${picks[0].name} (CR ${picks[0].cr})`);
   }
-  // L4 base count = 8, multiplier = 1, cap 16 → 8
+  // L4 base count = 8, multiplier = 1, cap 24 → 8
   eq('L4 returns 8 picks', picks.length, 8);
 }
 
@@ -241,7 +245,7 @@ console.log('\n=== 11. pickConjureMinorElementalsSummonMulti(L4) returns 8 eleme
   if (picks.length > 0) {
     console.log(`    Picked elemental: ${picks[0].name} (CR ${picks[0].cr})`);
   }
-  // L4 base count = 8, multiplier = 1, cap 16 → 8
+  // L4 base count = 8, multiplier = 1, cap 24 → 8
   eq('L4 returns 8 picks', picks.length, 8);
 }
 
@@ -275,8 +279,7 @@ console.log('\n=== 13. conjure_animals.execute spawns 8 creatures when bestiary 
 console.log('\n=== 14. conjure_animals.execute spawns 16 creatures when bestiary loaded (L5) ===');
 {
   setBestiaryForTesting(null);
-  // L5 slot — uses the upcast multiplier (2×). Session 45 Task #28-follow-up
-  // raised the cap from 8 to 16, so L5 now spawns the full 16 (PHB-accurate).
+  // L5 slot — uses the upcast multiplier (2×) = 16, under the cap of 24.
   const caster = makeCaster('caster', { 3: 0, 4: 0, 5: 1 });
   const enemy = makeCaster('enemy', {}, { faction: 'enemy', pos: { x: 5, y: 0, z: 0 } });
   const bf = makeBF([caster, enemy]);
@@ -287,8 +290,8 @@ console.log('\n=== 14. conjure_animals.execute spawns 16 creatures when bestiary
   const summons = [...bf.combatants.values()].filter(
     c => c.isSummon && c.summonerId === caster.id && c.summonSpellName === 'Conjure Animals',
   );
-  // L5 has 2× multiplier = 16, cap now 16 → 16 (was 8 pre-Session-45)
-  eq('16 summons spawned at L5 (cap raised)', summons.length, 16);
+  // L5 has 2× multiplier = 16, cap 24 → 16 (PHB-accurate)
+  eq('16 summons spawned at L5 (2× multiplier)', summons.length, 16);
 
   // L5 slot consumed
   eq('L5 slot consumed', caster.resources!.spellSlots![5]!.remaining, 0);

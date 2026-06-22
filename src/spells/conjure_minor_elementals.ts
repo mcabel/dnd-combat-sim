@@ -289,7 +289,7 @@ export function execute(
 
   // ── Session 44 Task #28: multi-creature bestiary-driven spawn ──
   // Try the "8 elementals of CR 1/4" option first (e.g. 8 Mud Mephits).
-  // The slot-level multiplier (1×/2×/3×) is applied to the count, capped at MAX_SUMMONS_PER_CAST (16 — Session 45 Task #28-follow-up).
+  // The slot-level multiplier (1×/2×/3×) is applied to the count, capped at MAX_SUMMONS_PER_CAST (24 — Session 46 Task #28-follow-up-2).
   const multiPicks = pickConjureMinorElementalsSummonMulti(slotLevel);
 
   if (multiPicks.length > 0) {
@@ -300,6 +300,10 @@ export function execute(
       // support MAX_SUMMONS_PER_CAST = 16 (L5 upcast = 16 creatures).
       { x: 2, y: 0 }, { x: -2, y: 0 }, { x: 0, y: 2 }, { x: 0, y: -2 },
       { x: 2, y: 2 }, { x: -2, y: -2 }, { x: 2, y: -2 }, { x: -2, y: 2 },
+      // Session 46 Task #28-follow-up-2: 8 more offsets at distance 3 to
+      // support MAX_SUMMONS_PER_CAST = 24 (L7+ upcast = 24 creatures).
+      { x: 3, y: 0 }, { x: -3, y: 0 }, { x: 0, y: 3 }, { x: 0, y: -3 },
+      { x: 3, y: 3 }, { x: -3, y: -3 }, { x: 3, y: -3 }, { x: -3, y: 3 },
     ];
     for (let i = 0; i < multiPicks.length; i++) {
       const offset = offsets[i % offsets.length];

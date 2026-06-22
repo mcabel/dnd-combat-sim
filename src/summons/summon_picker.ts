@@ -364,23 +364,24 @@ export function pickConjureMinorElementalsSummon(slotLevel: number): SummonPick 
 // "N creatures at CR 1/4" option (8 at base count) for the most
 // iconic Pack-Tactics-style swarm loadout (e.g. 8 Wolves at L3).
 //
-// v1.5 simulation cap: MAX_SUMMONS_PER_CAST = 16. The PHB multiplier
+// v1.5 simulation cap: MAX_SUMMONS_PER_CAST = 24. The PHB multiplier
 // produces 8 (L3-4), 16 (L5-6), or 24 (L7+) creatures for the "8 at CR 1/4"
 // option. Session 44 Task #28 capped at 8 to avoid battlefield bloat.
-// Session 45 Task #28-follow-up raises the cap to 16, allowing the L5-6
-// upcast to produce the full 16 creatures (PHB-accurate). L7+ upcasts
-// are still capped at 16 (not 24) as a documented v1.6 simplification —
-// 24 creatures on the battlefield is unwieldy and the engine's per-turn
-// resolution scales linearly with creature count.
+// Session 45 Task #28-follow-up raised the cap to 16, allowing the L5-6
+// upcast to produce the full 16 creatures (PHB-accurate). Session 46
+// Task #28-follow-up-2 raises the cap to 24, allowing the L7+ upcast to
+// produce the full 24 creatures (PHB-accurate) now that the engine's
+// per-turn resolution has been profiled and confirmed to handle 24
+// summons in well under 1 second on modern hardware.
 //
 // The engine already supports batched summon turn-resolution (each
 // summon takes its own turn in initiative order), so the cap raise is
 // safe from a correctness standpoint. The performance impact is
-// acceptable: 16 wolves make 16 attack rolls per round, which the
+// acceptable: 24 wolves make 24 attack rolls per round, which the
 // engine handles in <1 second on modern hardware.
 
 /** Maximum number of creatures spawned by a single Conjure spell cast. */
-export const MAX_SUMMONS_PER_CAST = 16;
+export const MAX_SUMMONS_PER_CAST = 24;
 
 /**
  * Compute the PHB "At Higher Levels" multiplier for Conjure spells.
@@ -450,7 +451,7 @@ export function pickSummonPack(
  * v1.5 behaviour: picks the "Eight beasts of CR 1/4" option (the most
  * iconic Conjure Animals loadout — e.g. 8 Wolves with Pack Tactics).
  * The slot-level multiplier (1×/2×/3×) is applied to the count, then
- * capped at MAX_SUMMONS_PER_CAST = 8.
+ * capped at MAX_SUMMONS_PER_CAST = 24.
  *
  * Returns an array of SummonPick (all the same beast), or [] if the
  * bestiary is empty or has no CR 1/4 beast. The caller falls back to
@@ -477,7 +478,7 @@ export function pickConjureAnimalsSummonMulti(slotLevel: number): SummonPick[] {
  *
  * v1.5 behaviour: picks the "Eight fey of CR 1/4" option (e.g. 8 Sprites
  * with poisoned arrows). The slot-level multiplier is applied to the
- * count, then capped at MAX_SUMMONS_PER_CAST = 8.
+ * count, then capped at MAX_SUMMONS_PER_CAST = 24.
  *
  * Returns an array of SummonPick (all the same fey), or [] if the
  * bestiary is empty or has no CR 1/4 fey.
@@ -502,7 +503,7 @@ export function pickConjureWoodlandBeingsSummonMulti(slotLevel: number): SummonP
  *
  * v1.5 behaviour: picks the "Eight elementals of CR 1/4" option (e.g.
  * 8 Mud Mephits). The slot-level multiplier is applied to the count,
- * then capped at MAX_SUMMONS_PER_CAST = 8.
+ * then capped at MAX_SUMMONS_PER_CAST = 24.
  *
  * Returns an array of SummonPick (all the same elemental), or [] if
  * the bestiary is empty or has no CR 1/4 elemental.
