@@ -606,6 +606,20 @@ export function resetBudget(c: Combatant): void {
   // you hit with a melee attack on your next turn").
   cleanupAbsorbElements(c);
 
+  // ── Session 39: Lance of Lethargy Eldritch Invocation (XGE p.157) ──
+  // Speed reduction expires at start of each combatant's turn (v1
+  // simplification — canon: "beginning of your next turn" = caster's
+  // next turn). Inlined here (not in _invocations.ts) to avoid a
+  // circular dependency (utils.ts ↔ _invocations.ts). Mirrors Ray of
+  // Frost's cleanup pattern exactly.
+  if (c._hasLanceOfLethargy) {
+    if (c._lanceOfLethargyOriginalSpeed !== undefined) {
+      c.speed = c._lanceOfLethargyOriginalSpeed;
+      delete c._lanceOfLethargyOriginalSpeed;
+    }
+    delete c._hasLanceOfLethargy;
+  }
+
   const speed = effectiveSpeed(c);
   c.budget = {
     movementFt: speed,

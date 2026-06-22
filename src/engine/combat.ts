@@ -31,7 +31,10 @@ import { planTurn, planLegendaryAction, shouldTakeOpportunityAttack } from '../a
 import { shouldSmite, applyDivineSmite, tickRage, consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 // TG-008: Reaction spell subsystem
 import { REACTION_SPELLS, ReactionSpellDescriptor } from '../spells/_reaction_registry';
-import { fireEldritchBlastHitInvocations } from '../spells/_invocations';
+import {
+  fireEldritchBlastHitInvocations,
+  fireEldritchBlastDamageInvocations,
+} from '../spells/_invocations';
 import { consumeRider as consumeAbsorbElementsRider } from '../spells/absorb_elements';
 import { isControlledMount, mountDeathRiderCheck, isIndependentMount } from '../summons/mount';
 import { checkMountedCombatant, checkProtectionStyle, checkInterceptionReduction } from './mount_redirect';
@@ -1411,6 +1414,22 @@ export function resolveAttack(
 
   if (action.damage) {
     let dmg = rollDamage(action.damage, isCrit);
+
+    // ── Session 39: Eldritch Invocation — Agonizing Blast ──
+    // PHB p.110: "When you cast Eldritch Blast, add your Charisma modifier
+    // to the damage it deals on a hit." Pre-damage hook fired AFTER the
+    // base roll, BEFORE other riders. The bonus is flat (NOT dice, so NOT
+    // doubled on crit per PHB p.196). The hook checks the attacker's
+    // eldritchInvocations list; no-op if Agonizing Blast isn't known.
+    if (action.name === 'Eldritch Blast') {
+      const invDmg = fireEldritchBlastDamageInvocations(attacker, target);
+      if (invDmg > 0) {
+        dmg += invDmg;
+        log(state, 'action', attacker.id,
+          `${attacker.name} adds Agonizing Blast bonus (+${invDmg} force) to ${target.name}!`,
+          target.id, invDmg);
+      }
+    }
 
     // Divine Smite: Paladin expends a spell slot on a hit (PHB p.85)
     if (attacker.resources?.divineSmite && shouldSmite(attacker, target, isCrit)) {

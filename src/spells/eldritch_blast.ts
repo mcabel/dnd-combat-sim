@@ -101,4 +101,14 @@ export const metadata = {
    * See src/spells/_invocations.ts for the invocation registry.
    */
   repellingBlastV1Implemented: true as const,
+  /**
+   * Session 39: Three more EB-augmenting invocations are NOW supported:
+   *   - Agonizing Blast (PHB p.110): +CHA mod to EB damage (pre-damage hook)
+   *   - Grasp of Hadar (PHB p.111): pull 10 ft toward caster on EB hit
+   *   - Lance of Lethargy (XGE p.157): reduce target speed 10 ft on EB hit
+   * See src/spells/_invocations.ts for the invocation registry.
+   */
+  agonizingBlastV1Implemented: true as const,
+  graspOfHadarV1Implemented: true as const,
+  lanceOfLethargyV1Implemented: true as const,
 } as const;

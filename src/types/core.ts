@@ -614,6 +614,16 @@ export interface Combatant {
   _rayOfFrostOriginalSpeed?: number;
   _hasRayOfFrost?: boolean;
 
+  // ── Session 39 — Lance of Lethargy Eldritch Invocation (XGE p.157) ──
+  // Speed reduction scratch state. Mirrors Ray of Frost's pattern:
+  //   - _lanceOfLethargyOriginalSpeed: stored the first time the invocation
+  //     hits (prevents double-store on multi-hit / multi-caster scenarios)
+  //   - _hasLanceOfLethargy: flag indicating the speed is currently reduced
+  // Cleanup is inlined in resetBudget (utils.ts) to avoid a circular
+  // dependency (utils.ts ↔ _invocations.ts).
+  _lanceOfLethargyOriginalSpeed?: number;
+  _hasLanceOfLethargy?: boolean;
+
   // ---- Armor material (for cantrips like Shocking Grasp, PHB p.275) ----
   // True when the creature wears metal armor (chain shirt, scale mail, breastplate,
   // half plate, ring mail, chain mail, splint, plate). Optional — undefined is
