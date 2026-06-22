@@ -2281,6 +2281,203 @@ async function run() {
   });
 
 
+  await test('GET /api/spells result is sorted alphabetically', async () => {
+    const { json } = await request(BASE, '/api/spells?class=Wizard&level=1');
+    const sorted = [...json.spells].sort();
+    assert(JSON.stringify(json.spells) === JSON.stringify(sorted), 'Spells should be sorted alphabetically');
+  });
+
+  // ── POST /api/characters/:id/chooseinvocations ─────────────
+  {
+    let wlCharId = '';
+
+    await test('setup: create Warlock lv2 for invocations tests', async () => {
+      const created = await request(BASE, '/api/characters', 'POST', {
+        name: 'InvTestWarlock', race: 'Human', background: 'Sage', alignment: 'True Neutral',
+        firstClass: 'Warlock',
+        classLevels: [{ className: 'Warlock', level: 2 }],
+        subclassChoices: {},
+        experiencePoints: 0,
+        baseStats: { str: 8, dex: 14, con: 12, int: 10, wis: 13, cha: 16 },
+        stats:     { str: 8, dex: 14, con: 12, int: 10, wis: 13, cha: 16 },
+        maxHP: 16, currentHP: 16, temporaryHP: 0,
+        armorClass: 13, acFormula: 'Leather 11+DEX', speed: 30,
+        hitDice: [{ className: 'Warlock', dieSides: 8, total: 2, remaining: 2 }],
+        proficiencies: { armor: ['light'], weapons: ['simple-melee','simple-ranged'], tools: [], savingThrows: ['wis','cha'], skills: ['Arcana','Deception'], expertise: [] },
+        languages: ['Common'],
+        resources: {},
+        equipment: [],
+        gold: 10,
+        level1Features: [], allFeatures: [], feats: [],
+        backgroundFeature: 'Researcher', exhaustionLevel: 0,
+      });
+      assert(created.status === 201, `create expected 201, got ${created.status}: ${JSON.stringify(created.json)}`);
+      wlCharId = created.json.character.id;
+    });
+
+    await test('POST /chooseinvocations 400 when invocations not array', async () => {
+      const { status } = await request(BASE, `/api/characters/${wlCharId}/chooseinvocations`, 'POST', { invocations: 'Agonizing Blast' });
+      assert(status === 400, `Expected 400, got ${status}`);
+    });
+
+    await test('POST /chooseinvocations 400 when wrong count', async () => {
+      // Warlock lv2 needs exactly 2; sending 1 should fail
+      const { status, json } = await request(BASE, `/api/characters/${wlCharId}/chooseinvocations`, 'POST', { invocations: ['Agonizing Blast'] });
+      assert(status === 400, `Expected 400, got ${status}: ${JSON.stringify(json)}`);
+    });
+
+    await test('POST /chooseinvocations 400 for unknown invocation name', async () => {
+      const { status } = await request(BASE, `/api/characters/${wlCharId}/chooseinvocations`, 'POST', { invocations: ['Agonizing Blast', 'Fake Invocation'] });
+      assert(status === 400, `Expected 400, got ${status}`);
+    });
+
+    await test('POST /chooseinvocations 200 sets two invocations for lv2 Warlock', async () => {
+      const { status, json } = await request(BASE, `/api/characters/${wlCharId}/chooseinvocations`, 'POST', {
+        invocations: ['Agonizing Blast', 'Repelling Blast'],
+      });
+      assert(status === 200, `Expected 200, got ${status}: ${JSON.stringify(json)}`);
+      assert(Array.isArray(json.invocations), 'response.invocations is array');
+      assert(json.invocations.length === 2, `Expected 2 invocations, got ${json.invocations.length}`);
+      assert(json.invocations.includes('Agonizing Blast'), 'Agonizing Blast recorded');
+      assert(json.invocations.includes('Repelling Blast'), 'Repelling Blast recorded');
+      assert(json.character.eldritchInvocations.length === 2, 'eldritchInvocations on sheet has 2');
+    });
+
+    await test('POST /chooseinvocations 200 can replace invocations', async () => {
+      const { status, json } = await request(BASE, `/api/characters/${wlCharId}/chooseinvocations`, 'POST', {
+        invocations: ['Grasp of Hadar', 'Lance of Lethargy'],
+      });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(json.invocations.includes('Grasp of Hadar'), 'Grasp of Hadar recorded after replace');
+      assert(!json.invocations.includes('Agonizing Blast'), 'Old invocation replaced');
+    });
+
+    await test('cleanup: delete invocations test character', async () => {
+      const { deleteCharacter } = require('../characters/storage');
+      try { deleteCharacter(wlCharId); } catch {}
+    });
+  }
+
+  // ── POST /api/characters/:id/choosepactboon ─────────────────
+  {
+    let wlCharId3 = '';
+
+    await test('setup: create Warlock lv3 for pact boon tests', async () => {
+      const created = await request(BASE, '/api/characters', 'POST', {
+        name: 'PactBoonTestWarlock', race: 'Human', background: 'Sage', alignment: 'True Neutral',
+        firstClass: 'Warlock',
+        classLevels: [{ className: 'Warlock', level: 3 }],
+        subclassChoices: {},
+        experiencePoints: 0,
+        baseStats: { str: 8, dex: 14, con: 12, int: 10, wis: 13, cha: 16 },
+        stats:     { str: 8, dex: 14, con: 12, int: 10, wis: 13, cha: 16 },
+        maxHP: 24, currentHP: 24, temporaryHP: 0,
+        armorClass: 13, acFormula: 'Leather', speed: 30,
+        hitDice: [{ className: 'Warlock', dieSides: 8, total: 3, remaining: 3 }],
+        proficiencies: { armor: ['light'], weapons: ['simple-melee','simple-ranged'], tools: [], savingThrows: ['wis','cha'], skills: ['Arcana','Deception'], expertise: [] },
+        languages: ['Common'],
+        resources: {},
+        equipment: [],
+        gold: 10,
+        level1Features: [], allFeatures: [], feats: [],
+        backgroundFeature: 'Researcher', exhaustionLevel: 0,
+      });
+      assert(created.status === 201, `create expected 201, got ${created.status}: ${JSON.stringify(created.json)}`);
+      wlCharId3 = created.json.character.id;
+    });
+
+    await test('POST /choosepactboon 400 for invalid boon value', async () => {
+      const { status } = await request(BASE, `/api/characters/${wlCharId3}/choosepactboon`, 'POST', { boon: 'talisman' });
+      assert(status === 400, `Expected 400 for unsupported boon, got ${status}`);
+    });
+
+    await test('POST /choosepactboon 400 with missing boon', async () => {
+      const { status } = await request(BASE, `/api/characters/${wlCharId3}/choosepactboon`, 'POST', {});
+      assert(status === 400, `Expected 400 for missing boon, got ${status}`);
+    });
+
+    await test('POST /choosepactboon 200 sets blade pact', async () => {
+      const { status, json } = await request(BASE, `/api/characters/${wlCharId3}/choosepactboon`, 'POST', { boon: 'blade' });
+      assert(status === 200, `Expected 200, got ${status}: ${JSON.stringify(json)}`);
+      assert(json.pactBoon === 'blade', `Expected pactBoon=blade, got ${json.pactBoon}`);
+      assert(json.character.pactBoon === 'blade', 'pactBoon set on character sheet');
+    });
+
+    await test('POST /choosepactboon 400 when boon already set', async () => {
+      const { status } = await request(BASE, `/api/characters/${wlCharId3}/choosepactboon`, 'POST', { boon: 'tome' });
+      assert(status === 400, `Expected 400 when boon already chosen, got ${status}`);
+    });
+
+    await test('cleanup: delete pact boon test character', async () => {
+      const { deleteCharacter } = require('../characters/storage');
+      try { deleteCharacter(wlCharId3); } catch {}
+    });
+  }
+
+  // ── POST /api/characters/:id/addxp ──────────────────────────
+  {
+    let xpCharId = '';
+
+    await test('setup: create character for addxp tests', async () => {
+      const created = await request(BASE, '/api/characters', 'POST', {
+        name: 'XPTestChar', race: 'Human', background: 'Sage', alignment: 'True Neutral',
+        firstClass: 'Fighter',
+        classLevels: [{ className: 'Fighter', level: 1 }],
+        subclassChoices: {},
+        experiencePoints: 100,
+        baseStats: { str: 16, dex: 12, con: 14, int: 10, wis: 10, cha: 10 },
+        stats:     { str: 16, dex: 12, con: 14, int: 10, wis: 10, cha: 10 },
+        maxHP: 12, currentHP: 12, temporaryHP: 0,
+        armorClass: 16, acFormula: 'Chain Mail', speed: 30,
+        hitDice: [{ className: 'Fighter', dieSides: 10, total: 1, remaining: 1 }],
+        proficiencies: { armor: ['light','medium','heavy','shields'], weapons: ['simple-melee','simple-ranged','martial-melee','martial-ranged'], tools: [], savingThrows: ['str','con'], skills: ['Athletics','Perception'], expertise: [] },
+        languages: ['Common'],
+        resources: {},
+        equipment: [],
+        gold: 10,
+        level1Features: [], allFeatures: [], feats: [],
+        backgroundFeature: 'Researcher', exhaustionLevel: 0,
+      });
+      assert(created.status === 201, `create expected 201, got ${created.status}: ${JSON.stringify(created.json)}`);
+      xpCharId = created.json.character.id;
+    });
+
+    await test('POST /addxp 400 for negative amount', async () => {
+      const { status } = await request(BASE, `/api/characters/${xpCharId}/addxp`, 'POST', { amount: -50 });
+      assert(status === 400, `Expected 400 for negative amount, got ${status}`);
+    });
+
+    await test('POST /addxp 400 for non-numeric amount', async () => {
+      const { status } = await request(BASE, `/api/characters/${xpCharId}/addxp`, 'POST', { amount: 'lots' });
+      assert(status === 400, `Expected 400 for non-numeric amount, got ${status}`);
+    });
+
+    await test('POST /addxp 200 awards XP and returns new total', async () => {
+      const { status, json } = await request(BASE, `/api/characters/${xpCharId}/addxp`, 'POST', { amount: 200 });
+      assert(status === 200, `Expected 200, got ${status}: ${JSON.stringify(json)}`);
+      assert(json.newTotal === 300, `Expected newTotal=300, got ${json.newTotal}`);
+      assert(json.character.experiencePoints === 300, 'experiencePoints updated on character');
+    });
+
+    await test('POST /addxp 200 adding 0 XP is valid', async () => {
+      const { status, json } = await request(BASE, `/api/characters/${xpCharId}/addxp`, 'POST', { amount: 0 });
+      assert(status === 200, `Expected 200 for 0 XP, got ${status}`);
+      assert(json.newTotal === 300, `Total should remain 300, got ${json.newTotal}`);
+    });
+
+    await test('POST /addxp 200 accumulates across multiple calls', async () => {
+      await request(BASE, `/api/characters/${xpCharId}/addxp`, 'POST', { amount: 450 });
+      const { status, json } = await request(BASE, `/api/characters/${xpCharId}/addxp`, 'POST', { amount: 250 });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(json.newTotal === 1000, `Expected 1000 total, got ${json.newTotal}`);
+    });
+
+    await test('cleanup: delete addxp test character', async () => {
+      const { deleteCharacter } = require('../characters/storage');
+      try { deleteCharacter(xpCharId); } catch {}
+    });
+  }
+
   // ── Tear down ─────────────────────────────────────────────
 
   // Clean up test parties created during this run

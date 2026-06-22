@@ -21,6 +21,11 @@
 //   DELETE /api/parties/:id             delete a party
 //   GET    /api/parties/:id/members     get full character sheets for party members
 //   POST   /api/parties/:id/awardxp     award combat XP to all party members
+//
+// Character management extras:
+//   POST   /api/characters/:id/chooseinvocations   set Warlock Eldritch Invocations
+//   POST   /api/characters/:id/choosepactboon       set Warlock Pact Boon
+//   POST   /api/characters/:id/addxp                award XP to a single character
 // ============================================================
 
 import { Router, Request, Response } from 'express';
@@ -34,7 +39,7 @@ import {
 import { ValidationError }            from './characters/validator';
 import { buildCombatant, buildWarnings } from './characters/builder';
 import { applyLevelUp, popLevel, bootstrapLevelHistory } from './characters/leveler';
-import { applyASI, applyFeat, chooseSubclass } from './characters/improvements';
+import { applyASI, applyFeat, chooseSubclass, chooseEldritchInvocations, choosePactBoon } from './characters/improvements';
 import { listFeats, getFeat }          from './characters/feat_data';
 import { spawnMonster, Raw5etoolsMonster } from './parser/fivetools';
 import { simulate }                    from './scenarios/simulate';
@@ -703,6 +708,99 @@ router.post('/characters/:id/choosesubclass', async (req: Request, res: Response
       className,
       subclassName: updated.subclassChoices[className],
     });
+  } catch (err) {
+    return handleError(res, err);
+  }
+});
+
+// ============================================================
+// POST /api/characters/:id/chooseinvocations
+// Set the full list of Eldritch Invocations for a Warlock.
+// Body: { invocations: string[] }  — must be exactly the right count for level.
+// Response: { character: CharacterSheet; invocations: string[] }
+// ============================================================
+router.post('/characters/:id/chooseinvocations', async (req: Request, res: Response) => {
+  try {
+    const id   = String(req.params.id);
+    const body = req.body ?? {};
+
+    const invocations = body.invocations;
+    if (!Array.isArray(invocations) || invocations.some(v => typeof v !== 'string')) {
+      return res.status(400).json({ error: 'invocations (string[]) is required.' });
+    }
+
+    const sheet = loadCharacter(id);
+    if (!sheet) return res.status(404).json({ error: `Character not found: ${id}` });
+
+    const updated = chooseEldritchInvocations(sheet, invocations);
+    await saveCharacter(updated);
+
+    return res.json({ character: updated, invocations: updated.eldritchInvocations });
+  } catch (err) {
+    // chooseEldritchInvocations throws plain Error for all validation failures
+    if (err instanceof Error) return res.status(400).json({ error: err.message });
+    return handleError(res, err);
+  }
+});
+
+// ============================================================
+// POST /api/characters/:id/choosepactboon
+// Set the Pact Boon for a Warlock level 3+ (chain/blade/tome).
+// Body: { boon: 'chain' | 'blade' | 'tome' }
+// Response: { character: CharacterSheet; pactBoon: string }
+// ============================================================
+router.post('/characters/:id/choosepactboon', async (req: Request, res: Response) => {
+  try {
+    const id   = String(req.params.id);
+    const body = req.body ?? {};
+
+    const VALID_BOONS = ['chain', 'blade', 'tome'] as const;
+    const boon = body.boon;
+    if (!boon || !VALID_BOONS.includes(boon)) {
+      return res.status(400).json({ error: `boon must be one of: ${VALID_BOONS.join(', ')}.` });
+    }
+
+    const sheet = loadCharacter(id);
+    if (!sheet) return res.status(404).json({ error: `Character not found: ${id}` });
+
+    const updated = choosePactBoon(sheet, boon);
+    await saveCharacter(updated);
+
+    return res.json({ character: updated, pactBoon: updated.pactBoon });
+  } catch (err) {
+    // choosePactBoon throws plain Error for all validation failures
+    if (err instanceof Error) return res.status(400).json({ error: err.message });
+    return handleError(res, err);
+  }
+});
+
+// ============================================================
+// POST /api/characters/:id/addxp
+// Award XP directly to a single character.
+// Body: { amount: number }
+// Response: { character: CharacterSheet; newTotal: number }
+// ============================================================
+router.post('/characters/:id/addxp', async (req: Request, res: Response) => {
+  try {
+    const id   = String(req.params.id);
+    const body = req.body ?? {};
+
+    const amount = Number(body.amount);
+    if (!Number.isFinite(amount) || amount < 0) {
+      return res.status(400).json({ error: 'amount must be a non-negative number.' });
+    }
+
+    const sheet = loadCharacter(id);
+    if (!sheet) return res.status(404).json({ error: `Character not found: ${id}` });
+
+    const updated = {
+      ...sheet,
+      experiencePoints: (sheet.experiencePoints || 0) + amount,
+      updatedAt: new Date().toISOString(),
+    };
+    await saveCharacter(updated);
+
+    return res.json({ character: updated, newTotal: updated.experiencePoints });
   } catch (err) {
     return handleError(res, err);
   }
