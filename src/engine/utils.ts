@@ -129,7 +129,17 @@ export function rollSave(
 ): { roll: number; total: number; success: boolean } {
   const score = combatant[ability];
   const mod = abilityMod(score);
-  const prof = isProficient ? profBonusByCR(combatant.cr) : 0;
+
+  // ── Session 48 Task #29-follow-up-4b: Diamond Soul (Open Hand Monk 13) ──
+  // PHB p.79: "the purity of your ki suffuses your entire being, granting
+  // you proficiency in all saving throws."
+  // When the combatant has Diamond Soul, treat ALL saves as proficient.
+  // Use combatantProfBonus() for the correct proficiency (level-based for
+  // PCs, CR-based for monsters) — profBonusByCR returns 2 for all PCs
+  // (cr=null) which is wrong for level 5+ monks.
+  const diamondSoulActive = combatant.classFeatures?.includes('Diamond Soul') === true;
+  const effectiveProficient = isProficient || diamondSoulActive;
+  const prof = effectiveProficient ? combatantProfBonus(combatant) : 0;
 
   // Conditions and advantage-system entries that affect saving throws
   const selfSave = querySelf(combatant, `save:${ability}` as import('../types/core').D20TestScope);
