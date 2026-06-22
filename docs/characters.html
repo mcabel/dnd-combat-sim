@@ -1541,10 +1541,13 @@ function renderEquipment(c) {
     const listId = `equip-list-${c.id}`;
     const attunedCount = items.filter(e => e.attuned).length;
     const attuneCap = attunementCap(c);
+    const carried = items.reduce((sum, e) => sum + (e.weight || 0) * (e.quantity || 1), 0);
+    const capacity = (c.stats?.str || 10) * 15;
     html += `<div>
       <span style="font-size:11px;color:var(--muted);cursor:pointer" onclick="toggleEquipList('${listId}')">
         <strong>All Gear (${items.length})</strong> <span id="${listId}-arrow">▸</span>
         ${attunedCount > 0 ? `<span style="margin-left:8px;color:${attunedCount > attuneCap ? 'var(--danger,#e05252)' : 'var(--muted)'}">Attuned: ${attunedCount}/${attuneCap}</span>` : ''}
+        ${carried > 0 ? `<span style="margin-left:8px;color:${carried > capacity ? 'var(--danger,#e05252)' : 'var(--muted)'}">Carried: ${carried}/${capacity} lb</span>` : ''}
       </span>
       <div id="${listId}" style="display:none;margin-top:4px">
         <table style="width:100%;border-collapse:collapse;font-size:11px">
@@ -1552,6 +1555,7 @@ function renderEquipment(c) {
             <tr style="color:var(--muted);border-bottom:1px solid var(--border)">
               <th style="text-align:left;padding:2px 4px">Item</th>
               <th style="text-align:center;padding:2px 4px">Qty</th>
+              <th style="text-align:center;padding:2px 4px">Wt</th>
               <th style="text-align:center;padding:2px 4px">Cat</th>
               <th style="text-align:center;padding:2px 4px">Equipped</th>
               <th style="text-align:center;padding:2px 4px">Attuned</th>
@@ -1577,6 +1581,14 @@ function renderEquipment(c) {
                     onblur="saveEquipQty('${c.id}', ${i}, this.value)"
                     onkeydown="if(event.key==='Enter')this.blur()"
                     title="Edit quantity"/>
+                </td>
+                <td style="text-align:center;padding:3px 4px">
+                  <input type="number" value="${e.weight ?? ''}" min="0" step="0.1" placeholder="—"
+                    style="width:48px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:11px;padding:2px 4px;text-align:center;outline:none"
+                    onchange="saveEquipWeight('${c.id}', ${i}, this.value)"
+                    onblur="saveEquipWeight('${c.id}', ${i}, this.value)"
+                    onkeydown="if(event.key==='Enter')this.blur()"
+                    title="Edit weight (lb, per unit)"/>
                 </td>
                 <td style="text-align:center;padding:3px 4px;color:var(--muted)">${e.category}</td>
                 <td style="text-align:center;padding:3px 4px">
@@ -1786,9 +1798,53 @@ async function saveEquipQty(charId, idx, rawVal) {
     if (!r.ok) { showBanner('Failed to update quantity', 'error'); return; }
     const { character: saved } = await r.json();
     S.charDetail = saved;
-    // no full re-render needed — input already shows new value
+    // Carried-weight summary depends on quantity, so re-render (preserve list-open state)
+    const listId  = `equip-list-${charId}`;
+    const wasOpen = document.getElementById(listId)?.style.display === 'block';
+    renderEquipment(S.charDetail);
+    if (wasOpen) {
+      const el    = document.getElementById(listId);
+      const arrow = document.getElementById(listId + '-arrow');
+      if (el)    el.style.display  = 'block';
+      if (arrow) arrow.textContent = '▾';
+    }
   } catch (e) {
     showBanner('Network error updating quantity', 'error');
+  }
+}
+
+async function saveEquipWeight(charId, idx, rawVal) {
+  const trimmed = String(rawVal).trim();
+  const weight  = trimmed === '' ? undefined : parseFloat(trimmed);
+  if (trimmed !== '' && (isNaN(weight) || weight < 0)) { showBanner('Weight must be ≥ 0', 'error'); return; }
+  const c = S.charDetail && S.charDetail.id === charId ? S.charDetail : null;
+  if (!c) return;
+  const updated = c.equipment.map((item, i) => {
+    if (i !== idx) return item;
+    const copy = { ...item };
+    if (weight === undefined) { delete copy.weight; } else { copy.weight = weight; }
+    return copy;
+  });
+  try {
+    const r = await fetch(`/api/characters/${charId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ equipment: updated })
+    });
+    if (!r.ok) { showBanner('Failed to update weight', 'error'); return; }
+    const { character: saved } = await r.json();
+    S.charDetail = saved;
+    const listId  = `equip-list-${charId}`;
+    const wasOpen = document.getElementById(listId)?.style.display === 'block';
+    renderEquipment(S.charDetail);
+    if (wasOpen) {
+      const el    = document.getElementById(listId);
+      const arrow = document.getElementById(listId + '-arrow');
+      if (el)    el.style.display  = 'block';
+      if (arrow) arrow.textContent = '▾';
+    }
+  } catch (e) {
+    showBanner('Network error updating weight', 'error');
   }
 }
 

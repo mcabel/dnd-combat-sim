@@ -18,7 +18,7 @@ import { validateCharacterSheet, validateParty, ValidationError } from '../chara
 import {
   CharacterSheet, Party, totalLevel, deriveStats,
   abilityModifier, levelFromXP, proficiencyBonus,
-  attunementCap, attunedItemCount,
+  attunementCap, attunedItemCount, carryingCapacity, totalCarriedWeight,
 } from '../characters/types';
 
 // ---- Test Harness -------------------------------------------
@@ -574,6 +574,28 @@ console.log('\n=== Attunement Tracking ===');
   const fourAttunedArtificer10 = { ...fourAttuned, firstClass: 'Artificer' as const, classLevels: [{ className: 'Artificer' as const, level: 10 }] };
   const okAtRaisedCap = validateCharacterSheet(fourAttunedArtificer10);
   assert('4 attuned items passes for a lv10 Artificer (cap 4)', !okAtRaisedCap.some(e => e.includes('attuned')));
+}
+
+// =============================================================
+// Carrying capacity
+// =============================================================
+console.log('\n=== Carrying Capacity ===');
+{
+  eq('STR 15 -> capacity 225 lb', carryingCapacity(makeSheet({ stats: { str: 15, dex: 10, con: 14, int: 8, wis: 12, cha: 10 } })), 225);
+  eq('STR 8 -> capacity 120 lb', carryingCapacity(makeSheet({ stats: { str: 8, dex: 10, con: 14, int: 8, wis: 12, cha: 10 } })), 120);
+  eq('STR 20 -> capacity 300 lb', carryingCapacity(makeSheet({ stats: { str: 20, dex: 10, con: 14, int: 8, wis: 12, cha: 10 } })), 300);
+
+  eq('totalCarriedWeight with no equipment is 0', totalCarriedWeight(makeSheet({ equipment: [] })), 0);
+
+  const withWeights = makeSheet({
+    equipment: [
+      { name: 'Plate Armor', quantity: 1, equipped: true, category: 'armor', weight: 65 },
+      { name: 'Longsword',   quantity: 1, equipped: true, category: 'weapon', weight: 3 },
+      { name: 'Rations',     quantity: 10, equipped: false, category: 'gear', weight: 2 }, // 10 x 2 = 20
+      { name: 'Torch',       quantity: 5, equipped: false, category: 'gear' }, // no weight set -> contributes 0
+    ],
+  });
+  eq('totalCarriedWeight sums weight x quantity, untracked items contribute 0', totalCarriedWeight(withWeights), 88);
 }
 
 // =============================================================

@@ -178,6 +178,8 @@ export interface EquipmentItem {
   attuned?: boolean;
   /** Flags this as a magic item at all (independent of whether it needs attunement). */
   magical?: boolean;
+  /** Weight in pounds, per unit (PHB p.176). Absent = untracked/unknown weight. */
+  weight?: number;
 }
 
 export interface CharacterProficiencies {
@@ -521,6 +523,21 @@ export function attunementCap(sheet: CharacterSheet): number {
 /** Count of currently-attuned equipment items. */
 export function attunedItemCount(sheet: CharacterSheet): number {
   return (sheet.equipment || []).filter(item => item.attuned).length;
+}
+
+/** Carrying capacity in pounds: STR score x 15 (PHB p.176, base rule — not
+ *  the optional Variant: Encumbrance speed-penalty tiers, which aren't
+ *  modeled here). */
+export function carryingCapacity(sheet: CharacterSheet): number {
+  return sheet.stats.str * 15;
+}
+
+/** Total weight of carried equipment in pounds. Items with no `weight` set
+ *  contribute 0 (untracked, not assumed weightless) — this is a best-effort
+ *  total, not a guarantee every item has a known weight. Coin weight (PHB:
+ *  50 coins/lb) is intentionally not included. */
+export function totalCarriedWeight(sheet: CharacterSheet): number {
+  return (sheet.equipment || []).reduce((sum, item) => sum + (item.weight || 0) * (item.quantity || 1), 0);
 }
 
 /** Compute proficiency bonus from total level */
