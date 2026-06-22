@@ -81,9 +81,9 @@ console.log('\n=== 1. Thorn Whip is parsed correctly ===\n');
   const thornWhip = druid.actions.find(a => a.name === 'Thorn Whip');
   assert('Thorn Whip found in Druid actions', thornWhip !== undefined);
   eq('Thorn Whip range = 30ft', thornWhip?.range?.normal, 30);
-  eq('Thorn Whip attackType = ranged (parser treats cantrips with range as ranged)', thornWhip?.attackType, 'ranged');
+  eq('Thorn Whip attackType = spell (Session 41 cantrip pipeline — was "ranged" when Thorn Whip came from weapons array)', thornWhip?.attackType, 'spell');
   eq('Thorn Whip damage type = piercing', thornWhip?.damageType, 'piercing');
-  assert('Thorn Whip has no slotLevel (cantrip)', !thornWhip?.slotLevel);
+  eq('Thorn Whip slotLevel = 0 (cantrip, from SPELL_DB)', thornWhip?.slotLevel, 0);
 }
 
 // ============================================================
