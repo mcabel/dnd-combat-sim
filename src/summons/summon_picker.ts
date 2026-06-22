@@ -346,6 +346,165 @@ export function pickConjureMinorElementalsSummon(slotLevel: number): SummonPick 
   return pickSummonByCR(bestiary, maxCR, 'elemental');
 }
 
+// ── Session 44 Task #28: Multi-creature Conjure spell options ──
+//
+// PHB Conjure Animals / Woodland Beings / Minor Elementals all offer a
+// table of (count, maxCR) options at the base slot level, plus an
+// "At Higher Levels" multiplier:
+//   - L3/L4 base slot: 1× multiplier
+//   - L5/L6: 2× multiplier
+//   - L7/L8/L9: 3× multiplier
+//
+// (PHB p.225 Conjure Animals: "Twice as many with a 5th-level slot,
+// three times as many with a 7th-level slot." Same wording on p.226
+// for Woodland Beings and Minor Elementals.)
+//
+// v1 (Session 43 Task #21) always picked the "1 creature at max CR"
+// option. This v1.5 adds multi-creature pickers that select the
+// "N creatures at CR 1/4" option (8 at base count) for the most
+// iconic Pack-Tactics-style swarm loadout (e.g. 8 Wolves at L3).
+//
+// v1.5 simulation cap: MAX_SUMMONS_PER_CAST = 8. The PHB multiplier
+// would produce 16 (L5) or 24 (L7) creatures, which slows the engine
+// and clutters the battlefield. We cap at 8 — a documented v1.5
+// simplification. Future versions can raise this once the engine
+// supports batched summon turn-resolution.
+
+/** Maximum number of creatures spawned by a single Conjure spell cast. */
+export const MAX_SUMMONS_PER_CAST = 8;
+
+/**
+ * Compute the PHB "At Higher Levels" multiplier for Conjure spells.
+ *
+ *   L3, L4 → 1× (base count from the option table)
+ *   L5, L6 → 2×
+ *   L7, L8, L9 → 3×
+ *
+ * (PHB p.225: "Twice as many with a 5th-level slot, three times as
+ * many with a 7th-level slot." The multiplier applies to ALL options
+ * in the PHB table, not just the 8-creature one.)
+ */
+export function conjureSlotMultiplier(slotLevel: number): number {
+  if (slotLevel >= 7) return 3;
+  if (slotLevel >= 5) return 2;
+  return 1;
+}
+
+/**
+ * Pick multiple copies of the same creature for a Conjure spell.
+ *
+ * Returns an array of SummonPick (all identical — same name, CR, raw)
+ * with length = min(count, MAX_SUMMONS_PER_CAST). Returns [] if no
+ * matching creature is found in the bestiary.
+ *
+ * Used by the multi-creature Conjure spell options (8 Wolves, 8 Sprites,
+ * 8 Mephits, etc.). The caller spawns one Combatant per pick.
+ */
+export function pickSummonPack(
+  maxCR: number,
+  creatureType: string,
+  count: number,
+): SummonPick[] {
+  const bestiary = getBestiary();
+  if (bestiary.size === 0) return [];
+
+  // Pick the highest-CR creature of the matching type within maxCR.
+  // All N creatures in the pack are identical (same species) — this
+  // matches PHB "X beasts of CR Y" (the beasts are the same creature).
+  const pick = pickSummonByCR(bestiary, maxCR, creatureType);
+  if (!pick) return [];
+
+  // Cap at MAX_SUMMONS_PER_CAST (v1.5 simplification).
+  const cappedCount = Math.min(count, MAX_SUMMONS_PER_CAST);
+
+  // Build N copies. Each copy is a separate SummonPick object so the
+  // caller can spawn N separate Combatants with unique IDs.
+  const pack: SummonPick[] = [];
+  for (let i = 0; i < cappedCount; i++) {
+    pack.push({ name: pick.name, cr: pick.cr, raw: pick.raw });
+  }
+  return pack;
+}
+
+// ---- Conjure Animals multi-picker (Session 44 Task #28) -------
+
+/**
+ * Pick a pack of beasts for Conjure Animals at the given slot level.
+ *
+ * PHB p.225 option table (L3 base):
+ *   - One beast of CR 2
+ *   - Two beasts of CR 1
+ *   - Three beasts of CR 1/2
+ *   - Four beasts of CR 1/4
+ *   - Eight beasts of CR 1/4
+ *
+ * v1.5 behaviour: picks the "Eight beasts of CR 1/4" option (the most
+ * iconic Conjure Animals loadout — e.g. 8 Wolves with Pack Tactics).
+ * The slot-level multiplier (1×/2×/3×) is applied to the count, then
+ * capped at MAX_SUMMONS_PER_CAST = 8.
+ *
+ * Returns an array of SummonPick (all the same beast), or [] if the
+ * bestiary is empty or has no CR 1/4 beast. The caller falls back to
+ * the single-creature picker or the v1 hardcoded 2-Wolf stat block.
+ */
+export function pickConjureAnimalsSummonMulti(slotLevel: number): SummonPick[] {
+  // PHB option 4: Eight beasts of CR 1/4
+  const baseCount = 8;
+  const maxCR = 0.25;
+  const multiplier = conjureSlotMultiplier(slotLevel);
+  return pickSummonPack(maxCR, 'beast', baseCount * multiplier);
+}
+
+// ---- Conjure Woodland Beings multi-picker (Session 44 Task #28) -------
+
+/**
+ * Pick a pack of fey for Conjure Woodland Beings at the given slot level.
+ *
+ * PHB p.226 option table (L4 base):
+ *   - One fey of CR 2
+ *   - Two fey of CR 1
+ *   - Four fey of CR 1/2
+ *   - Eight fey of CR 1/4
+ *
+ * v1.5 behaviour: picks the "Eight fey of CR 1/4" option (e.g. 8 Sprites
+ * with poisoned arrows). The slot-level multiplier is applied to the
+ * count, then capped at MAX_SUMMONS_PER_CAST = 8.
+ *
+ * Returns an array of SummonPick (all the same fey), or [] if the
+ * bestiary is empty or has no CR 1/4 fey.
+ */
+export function pickConjureWoodlandBeingsSummonMulti(slotLevel: number): SummonPick[] {
+  const baseCount = 8;
+  const maxCR = 0.25;
+  const multiplier = conjureSlotMultiplier(slotLevel);
+  return pickSummonPack(maxCR, 'fey', baseCount * multiplier);
+}
+
+// ---- Conjure Minor Elementals multi-picker (Session 44 Task #28) -------
+
+/**
+ * Pick a pack of elementals for Conjure Minor Elementals at the given slot level.
+ *
+ * PHB p.225 option table (L4 base):
+ *   - One elemental of CR 2
+ *   - Two elementals of CR 1
+ *   - Four elementals of CR 1/2
+ *   - Eight elementals of CR 1/4
+ *
+ * v1.5 behaviour: picks the "Eight elementals of CR 1/4" option (e.g.
+ * 8 Mud Mephits). The slot-level multiplier is applied to the count,
+ * then capped at MAX_SUMMONS_PER_CAST = 8.
+ *
+ * Returns an array of SummonPick (all the same elemental), or [] if
+ * the bestiary is empty or has no CR 1/4 elemental.
+ */
+export function pickConjureMinorElementalsSummonMulti(slotLevel: number): SummonPick[] {
+  const baseCount = 8;
+  const maxCR = 0.25;
+  const multiplier = conjureSlotMultiplier(slotLevel);
+  return pickSummonPack(maxCR, 'elemental', baseCount * multiplier);
+}
+
 // ---- Combatant builder (from bestiary pick) ------------------
 
 /**

@@ -56,7 +56,12 @@ import { startConcentration, rollDie } from '../engine/utils';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 import { CONJURE_ANIMALS_OPTIONS, DEFAULT_CA_OPTION } from '../summons/cr_picker';
 // Session 43 Task #21: bestiary-driven summon selection.
-import { pickConjureAnimalsSummon, buildSummonCombatant } from '../summons/summon_picker';
+// Session 44 Task #28: multi-creature option (8 wolves) preferred when bestiary loaded.
+import {
+  pickConjureAnimalsSummon,
+  pickConjureAnimalsSummonMulti,
+  buildSummonCombatant,
+} from '../summons/summon_picker';
 
 // ---- Metadata -----------------------------------------------
 
@@ -250,8 +255,11 @@ export function shouldCast(caster: Combatant, bf: Battlefield): boolean {
  *  1. Consume a spell slot (find the lowest available L3+ slot).
  *  2. Break any existing concentration (safety net).
  *  3. Start concentration on Conjure Animals.
- *  4. Create 2 Wolf combatants (v1: hardcoded, most common option).
- *  5. Add wolves to battlefield combatants.
+ *  4. Try multi-creature bestiary-driven spawn (8 wolves, Session 44 Task #28).
+ *     If bestiary is empty or no CR 1/4 beast found, try single-creature spawn
+ *     (1 beast at max CR, Session 43 Task #21). If that also fails, fall back
+ *     to v1 hardcoded 2 Wolves.
+ *  5. Add summons to battlefield combatants.
  *  6. Insert into initiative after the caster.
  *  7. Log the summon.
  */
@@ -269,13 +277,50 @@ export function execute(
   }
   startConcentration(caster, 'Conjure Animals');
 
-  // Session 43 Task #21: bestiary-driven summon selection.
+  // ── Session 44 Task #28: multi-creature bestiary-driven spawn ──
+  // Try the "8 beasts of CR 1/4" option first (the most iconic Conjure
+  // Animals loadout — 8 Wolves with Pack Tactics). The slot-level
+  // multiplier (1×/2×/3×) is applied to the count, capped at 8.
+  const multiPicks = pickConjureAnimalsSummonMulti(slotLevel);
+
+  if (multiPicks.length > 0) {
+    // Spawn N creatures, spreading them around the caster.
+    const offsets = [
+      { x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }, { x: 0, y: -1 },
+      { x: 1, y: 1 }, { x: -1, y: -1 }, { x: 1, y: -1 }, { x: -1, y: 1 },
+    ];
+    for (let i = 0; i < multiPicks.length; i++) {
+      const offset = offsets[i % offsets.length];
+      const pos = {
+        x: caster.pos.x + offset.x,
+        y: caster.pos.y + offset.y,
+        z: caster.pos.z,
+      };
+      const summon = buildSummonCombatant(multiPicks[i], caster, 'Conjure Animals', pos);
+      // Append index to the name for distinguishability.
+      summon.name = `${multiPicks[i].name} (${caster.name}) #${i + 1}`;
+      state.battlefield.combatants.set(summon.id, summon);
+      if (!state.battlefield.pendingInitiativeInserts) {
+        state.battlefield.pendingInitiativeInserts = [];
+      }
+      state.battlefield.pendingInitiativeInserts.push({
+        combatantId: summon.id,
+        insertAfterId: caster.id,
+      });
+    }
+    const firstName = multiPicks[0].name;
+    const count = multiPicks.length;
+    emit(
+      state, 'action', caster.id,
+      `${caster.name} casts Conjure Animals (slot L${slotLevel})! ${count} ${firstName}s appear (CR ${multiPicks[0].cr} each).`,
+    );
+    return;
+  }
+
+  // ── Session 43 Task #21: single-creature bestiary-driven spawn ──
   // Tries to pick the appropriate beast from the bestiary based on slot
   // level (L3 → CR 2, L4 → CR 3, ..., L9 → CR 8). Falls back to 2 Wolves
   // (v1 hardcoded) if the bestiary is not loaded or no matching creature.
-  //
-  // v1 simplification: picks the "1 creature at max CR" option from the
-  // PHB table. The 2/4/8-creature options are not modelled in v1.
   const pick = pickConjureAnimalsSummon(slotLevel);
 
   if (pick) {

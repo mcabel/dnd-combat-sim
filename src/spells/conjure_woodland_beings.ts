@@ -62,7 +62,12 @@ import { startConcentration } from '../engine/utils';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 import { CONJURE_WOODLAND_BEINGS_OPTIONS, DEFAULT_CWB_OPTION } from '../summons/cr_picker';
 // Session 43 Task #21: bestiary-driven summon selection.
-import { pickConjureWoodlandBeingsSummon, buildSummonCombatant } from '../summons/summon_picker';
+// Session 44 Task #28: multi-creature option (8 fey) preferred when bestiary loaded.
+import {
+  pickConjureWoodlandBeingsSummon,
+  pickConjureWoodlandBeingsSummonMulti,
+  buildSummonCombatant,
+} from '../summons/summon_picker';
 
 // ---- Metadata -----------------------------------------------
 
@@ -284,8 +289,11 @@ export function shouldCast(caster: Combatant, bf: Battlefield): boolean {
  *  1. Consume a spell slot (find the lowest available L4+ slot).
  *  2. Break any existing concentration (safety net).
  *  3. Start concentration on Conjure Woodland Beings.
- *  4. Create 4 Sprite combatants (v1: hardcoded, most iconic option).
- *  5. Add sprites to battlefield combatants.
+ *  4. Try multi-creature bestiary-driven spawn (8 fey, Session 44 Task #28).
+ *     If bestiary is empty or no CR 1/4 fey found, try single-creature spawn
+ *     (1 fey at max CR, Session 43 Task #21). If that also fails, fall back
+ *     to v1 hardcoded 4 Sprites.
+ *  5. Add summons to battlefield combatants.
  *  6. Insert into initiative after the caster.
  *  7. Log the summon.
  */
@@ -303,13 +311,47 @@ export function execute(
   }
   startConcentration(caster, 'Conjure Woodland Beings');
 
-  // Session 43 Task #21: bestiary-driven summon selection.
+  // ── Session 44 Task #28: multi-creature bestiary-driven spawn ──
+  // Try the "8 fey of CR 1/4" option first (e.g. 8 Sprites). The slot-level
+  // multiplier (1×/2×/3×) is applied to the count, capped at 8.
+  const multiPicks = pickConjureWoodlandBeingsSummonMulti(slotLevel);
+
+  if (multiPicks.length > 0) {
+    const offsets = [
+      { x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }, { x: 0, y: -1 },
+      { x: 1, y: 1 }, { x: -1, y: -1 }, { x: 1, y: -1 }, { x: -1, y: 1 },
+    ];
+    for (let i = 0; i < multiPicks.length; i++) {
+      const offset = offsets[i % offsets.length];
+      const pos = {
+        x: caster.pos.x + offset.x,
+        y: caster.pos.y + offset.y,
+        z: caster.pos.z,
+      };
+      const summon = buildSummonCombatant(multiPicks[i], caster, 'Conjure Woodland Beings', pos);
+      summon.name = `${multiPicks[i].name} (${caster.name}) #${i + 1}`;
+      state.battlefield.combatants.set(summon.id, summon);
+      if (!state.battlefield.pendingInitiativeInserts) {
+        state.battlefield.pendingInitiativeInserts = [];
+      }
+      state.battlefield.pendingInitiativeInserts.push({
+        combatantId: summon.id,
+        insertAfterId: caster.id,
+      });
+    }
+    const firstName = multiPicks[0].name;
+    const count = multiPicks.length;
+    emit(
+      state, 'action', caster.id,
+      `${caster.name} casts Conjure Woodland Beings (slot L${slotLevel})! ${count} ${firstName}s appear (CR ${multiPicks[0].cr} each).`,
+    );
+    return;
+  }
+
+  // ── Session 43 Task #21: single-creature bestiary-driven spawn ──
   // Tries to pick the appropriate fey from the bestiary based on slot
   // level (L4 → CR 2, L5 → CR 3, ..., L9 → CR 7). Falls back to 4 Sprites
   // (v1 hardcoded) if the bestiary is not loaded or no matching creature.
-  //
-  // v1 simplification: picks the "1 creature at max CR" option from the
-  // PHB table. The 2/4/8-creature options are not modelled in v1.
   const pick = pickConjureWoodlandBeingsSummon(slotLevel);
 
   if (pick) {
