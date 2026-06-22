@@ -174,6 +174,10 @@ export interface EquipmentItem {
   equipped: boolean;
   category: 'weapon' | 'armor' | 'shield' | 'tool' | 'gear' | 'pack';
   notes?: string;
+  /** Magic item requiring attunement (DMG p.136) — only meaningful if `magical` is true. */
+  attuned?: boolean;
+  /** Flags this as a magic item at all (independent of whether it needs attunement). */
+  magical?: boolean;
 }
 
 export interface CharacterProficiencies {
@@ -499,6 +503,24 @@ export function abilityModifier(score: number): number {
 /** Sum all class levels to get total character level */
 export function totalLevel(sheet: CharacterSheet): number {
   return sheet.classLevels.reduce((sum, cl) => sum + cl.level, 0);
+}
+
+/**
+ * Max simultaneous magic item attunements (DMG p.136: normally 3).
+ * Artificer raises this via Magic Item Adept (lv10 → 4), Magic Item
+ * Savant (lv14 → 5), Magic Item Master (lv18 → 6).
+ */
+export function attunementCap(sheet: CharacterSheet): number {
+  const artificerLevel = sheet.classLevels.find(cl => cl.className === 'Artificer')?.level ?? 0;
+  if (artificerLevel >= 18) return 6;
+  if (artificerLevel >= 14) return 5;
+  if (artificerLevel >= 10) return 4;
+  return 3;
+}
+
+/** Count of currently-attuned equipment items. */
+export function attunedItemCount(sheet: CharacterSheet): number {
+  return (sheet.equipment || []).filter(item => item.attuned).length;
 }
 
 /** Compute proficiency bonus from total level */

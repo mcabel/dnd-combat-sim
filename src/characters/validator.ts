@@ -10,6 +10,7 @@
 import {
   CharacterSheet, Party, totalLevel, MULTICLASS_PREREQS,
   XP_THRESHOLDS, CLASS_HIT_DICE, ClassName,
+  attunementCap, attunedItemCount,
 } from './types';
 
 /** Thrown by storage functions when validation fails. */
@@ -237,6 +238,15 @@ export function validateCharacterSheet(sheet: CharacterSheet): string[] {
   }
   if (!Array.isArray(sheet.equipment)) {
     errors.push('equipment must be an array');
+  } else {
+    // Attunement cap (DMG p.136: normally 3; Artificer raises it via Magic
+    // Item Adept/Savant/Master). Only checked when equipment is actually an
+    // array — a malformed equipment field is already reported above.
+    const cap   = attunementCap(sheet);
+    const count = attunedItemCount(sheet);
+    if (count > cap) {
+      errors.push(`too many attuned items: ${count} attuned, max is ${cap}`);
+    }
   }
   if (typeof sheet.gold !== 'number' || sheet.gold < 0) {
     errors.push('gold must be a non-negative number');

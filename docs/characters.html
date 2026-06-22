@@ -1490,6 +1490,17 @@ async function toggleCondition(name) {
 }
 
 // ── Equipment ────────────────────────────────────────────────
+// Attunement cap (DMG p.136: normally 3; Artificer raises it via Magic Item
+// Adept lv10 -> 4, Magic Item Savant lv14 -> 5, Magic Item Master lv18 -> 6).
+// Mirrors attunementCap() in src/characters/types.ts — keep in sync.
+function attunementCap(c) {
+  const artificerLevel = (c.classLevels || []).find(cl => cl.className === 'Artificer')?.level || 0;
+  if (artificerLevel >= 18) return 6;
+  if (artificerLevel >= 14) return 5;
+  if (artificerLevel >= 10) return 4;
+  return 3;
+}
+
 function renderEquipment(c) {
   const el = document.getElementById('char-equipment');
   if (!el) return;
@@ -1528,9 +1539,12 @@ function renderEquipment(c) {
   // Full gear list (collapsible)
   if (items.length > 0) {
     const listId = `equip-list-${c.id}`;
+    const attunedCount = items.filter(e => e.attuned).length;
+    const attuneCap = attunementCap(c);
     html += `<div>
       <span style="font-size:11px;color:var(--muted);cursor:pointer" onclick="toggleEquipList('${listId}')">
         <strong>All Gear (${items.length})</strong> <span id="${listId}-arrow">▸</span>
+        ${attunedCount > 0 ? `<span style="margin-left:8px;color:${attunedCount > attuneCap ? 'var(--danger,#e05252)' : 'var(--muted)'}">Attuned: ${attunedCount}/${attuneCap}</span>` : ''}
       </span>
       <div id="${listId}" style="display:none;margin-top:4px">
         <table style="width:100%;border-collapse:collapse;font-size:11px">
@@ -1540,6 +1554,7 @@ function renderEquipment(c) {
               <th style="text-align:center;padding:2px 4px">Qty</th>
               <th style="text-align:center;padding:2px 4px">Cat</th>
               <th style="text-align:center;padding:2px 4px">Equipped</th>
+              <th style="text-align:center;padding:2px 4px">Attuned</th>
               <th style="text-align:center;padding:2px 4px;width:28px"></th>
             </tr>
           </thead>
@@ -1569,6 +1584,13 @@ function renderEquipment(c) {
                     title="${e.equipped ? 'Unequip' : 'Equip'}"
                     style="background:none;border:none;cursor:pointer;padding:2px 6px;font-size:13px;line-height:1">
                     ${e.equipped ? '<span style="color:var(--accent)">✓</span>' : '<span style="color:var(--muted)">—</span>'}
+                  </button>
+                </td>
+                <td style="text-align:center;padding:3px 4px">
+                  <button onclick="toggleAttuned('${c.id}', ${i})"
+                    title="${e.attuned ? 'Remove attunement' : 'Attune to this item'}"
+                    style="background:none;border:none;cursor:pointer;padding:2px 6px;font-size:13px;line-height:1">
+                    ${e.attuned ? '<span style="color:var(--accent)">⭑</span>' : '<span style="color:var(--muted)">☆</span>'}
                   </button>
                 </td>
                 <td style="text-align:center;padding:3px 4px">
@@ -1670,6 +1692,39 @@ async function toggleEquip(charId, itemIndex, equipped) {
     }
   } catch (e) {
     showBanner('Network error updating equipment', 'error');
+  }
+}
+
+async function toggleAttuned(charId, idx) {
+  const c = S.charDetail && S.charDetail.id === charId ? S.charDetail : null;
+  if (!c) return;
+  const updated = c.equipment.map((item, i) =>
+    i === idx ? { ...item, attuned: !item.attuned } : item
+  );
+  try {
+    const res = await fetch(`/api/characters/${charId}`, {
+      method:  'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ equipment: updated }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      showBanner(err.error || 'Failed to update attunement', 'error');
+      return;
+    }
+    const data = await res.json();
+    S.charDetail = data.character;
+    const listId  = `equip-list-${charId}`;
+    const wasOpen = document.getElementById(listId)?.style.display === 'block';
+    renderEquipment(S.charDetail);
+    if (wasOpen) {
+      const el    = document.getElementById(listId);
+      const arrow = document.getElementById(listId + '-arrow');
+      if (el)    el.style.display  = 'block';
+      if (arrow) arrow.textContent = '▾';
+    }
+  } catch (e) {
+    showBanner('Network error updating attunement', 'error');
   }
 }
 
