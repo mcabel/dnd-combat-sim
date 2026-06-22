@@ -46,7 +46,7 @@
 
 import { Combatant, Battlefield } from '../types/core';
 import { rollSaveReactable, CombatEvent, EngineState } from '../engine/combat';
-import { rollDie, applyDamageWithTempHP } from '../engine/utils';
+import { rollDie, applyDamageWithTempHP, elementalAffinityBonus } from '../engine/utils';
 import { inConeFt, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 
@@ -209,7 +209,9 @@ export function execute(
     if (target.isDead || target.isUnconscious) continue;
 
     const save = rollSaveReactable(state, caster, target, 'con', saveDC);
-    const fullDmg = rollDamage();
+    // Session 48 Task #29-follow-up-5c: Elemental Affinity (Draconic Sorcerer 6)
+    const eaBonus = elementalAffinityBonus(caster, metadata.damageType);
+    const fullDmg = rollDamage() + eaBonus;
     const dmg = save.success ? Math.floor(fullDmg / 2) : fullDmg;
     const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);
 
