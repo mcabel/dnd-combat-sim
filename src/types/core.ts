@@ -361,6 +361,13 @@ export interface PlayerResources {
 
   // Fighter
   secondWind?:         { max: number; remaining: number };   // bonus action, short rest
+  // ── Session 43 Task #23: Action Surge (Fighter 2+, PHB p.72) ──
+  // 1 use at lv2, 2 uses at lv17. Short or long rest recovery.
+  // Tracked on the sheet (sheet.resources.actionSurge) and transferred to
+  // the Combatant via buildCombatant -> pcToCombatant. The planner checks
+  // remaining > 0 to plan an extraAction; the engine consumes one use when
+  // the extraAction executes.
+  actionSurge?:        { max: number; remaining: number };   // action, short rest
 
   // Bard
   bardicInspiration?:  { max: number; remaining: number; die: string };  // bonus action, long rest
@@ -1537,6 +1544,15 @@ export interface TurnPlan {
   reaction: PlannedAction | null;         // prepared, fires reactively
   moveBefore: Vec3 | null;               // position before action
   moveAfter: Vec3 | null;                // position after action
+  // ── Session 43 Task #23: Action Surge (Fighter 2+, PHB p.72) ──
+  // An extra ACTION granted by Action Surge. Executes AFTER the main action
+  // and bonus action, consuming one actionSurge use. Like the main action,
+  // it can be any action type — but v1 always plans it as an Attack on the
+  // same target (for damage maximization). The attackCount is set by the
+  // same Extra Attack logic as the main action (so a Fighter 5+ with Action
+  // Surge makes 4 attacks total: 2 from main + 2 from extra). The engine's
+  // executeTurnPlan calls executePlannedAction again for this extra action.
+  extraAction?: PlannedAction | null;
 }
 
 export interface PlannedAction {

@@ -4789,6 +4789,65 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
     }
   }
 
+  // ── Session 43 Task #23: Action Surge (Fighter 2+, PHB p.72) ──
+  // "On your turn, you can take one additional action on top of your regular
+  // action and a possible bonus action." v1: if the Fighter has an actionSurge
+  // use available, plan an extra Attack on the same target. The attackCount
+  // for this extra Attack is set by the same Extra Attack logic as the main
+  // action (so Fighter 5+ gets 2 attacks from main + 2 from surge = 4 total).
+  //
+  // Conditions:
+  //   - self.resources.actionSurge.remaining > 0 (use available)
+  //   - plan.action is set (we have something to do this turn)
+  //   - plan.action.type === 'attack' (v1 only surges for extra attacks —
+  //     surging to cast a second spell is suboptimal in most cases since
+  //     it would consume another spell slot; future: smarter logic)
+  //   - target is alive (avoid planning a surge against a dead target —
+  //     the engine would skip it anyway, but no point planning it)
+  //
+  // The engine's executeTurnPlan calls executePlannedAction again for
+  // plan.extraAction and consumes one actionSurge use.
+  if (
+    self.resources?.actionSurge &&
+    self.resources.actionSurge.remaining > 0 &&
+    plan.action &&
+    plan.action.type === 'attack' &&
+    plan.action.action &&
+    target && !target.isDead && !target.isUnconscious
+  ) {
+    // Clone the main attack action for the surge. We reset attackCount to
+    // undefined here so the same Extra Attack / Thirsting Blade logic can
+    // re-apply (the planner's attackCount-setting block ran before this
+    // extraAction is created, so we manually re-apply below).
+    const surgeAction: PlannedAction = {
+      type: 'attack',
+      action: plan.action.action,
+      targetId: target.id,
+      description: `${self.name} uses Action Surge — extra Attack`,
+    };
+    // Re-apply the attackCount logic (mirrors the block above for plan.action).
+    // Thirsting Blade (melee + Pact of the Blade + invocation)
+    if (
+      surgeAction.action !== null &&
+      surgeAction.action.attackType === 'melee' &&
+      hasInvocation(self, 'Thirsting Blade') &&
+      self.pactBoon === 'blade'
+    ) {
+      surgeAction.attackCount = 2;
+    }
+    // Extra Attack features (Fighter/Barbarian/Monk/Paladin/Ranger 5+)
+    if (surgeAction.attackCount === undefined) {
+      if (hasFeature(self, 'Extra Attack (3)')) {
+        surgeAction.attackCount = 4;   // Fighter 20
+      } else if (hasFeature(self, 'Extra Attack (2)')) {
+        surgeAction.attackCount = 3;   // Fighter 11
+      } else if (hasFeature(self, 'Extra Attack')) {
+        surgeAction.attackCount = 2;   // martial 5+
+      }
+    }
+    plan.extraAction = surgeAction;
+  }
+
   return plan;
 }
 

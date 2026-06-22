@@ -60,6 +60,8 @@ interface RawResource {
 interface RawResources {
   rage?:               RawResource;
   secondWind?:         RawResource;
+  // Session 43 Task #23: Action Surge (Fighter 2+)
+  actionSurge?:        RawResource;
   bardicInspiration?:  RawResource;
   sneakAttack?:        RawResource;
   divineSmite?:        boolean | RawResource;
@@ -246,6 +248,17 @@ function buildResources(raw: RawPCEntry): PlayerResources | null {
   // Second Wind (Fighter)
   if (r?.secondWind) {
     result.secondWind = { max: 1, remaining: 1 };
+  }
+
+  // Action Surge (Fighter 2+) — Session 43 Task #23
+  // PHB p.72: 1 use at lv2, 2 uses at lv17. Short or long rest recovery.
+  // The leveler populates sheet.resources.actionSurge.max correctly (1 or 2);
+  // buildRawResources passes that as `uses`. We populate both max and
+  // remaining here (full on combat start; recovered via rest in
+  // character_router.ts which already handles actionSurge.remaining).
+  if (r?.actionSurge) {
+    const max = r.actionSurge.uses ?? 1;
+    result.actionSurge = { max, remaining: max };
   }
 
   // Bardic Inspiration (Bard)

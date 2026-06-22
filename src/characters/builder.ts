@@ -220,6 +220,10 @@ function buildRawResources(res: CharacterResources): any {
 
   if (res.rage)              out.rage             = { uses: res.rage.max };
   if (res.secondWind)        out.secondWind        = { uses: 1 };
+  // ── Session 43 Task #23: Action Surge transfer ──
+  // Fighter 2+ has 1 use; Fighter 17+ has 2 uses. Pass max through so
+  // buildResources (pc.ts) can populate { max, remaining } on the Combatant.
+  if (res.actionSurge)       out.actionSurge       = { uses: res.actionSurge.max };
   if (res.bardicInspiration) out.bardicInspiration = {
     uses: res.bardicInspiration.max,
     die:  `d${res.bardicInspiration.dieSides}`,

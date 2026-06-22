@@ -4542,7 +4542,7 @@ export function executePlannedAction(
  * Order: moveBefore → action → bonus action → moveAfter
  * (Movement can split around the action per PHB p.190.)
  */
-function executeTurnPlan(actor: Combatant, plan: TurnPlan, state: EngineState): void {
+export function executeTurnPlan(actor: Combatant, plan: TurnPlan, state: EngineState): void {
   const isDisengage = plan.action?.type === 'disengage'
                    || plan.bonusAction?.type === 'disengage';
 
@@ -4586,6 +4586,36 @@ function executeTurnPlan(actor: Combatant, plan: TurnPlan, state: EngineState): 
   // Move after action
   if (plan.moveAfter && !actor.isDead && !actor.isUnconscious) {
     executeMove(actor, plan.moveAfter, state, isDisengage);
+  }
+
+  // ── Session 43 Task #23: Action Surge (Fighter 2+, PHB p.72) ──
+  // "On your turn, you can take one additional action on top of your regular
+  // action and a possible bonus action." The planner sets plan.extraAction
+  // when actionSurge.remaining > 0 and the main action was an Attack. Here
+  // we execute that extra action and consume one actionSurge use.
+  //
+  // v1 simplification: the extra action is always an Attack on the same
+  // target. If the target died from the main action, the engine's
+  // resolveAttack handles the dead-target guard (returns early). The
+  // attackCount loop in executePlannedAction's 'attack' branch also breaks
+  // immediately if the target is dead at loop start.
+  //
+  // PHB p.72: Action Surge grants one additional ACTION (any type). It does
+  // NOT grant an extra bonus action or reaction. It does NOT refresh the
+  // fighter's action budget — it's a separate, additional action that
+  // bypasses the normal one-action-per-turn limit.
+  if (plan.extraAction && !actor.isDead && !actor.isUnconscious) {
+    // Consume one actionSurge use BEFORE executing (so even if the action
+    // misses or the target is already dead, the use is spent — PHB p.72:
+    // "you can take one additional action", the resource is consumed when
+    // the player declares the Action Surge, not when it lands).
+    if (actor.resources?.actionSurge && actor.resources.actionSurge.remaining > 0) {
+      actor.resources.actionSurge.remaining -= 1;
+      log(state, 'action', actor.id,
+        `${actor.name} uses Action Surge — gains one additional action!`,
+        undefined);
+      executePlannedAction(actor, plan.extraAction, state);
+    }
   }
 
   // Clean up turn flags
