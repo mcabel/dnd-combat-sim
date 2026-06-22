@@ -412,6 +412,40 @@ export function buildCombatant(
     (combatant.resources as any).wholenessOfBody = { max: 1, remaining: 1 };
   }
 
+  // ── Session 49 Task #29-follow-up-5d: Dragon Wings (Draconic Sorcerer 14) ──
+  // PHB p.102: "At 14th level, you gain the ability to sprout a pair of dragon
+  // wings from your back, obtaining a flying speed equal to your current speed."
+  // The feature is tracked in classFeatures by the leveler. Here we set the
+  // combatant's flySpeed to match their walking speed when the feature is
+  // present. This is a permanent passive — the wings are always available
+  // (PHB p.102: "You can create these wings at will"). No resource cost.
+  // If the character already has a racial fly speed (e.g. Aarakocra), keep the
+  // higher of the two.
+  if (combatant.classFeatures?.includes('Dragon Wings')) {
+    const wingsSpeed = combatant.speed;
+    if (!combatant.flySpeed || combatant.flySpeed < wingsSpeed) {
+      combatant.flySpeed = wingsSpeed;
+    }
+  }
+
+  // ── Session 49 Task #29-follow-up-5d: Draconic Presence (Draconic Sorcerer 18) ──
+  // PHB p.102: "Beginning at 18th level, you can channel the dread presence of
+  // your dragon ancestor, using Action + 5 sorcery points. Each creature of
+  // your choice within 60 feet of you must succeed on a Wisdom saving throw or
+  // become frightened of you until the end of your next turn."
+  //
+  // v1 simplification: instead of tracking the 5-sorcery-point cost (sorcery
+  // points are NOT yet transferred to the Combatant — deferred to a future
+  // session), we treat Draconic Presence as a 1/combat action (like Wholeness
+  // of Body). The frightened-aura effect is canon. Documented via the resource
+  // flag `draconicPresence: { max: 1, remaining: 1 }`. The engine's
+  // 'draconicPresence' action type consumes one use and applies frightened to
+  // all enemies within 60 ft who fail a WIS save.
+  if (combatant.classFeatures?.includes('Draconic Presence')) {
+    if (!combatant.resources) combatant.resources = {} as any;
+    (combatant.resources as any).draconicPresence = { max: 1, remaining: 1 };
+  }
+
   return combatant;
 }
 

@@ -850,6 +850,44 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
     }
   }
 
+  // ── Session 49 Task #29-follow-up-5d: Draconic Presence (Draconic Sorcerer 18) ──
+  // PHB p.102: "Beginning at 18th level, you can channel the dread presence
+  // of your dragon ancestor, using Action + 5 sorcery points. Each creature
+  // of your choice within 60 feet of you must succeed on a Wisdom saving
+  // throw or become frightened of you until the end of your next turn."
+  //
+  // v1 simplification: 1/combat (sorcery points not yet on Combatant).
+  //
+  // Priority: AFTER Wholeness of Body (self-heal is more urgent) but BEFORE
+  // self-preserve — a frighten aura that hits 3+ enemies is a strong
+  // offensive play worth using even when moderately hurt. The 2-enemy
+  // threshold ensures we don't waste the action on a lone target. HP > 30%
+  // threshold avoids wasting the action when about to die (retreat instead).
+  if (self.resources?.draconicPresence && self.resources.draconicPresence.remaining > 0
+      && hasFeature(self, 'Draconic Presence')) {
+    const hpRatio = self.maxHP > 0 ? self.currentHP / self.maxHP : 1;
+    if (hpRatio > 0.3) {
+      // Count living enemies within 60 ft (Draconic Presence's AoE radius).
+      let enemiesInAura = 0;
+      for (const e of livingEnemiesOf(self, battlefield)) {
+        const dFt = chebyshev3D(self.pos, e.pos) * 5;
+        if (dFt <= 60) enemiesInAura++;
+      }
+      if (enemiesInAura >= 2) {
+        plan.action = {
+          type: 'draconicPresence',
+          action: null,
+          targetId: null,   // AoE — no single target
+          description: `${self.name} channels Draconic Presence to frighten ${enemiesInAura} enemies within 60 ft`,
+        };
+        plan.targetId = null;
+        const anyEnemy = livingEnemiesOf(self, battlefield)[0] ?? null;
+        plan.bonusAction = planBonusAction(self, anyEnemy, battlefield);
+        return plan;
+      }
+    }
+  }
+
   // === SELF-PRESERVE CHECK (Smart only) ===
   if (self.aiProfile === 'smart') {
     const preserve = selfPreserveDecision(self, battlefield);

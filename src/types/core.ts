@@ -408,6 +408,12 @@ export interface PlayerResources {
   // once per long rest. Tracked as max=1/remaining=1; consumed when used.
   wholenessOfBody?: { max: number; remaining: number };
 
+  // ── Session 49 Task #29-follow-up-5d: Draconic Presence ──
+  // Draconic Sorcerer 18 (PHB p.102): action + 5 sorcery points, frighten
+  // all enemies within 60 ft (WIS save). v1 simplification: 1/combat (sorcery
+  // points not yet transferred to Combatant — deferred to a future session).
+  draconicPresence?: { max: number; remaining: number };
+
   // Innate Spellcasting (MM p.10–11; e.g. Couatl, Drow, Druidic casters).
   // Per-spell uses-per-day tracker. Used by monsters with at-will or
   // N/day innate spellcasting. The spell names MUST match the Action.name
@@ -1589,6 +1595,7 @@ export interface PlannedAction {
     | 'help' | 'hide' | 'ready' | 'shove' | 'grapple' | 'escapeGrapple'
     | 'secondWind' | 'rage' | 'layOnHands' | 'bardicInspiration'
     | 'wholenessOfBody'  // Open Hand Monk 6 — self-heal 3×monk level, 1/long rest (PHB p.79)
+    | 'draconicPresence' // Draconic Sorcerer 18 — frighten aura, WIS save, 1/combat (PHB p.102)
     | 'spellHeal'    // legacy — no longer dispatched; retained for test compatibility
     | 'cureWounds'  // Cure Wounds — action, 1d8+mod heal per slot level, touch range (PHB p.230)
     | 'faerieFire'     // Faerie Fire AoE control (concentration)

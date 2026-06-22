@@ -213,7 +213,7 @@ console.log('\n--- 1. Ice Knife + cold ancestry → EA on cold AoE ---');
 {
   const sorc = makeSorc('cold', { 1: 1 });
   const ICE_KNIFE_ACTION: Action = {
-    name: 'Ice Knife', isMultiattack: false, attackType: 'rangedSpell',
+    name: 'Ice Knife', isMultiattack: false, attackType: 'spell',
     reach: 5, range: { normal: 60, long: 60 },
     hitBonus: 30, damage: null, damageType: null,
     saveDC: 25, saveAbility: 'dex', isAoE: true, isControl: false,
@@ -246,7 +246,7 @@ console.log('\n--- 2. Ice Knife + fire ancestry → no EA on cold AoE ---');
 {
   const sorc = makeSorc('fire', { 1: 1 });  // fire ancestry, NOT cold
   const ICE_KNIFE_ACTION: Action = {
-    name: 'Ice Knife', isMultiattack: false, attackType: 'rangedSpell',
+    name: 'Ice Knife', isMultiattack: false, attackType: 'spell',
     reach: 5, range: { normal: 60, long: 60 },
     hitBonus: 30, damage: null, damageType: null,
     saveDC: 25, saveAbility: 'dex', isAoE: true, isControl: false,
@@ -280,7 +280,7 @@ console.log('\n--- 3. Ice Knife: piercing never gets EA ---');
   // Cold ancestry — would match cold AoE, but piercing is NOT a draconic type.
   const sorc = makeSorc('cold', { 1: 1 });
   const ICE_KNIFE_ACTION: Action = {
-    name: 'Ice Knife', isMultiattack: false, attackType: 'rangedSpell',
+    name: 'Ice Knife', isMultiattack: false, attackType: 'spell',
     reach: 5, range: { normal: 60, long: 60 },
     hitBonus: 30, damage: null, damageType: null,
     saveDC: 25, saveAbility: 'dex', isAoE: true, isControl: false,
@@ -313,7 +313,7 @@ console.log('\n--- 4. Chromatic Orb + acid ancestry → EA (picker picks acid) -
 {
   const sorc = makeSorc('acid', { 1: 1 });
   const CHROMATIC_ORB_ACTION: Action = {
-    name: 'Chromatic Orb', isMultiattack: false, attackType: 'rangedSpell',
+    name: 'Chromatic Orb', isMultiattack: false, attackType: 'spell',
     reach: 5, range: { normal: 90, long: 90 },
     hitBonus: 30, damage: null, damageType: null,
     saveDC: 25, saveAbility: 'dex', isAoE: false, isControl: false,
@@ -342,7 +342,7 @@ console.log('\n--- 5. Chromatic Orb + lightning ancestry, picker picks acid → 
 {
   const sorc = makeSorc('lightning', { 1: 1 });  // lightning ancestry, picker picks acid
   const CHROMATIC_ORB_ACTION: Action = {
-    name: 'Chromatic Orb', isMultiattack: false, attackType: 'rangedSpell',
+    name: 'Chromatic Orb', isMultiattack: false, attackType: 'spell',
     reach: 5, range: { normal: 90, long: 90 },
     hitBonus: 30, damage: null, damageType: null,
     saveDC: 25, saveAbility: 'dex', isAoE: false, isControl: false,
@@ -371,7 +371,7 @@ console.log('\n--- 6. Chromatic Orb + fire ancestry, picker skips acid/cold → 
 {
   const sorc = makeSorc('fire', { 1: 1 });
   const CHROMATIC_ORB_ACTION: Action = {
-    name: 'Chromatic Orb', isMultiattack: false, attackType: 'rangedSpell',
+    name: 'Chromatic Orb', isMultiattack: false, attackType: 'spell',
     reach: 5, range: { normal: 90, long: 90 },
     hitBonus: 30, damage: null, damageType: null,
     saveDC: 25, saveAbility: 'dex', isAoE: false, isControl: false,
@@ -404,7 +404,7 @@ console.log('\n--- 7. Scorching Ray + fire ancestry → EA per ray ---');
 {
   const sorc = makeSorc('fire', { 2: 1 });
   const SCORCHING_RAY_ACTION: Action = {
-    name: 'Scorching Ray', isMultiattack: false, attackType: 'rangedSpell',
+    name: 'Scorching Ray', isMultiattack: false, attackType: 'spell',
     reach: 5, range: { normal: 120, long: 120 },
     hitBonus: 30, damage: null, damageType: null,
     saveDC: 25, saveAbility: 'dex', isAoE: false, isControl: false,
@@ -436,7 +436,7 @@ console.log('\n--- 8. Scorching Ray + cold ancestry → no EA ---');
 {
   const sorc = makeSorc('cold', { 2: 1 });  // cold ancestry, NOT fire
   const SCORCHING_RAY_ACTION: Action = {
-    name: 'Scorching Ray', isMultiattack: false, attackType: 'rangedSpell',
+    name: 'Scorching Ray', isMultiattack: false, attackType: 'spell',
     reach: 5, range: { normal: 120, long: 120 },
     hitBonus: 30, damage: null, damageType: null,
     saveDC: 25, saveAbility: 'dex', isAoE: false, isControl: false,
@@ -585,7 +585,7 @@ console.log('\n--- 12. Chromatic Orb + thunder ancestry → never fires EA ---')
   // yield 0 bonus regardless of picked type.
   const sorc = makeSorc('thunder', { 1: 1 });  // bogus ancestry, but feature is present
   const CHROMATIC_ORB_ACTION: Action = {
-    name: 'Chromatic Orb', isMultiattack: false, attackType: 'rangedSpell',
+    name: 'Chromatic Orb', isMultiattack: false, attackType: 'spell',
     reach: 5, range: { normal: 90, long: 90 },
     hitBonus: 30, damage: null, damageType: null,
     saveDC: 25, saveAbility: 'dex', isAoE: false, isControl: false,

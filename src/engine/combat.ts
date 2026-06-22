@@ -3006,6 +3006,86 @@ export function executePlannedAction(
       }
       break;
     }
+    case 'draconicPresence': {
+      // ── Session 49 Task #29-follow-up-5d: Draconic Sorcerer 18 (PHB p.102) ──
+      // Action + 5 sorcery points: each enemy within 60 ft must succeed on a
+      // WIS save or become frightened of the caster until the end of the
+      // caster's next turn.
+      //
+      // v1 simplification: 1/combat (sorcery points not yet on Combatant).
+      // The frightened condition is applied via applySpellEffect so the
+      // standard frightened mechanics (disadvantage on ability checks + attack
+      // rolls while the source is in sight, can't move closer) are inherited.
+      // v1 does NOT model "until the end of your next turn" — frightened
+      // persists for the v1 combat (matches Cause Fear / Fear spell pattern).
+      if (actor.resources?.draconicPresence && actor.resources.draconicPresence.remaining > 0) {
+        // Consume the resource first.
+        actor.resources.draconicPresence.remaining -= 1;
+
+        // Compute WIS save DC from the actor's spellcasting save DC.
+        // Fall back to 8 + prof + CHA mod (Sorcerer casting) if not set.
+        const spellAction = actor.actions.find(a => a.saveDC !== null && a.saveDC !== undefined);
+        const saveDC = spellAction?.saveDC
+          ?? (8 + (actor.level ? Math.ceil(actor.level / 4) + 1 : 2) + abilityMod(actor.cha));
+
+        log(state, 'action', actor.id, plan.description);
+
+        // Collect all living enemies within 60 ft of the caster.
+        const enemies: Combatant[] = [];
+        for (const c of state.battlefield.combatants.values()) {
+          if (c.id === actor.id) continue;
+          if (c.faction === actor.faction) continue;
+          if (c.isDead || c.isUnconscious) continue;
+          const distFt = chebyshev3D(actor.pos, c.pos) * 5;
+          if (distFt <= 60) enemies.push(c);
+        }
+
+        if (enemies.length === 0) {
+          log(state, 'action', actor.id,
+            `${actor.name} channels Draconic Presence, but no enemies are within 60 ft.`);
+          break;
+        }
+
+        log(state, 'action', actor.id,
+          `${actor.name} channels Draconic Presence! ${enemies.length} enem${enemies.length === 1 ? 'y' : 'ies'} within 60 ft must make a DC ${saveDC} WIS save or be frightened.`);
+
+        for (const enemy of enemies) {
+          if (enemy.isDead || enemy.isUnconscious) continue;
+          // Skip enemies already frightened (by this caster or another source).
+          if (enemy.conditions.has('frightened')) {
+            log(state, 'action', actor.id,
+              `${enemy.name} is already frightened — unaffected by Draconic Presence.`,
+              enemy.id);
+            continue;
+          }
+          const save = rollSaveReactable(state, actor, enemy, 'wis', saveDC);
+          if (save.success) {
+            log(state, 'save_success', actor.id,
+              `${enemy.name} resists Draconic Presence (WIS ${save.total} vs DC ${saveDC}) — not frightened!`,
+              enemy.id, save.roll);
+          } else {
+            applySpellEffect(enemy, {
+              casterId: actor.id,
+              spellName: 'Draconic Presence',
+              effectType: 'condition_apply',
+              payload: { condition: 'frightened' },
+              sourceIsConcentration: false,
+            });
+            log(state, 'save_fail', actor.id,
+              `${enemy.name} succumbs to Draconic Presence (WIS ${save.total} vs DC ${saveDC}) — FRIGHTENED!`,
+              enemy.id, save.roll);
+            log(state, 'condition_add', actor.id,
+              `${enemy.name} is frightened of ${actor.name}!`,
+              enemy.id);
+          }
+        }
+      } else {
+        // No uses remaining — shouldn't happen (planner guards this), but
+        // log a no-op to avoid silent failure.
+        log(state, 'action', actor.id, `${plan.description} (no uses remaining — no-op)`);
+      }
+      break;
+    }
     case 'spellHeal': {
       // Cure Wounds (action) or Healing Word (bonus action).
       // PHB p.230 / p.250: 1d8+WIS or 1d4+WIS; restores HP to a touched/nearby creature.
