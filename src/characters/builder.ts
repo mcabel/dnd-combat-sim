@@ -220,6 +220,10 @@ function buildRawResources(res: CharacterResources): any {
 
   if (res.rage)              out.rage             = { uses: res.rage.max };
   if (res.secondWind)        out.secondWind        = { uses: 1 };
+  // ── Session 43 Task #23: Action Surge transfer ──
+  // Fighter 2+ has 1 use; Fighter 17+ has 2 uses. Pass max through so
+  // buildResources (pc.ts) can populate { max, remaining } on the Combatant.
+  if (res.actionSurge)       out.actionSurge       = { uses: res.actionSurge.max };
   if (res.bardicInspiration) out.bardicInspiration = {
     uses: res.bardicInspiration.max,
     die:  `d${res.bardicInspiration.dieSides}`,
@@ -334,9 +338,63 @@ export function buildCombatant(
   // treats undefined and [] the same — both return false for any name lookup).
   if (sheet.eldritchInvocations && sheet.eldritchInvocations.length > 0) {
     combatant.eldritchInvocations = [...sheet.eldritchInvocations];
+
+    // ── Session 41 Task #16: Eldritch Spear invocation ──
+    // PHB p.111: "When you cast Eldritch Blast, its range is 300 feet."
+    // The default EB range is 120 ft (per the SPELL_DB entry). When the
+    // Warlock has Eldritch Spear, patch the EB Action's reach + range
+    // to 300 ft. This is a metadata-only change — no engine hook needed.
+    if (combatant.eldritchInvocations.includes('Eldritch Spear')) {
+      const ebAction = combatant.actions.find(a => a.name === 'Eldritch Blast');
+      if (ebAction) {
+        ebAction.reach = 300;
+        ebAction.range = { normal: 300, long: 300 };
+      }
+    }
+  }
+
+  // ── Session 42 Task #18: Pact Boon transfer ──
+  // Transfer the Warlock's Pact Boon choice (chain/blade/tome) to the
+  // Combatant so the planner can check it for Thirsting Blade (requires
+  // 'blade'). No-op for non-Warlocks (pactBoon is undefined).
+  if (sheet.pactBoon) {
+    combatant.pactBoon = sheet.pactBoon;
+  }
+
+  // ── Session 43 Task #24: Class features transfer ──
+  // Transfer the names of all class/subclass features the character has
+  // gained via leveling (e.g. 'Extra Attack', 'Action Surge (1/rest)',
+  // 'Cunning Action', etc.). The planner checks this list to set
+  // attackCount for Extra Attack (Fighter/Paladin/Ranger/Barbarian/Monk 5+,
+  // Fighter 11+ = 3 attacks, Fighter 20 = 4 attacks). Monsters have no
+  // class features, so this is undefined for them.
+  //
+  // We include source 'class' and 'subclass' features (NOT 'race' — racial
+  // traits are already in combatant.traits). We dedupe by name in case the
+  // same feature appears multiple times (e.g. multi-class characters).
+  const classFeatureNames = sheet.allFeatures
+    .filter(f => f.source === 'class' || f.source === 'subclass')
+    .map(f => f.name);
+  if (classFeatureNames.length > 0) {
+    combatant.classFeatures = [...new Set(classFeatureNames)];
   }
 
   return combatant;
+}
+
+/**
+ * Check if a combatant has a specific class/subclass feature by name.
+ * Returns true if the feature name is in the combatant's `classFeatures`
+ * list (populated by buildCombatant from sheet.allFeatures).
+ *
+ * Examples: 'Extra Attack', 'Extra Attack (2)', 'Action Surge (1/rest)',
+ * 'Cunning Action', 'Jack of All Trades', etc.
+ *
+ * Returns false for monsters (no classFeatures list) and for combatants
+ * that don't have the named feature.
+ */
+export function hasFeature(combatant: Combatant, featureName: string): boolean {
+  return combatant.classFeatures?.includes(featureName) ?? false;
 }
 
 /**

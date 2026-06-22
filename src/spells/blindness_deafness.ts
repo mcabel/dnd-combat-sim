@@ -44,9 +44,8 @@
 // ============================================================
 
 import { Combatant, Battlefield } from '../types/core';
-import { CombatEvent, EngineState } from '../engine/combat';
+import { rollSaveReactable, CombatEvent, EngineState } from '../engine/combat';
 import { applySpellEffect } from '../engine/spell_effects';
-import { rollSave } from '../engine/utils';
 import { chebyshev3D } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 
@@ -191,7 +190,7 @@ export function execute(
   // Re-check liveness (stale edge case)
   if (target.isDead || target.isUnconscious) return;
 
-  const save = rollSave(target, 'con', saveDC);
+  const save = rollSaveReactable(state, caster, target, 'con', saveDC);
   emit(
     state,
     save.success ? 'save_success' : 'save_fail',

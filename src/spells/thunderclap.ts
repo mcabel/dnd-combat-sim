@@ -53,8 +53,8 @@
 // ============================================================
 
 import { Combatant } from '../types/core';
-import { CombatEvent, EngineState } from '../engine/combat';
-import { rollSave, rollDie, applyDamageWithTempHP } from '../engine/utils';
+import { rollSaveReactable, CombatEvent, EngineState } from '../engine/combat';
+import { rollDie, applyDamageWithTempHP } from '../engine/utils';
 import { euclideanDistFt } from '../engine/movement';
 
 // ---- Constants ----------------------------------------------
@@ -167,7 +167,7 @@ export function execute(
   for (const target of inRange) {
     if (target.isDead || target.isUnconscious) continue;
 
-    const save = rollSave(target, 'con', saveDC);
+    const save = rollSaveReactable(state, caster, target, 'con', saveDC);
 
     // Roll Nd6 thunder damage (N = dmgCount, scales with caster level)
     let dmgRoll = 0;

@@ -39,9 +39,9 @@
 // ============================================================
 
 import { Combatant, Battlefield } from '../types/core';
-import { CombatEvent, EngineState } from '../engine/combat';
+import { rollSaveReactable, CombatEvent, EngineState } from '../engine/combat';
 import { applySpellEffect, removeEffectsFromCaster } from '../engine/spell_effects';
-import { startConcentration, rollSave } from '../engine/utils';
+import { startConcentration } from '../engine/utils';
 import { inConeFt, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 
@@ -126,7 +126,7 @@ export function execute(caster: Combatant, targets: Combatant[], state: EngineSt
 
   for (const target of targets) {
     if (target.isDead || target.isUnconscious) continue;
-    const save = rollSave(target, 'wis', saveDC);
+    const save = rollSaveReactable(state, caster, target, 'wis', saveDC);
     emit(state, save.success ? 'save_success' : 'save_fail', caster.id,
       `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} WIS save vs Fear (rolled ${save.total})${save.success ? '' : ' + FRIGHTENED'}`, target.id, save.roll);
 

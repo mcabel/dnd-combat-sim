@@ -274,6 +274,10 @@ import { shouldCast as shouldCastFindGreaterSteed }    from '../spells/find_grea
 
 // ── Session 19 — bulk-implementation generic dispatch (262 new spells) ────
 import { GENERIC_SPELL_LIST } from '../spells/_generic_registry';
+// ── Session 42 Task #18 — Thirsting Blade check ──
+import { hasInvocation } from '../spells/_invocations';
+// ── Session 43 Task #24 — Extra Attack feature check ──
+import { hasFeature } from '../characters/builder';
 import { selectAction, selfPreserveDecision, selectLegendaryAction } from './actions';
 import {
   canReach, bestAdjacentPos, bestRangedPosition,
@@ -4704,6 +4708,55 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
   // Don't overwrite a self-buff action (e.g. mageArmor) already planned above.
   if (!plan.action) plan.action = chosenAction;
 
+  // ── Session 42 Task #18: Thirsting Blade (extra attack) ──
+  // PHB p.111: "You can attack with your pact weapon twice, instead of
+  // once, whenever you take the Attack action on your turn."
+  // Conditions: Warlock has Thirsting Blade invocation + Pact of the Blade
+  // boon + the planned action is a melee weapon attack.
+  // v1 simplification: assumes ANY melee attack from a Thirsting Blade
+  // Warlock is a pact weapon attack (no isPactWeapon Action flag needed).
+  if (
+    plan.action &&
+    plan.action.type === 'attack' &&
+    plan.action.action &&
+    plan.action.action.attackType === 'melee' &&
+    hasInvocation(self, 'Thirsting Blade') &&
+    self.pactBoon === 'blade'
+  ) {
+    plan.action.attackCount = 2;
+  }
+
+  // ── Session 43 Task #24: Extra Attack for martial classes ──
+  // PHB p.72 (Fighter), p.49 (Barbarian), p.85 (Monk), p.85 (Paladin),
+  // p.92 (Ranger): "Beginning at 5th level, you can attack twice, instead
+  // of once, whenever you take the Attack action on your turn."
+  // Fighter 11 (Extra Attack (2)) → 3 attacks; Fighter 20 (Extra Attack (3))
+  // → 4 attacks. Bard 6 (Valor/Swords) → 2 attacks, but the leveler does
+  // not currently model subclass-specific Extra Attack grants — only base
+  // class features. We check for the feature name strings set by the leveler.
+  //
+  // This applies to ANY Attack action (melee OR ranged), unlike Thirsting
+  // Blade which is melee-only. The attackCount loop in executePlannedAction
+  // already handles both attack types.
+  //
+  // We DON'T overwrite attackCount if Thirsting Blade already set it to 2
+  // (the values would be the same for a Warlock 5 / Fighter 5 multiclass,
+  // but this guard future-proofs against higher-tier Fighter Extra Attack
+  // values colliding with the Warlock-only Thirsting Blade).
+  if (
+    plan.action &&
+    plan.action.type === 'attack' &&
+    plan.action.attackCount === undefined
+  ) {
+    if (hasFeature(self, 'Extra Attack (3)')) {
+      plan.action.attackCount = 4;   // Fighter 20
+    } else if (hasFeature(self, 'Extra Attack (2)')) {
+      plan.action.attackCount = 3;   // Fighter 11
+    } else if (hasFeature(self, 'Extra Attack')) {
+      plan.action.attackCount = 2;   // Fighter/Barbarian/Monk/Paladin/Ranger 5
+    }
+  }
+
   // === MOVEMENT ===
   const { moveBefore, moveAfter } = planMovement(self, target, chosenAction, battlefield);
   plan.moveBefore = moveBefore;
@@ -4734,6 +4787,65 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
         chosenAction = ca.overrideAction;  // keep local reference consistent
       }
     }
+  }
+
+  // ── Session 43 Task #23: Action Surge (Fighter 2+, PHB p.72) ──
+  // "On your turn, you can take one additional action on top of your regular
+  // action and a possible bonus action." v1: if the Fighter has an actionSurge
+  // use available, plan an extra Attack on the same target. The attackCount
+  // for this extra Attack is set by the same Extra Attack logic as the main
+  // action (so Fighter 5+ gets 2 attacks from main + 2 from surge = 4 total).
+  //
+  // Conditions:
+  //   - self.resources.actionSurge.remaining > 0 (use available)
+  //   - plan.action is set (we have something to do this turn)
+  //   - plan.action.type === 'attack' (v1 only surges for extra attacks —
+  //     surging to cast a second spell is suboptimal in most cases since
+  //     it would consume another spell slot; future: smarter logic)
+  //   - target is alive (avoid planning a surge against a dead target —
+  //     the engine would skip it anyway, but no point planning it)
+  //
+  // The engine's executeTurnPlan calls executePlannedAction again for
+  // plan.extraAction and consumes one actionSurge use.
+  if (
+    self.resources?.actionSurge &&
+    self.resources.actionSurge.remaining > 0 &&
+    plan.action &&
+    plan.action.type === 'attack' &&
+    plan.action.action &&
+    target && !target.isDead && !target.isUnconscious
+  ) {
+    // Clone the main attack action for the surge. We reset attackCount to
+    // undefined here so the same Extra Attack / Thirsting Blade logic can
+    // re-apply (the planner's attackCount-setting block ran before this
+    // extraAction is created, so we manually re-apply below).
+    const surgeAction: PlannedAction = {
+      type: 'attack',
+      action: plan.action.action,
+      targetId: target.id,
+      description: `${self.name} uses Action Surge — extra Attack`,
+    };
+    // Re-apply the attackCount logic (mirrors the block above for plan.action).
+    // Thirsting Blade (melee + Pact of the Blade + invocation)
+    if (
+      surgeAction.action !== null &&
+      surgeAction.action.attackType === 'melee' &&
+      hasInvocation(self, 'Thirsting Blade') &&
+      self.pactBoon === 'blade'
+    ) {
+      surgeAction.attackCount = 2;
+    }
+    // Extra Attack features (Fighter/Barbarian/Monk/Paladin/Ranger 5+)
+    if (surgeAction.attackCount === undefined) {
+      if (hasFeature(self, 'Extra Attack (3)')) {
+        surgeAction.attackCount = 4;   // Fighter 20
+      } else if (hasFeature(self, 'Extra Attack (2)')) {
+        surgeAction.attackCount = 3;   // Fighter 11
+      } else if (hasFeature(self, 'Extra Attack')) {
+        surgeAction.attackCount = 2;   // martial 5+
+      }
+    }
+    plan.extraAction = surgeAction;
   }
 
   return plan;

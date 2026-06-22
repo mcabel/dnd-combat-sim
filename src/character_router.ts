@@ -35,7 +35,7 @@ import { ValidationError }            from './characters/validator';
 import { buildCombatant, buildWarnings } from './characters/builder';
 import { applyLevelUp, popLevel, bootstrapLevelHistory } from './characters/leveler';
 import { applyASI, applyFeat, chooseSubclass } from './characters/improvements';
-import { listFeats }                   from './characters/feat_data';
+import { listFeats, getFeat }          from './characters/feat_data';
 import { spawnMonster, Raw5etoolsMonster } from './parser/fivetools';
 import { simulate }                    from './scenarios/simulate';
 import { Combatant }                   from './types/core';
@@ -596,6 +596,7 @@ router.post('/characters/:id/applyfeat', async (req: Request, res: Response) => 
     return res.json({
       character: updated,
       featName,
+      grantsSpells:                    !!(getFeat(featName)?.grantsSpells),
       pendingAbilityScoreImprovements: updated.pendingAbilityScoreImprovements ?? 0,
       pendingASIHalfPoints:            updated.pendingASIHalfPoints ?? 0,
     });
@@ -604,6 +605,65 @@ router.post('/characters/:id/applyfeat', async (req: Request, res: Response) => 
   }
 });
 
+
+// ============================================================
+// POST /api/characters/:id/setfeatspells
+// Record the spell choices made for a spell-granting feat
+// (Magic Initiate, Ritual Caster, Spell Sniper — flagged via
+// `grantsSpells` in feat_data.ts). Purely informational: validates
+// that the named feat is actually on the character and that it is a
+// spell-granting one, then persists the chosen spell names.
+//
+// Request:  { featName: string; spells: string[] }
+// Response: { character: CharacterSheet; featName: string; spells: string[] }
+// ============================================================
+router.post('/characters/:id/setfeatspells', async (req: Request, res: Response) => {
+  try {
+    const id   = String(req.params.id);
+    const body = req.body ?? {};
+
+    const featName = body.featName;
+    if (!featName || typeof featName !== 'string') {
+      return res.status(400).json({ error: 'featName (string) is required.' });
+    }
+    const spells = body.spells;
+    if (!Array.isArray(spells) || spells.some((s: unknown) => typeof s !== 'string')) {
+      return res.status(400).json({ error: 'spells must be an array of strings.' });
+    }
+    if (spells.length === 0) {
+      return res.status(400).json({ error: 'spells must contain at least one spell name.' });
+    }
+
+    const featDef = getFeat(featName);
+    if (!featDef) {
+      return res.status(400).json({ error: `Unknown feat "${featName}".` });
+    }
+    if (!featDef.grantsSpells) {
+      return res.status(400).json({ error: `Feat "${featName}" does not grant spells. Only Magic Initiate, Ritual Caster, and Spell Sniper accept spell choices via this endpoint.` });
+    }
+
+    const sheet = loadCharacter(id);
+    if (!sheet) return res.status(404).json({ error: `Character not found: ${id}` });
+
+    if (!(sheet.feats || []).includes(featName)) {
+      return res.status(409).json({ error: `Character does not have the "${featName}" feat. Apply it first via POST /applyfeat.` });
+    }
+
+    const updated = {
+      ...sheet,
+      featSpellChoices: {
+        ...(sheet.featSpellChoices ?? {}),
+        [featName]: spells,
+      },
+      updatedAt: new Date().toISOString(),
+    };
+
+    await saveCharacter(updated);
+    return res.json({ character: updated, featName, spells });
+  } catch (err) {
+    return handleError(res, err);
+  }
+});
 
 // Set the subclass for a class on a saved character.
 //

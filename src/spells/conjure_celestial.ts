@@ -106,6 +106,10 @@ import { removeEffectsFromCaster } from '../engine/spell_effects';
 import { startConcentration } from '../engine/utils';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 import { CONJURE_CELESTIAL_OPTIONS, DEFAULT_CC_OPTION } from '../summons/cr_picker';
+import {
+  pickConjureCelestialSummon,
+  buildSummonCombatant,
+} from '../summons/summon_picker';
 
 // ---- Metadata -----------------------------------------------
 
@@ -169,8 +173,36 @@ export function createCouatl(
   // STR 16, DEX 20, CON 17, INT 18, WIS 20, CHA 18
   // Bite: +8 to hit, 1d6+5 piercing + DC 13 CON or poisoned (unconscious)
   // Constrict: +6 to hit, 2d6+3 bludgeoning + DC 15 STR or grappled+restrained
+  //
+  // Innate Spellcasting (MM p.43, CHA-based, DC 14 per bestiary JSON):
+  //   At will: detect evil and good, detect magic, detect thoughts (utility — not modelled)
+  //   3/day each: bless, create food and water, cure wounds, lesser restoration,
+  //               protection from poison, sanctuary, shield
+  //   1/day each: dream, greater restoration, scrying (out-of-combat — not modelled)
+  //
+  // Session 41 Task #2: added bless + cure wounds + sanctuary as Action
+  // objects with 3/day innate spellcasting resource tracking. The Couatl's
+  // aiProfile is now 'smart' (was 'attackNearest') so the AI planner can
+  // invoke shouldCastBless / shouldCastCureWounds — both functions were
+  // updated this session to accept innate spell uses as alternative to
+  // standard spell slots.
+  //
+  // Combat-relevant innate spells added (3/day each):
+  //   - Bless (L1, concentration, action): +1d4 to attack rolls + saves for 3 allies
+  //   - Cure Wounds (L1, action): 1d8+WIS healing to touched ally
+  //   - Sanctuary (L1, bonus action): ward ally vs attacks (v1 forward-compat flag)
+  //
+  // Skipped (out-of-combat or situation):
+  //   - Create Food and Water, Lesser Restoration, Protection from Poison
+  //   - Shield (would need reaction_registry integration)
+  //   - Dream, Greater Restoration, Scrying
   const hp = 97;
   const ac = 19;
+
+  // Innate spell save DC (MM p.43 — CHA-based, DC 14)
+  const innateSaveDC = 14;
+  // Innate spell attack bonus = prof (CR 4 = +2) + CHA mod (+4) = +6
+  const innateSpellAttackBonus = 6;
 
   const biteAction: Action = {
     name: 'Bite',
@@ -212,6 +244,74 @@ export function createCouatl(
     description: 'Constrict: +6 to hit, reach 10 ft, 2d6+3 bludgeoning + DC 15 STR or grappled+restrained.',
   };
 
+  // ---- Innate Spellcasting Actions (Session 41 Task #2) ----
+  // These are Action objects that the AI planner can select. The
+  // resources.innateSpellcasting field tracks the 3/day cap per spell.
+  // slotLevel: 0 ensures the slot-gate filter doesn't drop them.
+  // The execute functions in bless.ts / cure_wounds.ts / sanctuary.ts
+  // were updated this session to consume innate uses as a fallback
+  // when no spell slot is available.
+
+  const blessAction: Action = {
+    name: 'Bless',
+    isMultiattack: false,
+    attackType: null,           // no attack roll, no save — willing targets
+    reach: 30,
+    range: { normal: 30, long: 30 },
+    hitBonus: null,
+    damage: null,
+    damageType: null,
+    saveDC: null,
+    saveAbility: null,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: true,
+    slotLevel: 0,               // innate — never consumes a slot
+    costType: 'action',
+    legendaryCost: 0,
+    description: 'Innate Bless (3/day): up to 3 allies in 30 ft gain +1d4 to attack rolls and saves.',
+  };
+
+  const cureWoundsAction: Action = {
+    name: 'Cure Wounds',
+    isMultiattack: false,
+    attackType: null,           // no attack roll, no save — heal
+    reach: 5,
+    range: { normal: 5, long: 5 },
+    hitBonus: null,
+    damage: null,
+    damageType: null,
+    saveDC: null,
+    saveAbility: null,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 0,               // innate — never consumes a slot
+    costType: 'action',
+    legendaryCost: 0,
+    description: 'Innate Cure Wounds (3/day): touch — target regains 1d8+4 HP (WIS +4).',
+  };
+
+  const sanctuaryAction: Action = {
+    name: 'Sanctuary',
+    isMultiattack: false,
+    attackType: null,           // no attack roll, no save — willing target
+    reach: 30,
+    range: { normal: 30, long: 30 },
+    hitBonus: null,
+    damage: null,
+    damageType: null,
+    saveDC: innateSaveDC,        // WIS save DC for attackers who target the warded creature
+    saveAbility: 'wis',
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 0,               // innate — never consumes a slot
+    costType: 'bonusAction',
+    legendaryCost: 0,
+    description: 'Innate Sanctuary (3/day, bonus action): ward an ally in 30 ft — attackers must WIS save or lose target.',
+  };
+
   // Position: adjacent to caster (1 square away)
   const pos = { x: caster.pos.x + 1, y: caster.pos.y, z: caster.pos.z };
 
@@ -237,13 +337,17 @@ export function createCouatl(
     cha: 18,
     cr: 4,
     pos,
-    // Couatl has 2 attacks: Bite (poison/unconscious) and Constrict (grapple)
-    // v1 uses Bite as the primary action (higher hit bonus, cleaner mechanic)
-    actions: [biteAction, constrictAction],
+    // Couatl has 2 attacks + 3 innate spells:
+    //   - Bite (poison/unconscious)
+    //   - Constrict (grapple/restrain)
+    //   - Bless (innate 3/day, concentration buff)
+    //   - Cure Wounds (innate 3/day, heal)
+    //   - Sanctuary (innate 3/day, bonus-action ward)
+    actions: [biteAction, constrictAction, blessAction, cureWoundsAction, sanctuaryAction],
     traits: [
       'Magic Weapons',
       'Shielded Mind',
-      'Innate Spellcasting (DC 16)',
+      'Innate Spellcasting (DC 14, CHA-based — Session 41 Task #2)',
       'Change Shape',
       'Truesight 120 ft',
       'Damage Immunities: radiant, psychic',
@@ -260,11 +364,25 @@ export function createCouatl(
       freeObjectUsed: false,
     },
     conditions: new Set(),
-    aiProfile: 'attackNearest' as AIProfile,
+    // Session 41 Task #2: switched from 'attackNearest' to 'smart' so the
+    // AI planner can invoke shouldCastBless / shouldCastCureWounds (both
+    // updated this session to accept innate spell uses as alternative to
+    // standard spell slots). The 'smart' profile still falls through to
+    // selectAction (Bite or Constrict) when no spell is appropriate.
+    aiProfile: 'smart' as AIProfile,
     perception: { targets: new Map() } as any,
     concentration: null,
     deathSaves: null,
-    resources: null,
+    // Innate spellcasting: 3/day each for bless, cure wounds, sanctuary.
+    // Initialized here so the AI planner (shouldCastBless, shouldCastCW)
+    // and the spell execute functions can decrement the counter.
+    resources: {
+      innateSpellcasting: {
+        'Bless':           { max: 3, remaining: 3 },
+        'Cure Wounds':     { max: 3, remaining: 3 },
+        'Sanctuary':       { max: 3, remaining: 3 },
+      },
+    },
     tempHP: 0,
     exhaustionLevel: 0,
     mountedOn: null,
@@ -330,7 +448,13 @@ export function shouldCast(caster: Combatant, bf: Battlefield): boolean {
  *  1. Consume a spell slot (find the lowest available L7+ slot).
  *  2. Break any existing concentration (safety net).
  *  3. Start concentration on Conjure Celestial.
- *  4. Create the Couatl combatant (built manually, NOT from bestiary).
+ *  4. Create the celestial combatant.
+ *     - Session 41 Task #3: bestiary integration. Tries to pick the
+ *       appropriate celestial from the bestiary based on slot level
+ *       (L7 → Couatl CR 4, L8 → Unicorn CR 5 in MM, L9 → CR 6 — no
+ *       CR 6 celestials in MM, falls back to Couatl).
+ *     - Falls back to the hardcoded createCouatl() if the bestiary is
+ *       not loaded or no matching creature is found.
  *  5. Add to battlefield combatants.
  *  6. Insert into initiative (pendingInitiativeInserts for after-caster insertion).
  *  7. Log the summon.
@@ -349,12 +473,22 @@ export function execute(
   }
   startConcentration(caster, 'Conjure Celestial');
 
-  // v1 simplification: always spawn a Couatl (CR 4). The Couatl stat
-  // block is valid for any L7+ slot per the spell's CR-scaling rule.
-  // A future v2 should pick higher-CR celestials when bestiary loading
-  // is standardised (no CR 5-6 celestials exist in the MM, so v2 would
-  // need to pull from VGM/MTF/etc.).
-  const summon = createCouatl(caster, slotLevel);
+  // Session 41 Task #3: bestiary-driven summon selection.
+  // L7: Couatl (canonical, only CR 4 celestial in MM).
+  // L8: Unicorn (CR 5 celestial in MM) — NEW in Session 41.
+  // L9: no CR 6 celestials in MM; picker returns null → fall back to Couatl.
+  // L7 also returns null if bestiary isn't loaded → fall back to createCouatl.
+  const pick = pickConjureCelestialSummon(slotLevel);
+  let summon: Combatant;
+  let summonName: string;
+  if (pick) {
+    summon = buildSummonCombatant(pick, caster, 'Conjure Celestial');
+    summonName = pick.name;
+  } else {
+    // Fallback: hardcoded Couatl stat block (v1 behavior).
+    summon = createCouatl(caster, slotLevel);
+    summonName = 'Couatl';
+  }
 
   // Add to battlefield
   state.battlefield.combatants.set(summon.id, summon);
@@ -370,7 +504,7 @@ export function execute(
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Conjure Celestial (slot L${slotLevel})! Couatl appears with ${summon.maxHP} HP, AC ${summon.ac}.`,
+    `${caster.name} casts Conjure Celestial (slot L${slotLevel})! ${summonName} appears with ${summon.maxHP} HP, AC ${summon.ac}.`,
     summon.id,
   );
 }

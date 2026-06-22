@@ -174,6 +174,12 @@ export interface EquipmentItem {
   equipped: boolean;
   category: 'weapon' | 'armor' | 'shield' | 'tool' | 'gear' | 'pack';
   notes?: string;
+  /** Magic item requiring attunement (DMG p.136) — only meaningful if `magical` is true. */
+  attuned?: boolean;
+  /** Flags this as a magic item at all (independent of whether it needs attunement). */
+  magical?: boolean;
+  /** Weight in pounds, per unit (PHB p.176). Absent = untracked/unknown weight. */
+  weight?: number;
 }
 
 export interface CharacterProficiencies {
@@ -411,6 +417,14 @@ export interface CharacterSheet {
   level1Features: CharacterFeature[];   // Features from race + class at level 1
   allFeatures: CharacterFeature[];      // All features across all levels (grows as you level up)
   feats: string[];                      // Feat names (resolved from registry at runtime)
+  /**
+   * Spell choices for feats that grant spells (Magic Initiate, Ritual Caster,
+   * Spell Sniper). Keyed by feat name; value is an array of chosen spell names.
+   * These are feat-granted spells, not class spell-slot spells — they are
+   * stored separately and do not consume class slots per their respective feat
+   * descriptions. Absent key = player hasn't made the choice yet.
+   */
+  featSpellChoices?: Record<string, string[]>;
   backgroundFeature: string;            // Background feature description
 
   // Status
@@ -456,6 +470,14 @@ export interface CharacterSheet {
   // hooks (Repelling Blast, Agonizing Blast, Grasp of Hadar, Lance of
   // Lethargy) can fire.
   eldritchInvocations?: string[];
+
+  // ---- Pact Boon (PHB p.108, Warlock level 3) ----------------
+  // Set by choosePactBoon() in improvements.ts at Warlock level 3.
+  // 'chain' = Pact of the Chain (familiar variant)
+  // 'blade' = Pact of the Blade (pact weapon — enables Thirsting Blade)
+  // 'tome'  = Pact of the Tome (3 cantrips from any class list)
+  // The builder transfers this to Combatant.pactBoon at runtime.
+  pactBoon?: 'chain' | 'blade' | 'tome';
 }
 
 // ---- Party --------------------------------------------------
@@ -491,6 +513,39 @@ export function abilityModifier(score: number): number {
 /** Sum all class levels to get total character level */
 export function totalLevel(sheet: CharacterSheet): number {
   return sheet.classLevels.reduce((sum, cl) => sum + cl.level, 0);
+}
+
+/**
+ * Max simultaneous magic item attunements (DMG p.136: normally 3).
+ * Artificer raises this via Magic Item Adept (lv10 → 4), Magic Item
+ * Savant (lv14 → 5), Magic Item Master (lv18 → 6).
+ */
+export function attunementCap(sheet: CharacterSheet): number {
+  const artificerLevel = sheet.classLevels.find(cl => cl.className === 'Artificer')?.level ?? 0;
+  if (artificerLevel >= 18) return 6;
+  if (artificerLevel >= 14) return 5;
+  if (artificerLevel >= 10) return 4;
+  return 3;
+}
+
+/** Count of currently-attuned equipment items. */
+export function attunedItemCount(sheet: CharacterSheet): number {
+  return (sheet.equipment || []).filter(item => item.attuned).length;
+}
+
+/** Carrying capacity in pounds: STR score x 15 (PHB p.176, base rule — not
+ *  the optional Variant: Encumbrance speed-penalty tiers, which aren't
+ *  modeled here). */
+export function carryingCapacity(sheet: CharacterSheet): number {
+  return sheet.stats.str * 15;
+}
+
+/** Total weight of carried equipment in pounds. Items with no `weight` set
+ *  contribute 0 (untracked, not assumed weightless) — this is a best-effort
+ *  total, not a guarantee every item has a known weight. Coin weight (PHB:
+ *  50 coins/lb) is intentionally not included. */
+export function totalCarriedWeight(sheet: CharacterSheet): number {
+  return (sheet.equipment || []).reduce((sum, item) => sum + (item.weight || 0) * (item.quantity || 1), 0);
 }
 
 /** Compute proficiency bonus from total level */

@@ -343,8 +343,10 @@ console.log('\n--- 3. chooseEldritchInvocations() validation ---');
 // 3f. Unknown invocation name throws
 {
   const warlock2 = levelWarlockTo(makeWarlock1(), 2);
+  // Session 41 Task #16: Thirsting Blade is now a registered invocation.
+  // Use a genuinely unknown name to test the rejection path.
   throws('3f. Unknown invocation throws',
-    () => chooseEldritchInvocations(warlock2, ['Agonizing Blast', 'Thirsting Blade']),
+    () => chooseEldritchInvocations(warlock2, ['Agonizing Blast', 'Nonexistent Invocation']),
     'Unknown Eldritch Invocation');
 }
 
@@ -364,17 +366,22 @@ console.log('\n--- 3. chooseEldritchInvocations() validation ---');
     result.eldritchInvocations!.length, 3);
 }
 
-// 3i. Warlock level 9 with 5 invocations works (all 4 known + duplicate-rejection test)
+// 3i. Warlock level 9 with 5 invocations works (Session 41 Task #16: 7 known invocations now)
 {
   const warlock9 = levelWarlockTo(makeWarlock1(), 9);
-  // 4 known invocations; need 5. Should fail because we can't pick duplicates.
-  throws('3i1. Warlock 9 with only 4 known invocations available (need 5) — try with 4 throws (count mismatch)',
+  // Session 41 Task #16: registry now has 7 invocations. Warlock 9 (5 slots)
+  // can pick 5 unique invocations without duplicates.
+  // 3i1: 4 invocations still throws (count mismatch — needs 5)
+  throws('3i1. Warlock 9 with only 4 invocations throws (count mismatch)',
     () => chooseEldritchInvocations(warlock9, ['Agonizing Blast', 'Repelling Blast', 'Grasp of Hadar', 'Lance of Lethargy']),
     'count mismatch');
-  // Try with 5 — must include a duplicate, which fails on the dup check
-  throws('3i2. Warlock 9 with 5 invocations + duplicate throws (no 5th unique invocation in v1 registry)',
-    () => chooseEldritchInvocations(warlock9, ['Agonizing Blast', 'Repelling Blast', 'Grasp of Hadar', 'Lance of Lethargy', 'Agonizing Blast']),
-    'Duplicate');
+  // 3i2: 5 unique invocations now SUCCEEDS (was duplicate-rejection test pre-Session 41)
+  const result = chooseEldritchInvocations(warlock9, [
+    'Agonizing Blast', 'Repelling Blast', 'Grasp of Hadar',
+    'Lance of Lethargy', 'Eldritch Spear',
+  ]);
+  eq('3i2. Warlock 9 with 5 unique invocations succeeds (Session 41 Task #16)',
+    result.eldritchInvocations!.length, 5);
 }
 
 // 3j. Replacing invocations works (full swap, v1 simplification)
@@ -588,16 +595,21 @@ console.log('\n--- 10. End-to-end: CHA 20 (+5) Agonizing Blast damage ---');
 }
 
 // ============================================================
-// 11. ELDRITCH_INVOCATIONS registry has all 4 v1 entries
+// 11. ELDRITCH_INVOCATIONS registry has all 7 v1 entries (Sessions 38-41)
 // ============================================================
-console.log('\n--- 11. Registry has all 4 v1 invocations ---');
+console.log('\n--- 11. Registry has all 7 v1 invocations (Sessions 38-41) ---');
 {
   const names = Object.keys(ELDRITCH_INVOCATIONS).sort();
-  eq('11a. registry has 4 entries', names.length, 4);
+  // Session 41 Task #16: 3 new invocations added (Eldritch Spear, Eldritch Mind, Thirsting Blade)
+  eq('11a. registry has 7 entries (was 4 pre-Session 41)', names.length, 7);
   assert('11b. includes Agonizing Blast',    names.includes('Agonizing Blast'));
   assert('11c. includes Grasp of Hadar',    names.includes('Grasp of Hadar'));
   assert('11d. includes Lance of Lethargy', names.includes('Lance of Lethargy'));
   assert('11e. includes Repelling Blast',   names.includes('Repelling Blast'));
+  // Session 41 Task #16 additions
+  assert('11f. includes Eldritch Spear',    names.includes('Eldritch Spear'));
+  assert('11g. includes Eldritch Mind',     names.includes('Eldritch Mind'));
+  assert('11h. includes Thirsting Blade',   names.includes('Thirsting Blade'));
 }
 
 // ============================================================

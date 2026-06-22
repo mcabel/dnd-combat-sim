@@ -129,7 +129,12 @@ export const REACTION_SPELLS: ReactionSpellDescriptor[] = [
   {
     name: 'Silvery Barbs',
     level: 1,
-    triggerKinds: ['incoming_attack_hit'],
+    // Session 41 Task #8: added 'incoming_save_success' for the save-success
+    // reroll trigger (SCC p.38: "succeeds on a saving throw").
+    // Session 42 Task #19: added 'incoming_ability_check_success' for the
+    // ability-check-success reroll trigger (SCC p.38: "succeeds on an
+    // ability check"). Covers grapple/shove/escape contests.
+    triggerKinds: ['incoming_attack_hit', 'incoming_save_success', 'incoming_ability_check_success'],
     shouldCast: shouldCastSilveryBarbs,
     execute: executeSilveryBarbs,
   },

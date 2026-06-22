@@ -232,7 +232,10 @@ console.log('\n=== 3. createCouatl — combatant creation ===\n');
   eq('Couatl HP is 97', couatl.maxHP, 97);
   eq('Couatl currentHP equals maxHP', couatl.currentHP, couatl.maxHP);
   eq('Couatl AC is 19', couatl.ac, 19);
-  eq('Couatl aiProfile is attackNearest', couatl.aiProfile, 'attackNearest');
+  // Session 41 Task #2: aiProfile switched from 'attackNearest' to 'smart'
+  // so the AI planner can invoke shouldCastBless / shouldCastCureWounds
+  // via the innate spellcasting pipeline.
+  eq('Couatl aiProfile is smart (Session 41 innate spellcasting)', couatl.aiProfile, 'smart');
   eq('Couatl speed is 30', couatl.speed, 30);
   eq('Couatl flySpeed is 90', couatl.flySpeed, 90);
   eq('Couatl STR is 16', couatl.str, 16);
@@ -243,10 +246,18 @@ console.log('\n=== 3. createCouatl — combatant creation ===\n');
   eq('Couatl CHA is 18', couatl.cha, 18);
   eq('Couatl CR is 4', couatl.cr, 4);
 
-  // Attack actions (Couatl has 2: Bite + Constrict)
-  eq('Couatl has 2 attack actions', couatl.actions.length, 2);
-  eq('Couatl first attack is Bite (primary)', couatl.actions[0].name, 'Bite');
-  eq('Couatl second attack is Constrict', couatl.actions[1].name, 'Constrict');
+  // Attack + Innate Spell Actions (Session 41 Task #2):
+  //   - Bite (poison/unconscious)
+  //   - Constrict (grapple/restrain)
+  //   - Bless (innate 3/day, concentration buff)
+  //   - Cure Wounds (innate 3/day, heal)
+  //   - Sanctuary (innate 3/day, bonus-action ward)
+  eq('Couatl has 5 actions (2 attacks + 3 innate spells)', couatl.actions.length, 5);
+  eq('Couatl first action is Bite (primary)', couatl.actions[0].name, 'Bite');
+  eq('Couatl second action is Constrict', couatl.actions[1].name, 'Constrict');
+  eq('Couatl third action is Bless (innate)', couatl.actions[2].name, 'Bless');
+  eq('Couatl fourth action is Cure Wounds (innate)', couatl.actions[3].name, 'Cure Wounds');
+  eq('Couatl fifth action is Sanctuary (innate)', couatl.actions[4].name, 'Sanctuary');
 
   // Bite (primary, melee)
   const bite = couatl.actions[0];
@@ -487,18 +498,32 @@ console.log('\n=== 8. Upcast — slot level scales but stat block stays the same
   const actionEvents7 = events7.filter((e: any) => e.type === 'action');
   assert('L7 cast log mentions slot L7', actionEvents7.length > 0 && actionEvents7[0].description.includes('L7'));
 
-  // L8 upcast: still spawns Couatl (v1 simplification), but consumes L7 first
-  // because consumeSpellSlot() finds the lowest available L7+ slot.
+  // L8 upcast: Session 41 Task #3 bestiary integration — now picks
+  // Unicorn (CR 5 celestial, MM p.294) when bestiary is loaded.
+  // Falls back to Couatl (CR 4) if bestiary is not available.
+  // The Unicorn stat block: AC 12, HP 67 (9d10+18), CR 5.
   const caster8 = makeCaster('c8');
   caster8.resources = withSlots7And8(0, 1); // L7 exhausted, L8 available
   const bf8 = makeBF([caster8, makeEnemy('e8')]);
   const state8 = makeState(bf8);
   execute(caster8, caster8, state8);
-  const couatl8 = [...bf8.combatants.values()].find(c => c.isSummon && c.summonerId === caster8.id);
-  assert('L8 upcast: Couatl spawned', !!couatl8);
-  if (couatl8) {
-    eq('L8 upcast: HP is still 97 (v1 simplification)', couatl8.maxHP, 97);
-    eq('L8 upcast: CR is still 4 (v1 simplification)', couatl8.cr, 4);
+  const summon8 = [...bf8.combatants.values()].find(c => c.isSummon && c.summonerId === caster8.id);
+  assert('L8 upcast: summon spawned', !!summon8);
+  if (summon8) {
+    // Bestiary is loaded from ./bestiaryData in the test environment → Unicorn.
+    // If bestiary is missing (e.g. CI without bestiaryData/), falls back to Couatl.
+    // Both are valid v1.5 outcomes — verify it's one of the two.
+    const isUnicorn = summon8.name.includes('Unicorn');
+    const isCouatl = summon8.name.includes('Couatl');
+    assert('L8 upcast: summon is Unicorn or Couatl (fallback)', isUnicorn || isCouatl);
+    if (isUnicorn) {
+      eq('L8 upcast: Unicorn HP is 67 (MM p.294)', summon8.maxHP, 67);
+      eq('L8 upcast: Unicorn CR is 5', summon8.cr, 5);
+    } else {
+      // Fallback: Couatl (HP 97, CR 4)
+      eq('L8 fallback: Couatl HP is 97', summon8.maxHP, 97);
+      eq('L8 fallback: Couatl CR is 4', summon8.cr, 4);
+    }
   }
   eq('L8 upcast: 8th-level slot consumed', caster8.resources!.spellSlots![8]!.remaining, 0);
 

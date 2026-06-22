@@ -41,8 +41,8 @@
 // ============================================================
 
 import { Combatant, Battlefield } from '../types/core';
-import { CombatEvent, EngineState } from '../engine/combat';
-import { rollSave, rollDie, applyDamageWithTempHP } from '../engine/utils';
+import { rollSaveReactable, CombatEvent, EngineState } from '../engine/combat';
+import { rollDie, applyDamageWithTempHP } from '../engine/utils';
 import { chebyshev3D, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 
@@ -124,7 +124,7 @@ export function execute(caster: Combatant, targets: Combatant[], state: EngineSt
   for (const target of targets) {
     if (target.isDead || target.isUnconscious) continue;
 
-    const save = rollSave(target, 'dex', saveDC);
+    const save = rollSaveReactable(state, caster, target, 'dex', saveDC);
 
     // Roll both damage types; halve each independently on save success.
     const coldRaw = rollDamageCold();

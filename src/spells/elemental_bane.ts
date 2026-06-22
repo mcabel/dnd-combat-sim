@@ -44,8 +44,8 @@
 // ============================================================
 
 import { Combatant, Battlefield } from '../types/core';
-import { CombatEvent, EngineState } from '../engine/combat';
-import { rollSave, rollDie, applyDamageWithTempHP } from '../engine/utils';
+import { rollSaveReactable, CombatEvent, EngineState } from '../engine/combat';
+import { rollDie, applyDamageWithTempHP } from '../engine/utils';
 import { chebyshev3D, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 
@@ -113,7 +113,7 @@ export function execute(caster: Combatant, target: Combatant, state: EngineState
     return;
   }
 
-  const save = rollSave(target, 'wis', saveDC);
+  const save = rollSaveReactable(state, caster, target, 'wis', saveDC);
   const fullDmg = rollDamage();
   const dmg = save.success ? Math.floor(fullDmg / 2) : fullDmg;
   const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);

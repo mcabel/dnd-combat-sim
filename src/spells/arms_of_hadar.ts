@@ -33,8 +33,8 @@
 // ============================================================
 
 import { Combatant, Battlefield } from '../types/core';
-import { CombatEvent, EngineState } from '../engine/combat';
-import { rollSave, rollDie, applyDamage } from '../engine/utils';
+import { rollSaveReactable, CombatEvent, EngineState } from '../engine/combat';
+import { rollDie, applyDamage } from '../engine/utils';
 import { euclideanDistFt } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 
@@ -137,7 +137,7 @@ export function execute(
   for (const target of targets) {
     if (target.isDead || target.isUnconscious) continue;
 
-    const save = rollSave(target, 'str', saveDC);
+    const save = rollSaveReactable(state, caster, target, 'str', saveDC);
 
     // Roll full 2d6 necrotic damage
     const dmgRoll = rollDie(6) + rollDie(6);

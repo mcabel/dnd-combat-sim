@@ -1359,11 +1359,29 @@ function renderCharDetail() {
   const feats = c.allFeatures || c.level1Features || [];
   const featEl = document.getElementById('char-features');
   if (feats.length) {
-    featEl.innerHTML = feats.map(f =>
-      `<li><strong>${esc(f.name)}</strong> <span style="color:var(--muted);font-size:10px">[${f.source}]</span> — ${esc(f.description)}</li>`
-    ).join('');
+    featEl.innerHTML = feats.map(f => {
+      const spellChoices = (c.featSpellChoices || {})[f.name];
+      const spellNote = (f.source === 'feat' && spellChoices && spellChoices.length)
+        ? `<br><span style="color:var(--accent2,#6ab0de);font-size:10px">Chosen spells: ${spellChoices.map(esc).join(', ')}
+            <button onclick="showFeatSpellPanel('${esc(c.id)}', '${esc(f.name)}')"
+              style="margin-left:6px;background:none;border:none;cursor:pointer;color:var(--muted);font-size:10px;padding:0" title="Edit spell choices">[edit]</button>
+           </span>`
+        : (f.source === 'feat' && ((c.feats || []).indexOf(f.name) >= 0) && ((() => { const fd = (window._featData || {})[f.name]; return fd && fd.grantsSpells; })()))
+          ? `<br><span style="color:var(--warn);font-size:10px">⚠ No spells recorded yet.
+               <button onclick="showFeatSpellPanel('${esc(c.id)}', '${esc(f.name)}')"
+                 style="background:none;border:none;cursor:pointer;color:var(--warn);font-size:10px;padding:0">Add spell choices</button>
+             </span>`
+          : '';
+      return `<li><strong>${esc(f.name)}</strong> <span style="color:var(--muted);font-size:10px">[${f.source}]</span> — ${esc(f.description)}${spellNote}</li>`;
+    }).join('');
   } else {
     featEl.innerHTML = '<li style="color:var(--muted)">No features recorded.</li>';
+  }
+
+  // Cache feat data client-side for spell-warning lookups (populated lazily)
+  if (!window._featData && S.feats) {
+    window._featData = {};
+    for (const f of S.feats) window._featData[f.name] = f;
   }
 
   // Equipment
@@ -1490,6 +1508,17 @@ async function toggleCondition(name) {
 }
 
 // ── Equipment ────────────────────────────────────────────────
+// Attunement cap (DMG p.136: normally 3; Artificer raises it via Magic Item
+// Adept lv10 -> 4, Magic Item Savant lv14 -> 5, Magic Item Master lv18 -> 6).
+// Mirrors attunementCap() in src/characters/types.ts — keep in sync.
+function attunementCap(c) {
+  const artificerLevel = (c.classLevels || []).find(cl => cl.className === 'Artificer')?.level || 0;
+  if (artificerLevel >= 18) return 6;
+  if (artificerLevel >= 14) return 5;
+  if (artificerLevel >= 10) return 4;
+  return 3;
+}
+
 function renderEquipment(c) {
   const el = document.getElementById('char-equipment');
   if (!el) return;
@@ -1528,9 +1557,15 @@ function renderEquipment(c) {
   // Full gear list (collapsible)
   if (items.length > 0) {
     const listId = `equip-list-${c.id}`;
+    const attunedCount = items.filter(e => e.attuned).length;
+    const attuneCap = attunementCap(c);
+    const carried = items.reduce((sum, e) => sum + (e.weight || 0) * (e.quantity || 1), 0);
+    const capacity = (c.stats?.str || 10) * 15;
     html += `<div>
       <span style="font-size:11px;color:var(--muted);cursor:pointer" onclick="toggleEquipList('${listId}')">
         <strong>All Gear (${items.length})</strong> <span id="${listId}-arrow">▸</span>
+        ${attunedCount > 0 ? `<span style="margin-left:8px;color:${attunedCount > attuneCap ? 'var(--danger,#e05252)' : 'var(--muted)'}">Attuned: ${attunedCount}/${attuneCap}</span>` : ''}
+        ${carried > 0 ? `<span style="margin-left:8px;color:${carried > capacity ? 'var(--danger,#e05252)' : 'var(--muted)'}">Carried: ${carried}/${capacity} lb</span>` : ''}
       </span>
       <div id="${listId}" style="display:none;margin-top:4px">
         <table style="width:100%;border-collapse:collapse;font-size:11px">
@@ -1538,8 +1573,10 @@ function renderEquipment(c) {
             <tr style="color:var(--muted);border-bottom:1px solid var(--border)">
               <th style="text-align:left;padding:2px 4px">Item</th>
               <th style="text-align:center;padding:2px 4px">Qty</th>
+              <th style="text-align:center;padding:2px 4px">Wt</th>
               <th style="text-align:center;padding:2px 4px">Cat</th>
               <th style="text-align:center;padding:2px 4px">Equipped</th>
+              <th style="text-align:center;padding:2px 4px">Attuned</th>
               <th style="text-align:center;padding:2px 4px;width:28px"></th>
             </tr>
           </thead>
@@ -1563,12 +1600,27 @@ function renderEquipment(c) {
                     onkeydown="if(event.key==='Enter')this.blur()"
                     title="Edit quantity"/>
                 </td>
+                <td style="text-align:center;padding:3px 4px">
+                  <input type="number" value="${e.weight ?? ''}" min="0" step="0.1" placeholder="—"
+                    style="width:48px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:11px;padding:2px 4px;text-align:center;outline:none"
+                    onchange="saveEquipWeight('${c.id}', ${i}, this.value)"
+                    onblur="saveEquipWeight('${c.id}', ${i}, this.value)"
+                    onkeydown="if(event.key==='Enter')this.blur()"
+                    title="Edit weight (lb, per unit)"/>
+                </td>
                 <td style="text-align:center;padding:3px 4px;color:var(--muted)">${e.category}</td>
                 <td style="text-align:center;padding:3px 4px">
                   <button onclick="toggleEquip('${c.id}', ${i}, ${!e.equipped})"
                     title="${e.equipped ? 'Unequip' : 'Equip'}"
                     style="background:none;border:none;cursor:pointer;padding:2px 6px;font-size:13px;line-height:1">
                     ${e.equipped ? '<span style="color:var(--accent)">✓</span>' : '<span style="color:var(--muted)">—</span>'}
+                  </button>
+                </td>
+                <td style="text-align:center;padding:3px 4px">
+                  <button onclick="toggleAttuned('${c.id}', ${i})"
+                    title="${e.attuned ? 'Remove attunement' : 'Attune to this item'}"
+                    style="background:none;border:none;cursor:pointer;padding:2px 6px;font-size:13px;line-height:1">
+                    ${e.attuned ? '<span style="color:var(--accent)">⭑</span>' : '<span style="color:var(--muted)">☆</span>'}
                   </button>
                 </td>
                 <td style="text-align:center;padding:3px 4px">
@@ -1673,6 +1725,39 @@ async function toggleEquip(charId, itemIndex, equipped) {
   }
 }
 
+async function toggleAttuned(charId, idx) {
+  const c = S.charDetail && S.charDetail.id === charId ? S.charDetail : null;
+  if (!c) return;
+  const updated = c.equipment.map((item, i) =>
+    i === idx ? { ...item, attuned: !item.attuned } : item
+  );
+  try {
+    const res = await fetch(`/api/characters/${charId}`, {
+      method:  'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ equipment: updated }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      showBanner(err.error || 'Failed to update attunement', 'error');
+      return;
+    }
+    const data = await res.json();
+    S.charDetail = data.character;
+    const listId  = `equip-list-${charId}`;
+    const wasOpen = document.getElementById(listId)?.style.display === 'block';
+    renderEquipment(S.charDetail);
+    if (wasOpen) {
+      const el    = document.getElementById(listId);
+      const arrow = document.getElementById(listId + '-arrow');
+      if (el)    el.style.display  = 'block';
+      if (arrow) arrow.textContent = '▾';
+    }
+  } catch (e) {
+    showBanner('Network error updating attunement', 'error');
+  }
+}
+
 // ── Gold editing ──────────────────────────────────────────────
 async function saveGold(charId, rawVal) {
   const gold = parseFloat(rawVal);
@@ -1731,9 +1816,53 @@ async function saveEquipQty(charId, idx, rawVal) {
     if (!r.ok) { showBanner('Failed to update quantity', 'error'); return; }
     const { character: saved } = await r.json();
     S.charDetail = saved;
-    // no full re-render needed — input already shows new value
+    // Carried-weight summary depends on quantity, so re-render (preserve list-open state)
+    const listId  = `equip-list-${charId}`;
+    const wasOpen = document.getElementById(listId)?.style.display === 'block';
+    renderEquipment(S.charDetail);
+    if (wasOpen) {
+      const el    = document.getElementById(listId);
+      const arrow = document.getElementById(listId + '-arrow');
+      if (el)    el.style.display  = 'block';
+      if (arrow) arrow.textContent = '▾';
+    }
   } catch (e) {
     showBanner('Network error updating quantity', 'error');
+  }
+}
+
+async function saveEquipWeight(charId, idx, rawVal) {
+  const trimmed = String(rawVal).trim();
+  const weight  = trimmed === '' ? undefined : parseFloat(trimmed);
+  if (trimmed !== '' && (isNaN(weight) || weight < 0)) { showBanner('Weight must be ≥ 0', 'error'); return; }
+  const c = S.charDetail && S.charDetail.id === charId ? S.charDetail : null;
+  if (!c) return;
+  const updated = c.equipment.map((item, i) => {
+    if (i !== idx) return item;
+    const copy = { ...item };
+    if (weight === undefined) { delete copy.weight; } else { copy.weight = weight; }
+    return copy;
+  });
+  try {
+    const r = await fetch(`/api/characters/${charId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ equipment: updated })
+    });
+    if (!r.ok) { showBanner('Failed to update weight', 'error'); return; }
+    const { character: saved } = await r.json();
+    S.charDetail = saved;
+    const listId  = `equip-list-${charId}`;
+    const wasOpen = document.getElementById(listId)?.style.display === 'block';
+    renderEquipment(S.charDetail);
+    if (wasOpen) {
+      const el    = document.getElementById(listId);
+      const arrow = document.getElementById(listId + '-arrow');
+      if (el)    el.style.display  = 'block';
+      if (arrow) arrow.textContent = '▾';
+    }
+  } catch (e) {
+    showBanner('Network error updating weight', 'error');
   }
 }
 
@@ -2707,7 +2836,61 @@ async function doApplyFeat() {
     refreshChars();
     renderCharDetail();
     setASIMode('score'); // reset to default mode for next time
-    showBanner(`Feat taken: ${featName}`, 'ok');
+    if (data.grantsSpells) {
+      showBanner(`Feat taken: ${featName} — ⚠ This feat grants spells. Enter your chosen spell(s) below.`, 'warn');
+      showFeatSpellPanel(S.charDetail.id, featName);
+    } else {
+      showBanner(`Feat taken: ${featName}`, 'ok');
+    }
+  } catch(e) { showErr(e.message); }
+}
+
+function showFeatSpellPanel(charId, featName) {
+  // Render a simple inline panel below the ASI card for recording spell choices.
+  // Uses the existing asi-form-card slot; a dedicated div is injected after it.
+  const existingPanel = document.getElementById('feat-spell-choice-panel');
+  if (existingPanel) existingPanel.remove();
+
+  const card = document.getElementById('asi-form-card');
+  if (!card) return;
+
+  const panel = document.createElement('div');
+  panel.id = 'feat-spell-choice-panel';
+  panel.className = 'card';
+  panel.style.cssText = 'margin-top:8px;background:var(--bg);border-color:var(--warn)';
+  panel.innerHTML = `
+    <div class="card-title" style="color:var(--warn)">${esc(featName)}: Choose Spells</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:8px">
+      Enter the spell name(s) you chose for <strong>${esc(featName)}</strong>, one per line.<br>
+      These are recorded for reference; they don't consume spell slots per the feat rules.
+    </div>
+    <textarea id="feat-spell-names-input" rows="3"
+      style="width:100%;box-sizing:border-box;background:var(--bg2,#1a1a22);border:1px solid var(--border);border-radius:5px;color:var(--text);font-family:var(--mono);font-size:12px;padding:6px 8px;resize:vertical"
+      placeholder="e.g.&#10;Fireball&#10;Mage Hand"></textarea>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button class="primary sm" onclick="saveFeatSpells('${esc(charId)}', '${esc(featName)}')">Save Spell Choices</button>
+      <button class="secondary sm" onclick="document.getElementById('feat-spell-choice-panel').remove()">Dismiss</button>
+    </div>
+  `;
+  card.insertAdjacentElement('afterend', panel);
+  panel.querySelector('textarea')?.focus();
+}
+
+async function saveFeatSpells(charId, featName) {
+  const textarea = document.getElementById('feat-spell-names-input');
+  if (!textarea) return;
+  const spells = textarea.value.split('\n').map(s => s.trim()).filter(Boolean);
+  if (spells.length === 0) { showErr('Enter at least one spell name.'); return; }
+  try {
+    const data = await api(`/api/characters/${charId}/setfeatspells`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ featName, spells }),
+    });
+    S.charDetail = data.character;
+    renderCharDetail();
+    document.getElementById('feat-spell-choice-panel')?.remove();
+    showBanner(`Spell choices saved for ${featName}: ${spells.join(', ')}`, 'ok');
   } catch(e) { showErr(e.message); }
 }
 

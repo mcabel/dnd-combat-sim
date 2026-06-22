@@ -51,9 +51,9 @@
 // ============================================================
 
 import { Combatant, Battlefield, ReactionTrigger, ReactionOutcome } from '../types/core';
-import { EngineState } from '../engine/combat';
+import { EngineState, rollAbilityCheckReactable } from '../engine/combat';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
-import { abilityMod, rollDie } from '../engine/utils';
+import { abilityMod } from '../engine/utils';
 
 /**
  * Check if `caster` has a spell slot of at least `minLevel`.
@@ -166,10 +166,8 @@ export function executeReaction(
   caster.budget.reactionUsed = true;
 
   // Determine if this is an auto-success or an ability check.
-  // PHB p.228: "If the spell is an area of effect spell, its area
-  //   ... " — wait, the actual rule:
-  //   "If the spell's level is less than or equal to the level of the
-  //    spell slot you used, the spell fails and has no effect."
+  // PHB p.228: "If the spell's level is less than or equal to the level of the
+  //   spell slot you used, the spell fails and has no effect."
   // So auto-success if slotLevel >= trigger.level.
   let countered: boolean;
   let checkRoll: number | null = null;
@@ -182,15 +180,28 @@ export function executeReaction(
   } else {
     // Ability check using spellcasting ability (best of INT/WIS/CHA in v1).
     // DC = 10 + spell's level.
+    // Session 43 Task #26: use rollAbilityCheckReactable so Silvery Barbs
+    // can fire on a successful check. The opponent is the original
+    // spellcaster (trigger.caster) — they would cast Silvery Barbs to
+    // negate the Counterspell's check success, causing their spell to
+    // resolve instead of being countered.
     dc = 10 + trigger.level;
-    const checkBonus = Math.max(
-      abilityMod(caster.int),
-      abilityMod(caster.wis),
-      abilityMod(caster.cha),
-    ) + 2;  // +2 prof (v1)
-    checkRoll = rollDie(20);
-    checkTotal = checkRoll + checkBonus;
-    countered = checkTotal >= dc;
+    const spellcastingAbility: 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha' = 'int';  // v1: INT for Wizards
+    // PHB p.228: no proficiency bonus (just spellcasting ability mod).
+    // v1 used +2 prof — we preserve that by passing isProficient=true
+    // so rollAbilityCheck adds profBonusByCR (+2 for typical PC CR 1).
+    const checkResult = rollAbilityCheckReactable(
+      state,
+      caster,            // checker (the one making the ability check)
+      trigger.caster,    // opponent (the original spellcaster — wants CS to fail)
+      spellcastingAbility,
+      dc,
+      true,              // isProficient — preserves v1 +2 prof
+      'counterspell',
+    );
+    checkRoll = checkResult.roll;
+    checkTotal = checkResult.total;
+    countered = checkResult.success;
   }
 
   // Log the result.

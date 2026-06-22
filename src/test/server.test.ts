@@ -1712,6 +1712,99 @@ async function run() {
       assert(status >= 400, `Expected an error status (no pending ASI anyway), got ${status}`);
     });
 
+    await test('POST /applyfeat response includes grantsSpells=false for non-spell feat', async () => {
+      // featCharId was cleaned up but we can re-fetch via another path — use a fresh char
+      // We check this on the Resilient result char (already applied above in this block).
+      // Actually just call GET /feats to confirm it's false for Tough, then test via a direct
+      // check of the flag in the next test using Magic Initiate directly.
+      const { json } = await request(BASE, '/api/feats');
+      const mi = json.feats.find((f: any) => f.name === 'Magic Initiate');
+      assert(!!mi?.grantsSpells, 'Magic Initiate.grantsSpells is true in /api/feats');
+      const keen = json.feats.find((f: any) => f.name === 'Keen Mind');
+      assert(!keen?.grantsSpells, 'Keen Mind.grantsSpells is falsy in /api/feats');
+    });
+
+    // setfeatspells tests — need a fresh character with Magic Initiate applied.
+    // We'll create a minimal character, give it 1 pending ASI, apply Magic Initiate,
+    // then test the setfeatspells endpoint.
+    {
+      let miCharId = '';
+
+      await test('setup: create character and apply Magic Initiate for setfeatspells tests', async () => {
+        const created = await request(BASE, '/api/characters', 'POST', {
+          name: 'MITestDummy', race: 'Human', background: 'Sage', alignment: 'True Neutral',
+          firstClass: 'Wizard',
+          classLevels: [{ className: 'Wizard', level: 4 }],
+          subclassChoices: {},
+          experiencePoints: 0,
+          baseStats: { str: 8, dex: 14, con: 12, int: 17, wis: 13, cha: 10 },
+          stats:     { str: 8, dex: 14, con: 12, int: 17, wis: 13, cha: 10 },
+          maxHP: 24, currentHP: 24, temporaryHP: 0,
+          armorClass: 12, acFormula: 'Mage Armor', speed: 30,
+          hitDice: [{ className: 'Wizard', dieSides: 6, total: 4, remaining: 4 }],
+          proficiencies: { armor: [], weapons: ['simple-melee','simple-ranged'], tools: [], savingThrows: ['int','wis'], skills: ['Arcana','History'], expertise: [] },
+          languages: ['Common','Elvish'],
+          resources: { arcaneRecovery: { usesRemaining: 1 } },
+          equipment: [],
+          gold: 15,
+          level1Features: [], allFeatures: [], feats: [],
+          backgroundFeature: 'Researcher', exhaustionLevel: 0,
+          pendingAbilityScoreImprovements: 1,
+        });
+        assert(created.status === 201, `create expected 201, got ${created.status}: ${JSON.stringify(created.json)}`);
+        miCharId = created.json.character.id;
+
+        const applied = await request(BASE, `/api/characters/${miCharId}/applyfeat`, 'POST', { featName: 'Magic Initiate' });
+        assert(applied.status === 200, `applyfeat expected 200, got ${applied.status}: ${JSON.stringify(applied.json)}`);
+        assert(!!applied.json.grantsSpells, 'applyfeat response includes grantsSpells=true for Magic Initiate');
+        assert(applied.json.character.feats.includes('Magic Initiate'), 'Magic Initiate recorded on character');
+      });
+
+      await test('POST /setfeatspells 400 with no featName', async () => {
+        const { status } = await request(BASE, `/api/characters/${miCharId}/setfeatspells`, 'POST', { spells: ['Fireball'] });
+        assert(status === 400, `Expected 400, got ${status}`);
+      });
+
+      await test('POST /setfeatspells 400 for non-spell-granting feat', async () => {
+        const { status, json } = await request(BASE, `/api/characters/${miCharId}/setfeatspells`, 'POST', { featName: 'Keen Mind', spells: ['Fireball'] });
+        assert(status === 400, `Expected 400, got ${status}. Body: ${JSON.stringify(json)}`);
+      });
+
+      await test('POST /setfeatspells 409 for feat character does not have', async () => {
+        const { status } = await request(BASE, `/api/characters/${miCharId}/setfeatspells`, 'POST', { featName: 'Ritual Caster', spells: ['Detect Magic'] });
+        assert(status === 409, `Expected 409, got ${status}`);
+      });
+
+      await test('POST /setfeatspells 200 records spell choices', async () => {
+        const { status, json } = await request(BASE, `/api/characters/${miCharId}/setfeatspells`, 'POST', {
+          featName: 'Magic Initiate',
+          spells: ['Mage Hand', 'Prestidigitation', 'Find Familiar'],
+        });
+        assert(status === 200, `Expected 200, got ${status}: ${JSON.stringify(json)}`);
+        const choices = json.character.featSpellChoices?.['Magic Initiate'];
+        assert(Array.isArray(choices), 'featSpellChoices.Magic Initiate is an array');
+        assert(choices?.includes('Find Familiar'), 'Find Familiar recorded');
+        assert(choices?.includes('Mage Hand'), 'Mage Hand recorded');
+        assert(choices?.length === 3, `Expected 3 spells, got ${choices?.length}`);
+      });
+
+      await test('POST /setfeatspells overwrites existing choices', async () => {
+        const { status, json } = await request(BASE, `/api/characters/${miCharId}/setfeatspells`, 'POST', {
+          featName: 'Magic Initiate',
+          spells: ['Shocking Grasp', 'Magic Missile'],
+        });
+        assert(status === 200, `Expected 200, got ${status}`);
+        const choices = json.character.featSpellChoices?.['Magic Initiate'];
+        assert(choices?.length === 2, `Expected 2 spells after overwrite, got ${choices?.length}`);
+        assert(!choices?.includes('Find Familiar'), 'Old choice not present after overwrite');
+      });
+
+      await test('cleanup: delete Magic Initiate test character', async () => {
+        const { deleteCharacter } = require('../characters/storage');
+        try { deleteCharacter(miCharId); } catch {}
+      });
+    }
+
     await test('cleanup: delete feat test character', async () => {
       const { deleteCharacter } = require('../characters/storage');
       try { deleteCharacter(featCharId); } catch {}

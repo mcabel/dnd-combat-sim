@@ -190,9 +190,69 @@ export const ELDRITCH_INVOCATIONS: Record<string, EldritchInvocation> = {
     },
   },
 
+  // ── Eldritch Spear (PHB p.111) ── [Session 41 Task #16]
+  // "When you cast Eldritch Blast, its range is 300 feet."
+  //
+  // No hook needed — the builder (src/characters/builder.ts) patches the
+  // EB Action's reach and range fields after pcToCombatant if the caster
+  // has this invocation. See buildCombatant() in builder.ts.
+  //
+  // The default EB range is 120 ft (per PHB p.237). Eldritch Spear
+  // extends it to 300 ft — a 2.5× range increase that lets the Warlock
+  // snipe from beyond most enemies' effective range.
+  'Eldritch Spear': {
+    name: 'Eldritch Spear',
+    description: 'When you cast Eldritch Blast, its range is 300 feet.',
+    // No hooks — applied as a metadata patch by the builder.
+  },
+
+  // ── Eldritch Mind (TCE p.71) ── [Session 41 Task #16]
+  // "You have advantage on Constitution saving throws that you make to
+  //  maintain your concentration on a spell when you take damage."
+  //
+  // No EB hook needed — the engine's rollConcentrationSave (in utils.ts)
+  // checks hasInvocation(caster, 'Eldritch Mind') and rolls with
+  // advantage if true. See rollConcentrationSave() in utils.ts.
+  //
+  // v1 simplification: advantage is rolled as the higher of two d20
+  // rolls (PHB p.173). This is consistent with the existing
+  // rollWithAdvantage helper.
+  'Eldritch Mind': {
+    name: 'Eldritch Mind',
+    description: 'You have advantage on Constitution saving throws that you make to maintain your concentration on a spell when you take damage.',
+    // No hooks — applied in rollConcentrationSave via hasInvocation check.
+  },
+
+  // ── Thirsting Blade (PHB p.111) ── [Session 42 Task #18]
+  // "You can attack with your pact weapon twice, instead of once,
+  //  whenever you take the Attack action on your turn."
+  //
+  // Session 42 Task #18: NOW FULLY IMPLEMENTED. The planner checks
+  // hasInvocation(self, 'Thirsting Blade') + self.pactBoon === 'blade'
+  // + melee attack → sets plan.attackCount = 2. The engine's
+  // executePlannedAction case 'attack' branch loops resolveAttack
+  // attackCount times (default 1).
+  //
+  // Prerequisites:
+  //   - Warlock level 5+ (invocation slot)
+  //   - Pact of the Blade boon (choosePactBoon(sheet, 'blade'))
+  //   - Thirsting Blade chosen in eldritchInvocations
+  //   - Melee weapon attack (attackType === 'melee')
+  //
+  // v1 simplification: assumes ANY melee attack from a Thirsting Blade
+  // Warlock is a pact weapon attack. No isPactWeapon Action flag needed.
+  // Future: add isPactWeapon flag for stricter RAW compliance.
+  'Thirsting Blade': {
+    name: 'Thirsting Blade',
+    description: 'You can attack with your pact weapon twice, instead of once, whenever you take the Attack action on your turn.',
+    // No hooks — the planner + engine handle the extra attack via
+    // plan.attackCount (see src/ai/planner.ts + src/engine/combat.ts).
+  },
+
   // Future invocations can be added here:
-  //   'Thirsting Blade' — two attacks with Pact Weapon (not an EB hook)
-  //   'Eldritch Spear' — EB range 300 ft (metadata-only, no hook)
+  //   'Devil's Sight' — see in magical darkness 120 ft (needs LOS engine changes)
+  //   'Mask of Many Faces' — cast Disguise Self at will (out-of-combat)
+  //   'Misty Visions' — cast Silent Image at will (out-of-combat)
   //   etc.
 };
 

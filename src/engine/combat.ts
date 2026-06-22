@@ -21,6 +21,7 @@ import {
   teamHasNoAttackCapability, canDealDamage, makeImprovisedUnarmed, makeImprovisedWeapon,
   effectiveSpeed, rollDie, abilityMod, proficiencyBonus,
   rollDiceString as rollBoomingBladeDice,
+  rollAbilityCheck,  // Session 43 Task #26: for rollAbilityCheckReactable
 } from './utils';
 import {
   chebyshev3D, distanceFt, euclideanDistFt, canReach, estimateMoveCostFt,
@@ -40,7 +41,7 @@ import { isControlledMount, mountDeathRiderCheck, isIndependentMount } from '../
 import { checkMountedCombatant, checkProtectionStyle, checkInterceptionReduction } from './mount_redirect';
 import { tickAdvantages, grantSelf, grantVulnerability } from './adv_system';
 import { getSummonEntry }                           from '../summons/registry';
-import { rollGrappleContest, rollShoveContest, canGrappleOrShoveTarget, rollDiceString } from './utils';
+import { rollGrappleContest, rollGrappleContestDetailed, rollShoveContest, canGrappleOrShoveTarget, rollDiceString } from './utils';
 import { computeLOS } from './los';
 import { removeEffectsFromCaster, removeEffectById, getActiveAcBonus, getActiveAcFloor, getActiveBlessDie, getActiveBaneDie, getActiveHexDie, getActiveDamageZones, getActiveWeaponEnchant, getActiveEnlargeReduce, getActiveTaunt, getActiveCurseAttackDisadv, getActiveCurseRider, applySpellEffect, getActiveTerrainZones, makeTerrainFn } from './spell_effects';
 import { TerrainZone } from './spell_effects';
@@ -846,6 +847,15 @@ function triggerReactions(
   if (trigger.kind === 'incoming_spell' && trigger.caster.id === reactor.id) return null;
   // Session 37: Shield vs Magic Missile — don't Shield against your own MM.
   if (trigger.kind === 'targeted_by_magic_missile' && trigger.caster.id === reactor.id) return null;
+  // Session 41: Silvery Barbs save-success — the reactor IS the spellcaster
+  // who forced the save (trigger.caster). Silvery Barbs is cast BY the
+  // spellcaster to force the saver to reroll, so the self-trigger guard
+  // does NOT apply here. The shouldCastReaction function already rejects
+  // self-saves (caster === saver) explicitly.
+  // Session 42: Silvery Barbs ability-check-success — the reactor is the
+  // OPPONENT of the checker (trigger.opponent). Don't cast Silvery Barbs
+  // against your own ability check success (would be wasteful). The
+  // shouldCastReaction function already rejects self-checks explicitly.
 
   // Iterate the registry in order; fire the first matching spell.
   for (const spell of REACTION_SPELLS) {
@@ -860,6 +870,277 @@ function triggerReactions(
     return spell.execute(reactor, state, trigger);
   }
   return null;
+}
+
+// ============================================================
+// Session 41 Task #8: rollSaveReactable — Silvery Barbs trigger
+//
+// Wraps `rollSave` from utils.ts and fires an `incoming_save_success`
+// reaction trigger after a successful save. The reactor is the spell
+// caster who forced the save (NOT the saver — Silvery Barbs is cast
+// by the spellcaster to force a reroll of the enemy's successful save).
+//
+// If Silvery Barbs (or any future 'incoming_save_success' reaction)
+// negates the save success, this wrapper returns success=false so
+// the calling spell module's "save failed" branch runs.
+//
+// Migration plan: spell modules call `rollSaveReactable(state, caster, saver, ability, dc, isProficient?)`
+// instead of `rollSave(saver, ability, dc, isProficient?)`. The wrapper
+// is a drop-in replacement: same return shape ({roll, total, success}),
+// plus the reaction-trigger side effect.
+//
+// v1.5 scope (Session 41): infrastructure added. The 110 spell modules
+// that call `rollSave` directly will be migrated incrementally — this
+// session migrates fireball, burning_hands, and sacred_flame as proof
+// of concept. Future sessions migrate the rest.
+// ============================================================
+
+/**
+ * Roll a saving throw with reaction-trigger support.
+ *
+ * Calls `rollSave(saver, ability, dc, isProficient)` to compute the
+ * raw save result. If the save succeeds AND a reaction spell (Silvery
+ * Barbs) is available to the caster, fires the `incoming_save_success`
+ * trigger. If the reaction negates (reroll flips to fail), returns
+ * success=false so the caller's "save failed" branch runs.
+ *
+ * @param state        Engine state (for triggerReactions + logging)
+ * @param caster       The creature that forced the save (potential reactor)
+ * @param saver        The creature making the save
+ * @param ability      Save ability (str/dex/con/int/wis/cha)
+ * @param dc           Save DC
+ * @param isProficient True if the saver is proficient in the save
+ * @returns { roll, total, success } — same shape as rollSave
+ */
+export function rollSaveReactable(
+  state: EngineState,
+  caster: Combatant,
+  saver: Combatant,
+  ability: 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha',
+  dc: number,
+  isProficient = false,
+): { roll: number; total: number; success: boolean } {
+  const result = rollSave(saver, ability, dc, isProficient);
+
+  // Only fire the trigger if the save succeeded — Silvery Barbs forces
+  // a reroll, which can only flip success → failure (not the reverse).
+  if (!result.success) return result;
+
+  // Don't fire the trigger if the caster is the saver (self-save can't
+  // be Silvery Barbs'd — the caster would be reacting to their own save).
+  if (caster.id === saver.id) return result;
+
+  // Don't fire if the caster is dead/unconscious (can't react).
+  if (caster.isDead || caster.isUnconscious) return result;
+
+  // Don't fire if the caster has already used their reaction this round.
+  if (caster.budget.reactionUsed) return result;
+
+  // Fire the trigger.
+  const outcome = triggerReactions(state, caster, {
+    kind: 'incoming_save_success',
+    caster,
+    saver,
+    ability,
+    dc,
+    roll: result.roll,
+    total: result.total,
+  });
+
+  // If the reaction negated the save, return success=false so the
+  // caller's "save failed" branch runs.
+  if (outcome?.kind === 'negated') {
+    return { ...result, success: false };
+  }
+
+  return result;
+}
+
+// ============================================================
+// Session 42 Task #19: rollGrappleContestReactable — Silvery Barbs
+// ability-check-success trigger for grapple/shove/escape contests.
+//
+// Wraps `rollGrappleContestDetailed` from utils.ts and fires an
+// `incoming_ability_check_success` reaction trigger when the attacker
+// wins the contest. The reactor is the DEFENDER (the one who wants
+// the attacker to fail). If Silvery Barbs negates (reroll flips the
+// contest to defender winning), this wrapper returns false (attacker
+// did NOT win the contest).
+//
+// Session 43 Task #25: now uses rollGrappleContestDetailed so the
+// trigger carries the REAL d20 rolls + totals (not placeholders).
+// This lets Silvery Barbs implement the strict RAW "reroll the d20
+// and use the lower roll" rule.
+//
+// Used for:
+//   - case 'grapple': attacker grapples defender
+//   - case 'shove': attacker shoves defender prone
+//   - case 'escapeGrapple': escaper (attacker) escapes grappler (defender)
+// ============================================================
+
+/**
+ * Roll a grapple/shove contest with reaction-trigger support.
+ *
+ * Calls `rollGrappleContestDetailed(attacker, defender)` to compute the
+ * full contest result (raw d20s + totals). If the attacker WINS, fires
+ * the `incoming_ability_check_success` trigger with the REAL roll values
+ * (Session 43 Task #25 — was previously placeholder roll=20, total=999).
+ * The reactor is the defender (the one who would cast Silvery Barbs to
+ * flip the contest). If the reaction negates, returns false (attacker
+ * did NOT win).
+ *
+ * @param state       Engine state (for triggerReactions + logging)
+ * @param attacker    The creature initiating the contest (the "checker")
+ * @param defender    The creature being contested (the "opponent" / reactor)
+ * @param contestType Description of the contest (e.g. "grapple", "shove")
+ * @returns true if attacker wins the contest (and Silvery Barbs didn't negate)
+ */
+export function rollGrappleContestReactable(
+  state: EngineState,
+  attacker: Combatant,
+  defender: Combatant,
+  contestType: string = 'grapple',
+): boolean {
+  // Roll the contest using the detailed version so we get raw d20s + totals.
+  const result = rollGrappleContestDetailed(attacker, defender);
+
+  // Only fire the trigger if the attacker won — Silvery Barbs forces
+  // a reroll, which can only flip success → failure (not the reverse).
+  if (!result.attackerWon) return false;
+
+  // Don't fire if the defender is the attacker (self-contest — shouldn't happen).
+  if (defender.id === attacker.id) return true;
+
+  // Don't fire if the defender is dead/unconscious (can't react).
+  if (defender.isDead || defender.isUnconscious) return true;
+
+  // Don't fire if the defender has already used their reaction this round.
+  if (defender.budget.reactionUsed) return true;
+
+  // Fire the trigger with REAL roll values (Session 43 Task #25 — was
+  // placeholder roll=20, total=999 in Session 42). The reroll logic in
+  // silvery_barbs.ts uses trigger.roll to compute lower-of-two-d20s,
+  // and trigger.opponentTotal to determine whether the lower roll
+  // flips the contest.
+  const outcome = triggerReactions(state, defender, {
+    kind: 'incoming_ability_check_success',
+    checker: attacker,
+    opponent: defender,
+    ability: 'str',  // grapple contests use STR (Athletics) for the attacker
+    roll: result.attackerRoll,
+    total: result.attackerTotal,
+    opponentTotal: result.defenderTotal,
+    contestType,
+  });
+
+  // If the reaction negated the contest, the attacker did NOT win.
+  if (outcome?.kind === 'negated') {
+    return false;
+  }
+
+  return true;
+}
+
+// ============================================================
+// Session 43 Task #26: rollAbilityCheckReactable — Silvery Barbs
+// ability-check-success trigger for Counterspell and Dispel Magic.
+//
+// Wraps `rollAbilityCheck` from utils.ts and fires an
+// `incoming_ability_check_success` reaction trigger when the checker
+// succeeds on the ability check. The reactor is the OPPONENT (the one
+// who would cast Silvery Barbs to force a reroll). If Silvery Barbs
+// negates (reroll flips the check to failure), this wrapper returns
+// success=false so the caller's "check failed" branch runs.
+//
+// Used for:
+//   - Counterspell L4+ ability check (DC 10 + spell level, INT/WIS/CHA)
+//     The opponent is the original spellcaster (trigger.caster in the
+//     incoming_spell trigger) who wants the Counterspell to fail.
+//   - Dispel Magic non-concentration effect check (DC 13 flat)
+//     The opponent is the target creature whose effect is being
+//     dispelled — they might want to protect their buff.
+// ============================================================
+
+/**
+ * Roll an ability check with reaction-trigger support.
+ *
+ * Calls `rollAbilityCheck(checker, ability, dc, isProficient)` to compute
+ * the raw check result. If the check succeeds AND the opponent has a
+ * reaction spell (Silvery Barbs) available, fires the
+ * `incoming_ability_check_success` trigger. If the reaction negates
+ * (lower-of-two-d20s reroll flips success to failure), returns
+ * success=false so the caller's "check failed" branch runs.
+ *
+ * @param state        Engine state (for triggerReactions + logging)
+ * @param checker      The creature making the ability check
+ * @param opponent     The creature who would cast Silvery Barbs to negate
+ *                     (e.g. original spellcaster for Counterspell, target
+ *                     creature for Dispel Magic)
+ * @param ability      The ability used (str/dex/con/int/wis/cha)
+ * @param dc           The DC of the check
+ * @param isProficient Whether the checker adds proficiency (default false)
+ * @param contestType  Description of the check (e.g. "counterspell", "dispel magic")
+ * @returns { roll, total, success, negated }
+ *   - roll: raw d20 (1-20)
+ *   - total: d20 + ability mod + (proficiency if applicable)
+ *   - success: whether the check succeeds AFTER any reaction
+ *   - negated: true if a reaction flipped success → failure
+ */
+export function rollAbilityCheckReactable(
+  state: EngineState,
+  checker: Combatant,
+  opponent: Combatant,
+  ability: 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha',
+  dc: number,
+  isProficient: boolean = false,
+  contestType: string = 'ability check',
+): { roll: number; total: number; success: boolean; negated: boolean } {
+  // Roll the check using the canonical rollAbilityCheck (utils.ts).
+  const result = rollAbilityCheck(checker, ability, dc, isProficient);
+
+  // Only fire the trigger if the checker succeeded — Silvery Barbs forces
+  // a reroll, which can only flip success → failure (not the reverse).
+  if (!result.success) {
+    return { roll: result.roll, total: result.total, success: false, negated: false };
+  }
+
+  // Don't fire if the opponent is the checker (self-check — shouldn't happen).
+  if (opponent.id === checker.id) {
+    return { roll: result.roll, total: result.total, success: true, negated: false };
+  }
+
+  // Don't fire if the opponent is dead/unconscious (can't react).
+  if (opponent.isDead || opponent.isUnconscious) {
+    return { roll: result.roll, total: result.total, success: true, negated: false };
+  }
+
+  // Don't fire if the opponent has already used their reaction this round.
+  if (opponent.budget.reactionUsed) {
+    return { roll: result.roll, total: result.total, success: true, negated: false };
+  }
+
+  // Fire the trigger with REAL roll values. The reroll logic in
+  // silvery_barbs.ts uses trigger.roll to compute lower-of-two-d20s.
+  // There's no "opponent total" for an ability check vs DC (unlike a
+  // contest), so we set opponentTotal to dc — the reroll flips when
+  // newCheckerTotal <= dc (which is exactly "the check now fails").
+  const outcome = triggerReactions(state, opponent, {
+    kind: 'incoming_ability_check_success',
+    checker,
+    opponent,
+    ability,
+    roll: result.roll,
+    total: result.total,
+    opponentTotal: dc,  // the threshold for the check to flip to failure
+    contestType,
+  });
+
+  // If the reaction negated the check, the checker did NOT succeed.
+  if (outcome?.kind === 'negated') {
+    return { roll: result.roll, total: result.total, success: false, negated: true };
+  }
+
+  return { roll: result.roll, total: result.total, success: true, negated: false };
 }
 
 // ============================================================
@@ -974,7 +1255,11 @@ export function resolveAttack(
 
   // Save-based attacks (no attack roll)
   if (action.attackType === 'save' && action.saveDC !== null && action.saveAbility !== null) {
-    const save = rollSave(target, action.saveAbility, action.saveDC);
+    // Session 41 Task #8: use rollSaveReactable so Silvery Barbs can fire
+    // on save success. The "caster" is the attacker (spellcaster who forced
+    // the save). If Silvery Barbs negates, save.success becomes false and
+    // the save-fail branch runs (full damage instead of half).
+    const save = rollSaveReactable(state, attacker, target, action.saveAbility, action.saveDC);
     log(state, save.success ? 'save_success' : 'save_fail', attacker.id,
       `${target.name} ${save.success ? 'succeeds' : 'fails'} DC ${action.saveDC} ${action.saveAbility} save (rolled ${save.total})`,
       target.id, save.roll);
@@ -2271,7 +2556,24 @@ export function executePlannedAction(
           effectiveTarget.id);
       }
       log(state, 'action', actor.id, plan.description, effectiveTarget.id ?? undefined);
-      resolveAttack(actor, effectiveTarget, plan.action, state);
+      // ── Session 42 Task #18: Thirsting Blade / Extra Attack ──
+      // PHB p.111: "You can attack with your pact weapon twice, instead of
+      // once, whenever you take the Attack action on your turn."
+      // The planner sets plan.attackCount = 2 when the actor has Thirsting
+      // Blade + Pact of the Blade + melee attack. Default is 1 (single attack).
+      // Loop resolveAttack this many times — each attack is independent
+      // (separate attack roll, damage roll, death check). The target may
+      // die mid-loop; subsequent attacks are skipped if the target is dead.
+      const attackCount = plan.attackCount ?? 1;
+      for (let i = 0; i < attackCount; i++) {
+        if (effectiveTarget.isDead || effectiveTarget.isUnconscious) break;
+        resolveAttack(actor, effectiveTarget, plan.action, state);
+        if (attackCount > 1 && i < attackCount - 1) {
+          log(state, 'action', actor.id,
+            `${actor.name} makes attack ${i + 2}/${attackCount} (Extra Attack / Thirsting Blade)`,
+            effectiveTarget.id ?? undefined);
+        }
+      }
       break;
     }
 
@@ -2325,7 +2627,8 @@ export function executePlannedAction(
         break;
       }
       log(state, 'action', actor.id, plan.description, plan.targetId ?? undefined);
-      const success = rollGrappleContest(actor, target);
+      // Session 42 Task #19: use rollGrappleContestReactable for Silvery Barbs support
+      const success = rollGrappleContestReactable(state, actor, target, 'grapple');
       if (success) {
         addCondition(target, 'grappled');
         target.grappledBy = actor.id;
@@ -2348,7 +2651,9 @@ export function executePlannedAction(
         break;
       }
       log(state, 'action', actor.id, plan.description, plan.targetId ?? undefined);
-      const success = rollShoveContest(actor, target);
+      // Session 42 Task #19: use rollGrappleContestReactable for Silvery Barbs support
+      // (rollShoveContest is just a wrapper around rollGrappleContest — same mechanic)
+      const success = rollGrappleContestReactable(state, actor, target, 'shove');
       if (success) {
         // Knock prone (AI always chooses prone for the melee advantage)
         addCondition(target, 'prone');
@@ -2377,7 +2682,8 @@ export function executePlannedAction(
         break;
       }
       // Contested roll: escaper (attacker role) vs grappler (defender role)
-      const escaped = rollGrappleContest(actor, grappler);
+      // Session 42 Task #19: use rollGrappleContestReactable for Silvery Barbs support
+      const escaped = rollGrappleContestReactable(state, actor, grappler, 'escape grapple');
       if (escaped) {
         removeCondition(actor, 'grappled');
         actor.grappledBy = undefined;
@@ -4341,7 +4647,7 @@ export function executePlannedAction(
  * Order: moveBefore → action → bonus action → moveAfter
  * (Movement can split around the action per PHB p.190.)
  */
-function executeTurnPlan(actor: Combatant, plan: TurnPlan, state: EngineState): void {
+export function executeTurnPlan(actor: Combatant, plan: TurnPlan, state: EngineState): void {
   const isDisengage = plan.action?.type === 'disengage'
                    || plan.bonusAction?.type === 'disengage';
 
@@ -4385,6 +4691,36 @@ function executeTurnPlan(actor: Combatant, plan: TurnPlan, state: EngineState): 
   // Move after action
   if (plan.moveAfter && !actor.isDead && !actor.isUnconscious) {
     executeMove(actor, plan.moveAfter, state, isDisengage);
+  }
+
+  // ── Session 43 Task #23: Action Surge (Fighter 2+, PHB p.72) ──
+  // "On your turn, you can take one additional action on top of your regular
+  // action and a possible bonus action." The planner sets plan.extraAction
+  // when actionSurge.remaining > 0 and the main action was an Attack. Here
+  // we execute that extra action and consume one actionSurge use.
+  //
+  // v1 simplification: the extra action is always an Attack on the same
+  // target. If the target died from the main action, the engine's
+  // resolveAttack handles the dead-target guard (returns early). The
+  // attackCount loop in executePlannedAction's 'attack' branch also breaks
+  // immediately if the target is dead at loop start.
+  //
+  // PHB p.72: Action Surge grants one additional ACTION (any type). It does
+  // NOT grant an extra bonus action or reaction. It does NOT refresh the
+  // fighter's action budget — it's a separate, additional action that
+  // bypasses the normal one-action-per-turn limit.
+  if (plan.extraAction && !actor.isDead && !actor.isUnconscious) {
+    // Consume one actionSurge use BEFORE executing (so even if the action
+    // misses or the target is already dead, the use is spent — PHB p.72:
+    // "you can take one additional action", the resource is consumed when
+    // the player declares the Action Surge, not when it lands).
+    if (actor.resources?.actionSurge && actor.resources.actionSurge.remaining > 0) {
+      actor.resources.actionSurge.remaining -= 1;
+      log(state, 'action', actor.id,
+        `${actor.name} uses Action Surge — gains one additional action!`,
+        undefined);
+      executePlannedAction(actor, plan.extraAction, state);
+    }
   }
 
   // Clean up turn flags

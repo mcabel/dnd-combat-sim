@@ -18,6 +18,7 @@ import { validateCharacterSheet, validateParty, ValidationError } from '../chara
 import {
   CharacterSheet, Party, totalLevel, deriveStats,
   abilityModifier, levelFromXP, proficiencyBonus,
+  attunementCap, attunedItemCount, carryingCapacity, totalCarriedWeight,
 } from '../characters/types';
 
 // ---- Test Harness -------------------------------------------
@@ -517,6 +518,85 @@ function loadAndValidate(filePath: string, label: string): void {
 loadAndValidate(exFighterPath, 'example-fighter.json');
 loadAndValidate(exWizardPath,  'example-wizard.json');
 loadAndValidate(exPartyPath,   'example-party.json');
+
+// =============================================================
+// Attunement tracking
+// =============================================================
+console.log('\n=== Attunement Tracking ===');
+{
+  eq('Base attunement cap is 3', attunementCap(makeSheet()), 3);
+
+  const artificer10 = makeSheet({
+    firstClass: 'Artificer', classLevels: [{ className: 'Artificer', level: 10 }],
+  });
+  eq('Magic Item Adept (lv10) raises cap to 4', attunementCap(artificer10), 4);
+
+  const artificer14 = makeSheet({
+    firstClass: 'Artificer', classLevels: [{ className: 'Artificer', level: 14 }],
+  });
+  eq('Magic Item Savant (lv14) raises cap to 5', attunementCap(artificer14), 5);
+
+  const artificer18 = makeSheet({
+    firstClass: 'Artificer', classLevels: [{ className: 'Artificer', level: 18 }],
+  });
+  eq('Magic Item Master (lv18) raises cap to 6', attunementCap(artificer18), 6);
+
+  const artificer9 = makeSheet({
+    firstClass: 'Artificer', classLevels: [{ className: 'Artificer', level: 9 }],
+  });
+  eq('Below lv10 Artificer still has base cap 3', attunementCap(artificer9), 3);
+
+  const noItems = makeSheet({ equipment: [] });
+  eq('attunedItemCount with no equipment is 0', attunedItemCount(noItems), 0);
+
+  const threeAttuned = makeSheet({
+    equipment: [
+      { name: 'Ring of Protection', quantity: 1, equipped: true, category: 'gear', attuned: true, magical: true },
+      { name: 'Cloak of Elvenkind', quantity: 1, equipped: true, category: 'gear', attuned: true, magical: true },
+      { name: '+1 Longsword',      quantity: 1, equipped: true, category: 'weapon', attuned: true, magical: true },
+      { name: 'Backpack',          quantity: 1, equipped: false, category: 'gear' }, // not attuned, mundane
+    ],
+  });
+  eq('attunedItemCount counts only attuned items', attunedItemCount(threeAttuned), 3);
+
+  const atCap = validateCharacterSheet(threeAttuned);
+  assert('exactly-at-cap (3/3) passes validation', !atCap.some(e => e.includes('attuned')));
+
+  const fourAttuned = makeSheet({
+    equipment: [
+      ...threeAttuned.equipment,
+      { name: 'Amulet of Health', quantity: 1, equipped: true, category: 'gear', attuned: true, magical: true },
+    ],
+  });
+  const overCap = validateCharacterSheet(fourAttuned);
+  assert('4 attuned items on a base-cap character fails validation', overCap.some(e => e.includes('too many attuned items')));
+
+  const fourAttunedArtificer10 = { ...fourAttuned, firstClass: 'Artificer' as const, classLevels: [{ className: 'Artificer' as const, level: 10 }] };
+  const okAtRaisedCap = validateCharacterSheet(fourAttunedArtificer10);
+  assert('4 attuned items passes for a lv10 Artificer (cap 4)', !okAtRaisedCap.some(e => e.includes('attuned')));
+}
+
+// =============================================================
+// Carrying capacity
+// =============================================================
+console.log('\n=== Carrying Capacity ===');
+{
+  eq('STR 15 -> capacity 225 lb', carryingCapacity(makeSheet({ stats: { str: 15, dex: 10, con: 14, int: 8, wis: 12, cha: 10 } })), 225);
+  eq('STR 8 -> capacity 120 lb', carryingCapacity(makeSheet({ stats: { str: 8, dex: 10, con: 14, int: 8, wis: 12, cha: 10 } })), 120);
+  eq('STR 20 -> capacity 300 lb', carryingCapacity(makeSheet({ stats: { str: 20, dex: 10, con: 14, int: 8, wis: 12, cha: 10 } })), 300);
+
+  eq('totalCarriedWeight with no equipment is 0', totalCarriedWeight(makeSheet({ equipment: [] })), 0);
+
+  const withWeights = makeSheet({
+    equipment: [
+      { name: 'Plate Armor', quantity: 1, equipped: true, category: 'armor', weight: 65 },
+      { name: 'Longsword',   quantity: 1, equipped: true, category: 'weapon', weight: 3 },
+      { name: 'Rations',     quantity: 10, equipped: false, category: 'gear', weight: 2 }, // 10 x 2 = 20
+      { name: 'Torch',       quantity: 5, equipped: false, category: 'gear' }, // no weight set -> contributes 0
+    ],
+  });
+  eq('totalCarriedWeight sums weight x quantity, untracked items contribute 0', totalCarriedWeight(withWeights), 88);
+}
 
 // =============================================================
 // Results

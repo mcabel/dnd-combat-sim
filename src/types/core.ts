@@ -361,6 +361,13 @@ export interface PlayerResources {
 
   // Fighter
   secondWind?:         { max: number; remaining: number };   // bonus action, short rest
+  // ── Session 43 Task #23: Action Surge (Fighter 2+, PHB p.72) ──
+  // 1 use at lv2, 2 uses at lv17. Short or long rest recovery.
+  // Tracked on the sheet (sheet.resources.actionSurge) and transferred to
+  // the Combatant via buildCombatant -> pcToCombatant. The planner checks
+  // remaining > 0 to plan an extraAction; the engine consumes one use when
+  // the extraAction executes.
+  actionSurge?:        { max: number; remaining: number };   // action, short rest
 
   // Bard
   bardicInspiration?:  { max: number; remaining: number; die: string };  // bonus action, long rest
@@ -395,6 +402,18 @@ export interface PlayerResources {
   // Recovered on long rest: up to half max (round up), per PHB p.186.
   // Optional — absent for monsters and legacy test combatants.
   hitDice?: { max: number; remaining: number; dieSides: number };
+
+  // Innate Spellcasting (MM p.10–11; e.g. Couatl, Drow, Druidic casters).
+  // Per-spell uses-per-day tracker. Used by monsters with at-will or
+  // N/day innate spellcasting. The spell names MUST match the Action.name
+  // of the corresponding spell Action in the combatant's actions list.
+  // The AI planner checks both spell slots AND innate uses when deciding
+  // whether to cast a spell (see ai/resources.ts: hasInnateSpellUse).
+  // At-will innate spells (e.g. Detect Magic) are not tracked here —
+  // they're modeled as slotLevel: 0 Actions that don't consume anything.
+  innateSpellcasting?: {
+    [spellName: string]: { max: number; remaining: number };
+  };
 }
 
 // ---- Save-fail tracker (Contagion / Flesh to Stone) -----------
@@ -493,6 +512,24 @@ export interface Combatant {
   // Repelling Blast fires after an Eldritch Blast hit if 'Repelling Blast'
   // is in this list).
   eldritchInvocations?: string[];
+
+  // ── Session 42 — Warlock Pact Boon (PHB p.108) ──
+  // 'chain' = Pact of the Chain (familiar variant)
+  // 'blade' = Pact of the Blade (creates a pact weapon — enables Thirsting Blade)
+  // 'tome'  = Pact of the Tome (3 cantrips from any class list)
+  // Set at Warlock level 3 via choosePactBoon() in improvements.ts.
+  // The engine checks this for Thirsting Blade (requires 'blade').
+  pactBoon?: 'chain' | 'blade' | 'tome';
+
+  // ── Session 43 — Class Features (for Extra Attack, etc.) ──
+  // List of class/subclass feature NAMES the combatant has (e.g. 'Extra Attack',
+  // 'Extra Attack (2)', 'Extra Attack (3)', 'Action Surge (1/rest)', etc.).
+  // Populated by buildCombatant() from sheet.allFeatures (filtered to source
+  // 'class' or 'subclass'). Undefined for monsters (no class features).
+  // Checked by the planner to set attackCount for Extra Attack (Fighter 5+,
+  // Paladin 5+, Ranger 5+, Barbarian 5+, Monk 5+) and Extra Attack (2)/(3)
+  // for Fighter 11/20.
+  classFeatures?: string[];
 
   // Temporary HP (absorbs damage before real HP)
   tempHP: number;
@@ -1507,6 +1544,15 @@ export interface TurnPlan {
   reaction: PlannedAction | null;         // prepared, fires reactively
   moveBefore: Vec3 | null;               // position before action
   moveAfter: Vec3 | null;                // position after action
+  // ── Session 43 Task #23: Action Surge (Fighter 2+, PHB p.72) ──
+  // An extra ACTION granted by Action Surge. Executes AFTER the main action
+  // and bonus action, consuming one actionSurge use. Like the main action,
+  // it can be any action type — but v1 always plans it as an Attack on the
+  // same target (for damage maximization). The attackCount is set by the
+  // same Extra Attack logic as the main action (so a Fighter 5+ with Action
+  // Surge makes 4 attacks total: 2 from main + 2 from extra). The engine's
+  // executeTurnPlan calls executePlannedAction again for this extra action.
+  extraAction?: PlannedAction | null;
 }
 
 export interface PlannedAction {
@@ -1784,6 +1830,15 @@ export interface PlannedAction {
   action: Action | null;
   targetId: string | null;
   description: string;
+  // ── Session 42 — Thirsting Blade / Extra Attack ──────────────────────
+  // Number of attacks to make when executing this plan. Default 1 (single
+  // attack). Set to 2 by the planner when the actor has Thirsting Blade
+  // (Warlock invocation) AND Pact of the Blade AND the action is a melee
+  // weapon attack. The engine's case 'attack': branch loops resolveAttack
+  // this many times.
+  // Future: generalize to support Fighter 5+ Extra Attack (2), Fighter 11+
+  // Extra Attack (3), etc.
+  attackCount?: number;
   // For healing actions (secondWind, layOnHands, spellHeal): HP restored this action.
   healAmount?: number;
   // ── Session 19 — generic spell dispatch ──────────────────────────────
@@ -1891,6 +1946,72 @@ export type ReactionTrigger =
       target: Combatant;
       /** Number of darts aimed at `target` (informational; Shield blocks all regardless). */
       dartCount: number;
+    }
+  // ── Session 41 — Silvery Barbs save-success trigger ──
+  // SCC p.38: Silvery Barbs can be cast "when a creature you can see
+  // within 60 feet of you succeeds on a saving throw." The reactor is
+  // the spellcaster who forced the save (NOT the saver). If Silvery
+  // Barbs negates, the reroll's lower result flips the save to a
+  // failure — the spell's effect then applies as if the save failed.
+  //
+  // Migration plan (Session 41 Task #8): spell modules call
+  // `rollSaveReactable(state, caster, saver, ability, dc, isProficient?)`
+  // in combat.ts instead of `rollSave` directly. The wrapper fires this
+  // trigger after a successful save; if Silvery Barbs negates, the
+  // wrapper returns success=false so the spell's effect branch runs.
+  //
+  // v1.5 scope: infrastructure added; the 110 spell modules that call
+  // `rollSave` will be migrated incrementally. See Session 41 handover.
+  | {
+      kind: 'incoming_save_success';
+      /** The creature that cast the spell forcing the save (potential reactor). */
+      caster: Combatant;
+      /** The creature that succeeded on the save (the saver). */
+      saver: Combatant;
+      /** The save ability (str/dex/con/int/wis/cha). */
+      ability: 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha';
+      /** The save DC. */
+      dc: number;
+      /** The raw d20 roll (1-20) of the save. */
+      roll: number;
+      /** The total save result (d20 + mods). */
+      total: number;
+    }
+  // ── Session 42 — Silvery Barbs ability-check-success trigger ──
+  // SCC p.38: Silvery Barbs can be cast "when a creature you can see
+  // within 60 feet of you succeeds on a saving throw OR an ability check."
+  // The reactor is the OPPONENT of the checker (the one who wants the
+  // check to fail). If Silvery Barbs negates, the reroll's lower result
+  // flips the contest outcome.
+  //
+  // v1 scope: grapple/shove/escape-grapple contests. The "checker" is the
+  // attacker (the one making the ability check); the "opponent" is the
+  // defender (the one who would cast Silvery Barbs to flip the contest).
+  // Future: extend to Counterspell and Dispel Magic ability checks.
+  | {
+      kind: 'incoming_ability_check_success';
+      /** The creature that made the ability check (the "checker"). */
+      checker: Combatant;
+      /** The opponent of the checker (the one who would cast Silvery Barbs
+       *  to flip the contest). For grapple: the defender. For escape
+       *  grapple: the grappler. */
+      opponent: Combatant;
+      /** The ability used for the check (str/dex/con/int/wis/cha). */
+      ability: 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha';
+      /** The raw d20 roll (1-20) of the check. */
+      roll: number;
+      /** The total check result (d20 + mods). */
+      total: number;
+      /** Description of the contest (e.g. "grapple", "shove", "escape grapple"). */
+      contestType: string;
+      // ── Session 43 Task #25: opponent's total for stricter Silvery Barbs
+      // RAW compliance. PHB/SCC: "The triggering creature must reroll the d20
+      // and use the lower roll." The reroll re-rolls the CHECKER's d20 only
+      // (not the opponent's). To determine whether the lower roll flips the
+      // contest, we compare the new checker total (lowerD20 + mods) against
+      // the opponent's original total. This field carries that opponent
+      // total so the reroll logic doesn't need to re-roll the opponent.
+      opponentTotal?: number;
     };
 
 /**
