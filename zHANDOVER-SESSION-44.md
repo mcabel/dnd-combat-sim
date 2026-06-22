@@ -166,8 +166,8 @@ Session 44 closed 5 more items from Session 43's priority list. Bard College of 
 - **Task #28 commit (e64914a):** deploy `success` ✅ / report-build-status `success` ✅ / build `success` ✅ / test `success` ✅
 - **Task #27 commit (4397884):** deploy `success` ✅ / report-build-status `success` ✅ / build `success` ✅ / test `success` ✅
 - **Task #20 commit (6289306):** deploy `success` ✅ / report-build-status `success` ✅ / build `success` ✅ / test `success` ✅
-- **Handover commit (<sha>):** see below — populated after step 4 push
-- **Final state:** ALL GREEN ✅ on latest commit (no red X's across Session 44)
+- **Handover commit (2d557e1):** test `success` ✅ (all 333 test files pass)
+- **Final state:** ALL GREEN ✅ on latest commit (2d557e1) — no red X's across any Session 44 commit. Verified via GitHub Actions API: all 6 commits (dff87f2, ac64d58, e64914a, 4397884, 6289306, 2d557e1) have `test=success` with zero failures.
 
 ---
 
