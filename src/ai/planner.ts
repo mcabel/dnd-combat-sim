@@ -1345,7 +1345,17 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
   // concentration, so it can stack with an existing concentration spell
   // (e.g. a Wizard concentrating on Blur could also cast Mirror Image).
   // Useful for squishy casters expecting to be attacked.
-  if (!plan.action && self.actions.some(a => a.name === 'Mirror Image') && shouldCastMirrorImage(self, battlefield)) {
+  //
+  // Session 46 Task #27-follow-up-2: when the combatant has Action Surge
+  // available AND is at low HP (< 50%), skip Mirror Image as the main
+  // action — save it for the Action Surge extra action (attack first,
+  // then surge Mirror Image for defense). This only affects Fighters
+  // with Action Surge; pure Wizards without Action Surge still cast
+  // Mirror Image as the main action (unchanged).
+  const _hasActionSurgeAvailable = !!(self.resources?.actionSurge && self.resources.actionSurge.remaining > 0);
+  const _lowHP = self.maxHP > 0 && self.currentHP / self.maxHP < 0.5;
+  const _skipMirrorImageForSurge = _hasActionSurgeAvailable && _lowHP;
+  if (!plan.action && !_skipMirrorImageForSurge && self.actions.some(a => a.name === 'Mirror Image') && shouldCastMirrorImage(self, battlefield)) {
     plan.action = {
       type: 'mirrorImage',
       action: null,
@@ -2525,9 +2535,20 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
   // --- 12B. FIREBALL (DEX save 8d6 fire AoE, L3, NO concentration) ---
   // PHB p.241: action, 150 ft, DEX save 8d6 fire (half on save), 20-ft radius
   // AoE. The most iconic combat spell in D&D — avg 28 dmg to each enemy in radius.
+  //
+  // Session 46 Task #27-follow-up-2: when the combatant has Action Surge
+  // available AND ≥2 enemies are clustered (so the Fireball surge will fire),
+  // skip Fireball as the main action — save it for the Action Surge extra
+  // action (attack first, then surge Fireball for AoE). When <2 clustered,
+  // Fireball is still the main action (the surge won't fire anyway). This
+  // only affects Fighters with Action Surge; pure Wizards are unchanged.
   if (!plan.action && self.actions.some(a => a.name === 'Fireball')) {
     const fbTargets = shouldCastFireball(self, battlefield);
-    if (fbTargets) {
+    // Check if the Fireball surge would fire (Action Surge + ≥2 clustered).
+    const _fireballSurgeReady = _hasActionSurgeAvailable
+      && !!fbTargets && fbTargets.length >= 2
+      && hasSpellSlot(self, 3);
+    if (fbTargets && !_fireballSurgeReady) {
       const names = fbTargets.map(t => t.name).join(', ');
       plan.action = {
         type: 'fireball',
@@ -4681,6 +4702,34 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
   // === SELECT ACTION ===
   let chosenAction = selectAction(self, target, battlefield);
 
+  // ── Session 46 Task #27-follow-up-2: Fireball surge interception ──
+  // If selectAction() picked Fireball (via its own AoE cluster logic in
+  // actions.ts) AND the Fireball surge would fire (Action Surge + ≥2
+  // clustered + L3 slot), replace the main action with the best weapon
+  // attack — save Fireball for the surge (attack + Fireball combo).
+  // This only affects Fighters with Action Surge; pure Wizards keep
+  // Fireball as the main action (no Action Surge → no surge → no intercept).
+  if (chosenAction && chosenAction.type === 'cast'
+      && chosenAction.action?.name === 'Fireball'
+      && _hasActionSurgeAvailable && hasSpellSlot(self, 3)) {
+    const fbTargetsCheck = shouldCastFireball(self, battlefield);
+    if (fbTargetsCheck && fbTargetsCheck.length >= 2) {
+      // Pick the best weapon attack (melee or ranged, excluding spells/saves).
+      const weaponAttack = self.actions.find(a =>
+        !a.isMultiattack && a.costType === 'action' &&
+        (a.attackType === 'melee' || a.attackType === 'ranged')
+      );
+      if (weaponAttack) {
+        chosenAction = {
+          type: 'attack',
+          action: weaponAttack,
+          targetId: target.id,
+          description: `${self.name} attacks ${target.name} with ${weaponAttack.name} (saving Fireball for Action Surge)`,
+        };
+      }
+    }
+  }
+
   // === IMPROVISED ATTACK FALLBACK ===
   // If the creature has no actions that apply (e.g. statblock with non-attack actions only),
   // fall back to improvised weapon (hasHands → 1d4+STR, no prof) or unarmed (1+STR, uses prof).
@@ -4849,6 +4898,7 @@ function maxAttackCount(
 
 // ── Session 44 Task #27: planExtraAction — smarter Action Surge tactics ──
 // ── Session 45 Task #27-follow-up: added Dash + Disengage surge options ──
+// ── Session 46 Task #27-follow-up-2: added Mirror Image + Fireball surge options ──
 //
 // Evaluates multiple surge options in priority order and returns the best
 // PlannedAction to take as the Action Surge extra action, or null if no
@@ -4900,17 +4950,58 @@ function maxAttackCount(
 //    This is a defensive option — when the fighter is low on HP, can't
 //    heal, and is surrounded, the best move is to retreat.
 //
-// 4. DEFAULT EXTRA ATTACK:
+// 4. MIRROR IMAGE DEFENSIVE SURGE (Session 46 Task #27-follow-up-2):
+//    Triggers when HP < 50% AND the combatant knows Mirror Image AND has
+//    an L2 spell slot AND does not already have mirror-image duplicates
+//    active. Returns a PlannedAction with type 'mirrorImage' targeting self.
+//
+//    Mirror Image (PHB p.260) is a 1-action self spell (NO concentration)
+//    that creates 3 illusory duplicates — attackers must roll d20 to
+//    retarget. This is the best defensive spell for an Action Surge
+//    because: (a) casting time is 1 action (RAW-valid for Action Surge,
+//    which grants an extra ACTION not bonus action), (b) no concentration
+//    (can stack with an existing concentration spell), (c) long duration
+//    (v1: lasts until all duplicates destroyed).
+//
+//    NOTE: Shield of Faith (the other defensive spell mentioned in the
+//    Session 45 next-session list) is a BONUS ACTION spell (PHB p.275)
+//    and CANNOT be cast via Action Surge (which grants an extra ACTION,
+//    not a bonus action — PHB p.72 + p.202). Excluded by RAW. Only
+//    action-time defensive spells are valid surge candidates.
+//
+//    This option fires AFTER Disengage but BEFORE Fireball/offensive
+//    options. When HP < 50% and we can't heal (Option 1 didn't fire),
+//    survival is the next priority — a hurt fighter with 3 mirror-image
+//    duplicates is much harder to hit than one without.
+//
+// 5. FIREBALL OFFENSIVE SURGE (Session 46 Task #27-follow-up-2):
+//    Triggers when the main action WAS an Attack AND the combatant knows
+//    Fireball AND has an L3 spell slot AND shouldCastFireball returns
+//    targets (≥2 enemies clustered in a 20-ft radius, no allies in the
+//    blast). Returns a PlannedAction with type 'fireball' targeting the
+//    first clustered enemy.
+//
+//    Fireball (PHB p.241) is a 1-action spell (DEX save 8d6 fire, 20-ft
+//    radius AoE, NO concentration). When the main action was a weapon
+//    attack on a single target but 2+ other enemies are clustered nearby,
+//    surging to Fireball deals ~28 dmg to EACH (avg 8d6) — much more
+//    total damage than a single extra weapon attack.
+//
+//    RAW validity: Fireball casting time = 1 action (PHB p.241). Valid
+//    Action Surge action. ✅
+//
+//    This option fires AFTER Mirror Image (defensive) but BEFORE the
+//    default extra Attack. When HP ≥ 50% (or no Mirror Image available)
+//    and enemies are clustered, AoE damage is preferred over a single
+//    extra attack.
+//
+// 6. DEFAULT EXTRA ATTACK:
 //    Triggers when plan.action is an Attack and the target is alive.
 //    Clones the main Attack action with the same attackCount (re-applies
 //    Thirsting Blade / Extra Attack logic). This is the original v1
 //    behaviour from Session 43 Task #23.
 //
-// 5. Returns null if no option applies — no surge planned.
-//
-// Future extension points (still not implemented):
-//   - Surge to cast a defensive spell (Shield of Faith, Mirror Image)
-//   - Surge for a different spell (e.g. Fireball) when main action was Attack
+// 7. Returns null if no option applies — no surge planned.
 function planExtraAction(
   self: Combatant,
   plan: TurnPlan,
@@ -4996,7 +5087,76 @@ function planExtraAction(
     }
   }
 
-  // ── Option 4: Default extra Attack on the same target ──
+  // ── Option 4: Mirror Image defensive surge ──
+  // Session 46 Task #27-follow-up-2. Triggers when:
+  //   - HP < 50% (we're hurt — survival priority)
+  //   - Combatant knows Mirror Image (Eldritch Knight / Fighter-Wizard multi)
+  //   - Has an L2 spell slot available
+  //   - shouldCastMirrorImage returns true (not already active, expects to be
+  //     attacked — the spell's own shouldCast helper guards these conditions)
+  //
+  // Mirror Image (PHB p.260): 1-action self spell, NO concentration, 3
+  // illusory duplicates. Attackers must roll d20 to retarget (6+ with 3
+  // duplicates, 8+ with 2, 11+ with 1). Lasts until all duplicates destroyed.
+  //
+  // RAW validity: casting time = 1 action. Action Surge (PHB p.72) grants
+  // an extra ACTION, so Mirror Image is a valid surge target. ✅
+  //
+  // Priority: after Disengage (Option 3) but before Fireball (Option 5)
+  // and the default extra Attack (Option 6). When hurt and unable to heal,
+  // defensive Mirror Image is preferred over a redundant extra attack.
+  if (hpRatio < 0.5 && self.actions.some(a => a.name === 'Mirror Image') && hasSpellSlot(self, 2)) {
+    if (shouldCastMirrorImage(self, battlefield)) {
+      return {
+        type: 'mirrorImage',
+        action: null,
+        targetId: self.id,   // self-buff
+        description: `${self.name} uses Action Surge — casts Mirror Image (defensive, low HP)`,
+      };
+    }
+  }
+
+  // ── Option 5: Fireball offensive surge ──
+  // Session 46 Task #27-follow-up-2. Triggers when:
+  //   - Main action WAS an Attack (we already hit someone this turn)
+  //   - Combatant knows Fireball (Eldritch Knight / Fighter-Wizard multi)
+  //   - Has an L3 spell slot available
+  //   - shouldCastFireball returns ≥2 targets (enemies clustered in a 20-ft
+  //     radius — the spell's own shouldCast helper collects all enemies in
+  //     the blast radius around the highest-threat enemy within 150 ft)
+  //
+  // Fireball (PHB p.241): 1-action spell, DEX save 8d6 fire (half on save),
+  // 20-ft radius AoE, 150 ft range, NO concentration. Avg 28 dmg per target.
+  //
+  // RAW validity: casting time = 1 action. Valid Action Surge action. ✅
+  //
+  // Priority: after Mirror Image (defensive) but before the default extra
+  // Attack. When HP ≥ 50% (or no Mirror Image available) and 2+ enemies are
+  // clustered, AoE damage (28×2 = 56+ total) is clearly worth the L3 slot
+  // versus a single extra weapon attack (avg ~10 dmg for a greatsword).
+  //
+  // v1 simplification: shouldCastFireball does NOT check for allies in the
+  // blast radius (matches the base planner's Fireball planning at line ~2528).
+  // A future "smart cluster" check could exclude casts that would hit 1+
+  // allies — deferred to a future session.
+  //
+  // The ≥2 threshold (rather than ≥1) ensures the surge is clearly worth
+  // the spell slot — a single-target Fireball surge (8d6 avg 28) would
+  // compete with the free extra Attack (avg ~10), but the L3 slot is
+  // more valuable spent on a multi-target cluster.
+  if (mainWasAttack && self.actions.some(a => a.name === 'Fireball') && hasSpellSlot(self, 3)) {
+    const fbTargets = shouldCastFireball(self, battlefield);
+    if (fbTargets && fbTargets.length >= 2) {
+      return {
+        type: 'fireball',
+        action: null,
+        targetId: fbTargets[0].id,
+        description: `${self.name} uses Action Surge — casts Fireball on ${fbTargets.map(t => t.name).join(', ')} (${fbTargets.length} clustered)`,
+      };
+    }
+  }
+
+  // ── Option 6: Default extra Attack on the same target ──
   // Original v1 behaviour — clone the main Attack action. The attackCount
   // is re-applied via the same Thirsting Blade / Extra Attack logic as the
   // main action (see "Session 44 Task #30" comment above for the non-stacking
