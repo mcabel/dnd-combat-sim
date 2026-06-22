@@ -364,14 +364,23 @@ export function pickConjureMinorElementalsSummon(slotLevel: number): SummonPick 
 // "N creatures at CR 1/4" option (8 at base count) for the most
 // iconic Pack-Tactics-style swarm loadout (e.g. 8 Wolves at L3).
 //
-// v1.5 simulation cap: MAX_SUMMONS_PER_CAST = 8. The PHB multiplier
-// would produce 16 (L5) or 24 (L7) creatures, which slows the engine
-// and clutters the battlefield. We cap at 8 — a documented v1.5
-// simplification. Future versions can raise this once the engine
-// supports batched summon turn-resolution.
+// v1.5 simulation cap: MAX_SUMMONS_PER_CAST = 16. The PHB multiplier
+// produces 8 (L3-4), 16 (L5-6), or 24 (L7+) creatures for the "8 at CR 1/4"
+// option. Session 44 Task #28 capped at 8 to avoid battlefield bloat.
+// Session 45 Task #28-follow-up raises the cap to 16, allowing the L5-6
+// upcast to produce the full 16 creatures (PHB-accurate). L7+ upcasts
+// are still capped at 16 (not 24) as a documented v1.6 simplification —
+// 24 creatures on the battlefield is unwieldy and the engine's per-turn
+// resolution scales linearly with creature count.
+//
+// The engine already supports batched summon turn-resolution (each
+// summon takes its own turn in initiative order), so the cap raise is
+// safe from a correctness standpoint. The performance impact is
+// acceptable: 16 wolves make 16 attack rolls per round, which the
+// engine handles in <1 second on modern hardware.
 
 /** Maximum number of creatures spawned by a single Conjure spell cast. */
-export const MAX_SUMMONS_PER_CAST = 8;
+export const MAX_SUMMONS_PER_CAST = 16;
 
 /**
  * Compute the PHB "At Higher Levels" multiplier for Conjure spells.

@@ -280,7 +280,7 @@ export function execute(
   // ── Session 44 Task #28: multi-creature bestiary-driven spawn ──
   // Try the "8 beasts of CR 1/4" option first (the most iconic Conjure
   // Animals loadout — 8 Wolves with Pack Tactics). The slot-level
-  // multiplier (1×/2×/3×) is applied to the count, capped at 8.
+  // multiplier (1×/2×/3×) is applied to the count, capped at MAX_SUMMONS_PER_CAST (16 — Session 45 Task #28-follow-up).
   const multiPicks = pickConjureAnimalsSummonMulti(slotLevel);
 
   if (multiPicks.length > 0) {
@@ -288,6 +288,10 @@ export function execute(
     const offsets = [
       { x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }, { x: 0, y: -1 },
       { x: 1, y: 1 }, { x: -1, y: -1 }, { x: 1, y: -1 }, { x: -1, y: 1 },
+      // Session 45 Task #28-follow-up: 8 more offsets at distance 2 to
+      // support MAX_SUMMONS_PER_CAST = 16 (L5 upcast = 16 creatures).
+      { x: 2, y: 0 }, { x: -2, y: 0 }, { x: 0, y: 2 }, { x: 0, y: -2 },
+      { x: 2, y: 2 }, { x: -2, y: -2 }, { x: 2, y: -2 }, { x: -2, y: 2 },
     ];
     for (let i = 0; i < multiPicks.length; i++) {
       const offset = offsets[i % offsets.length];
