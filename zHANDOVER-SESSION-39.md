@@ -208,4 +208,6 @@ tsc --noEmit: 0 errors.
 ## CI Status
 
 - **Before this session:** Latest commit (74048a5, Session 38 handover CI update) was green (Test Suite `success`).
-- **Session 39 commit (126355f):** To be verified post-commit. The work is additive (3 new invocation entries + 1 new hook + 1 new dispatcher + 2 new scratch fields + 1 cleanup inline + 1 pre-damage trigger point). All 50 eldritch_invocations assertions pass locally (5 stable runs), and 14 baseline test files pass (no regressions). The only engine path modified is the `if (action.name === 'Eldritch Blast')` pre-damage block in resolveAttack — a no-op for non-EB attacks.
+- **Session 39 commit (126355f):** Test Suite `success` ✅. The work is additive (3 new invocation entries + 1 new hook + 1 new dispatcher + 2 new scratch fields + 1 cleanup inline + 1 pre-damage trigger point). All 50 eldritch_invocations assertions pass locally (5 stable runs), and 14 baseline test files pass (no regressions). The only engine path modified is the `if (action.name === 'Eldritch Blast')` pre-damage block in resolveAttack — a no-op for non-EB attacks.
+- **Handover commit (67431ac — this file):** Test Suite `success` ✅. No code changes (markdown-only), so the green result from 126355f carries forward.
+- **Final state:** All green on the latest commit (67431ac). No red X.
