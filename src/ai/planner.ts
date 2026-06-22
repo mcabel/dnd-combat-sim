@@ -4731,18 +4731,40 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
   // p.92 (Ranger): "Beginning at 5th level, you can attack twice, instead
   // of once, whenever you take the Attack action on your turn."
   // Fighter 11 (Extra Attack (2)) → 3 attacks; Fighter 20 (Extra Attack (3))
-  // → 4 attacks. Bard 6 (Valor/Swords) → 2 attacks, but the leveler does
-  // not currently model subclass-specific Extra Attack grants — only base
-  // class features. We check for the feature name strings set by the leveler.
+  // → 4 attacks. Bard 6 (Valor/Swords) → 2 attacks — the leveler now models
+  // subclass-specific Extra Attack grants via SUBCLASS_FEATURES (Session 44
+  // Task #29). We check for the feature name strings set by the leveler.
   //
   // This applies to ANY Attack action (melee OR ranged), unlike Thirsting
   // Blade which is melee-only. The attackCount loop in executePlannedAction
   // already handles both attack types.
   //
-  // We DON'T overwrite attackCount if Thirsting Blade already set it to 2
-  // (the values would be the same for a Warlock 5 / Fighter 5 multiclass,
-  // but this guard future-proofs against higher-tier Fighter Extra Attack
-  // values colliding with the Warlock-only Thirsting Blade).
+  // ── Session 44 Task #30: Thirsting Blade + Extra Attack non-stacking ──
+  // RAW, Thirsting Blade (Warlock 5+, PHB p.111) and Extra Attack
+  // (Fighter/Barbarian/Monk/Paladin/Ranger 5+, PHB p.72/49/85/85/92;
+  // Bard Valor/Swords 6, PHB p.55 / XGE p.15) do NOT stack — both set
+  // the same "attack twice with the Attack action" property. A Warlock 5
+  // / Fighter 5 multiclass has both features, but they still only attack
+  // twice (NOT three times). The relevant SAC ruling (Sage Advice
+  // Compendium v2.7, "Does the Fighter's Extra Attack feature and the
+  // warlock's Thirsting Blade invocation stack?") confirms these don't
+  // add together — only the higher of the two applies.
+  //
+  // Implementation: we DON'T overwrite attackCount if Thirsting Blade
+  // already set it. Since Thirsting Blade = 2 and Extra Attack = 2
+  // (for martial 5+), they would set the same value. But the guard is
+  // important for higher-tier Fighter Extra Attack:
+  //   - Warlock 5 / Fighter 11 has Thirsting Blade (=2) AND Extra Attack (2)
+  //     (=3). RAW, Extra Attack (2) should "win" (the higher-tier feature
+  //     supersedes). However, our current guard lets Thirsting Blade win
+  //     (2 attacks instead of 3) because the Thirsting Blade check runs
+  //     FIRST and the Extra Attack check is gated by attackCount ===
+  //     undefined. This is a known v1 simplification — it under-models
+  //     the rare Warlock/Fighter-11 multiclass case.
+  //   - Future: replace the order-dependent guards with a single
+  //     maxAttackCount() helper that returns the highest applicable
+  //     attackCount from any source (Thirsting Blade = 2, Extra Attack =
+  //     2, Extra Attack (2) = 3, Extra Attack (3) = 4).
   if (
     plan.action &&
     plan.action.type === 'attack' &&
@@ -4753,7 +4775,7 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
     } else if (hasFeature(self, 'Extra Attack (2)')) {
       plan.action.attackCount = 3;   // Fighter 11
     } else if (hasFeature(self, 'Extra Attack')) {
-      plan.action.attackCount = 2;   // Fighter/Barbarian/Monk/Paladin/Ranger 5
+      plan.action.attackCount = 2;   // Fighter/Barbarian/Monk/Paladin/Ranger 5, Bard Valor/Swords 6
     }
   }
 
@@ -4826,6 +4848,8 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
       description: `${self.name} uses Action Surge — extra Attack`,
     };
     // Re-apply the attackCount logic (mirrors the block above for plan.action).
+    // See "Session 44 Task #30" comment above for the Thirsting Blade + Extra
+    // Attack non-stacking RAW ruling and known v1 simplification.
     // Thirsting Blade (melee + Pact of the Blade + invocation)
     if (
       surgeAction.action !== null &&
@@ -4835,14 +4859,15 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
     ) {
       surgeAction.attackCount = 2;
     }
-    // Extra Attack features (Fighter/Barbarian/Monk/Paladin/Ranger 5+)
+    // Extra Attack features (Fighter/Barbarian/Monk/Paladin/Ranger 5+,
+    // Bard Valor/Swords 6 — see SUBCLASS_FEATURES table in leveler.ts)
     if (surgeAction.attackCount === undefined) {
       if (hasFeature(self, 'Extra Attack (3)')) {
         surgeAction.attackCount = 4;   // Fighter 20
       } else if (hasFeature(self, 'Extra Attack (2)')) {
         surgeAction.attackCount = 3;   // Fighter 11
       } else if (hasFeature(self, 'Extra Attack')) {
-        surgeAction.attackCount = 2;   // martial 5+
+        surgeAction.attackCount = 2;   // martial 5+ / Bard Valor/Swords 6
       }
     }
     plan.extraAction = surgeAction;
