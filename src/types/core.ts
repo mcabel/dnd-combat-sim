@@ -2004,6 +2004,14 @@ export type ReactionTrigger =
       total: number;
       /** Description of the contest (e.g. "grapple", "shove", "escape grapple"). */
       contestType: string;
+      // ── Session 43 Task #25: opponent's total for stricter Silvery Barbs
+      // RAW compliance. PHB/SCC: "The triggering creature must reroll the d20
+      // and use the lower roll." The reroll re-rolls the CHECKER's d20 only
+      // (not the opponent's). To determine whether the lower roll flips the
+      // contest, we compare the new checker total (lowerD20 + mods) against
+      // the opponent's original total. This field carries that opponent
+      // total so the reroll logic doesn't need to re-roll the opponent.
+      opponentTotal?: number;
     };
 
 /**

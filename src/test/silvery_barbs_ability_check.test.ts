@@ -159,6 +159,13 @@ function makeAbilityCheckTrigger(
     ability: 'str',
     roll: 18,
     total: 22,
+    // Session 43 Task #25: opponentTotal is now required for the strict
+    // lower-of-two-d20s reroll logic. The original contest had checker
+    // total 22 (d20=18 + STR+4 mod). Setting opponentTotal=14 means the
+    // reroll flips when lowerD20 + 4 <= 14, i.e. lowerD20 <= 10, which
+    // is P(newD20 <= 10) = 50% — matching the original 50/50 design
+    // intent of this test (both sides STR 18, equal modifiers).
+    opponentTotal: 14,
     contestType: 'grapple',
     ...overrides,
   };

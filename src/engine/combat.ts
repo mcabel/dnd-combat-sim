@@ -40,7 +40,7 @@ import { isControlledMount, mountDeathRiderCheck, isIndependentMount } from '../
 import { checkMountedCombatant, checkProtectionStyle, checkInterceptionReduction } from './mount_redirect';
 import { tickAdvantages, grantSelf, grantVulnerability } from './adv_system';
 import { getSummonEntry }                           from '../summons/registry';
-import { rollGrappleContest, rollShoveContest, canGrappleOrShoveTarget, rollDiceString } from './utils';
+import { rollGrappleContest, rollGrappleContestDetailed, rollShoveContest, canGrappleOrShoveTarget, rollDiceString } from './utils';
 import { computeLOS } from './los';
 import { removeEffectsFromCaster, removeEffectById, getActiveAcBonus, getActiveAcFloor, getActiveBlessDie, getActiveBaneDie, getActiveHexDie, getActiveDamageZones, getActiveWeaponEnchant, getActiveEnlargeReduce, getActiveTaunt, getActiveCurseAttackDisadv, getActiveCurseRider, applySpellEffect, getActiveTerrainZones, makeTerrainFn } from './spell_effects';
 import { TerrainZone } from './spell_effects';
@@ -959,12 +959,17 @@ export function rollSaveReactable(
 // Session 42 Task #19: rollGrappleContestReactable — Silvery Barbs
 // ability-check-success trigger for grapple/shove/escape contests.
 //
-// Wraps `rollGrappleContest` from utils.ts and fires an
+// Wraps `rollGrappleContestDetailed` from utils.ts and fires an
 // `incoming_ability_check_success` reaction trigger when the attacker
 // wins the contest. The reactor is the DEFENDER (the one who wants
 // the attacker to fail). If Silvery Barbs negates (reroll flips the
 // contest to defender winning), this wrapper returns false (attacker
 // did NOT win the contest).
+//
+// Session 43 Task #25: now uses rollGrappleContestDetailed so the
+// trigger carries the REAL d20 rolls + totals (not placeholders).
+// This lets Silvery Barbs implement the strict RAW "reroll the d20
+// and use the lower roll" rule.
 //
 // Used for:
 //   - case 'grapple': attacker grapples defender
@@ -975,11 +980,13 @@ export function rollSaveReactable(
 /**
  * Roll a grapple/shove contest with reaction-trigger support.
  *
- * Calls `rollGrappleContest(attacker, defender)` to compute the raw
- * contest result. If the attacker WINS (returns true), fires the
- * `incoming_ability_check_success` trigger. The reactor is the defender
- * (the one who would cast Silvery Barbs to flip the contest). If the
- * reaction negates, returns false (attacker did NOT win).
+ * Calls `rollGrappleContestDetailed(attacker, defender)` to compute the
+ * full contest result (raw d20s + totals). If the attacker WINS, fires
+ * the `incoming_ability_check_success` trigger with the REAL roll values
+ * (Session 43 Task #25 — was previously placeholder roll=20, total=999).
+ * The reactor is the defender (the one who would cast Silvery Barbs to
+ * flip the contest). If the reaction negates, returns false (attacker
+ * did NOT win).
  *
  * @param state       Engine state (for triggerReactions + logging)
  * @param attacker    The creature initiating the contest (the "checker")
@@ -993,13 +1000,12 @@ export function rollGrappleContestReactable(
   defender: Combatant,
   contestType: string = 'grapple',
 ): boolean {
-  // Roll the raw contest using the existing utils function.
-  // rollGrappleContest returns true if the attacker wins.
-  const attackerWon = rollGrappleContest(attacker, defender);
+  // Roll the contest using the detailed version so we get raw d20s + totals.
+  const result = rollGrappleContestDetailed(attacker, defender);
 
   // Only fire the trigger if the attacker won — Silvery Barbs forces
   // a reroll, which can only flip success → failure (not the reverse).
-  if (!attackerWon) return false;
+  if (!result.attackerWon) return false;
 
   // Don't fire if the defender is the attacker (self-contest — shouldn't happen).
   if (defender.id === attacker.id) return true;
@@ -1010,23 +1016,19 @@ export function rollGrappleContestReactable(
   // Don't fire if the defender has already used their reaction this round.
   if (defender.budget.reactionUsed) return true;
 
-  // Reconstruct the roll details for the trigger.
-  // rollGrappleContest doesn't return the raw roll, so we approximate:
-  // the attacker's check total was high enough to beat the defender.
-  // For Silvery Barbs, we need the raw d20 roll to reconstruct the
-  // lower-reroll result. Since rollGrappleContest doesn't expose this,
-  // we set roll=20 and total=999 (guaranteed "success") — the reroll
-  // will use the lower of (20, newRoll) and re-evaluate the contest.
-  // v1 simplification: the reroll in executeAbilityCheckReroll re-rolls
-  // the contest entirely (calls rollGrappleContest again) rather than
-  // reconstructing individual d20 rolls.
+  // Fire the trigger with REAL roll values (Session 43 Task #25 — was
+  // placeholder roll=20, total=999 in Session 42). The reroll logic in
+  // silvery_barbs.ts uses trigger.roll to compute lower-of-two-d20s,
+  // and trigger.opponentTotal to determine whether the lower roll
+  // flips the contest.
   const outcome = triggerReactions(state, defender, {
     kind: 'incoming_ability_check_success',
     checker: attacker,
     opponent: defender,
     ability: 'str',  // grapple contests use STR (Athletics) for the attacker
-    roll: 20,        // placeholder — see comment above
-    total: 999,      // placeholder — see comment above
+    roll: result.attackerRoll,
+    total: result.attackerTotal,
+    opponentTotal: result.defenderTotal,
     contestType,
   });
 

@@ -1329,18 +1329,80 @@ export function canGrappleOrShoveTarget(attacker: Combatant, target: Combatant):
 // ---- Grapple / Shove (PHB p.195) ---------------------------
 
 /**
+ * Detailed result of a grapple/shove contest.
+ * Exposes the raw d20 rolls so reaction spells (Silvery Barbs) can
+ * implement stricter RAW compliance: "reroll the d20 and use the lower
+ * roll" requires knowing the original d20, not just win/lose.
+ */
+export interface GrappleContestResult {
+  /** True if the attacker wins the contest (defender becomes grappled/shoved). */
+  attackerWon: boolean;
+  /** The attacker's raw d20 roll (1-20). */
+  attackerRoll: number;
+  /** The attacker's total (d20 + STR mod + proficiency). */
+  attackerTotal: number;
+  /** The defender's raw d20 roll (1-20) — whichever of STR/DEX was higher. */
+  defenderRoll: number;
+  /** The defender's total (d20 + ability mod). */
+  defenderTotal: number;
+  /** Which defense skill the defender used ('str' = Athletics, 'dex' = Acrobatics). */
+  defenderSkill: 'str' | 'dex';
+}
+
+/**
  * Roll a grapple contest: attacker STR(Athletics) vs defender STR(Athletics) or DEX(Acrobatics).
  * Returns true if attacker wins (target becomes Grappled).
  * Note: grapple is an ability check, not an attack roll — Reckless Attack advantage does NOT apply.
  */
 export function rollGrappleContest(attacker: Combatant, defender: Combatant): boolean {
+  return rollGrappleContestDetailed(attacker, defender).attackerWon;
+}
+
+/**
+ * Detailed version of rollGrappleContest that returns the raw d20 rolls and
+ * totals for both sides. Used by rollGrappleContestReactable (combat.ts) to
+ * fire the `incoming_ability_check_success` reaction trigger with real roll
+ * values, and by Silvery Barbs' executeAbilityCheckSuccessReroll to
+ * implement the "reroll the d20 and use the lower roll" RAW rule.
+ *
+ * PHB p.195: "The target of your grapple must be no more than one size
+ * larger than you and must be within your reach." (Size check is the
+ * caller's responsibility — canGrappleOrShoveTarget.)
+ *
+ * PHB p.195: "Using at least one free hand, you try to seize the target,
+ * making a grapple check instead of an attack roll: a Strength (Athletics)
+ * check contested by the target's Strength (Athletics) or Dexterity
+ * (Acrobatics) check (the target chooses the ability to use)."
+ *
+ * Tie goes to the defender (consistent with attack vs AC tie = miss).
+ */
+export function rollGrappleContestDetailed(
+  attacker: Combatant,
+  defender: Combatant,
+): GrappleContestResult {
   const prof = profBonusByCR(attacker.cr);
-  const attackerRoll = rollDie(20) + abilityMod(attacker.str) + prof; // Athletics proficiency
+  const attackerDie = rollDie(20);
+  const attackerTotal = attackerDie + abilityMod(attacker.str) + prof; // Athletics proficiency
   // Defender chooses best of STR(Athletics) or DEX(Acrobatics) — AI uses whichever is higher
-  const defStr = rollDie(20) + abilityMod(defender.str);
-  const defDex = rollDie(20) + abilityMod(defender.dex);
-  const defenderRoll = Math.max(defStr, defDex);
-  return attackerRoll > defenderRoll; // tie goes to defender
+  const defStrDie = rollDie(20);
+  const defDexDie = rollDie(20);
+  const defStr = defStrDie + abilityMod(defender.str);
+  const defDex = defDexDie + abilityMod(defender.dex);
+  // The defender "chooses the ability to use" — modelled as picking the
+  // higher of the two rolls (since the defender sees both before deciding).
+  const useStr = defStr >= defDex;
+  const defenderTotal = useStr ? defStr : defDex;
+  const defenderDie = useStr ? defStrDie : defDexDie;
+  const defenderSkill: 'str' | 'dex' = useStr ? 'str' : 'dex';
+  const attackerWon = attackerTotal > defenderTotal; // tie goes to defender
+  return {
+    attackerWon,
+    attackerRoll: attackerDie,
+    attackerTotal,
+    defenderRoll: defenderDie,
+    defenderTotal,
+    defenderSkill,
+  };
 }
 
 /**

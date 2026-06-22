@@ -59,7 +59,7 @@
 import { Combatant, Battlefield, ReactionTrigger, ReactionOutcome } from '../types/core';
 import { EngineState } from '../engine/combat';
 import { consumeSpellSlot } from '../ai/resources';
-import { rollDie, attackHits, rollGrappleContest } from '../engine/utils';
+import { rollDie, attackHits } from '../engine/utils';
 
 // ---- Metadata -----------------------------------------------
 
@@ -245,20 +245,31 @@ function executeSaveSuccessReroll(
 }
 
 /**
- * Handle the 'incoming_ability_check_success' trigger (Session 42 Task #19):
- * re-roll the grapple/shove/escape contest. Since `rollGrappleContest`
- * doesn't expose the raw d20 rolls, we re-roll the entire contest and
- * check if the defender now wins.
+ * Handle the 'incoming_ability_check_success' trigger (Session 42 Task #19,
+ * refactored Session 43 Task #25): re-roll the checker's d20 and use the
+ * lower result, then re-evaluate the contest against the opponent's
+ * original total.
  *
- * v1 simplification: instead of reconstructing the original d20 + mods
- * (which `rollGrappleContest` doesn't expose), we re-roll the contest
- * by calling `rollGrappleContest` again. If the reroll flips the contest
- * (defender now wins), returns `{ kind: 'negated' }` — the engine's
- * `rollGrappleContestReactable` wrapper then returns false (attacker
- * did NOT win).
+ * Session 43 Task #25 — stricter RAW compliance:
+ * Previously (Session 42 v1), this function re-rolled the ENTIRE contest
+ * (attacker + defender both rerolled). PHB/SCC actually says "The
+ * triggering creature must reroll the d20 and use the lower roll" — only
+ * the CHECKER's d20 is rerolled, not the opponent's. Now that
+ * `rollGrappleContestDetailed` exposes the raw d20 + total + opponent
+ * total, we implement the strict rule:
+ *
+ *   1. Read original checker d20 (trigger.roll) and total (trigger.total).
+ *   2. Roll a new d20.
+ *   3. Use the lower of (original, new) d20.
+ *   4. Recompute checker total: lowerD20 + (originalTotal - originalD20).
+ *      (The difference originalTotal - originalD20 is the static modifier
+ *      — STR mod + proficiency for grapple.)
+ *   5. Compare new checker total vs trigger.opponentTotal.
+ *   6. If new checker total <= opponent total → contest flips → negated.
  *
  * PHB/SCC: "The triggering creature must reroll the d20 and use the
- * lower roll." v1 approximates this by re-rolling the entire contest.
+ * lower roll." The reroll re-rolls ONLY the checker's d20 (the opponent's
+ * roll stands).
  */
 function executeAbilityCheckSuccessReroll(
   caster: Combatant,
@@ -268,28 +279,40 @@ function executeAbilityCheckSuccessReroll(
   consumeSpellSlot(caster, 1);
   caster.budget.reactionUsed = true;
 
-  // v1 simplification: re-roll the contest by calling rollGrappleContest
-  // again. The original contest was attacker vs defender (checker vs
-  // opponent). The reroll uses the same participants.
-  // rollGrappleContest is imported at the top of this file from ../engine/utils.
+  // Session 43 Task #25: stricter RAW compliance — re-roll only the
+  // checker's d20 and use the lower of (original, new).
+  const originalD20 = trigger.roll;
+  const originalTotal = trigger.total;
+  const opponentTotal = trigger.opponentTotal ?? 0;
 
-  // Re-roll the contest: if the checker (attacker) wins again, the
-  // reroll didn't flip it. If the opponent (defender) wins, the reroll
-  // flipped the contest → negated.
-  const checkerWonReroll = rollGrappleContest(trigger.checker, trigger.opponent);
+  // The static modifier = total - d20 (e.g. STR mod + proficiency for grapple).
+  // We don't need to know what the modifier IS — just subtract the d20 from
+  // the total to get the modifier, then add it back to the lower d20.
+  const modifier = originalTotal - originalD20;
+
+  // Re-roll the checker's d20 only.
+  const newD20 = rollDie(20);
+
+  // Use the lower of the two d20s (PHB/SCC: "use the lower roll").
+  const lowerD20 = Math.min(originalD20, newD20);
+  const newCheckerTotal = lowerD20 + modifier;
+
+  // The opponent's roll stands. Contest flips if new checker total <=
+  // opponent total (tie goes to defender, same as the original contest).
+  const checkerStillWins = newCheckerTotal > opponentTotal;
 
   state.log.events.push({
     round: state.battlefield.round ?? 0,
     actorId: caster.id,
     type: 'action',
     targetId: trigger.checker.id,
-    description: `${caster.name} casts Silvery Barbs — ${trigger.checker.name} rerolls the ${trigger.contestType} contest vs ${trigger.opponent.name}. Contest ${checkerWonReroll ? 'still succeeds' : 'now FAILS'}!`,
+    description: `${caster.name} casts Silvery Barbs — ${trigger.checker.name} rerolls the ${trigger.contestType} check (d20: ${originalD20} → ${newD20}, use lower ${lowerD20}). New total ${newCheckerTotal} vs opponent ${opponentTotal}. Contest ${checkerStillWins ? 'still succeeds' : 'now FAILS'}!`,
   });
 
-  if (!checkerWonReroll) {
-    return { kind: 'negated', detail: `Silvery Barbs reroll flipped ${trigger.contestType} contest to defender winning` };
+  if (!checkerStillWins) {
+    return { kind: 'negated', detail: `Silvery Barbs reroll (d20 ${originalD20}→${newD20}, lower ${lowerD20}) flipped ${trigger.contestType} contest to defender winning` };
   }
-  return { kind: 'failed', detail: `Silvery Barbs reroll did not flip the ${trigger.contestType} contest` };
+  return { kind: 'failed', detail: `Silvery Barbs reroll (d20 ${originalD20}→${newD20}, lower ${lowerD20}) did not flip the ${trigger.contestType} contest` };
 }
 
 // ---- cleanup ------------------------------------------------
