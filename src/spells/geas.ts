@@ -40,9 +40,9 @@
 // ============================================================
 
 import { Combatant, Battlefield } from '../types/core';
-import { CombatEvent, EngineState } from '../engine/combat';
+import { rollSaveReactable, CombatEvent, EngineState } from '../engine/combat';
 import { applySpellEffect } from '../engine/spell_effects';
-import { rollSave, rollDie, applyDamageWithTempHP } from '../engine/utils';
+import { rollDie, applyDamageWithTempHP } from '../engine/utils';
 import { chebyshev3D } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 
@@ -124,7 +124,7 @@ export function execute(caster: Combatant, target: Combatant, state: EngineState
     `${caster.name} casts Geas at ${target.name}! (DC ${saveDC} WIS — 5d10 ${metadata.damageType} + charmed on fail)`, target.id);
   if (target.isDead || target.isUnconscious) return;
 
-  const save = rollSave(target, 'wis', saveDC);
+  const save = rollSaveReactable(state, caster, target, 'wis', saveDC);
   emit(state, save.success ? 'save_success' : 'save_fail', caster.id,
     `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} WIS save vs Geas (rolled ${save.total})`, target.id, save.roll);
 

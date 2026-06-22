@@ -54,9 +54,9 @@
 // ============================================================
 
 import { Combatant, Battlefield } from '../types/core';
-import { CombatEvent, EngineState } from '../engine/combat';
+import { rollSaveReactable, CombatEvent, EngineState } from '../engine/combat';
 import { applySpellEffect, removeEffectsFromCaster } from '../engine/spell_effects';
-import { startConcentration, rollSave, rollDie, applyDamageWithTempHP } from '../engine/utils';
+import { startConcentration, rollDie, applyDamageWithTempHP } from '../engine/utils';
 import { chebyshev3D } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 
@@ -204,7 +204,7 @@ export function execute(
   if (target.isDead || target.isUnconscious) return;
 
   // On-cast damage: CON save for half.
-  const save = rollSave(target, 'con', saveDC);
+  const save = rollSaveReactable(state, caster, target, 'con', saveDC);
   const fullDmg = rollDamage();
   const dmg = save.success ? Math.floor(fullDmg / 2) : fullDmg;
   const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);

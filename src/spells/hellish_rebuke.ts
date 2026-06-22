@@ -33,9 +33,9 @@
 // ============================================================
 
 import { Combatant, Battlefield, ReactionTrigger, ReactionOutcome } from '../types/core';
-import { EngineState } from '../engine/combat';
+import { rollSaveReactable, EngineState } from '../engine/combat';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
-import { rollSave, applyDamageWithTempHP, abilityMod, rollDiceString } from '../engine/utils';
+import { applyDamageWithTempHP, abilityMod, rollDiceString } from '../engine/utils';
 
 // ---- Metadata -----------------------------------------------
 
@@ -115,7 +115,7 @@ export function executeReaction(
   for (let i = 0; i < diceCount; i++) dmg += rollDiceString('1d10');
 
   // Attacker makes DEX save.
-  const save = rollSave(trigger.attacker, 'dex', dc);
+  const save = rollSaveReactable(state, caster, trigger.attacker, 'dex', dc);
   const actualDmg = save.success ? Math.floor(dmg / 2) : dmg;
   const dealt = applyDamageWithTempHP(trigger.attacker, actualDmg, 'fire');
 

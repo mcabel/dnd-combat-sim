@@ -66,9 +66,9 @@
 // ============================================================
 
 import { Combatant, Battlefield, Condition } from '../types/core';
-import { CombatEvent, EngineState } from '../engine/combat';
+import { rollSaveReactable, CombatEvent, EngineState } from '../engine/combat';
 import { applySpellEffect, removeEffectsFromCaster, applyTerrainDifficulty } from '../engine/spell_effects';
-import { startConcentration, rollSave } from '../engine/utils';
+import { startConcentration } from '../engine/utils';
 import { chebyshev3D } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 
@@ -228,7 +228,7 @@ export function execute(
   });
   applyTerrainDifficulty(state.battlefield, terrainEffect);
 
-  const save = rollSave(target, 'dex', saveDC);
+  const save = rollSaveReactable(state, caster, target, 'dex', saveDC);
   emit(
     state,
     save.success ? 'save_success' : 'save_fail',

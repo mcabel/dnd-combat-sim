@@ -64,8 +64,8 @@
 // ============================================================
 
 import { Combatant, Battlefield } from '../types/core';
-import { CombatEvent, EngineState } from '../engine/combat';
-import { rollAttack, rollDie, rollSave, applyDamageWithTempHP, abilityMod } from '../engine/utils';
+import { rollSaveReactable, CombatEvent, EngineState } from '../engine/combat';
+import { rollAttack, rollDie, applyDamageWithTempHP, abilityMod } from '../engine/utils';
 import { chebyshev3D, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 
@@ -318,7 +318,7 @@ export function execute(
   for (const target of liveExplosion) {
     if (target.isDead || target.isUnconscious) continue;
 
-    const save = rollSave(target, 'dex', saveDC);
+    const save = rollSaveReactable(state, caster, target, 'dex', saveDC);
     const fullDmg = rollColdDamage();
     const dmg = save.success ? Math.floor(fullDmg / 2) : fullDmg;
     const dealt = applyDamageWithTempHP(target, dmg, metadata.coldDamageType);

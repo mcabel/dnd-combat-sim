@@ -33,8 +33,8 @@
 // ============================================================
 
 import { Combatant, Battlefield } from '../types/core';
-import { CombatEvent, EngineState } from '../engine/combat';
-import { rollSave, rollDie, applyDamage } from '../engine/utils';
+import { rollSaveReactable, CombatEvent, EngineState } from '../engine/combat';
+import { rollDie, applyDamage } from '../engine/utils';
 import { euclideanDistFt, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 
@@ -177,7 +177,7 @@ export function execute(
     return;
   }
 
-  const save = rollSave(target, 'wis', saveDC);
+  const save = rollSaveReactable(state, caster, target, 'wis', saveDC);
 
   const dmgRoll = rollDie(6) + rollDie(6) + rollDie(6);
   const dmgFinal = save.success ? Math.floor(dmgRoll / 2) : dmgRoll;

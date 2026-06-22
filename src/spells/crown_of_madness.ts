@@ -71,9 +71,9 @@
 // ============================================================
 
 import { Combatant, Battlefield } from '../types/core';
-import { CombatEvent, EngineState } from '../engine/combat';
+import { rollSaveReactable, CombatEvent, EngineState } from '../engine/combat';
 import { applySpellEffect, removeEffectsFromCaster } from '../engine/spell_effects';
-import { startConcentration, rollSave } from '../engine/utils';
+import { startConcentration } from '../engine/utils';
 import { chebyshev3D } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 
@@ -238,7 +238,7 @@ export function execute(
   // Re-check liveness (stale edge case)
   if (target.isDead || target.isUnconscious) return;
 
-  const save = rollSave(target, 'wis', saveDC);
+  const save = rollSaveReactable(state, caster, target, 'wis', saveDC);
   emit(
     state,
     save.success ? 'save_success' : 'save_fail',

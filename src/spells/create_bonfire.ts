@@ -70,9 +70,9 @@
 // ============================================================
 
 import { Combatant, Battlefield } from '../types/core';
-import { EngineState } from '../engine/combat';
+import { rollSaveReactable, EngineState } from '../engine/combat';
 import { applySpellEffect, removeEffectsFromCaster } from '../engine/spell_effects';
-import { startConcentration, rollSave, rollDie, applyDamageWithTempHP } from '../engine/utils';
+import { startConcentration, rollDie, applyDamageWithTempHP } from '../engine/utils';
 import { chebyshev3D } from '../engine/movement';
 
 // ---- Metadata -----------------------------------------------
@@ -194,7 +194,7 @@ export function execute(
 
   // On-cast damage: DEX save for half
   if (!target.isDead && !target.isUnconscious) {
-    const save = rollSave(target, metadata.saveAbility, saveDC);
+    const save = rollSaveReactable(state, caster, target, metadata.saveAbility, saveDC);
     const fullDmg = rollDamage();
     const dmg = save.success ? Math.floor(fullDmg / 2) : fullDmg;
     const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);

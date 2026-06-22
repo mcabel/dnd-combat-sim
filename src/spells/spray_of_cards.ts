@@ -57,8 +57,8 @@
 // ============================================================
 
 import { Combatant, Battlefield } from '../types/core';
-import { CombatEvent, EngineState } from '../engine/combat';
-import { rollSave, rollDie, applyDamageWithTempHP } from '../engine/utils';
+import { rollSaveReactable, CombatEvent, EngineState } from '../engine/combat';
+import { rollDie, applyDamageWithTempHP } from '../engine/utils';
 import { inConeFt, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 import { applySpellEffect } from '../engine/spell_effects';
@@ -216,7 +216,7 @@ export function execute(
   for (const target of targets) {
     if (target.isDead || target.isUnconscious) continue;
 
-    const save = rollSave(target, 'dex', saveDC);
+    const save = rollSaveReactable(state, caster, target, 'dex', saveDC);
     const fullDmg = rollDamage();
     const dmg = save.success ? Math.floor(fullDmg / 2) : fullDmg;
     const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);

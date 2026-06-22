@@ -45,9 +45,8 @@
 // ============================================================
 
 import { Combatant, Battlefield } from '../types/core';
-import { CombatEvent, EngineState } from '../engine/combat';
+import { rollSaveReactable, CombatEvent, EngineState } from '../engine/combat';
 import { applySpellEffect } from '../engine/spell_effects';
-import { rollSave } from '../engine/utils';
 import { chebyshev3D, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 
@@ -127,7 +126,7 @@ export function executeFireworks(caster: Combatant, targets: Combatant[], state:
 
   for (const target of targets) {
     if (target.isDead || target.isUnconscious) continue;
-    const save = rollSave(target, 'con', saveDC);
+    const save = rollSaveReactable(state, caster, target, 'con', saveDC);
     emit(state, save.success ? 'save_success' : 'save_fail', caster.id,
       `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} CON save vs Pyrotechnics (rolled ${save.total})${save.success ? '' : ' + BLINDED'}`, target.id, save.roll);
 

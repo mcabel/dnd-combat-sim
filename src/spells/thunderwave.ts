@@ -26,8 +26,8 @@
 // ============================================================
 
 import { Combatant, Battlefield, Vec3 } from '../types/core';
-import { CombatEvent, EngineState } from '../engine/combat';
-import { rollSave, rollDie, applyDamage } from '../engine/utils';
+import { rollSaveReactable, CombatEvent, EngineState } from '../engine/combat';
+import { rollDie, applyDamage } from '../engine/utils';
 import { chebyshev3D, pushAway } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 
@@ -133,7 +133,7 @@ export function execute(
   for (const target of targets) {
     if (target.isDead || target.isUnconscious) continue;
 
-    const save = rollSave(target, 'con', saveDC);
+    const save = rollSaveReactable(state, caster, target, 'con', saveDC);
 
     // Roll full 2d8 thunder damage
     const dmgRoll = rollDie(8) + rollDie(8);

@@ -31,8 +31,8 @@
 // ============================================================
 
 import { Combatant, Battlefield } from '../types/core';
-import { CombatEvent, EngineState } from '../engine/combat';
-import { rollSave, rollDie, applyDamageWithTempHP } from '../engine/utils';
+import { rollSaveReactable, CombatEvent, EngineState } from '../engine/combat';
+import { rollDie, applyDamageWithTempHP } from '../engine/utils';
 import { chebyshev3D, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 import { applySpellEffect } from '../engine/spell_effects';
@@ -104,7 +104,7 @@ export function execute(caster: Combatant, target: Combatant, state: EngineState
   const fullDmg = rollDamage();
   const dealt = applyDamageWithTempHP(target, fullDmg, metadata.damageType);
 
-  const save = rollSave(target, 'int', saveDC);
+  const save = rollSaveReactable(state, caster, target, 'int', saveDC);
 
   emit(
     state,

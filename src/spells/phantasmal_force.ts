@@ -59,9 +59,9 @@
 // ============================================================
 
 import { Combatant, Battlefield } from '../types/core';
-import { CombatEvent, EngineState } from '../engine/combat';
+import { rollSaveReactable, CombatEvent, EngineState } from '../engine/combat';
 import { applySpellEffect, removeEffectsFromCaster } from '../engine/spell_effects';
-import { startConcentration, rollSave, rollDie, applyDamageWithTempHP } from '../engine/utils';
+import { startConcentration, rollDie, applyDamageWithTempHP } from '../engine/utils';
 import { chebyshev3D } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 
@@ -218,7 +218,7 @@ export function execute(
   if (target.isDead || target.isUnconscious) return;
 
   // INT save — first INT save in the cantrip-z workstream.
-  const save = rollSave(target, 'int', saveDC);
+  const save = rollSaveReactable(state, caster, target, 'int', saveDC);
 
   if (save.success) {
     // Target disbelieves the illusion — NO damage, NO damage_zone.

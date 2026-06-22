@@ -52,8 +52,8 @@
 // ============================================================
 
 import { Combatant } from '../types/core';
-import { CombatEvent, EngineState } from '../engine/combat';
-import { rollSave, rollDie, applyDamageWithTempHP } from '../engine/utils';
+import { rollSaveReactable, CombatEvent, EngineState } from '../engine/combat';
+import { rollDie, applyDamageWithTempHP } from '../engine/utils';
 import { euclideanDistFt } from '../engine/movement';
 
 // ---- Constants ----------------------------------------------
@@ -166,7 +166,7 @@ export function execute(
   for (const target of inRange) {
     if (target.isDead || target.isUnconscious) continue;
 
-    const save = rollSave(target, 'dex', saveDC);
+    const save = rollSaveReactable(state, caster, target, 'dex', saveDC);
 
     // Roll Nd6 force damage (N = dmgCount, scales with caster level)
     let dmgRoll = 0;
