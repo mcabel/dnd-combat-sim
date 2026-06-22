@@ -20,7 +20,7 @@
 
 import { CharacterSheet, ClassName, CharacterFeature, totalLevel } from './types';
 import { getFeat } from './feat_data';
-import { getMaxInvocationSlots } from './leveler';
+import { getMaxInvocationSlots, getSubclassFeaturesForLevels } from './leveler';
 import { ELDRITCH_INVOCATIONS } from '../spells/_invocations';
 
 // Valid ability score keys
@@ -383,14 +383,54 @@ export function chooseSubclass(
     );
   }
 
-  return {
+  // ── Session 44 Task #29: retroactively grant subclass features ──
+  // If the character has already attained levels in this class beyond
+  // the subclass-selection level (e.g. chose College of Valor at Bard 7
+  // instead of Bard 3), we need to grant any subclass features they
+  // "should have" already gained at earlier levels. The leveler's
+  // applyLevelUp() consults SUBCLASS_FEATURES only when the subclass is
+  // already chosen — so a late subclass pick would otherwise miss the
+  // Bard 6 Extra Attack.
+  //
+  // We look up the class's current level, then ask the leveler for all
+  // subclass features for levels 1..currentLevel. Features the character
+  // already has (by name+source) are skipped to avoid duplicates.
+  const classLevelEntry = sheet.classLevels.find(cl => cl.className === className);
+  const currentClassLevel = classLevelEntry?.level ?? 0;
+  const retroactiveFeatures: CharacterFeature[] = [];
+  if (currentClassLevel > 0) {
+    const allSubclassFeatures = getSubclassFeaturesForLevels(
+      className, subclassName.trim(), currentClassLevel,
+    );
+    // Filter out features the character already has (by name + source).
+    // This handles the unlikely case where the same feature name appears
+    // in both the base class table and the subclass table.
+    for (const f of allSubclassFeatures) {
+      const alreadyHas = sheet.allFeatures.some(
+        existing => existing.name === f.name && existing.source === f.source,
+      );
+      if (!alreadyHas) retroactiveFeatures.push(f);
+    }
+  }
+
+  const result: CharacterSheet = {
     ...sheet,
     subclassChoices: {
       ...sheet.subclassChoices,
       [className]: subclassName.trim(),
     },
+    // Append the retroactive subclass features (if any) to allFeatures.
+    // If currentClassLevel is 0 (no levels in class yet — shouldn't happen
+    // because we validated className presence above) or the subclass has
+    // no features at any level ≤ currentClassLevel, retroactiveFeatures
+    // is empty and this is a no-op.
+    allFeatures: retroactiveFeatures.length > 0
+      ? [...sheet.allFeatures, ...retroactiveFeatures]
+      : sheet.allFeatures,
     updatedAt: new Date().toISOString(),
   };
+
+  return result;
 }
 
 

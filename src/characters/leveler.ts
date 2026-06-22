@@ -294,6 +294,119 @@ const CASTING_ABILITY: Partial<Record<ClassName, AbilityScore>> = {
 type RawFeature = { name: string; description: string; source: 'class' | 'subclass' };
 type FeatureTable = Partial<Record<ClassName, Record<number, RawFeature[]>>>;
 
+// ── Session 44 Task #29: Subclass-specific feature table ──
+//
+// The CLASS_FEATURES table above only models BASE class features
+// (e.g. Bard 6 → Countercharm). Some subclass features are mechanically
+// significant enough that the engine needs to know about them — the
+// clearest case is Bard College of Valor / College of Swords both
+// granting Extra Attack at Bard 6 (PHB p.55). Without this table, a
+// Valor Bard 6 has no `Extra Attack` in their feature list, so the
+// planner's `hasFeature(self, 'Extra Attack')` check fails and they
+// only make 1 attack per Attack action.
+//
+// Format: SUBCLASS_FEATURES[className][subclassName][level] = RawFeature[]
+//
+// Lookup is case-sensitive on subclass name — callers must use the
+// canonical PHB/XGE names ("College of Valor", "College of Swords").
+// We accept the common shorthand "Valor" / "Swords" as aliases too
+// (see resolveSubclassFeatures below).
+//
+// v1 scope: only Bard Valor/Swords Extra Attack is modelled here.
+// Future subclass features (e.g. Battle Master maneuvers, Land Circle
+// ritual casting) can be added to this table as the engine needs them.
+type SubclassFeatureTable = Partial<
+  Record<ClassName, Partial<Record<string, Record<number, RawFeature[]>>>>
+>;
+
+const SUBCLASS_FEATURES: SubclassFeatureTable = {
+  Bard: {
+    'College of Valor': {
+      // PHB p.55 — "Extra Attack: Starting at 6th level, you can attack
+      // twice, instead of once, whenever you take the Attack action on
+      // your turn."
+      6: [{ name: 'Extra Attack', source: 'subclass',
+            description: 'Attack twice when you take the Attack action (College of Valor 6).' }],
+    },
+    'College of Swords': {
+      // XGE p.15 — same text as Valor: Extra Attack at Bard 6.
+      6: [{ name: 'Extra Attack', source: 'subclass',
+            description: 'Attack twice when you take the Attack action (College of Swords 6).' }],
+    },
+  },
+};
+
+/**
+ * Resolve subclass-specific features for the given class + subclass + level.
+ *
+ * Handles alias normalisation:
+ *   - "Valor" / "Valor Bard" → "College of Valor"
+ *   - "Swords" / "Swords Bard" → "College of Swords"
+ *
+ * Returns an empty array if the subclass is unknown, the class has no
+ * subclass feature table, or no features are defined for this level.
+ */
+function resolveSubclassFeatures(
+  className: ClassName,
+  subclass: string | undefined,
+  level: number,
+): RawFeature[] {
+  if (!subclass) return [];
+  const classTable = SUBCLASS_FEATURES[className];
+  if (!classTable) return [];
+
+  // Try exact match first
+  let entry = classTable[subclass];
+
+  // Alias normalisation (Bard-specific for v1)
+  if (!entry && className === 'Bard') {
+    const lower = subclass.toLowerCase();
+    if (lower === 'valor' || lower.includes('valor')) {
+      entry = classTable['College of Valor'];
+    } else if (lower === 'swords' || lower.includes('swords')) {
+      entry = classTable['College of Swords'];
+    }
+  }
+
+  if (!entry) return [];
+  return entry[level] ?? [];
+}
+
+/**
+ * Return all subclass-specific features the character SHOULD have for the
+ * given class at all levels from 1 up to (and including) `currentLevel`.
+ *
+ * Used by chooseSubclass() in improvements.ts to retroactively grant
+ * subclass features when the player picks a subclass AFTER reaching a
+ * level that grants a subclass feature (e.g. choosing College of Valor
+ * at Bard 7 should still grant Extra Attack for Bard 6).
+ *
+ * Returns CharacterFeature[] (already typed for storage on the sheet).
+ * Returns [] if the subclass is unknown or has no features at any level
+ * up to currentLevel.
+ *
+ * Accepts `className` as a plain string (not the strict ClassName union)
+ * because chooseSubclass's public API takes string. Unknown class names
+ * resolve to an empty list (no subclass features to grant).
+ */
+export function getSubclassFeaturesForLevels(
+  className: string,
+  subclass: string,
+  currentLevel: number,
+): CharacterFeature[] {
+  // Validate className is a known class; if not, no subclass features.
+  if (!VALID_CLASSES.has(className as ClassName)) return [];
+
+  const out: CharacterFeature[] = [];
+  for (let lvl = 1; lvl <= currentLevel; lvl++) {
+    const raws = resolveSubclassFeatures(className as ClassName, subclass, lvl);
+    for (const r of raws) {
+      out.push({ name: r.name, description: r.description, source: r.source });
+    }
+  }
+  return out;
+}
+
 const CLASS_FEATURES: FeatureTable = {
   Artificer: {
     1:  [{ name: 'Magical Tinkering', source: 'class',    description: 'Imbue a Tiny nonmagical object you touch with one of several minor magical properties (light, message recording, sensory illusion, or odor/sound).' },
@@ -947,7 +1060,25 @@ export function applyLevelUp(
   // ---- Collect new features --------------------------------
 
   const rawFeatures = CLASS_FEATURES[cn]?.[newClassLevel] ?? [];
-  const newFeatures: CharacterFeature[] = rawFeatures.map(f => ({
+
+  // ── Session 44 Task #29: subclass-specific features ──
+  // Some subclass features are mechanically significant (e.g. Bard
+  // College of Valor/Swords → Extra Attack at Bard 6). The base
+  // CLASS_FEATURES table only summarises the subclass prompt at the
+  // subclass-selection level (e.g. "Bard College" at Bard 3) — it
+  // doesn't model the features each subclass grants at later levels.
+  // We consult the SUBCLASS_FEATURES table here using the character's
+  // already-chosen subclass (subclassChoices[cn]) to fill that gap.
+  //
+  // If the subclass hasn't been chosen yet (subclassPrompt is set this
+  // level), resolveSubclassFeatures returns [] — the features will be
+  // granted on a future applySubclassFeatures() call after the player
+  // picks a subclass.
+  const chosenSubclass = updated.subclassChoices[cn];
+  const rawSubclassFeatures = resolveSubclassFeatures(cn, chosenSubclass, newClassLevel);
+
+  const allRawFeatures = [...rawFeatures, ...rawSubclassFeatures];
+  const newFeatures: CharacterFeature[] = allRawFeatures.map(f => ({
     name:        f.name,
     description: f.description,
     source:      f.source,
