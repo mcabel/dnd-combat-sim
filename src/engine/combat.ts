@@ -29,7 +29,7 @@ import {
   livingEnemiesOf, livingAlliesOf, posKey, pushAway
 } from './movement';
 import { planTurn, planLegendaryAction, shouldTakeOpportunityAttack } from '../ai/planner';
-import { shouldSmite, applyDivineSmite, tickRage, consumeSpellSlot, hasSpellSlot } from '../ai/resources';
+import { shouldSmite, applyDivineSmite, tickRage, consumeSpellSlot, hasSpellSlot, hasInnateSpellUse } from '../ai/resources';
 // TG-008: Reaction spell subsystem
 import { REACTION_SPELLS, ReactionSpellDescriptor } from '../spells/_reaction_registry';
 import {
@@ -862,8 +862,12 @@ function triggerReactions(
     if (!spell.triggerKinds.includes(trigger.kind)) continue;
     // The reactor must have this spell in their actions list.
     if (!reactor.actions.some(a => a.name === spell.name)) continue;
-    // The reactor must have a spell slot of the required level.
-    if (!hasSpellSlot(reactor, spell.level)) continue;
+    // The reactor must have a spell slot of the required level OR an
+    // innate spell use available (Session 44 Task #20: Couatl's Shield
+    // is innate 3/day, not slot-based). The innate-use fallback mirrors
+    // the pattern in cure_wounds.ts execute() — consumeInnateSpellUse
+    // is called by the spell's executeReaction when no slot is available.
+    if (!hasSpellSlot(reactor, spell.level) && !hasInnateSpellUse(reactor, spell.name)) continue;
     // Tactical gating — the spell module decides if it's worth casting.
     if (!spell.shouldCast(reactor, state.battlefield, trigger)) continue;
     // Fire the reaction.

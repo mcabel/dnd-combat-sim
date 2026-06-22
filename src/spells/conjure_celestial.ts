@@ -191,11 +191,16 @@ export function createCouatl(
   //   - Bless (L1, concentration, action): +1d4 to attack rolls + saves for 3 allies
   //   - Cure Wounds (L1, action): 1d8+WIS healing to touched ally
   //   - Sanctuary (L1, bonus action): ward ally vs attacks (v1 forward-compat flag)
+  //   - Shield (L1, reaction): +5 AC vs triggering attack; blocks Magic Missile
+  //     (Session 44 Task #20 — wired into reaction_registry via the
+  //     hasInnateSpellUse fallback in triggerReactions)
   //
   // Skipped (out-of-combat or situation):
-  //   - Create Food and Water, Lesser Restoration, Protection from Poison
-  //   - Shield (would need reaction_registry integration)
-  //   - Dream, Greater Restoration, Scrying
+  //   - Create Food and Water (out-of-combat)
+  //   - Lesser Restoration, Protection from Poison (need condition tracking —
+  //     innate counters are tracked in resources.innateSpellcasting but no
+  //     Action objects are created for them; future: add condition-aware AI)
+  //   - Dream, Greater Restoration, Scrying (out-of-combat)
   const hp = 97;
   const ac = 19;
 
@@ -312,6 +317,39 @@ export function createCouatl(
     description: 'Innate Sanctuary (3/day, bonus action): ward an ally in 30 ft — attackers must WIS save or lose target.',
   };
 
+  // ── Session 44 Task #20: Shield innate action ──
+  // PHB p.275: "When you are hit by an attack or targeted by Magic Missile,
+  // you can cast Shield as a reaction." The Couatl's innate Shield (3/day)
+  // is wired into the reaction_registry via the `Shield` action name —
+  // triggerReactions checks `reactor.actions.some(a => a.name === 'Shield')`
+  // and now also accepts `hasInnateSpellUse(reactor, 'Shield')` as an
+  // alternative to `hasSpellSlot(reactor, 1)` (Session 44 Task #20 change
+  // in combat.ts). shield.ts executeReaction was updated to consume an
+  // innate use when no spell slot is available (mirrors cure_wounds.ts).
+  //
+  // costType: 'reaction' (not 'action') — Shield is ONLY cast as a reaction,
+  // never as a main action. The planner's action-selection logic ignores
+  // actions with costType 'reaction' for the main-action slot.
+  const shieldAction: Action = {
+    name: 'Shield',
+    isMultiattack: false,
+    attackType: null,           // no attack roll, no save — self-buff
+    reach: 0,                   // self
+    range: { normal: 0, long: 0 },
+    hitBonus: null,
+    damage: null,
+    damageType: null,
+    saveDC: null,
+    saveAbility: null,
+    isAoE: false,
+    isControl: false,
+    requiresConcentration: false,
+    slotLevel: 0,               // innate — never consumes a slot
+    costType: 'reaction',       // Shield is only cast as a reaction
+    legendaryCost: 0,
+    description: 'Innate Shield (3/day, reaction): +5 AC including against the triggering attack; blocks Magic Missile.',
+  };
+
   // Position: adjacent to caster (1 square away)
   const pos = { x: caster.pos.x + 1, y: caster.pos.y, z: caster.pos.z };
 
@@ -337,13 +375,14 @@ export function createCouatl(
     cha: 18,
     cr: 4,
     pos,
-    // Couatl has 2 attacks + 3 innate spells:
+    // Couatl has 2 attacks + 4 innate spells:
     //   - Bite (poison/unconscious)
     //   - Constrict (grapple/restrain)
     //   - Bless (innate 3/day, concentration buff)
     //   - Cure Wounds (innate 3/day, heal)
     //   - Sanctuary (innate 3/day, bonus-action ward)
-    actions: [biteAction, constrictAction, blessAction, cureWoundsAction, sanctuaryAction],
+    //   - Shield (innate 3/day, reaction +5 AC — Session 44 Task #20)
+    actions: [biteAction, constrictAction, blessAction, cureWoundsAction, sanctuaryAction, shieldAction],
     traits: [
       'Magic Weapons',
       'Shielded Mind',
@@ -373,14 +412,30 @@ export function createCouatl(
     perception: { targets: new Map() } as any,
     concentration: null,
     deathSaves: null,
-    // Innate spellcasting: 3/day each for bless, cure wounds, sanctuary.
+    // Innate spellcasting: 3/day each for bless, cure wounds, sanctuary,
+    // shield (Session 44 Task #20), lesser restoration, protection from
+    // poison (Session 44 Task #20 — tracked but not yet AI-cast; needs
+    // condition tracking for blinded/deafened/paralyzed/poisoned).
     // Initialized here so the AI planner (shouldCastBless, shouldCastCW)
     // and the spell execute functions can decrement the counter.
+    //
+    // Shield's counter is consumed by shield.ts executeReaction (which
+    // falls back to consumeInnateSpellUse when no spell slot is available,
+    // mirroring cure_wounds.ts).
+    //
+    // Lesser Restoration + Protection from Poison counters are tracked
+    // here for completeness (MM p.43 lists them as 3/day each) but no
+    // Action object is created for them — they need condition tracking
+    // (blinded/deafened/paralyzed/poisoned) which is out of v1 scope.
+    // Future: add condition-aware AI + execute functions.
     resources: {
       innateSpellcasting: {
-        'Bless':           { max: 3, remaining: 3 },
-        'Cure Wounds':     { max: 3, remaining: 3 },
-        'Sanctuary':       { max: 3, remaining: 3 },
+        'Bless':                { max: 3, remaining: 3 },
+        'Cure Wounds':          { max: 3, remaining: 3 },
+        'Sanctuary':            { max: 3, remaining: 3 },
+        'Shield':               { max: 3, remaining: 3 },  // Session 44 Task #20
+        'Lesser Restoration':   { max: 3, remaining: 3 },  // tracked, not yet cast
+        'Protection from Poison': { max: 3, remaining: 3 }, // tracked, not yet cast
       },
     },
     tempHP: 0,
