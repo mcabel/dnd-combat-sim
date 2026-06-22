@@ -237,4 +237,6 @@ tsc --noEmit: 0 errors.
 ## CI Status
 
 - **Before this session:** Latest commit (bc106a1, Session 37 handover CI update) was green (Test Suite `success`).
-- **Session 38 commit (1dc7128):** To be verified post-commit. The work is purely additive (new file + new optional Combatant field + 1 new trigger point in resolveAttack + metadata flag). All 36 repelling_blast assertions pass locally (3 stable runs), and 19 baseline test files pass (no regressions). The only engine path modified is the `if (action.name === 'Eldritch Blast')` block in resolveAttack — a no-op for non-EB attacks.
+- **Session 38 commit (1dc7128):** Test Suite `success` ✅. The work is purely additive (new file + new optional Combatant field + 1 new trigger point in resolveAttack + metadata flag). All 36 repelling_blast assertions pass locally (3 stable runs), and 19 baseline test files pass (no regressions). The only engine path modified is the `if (action.name === 'Eldritch Blast')` block in resolveAttack — a no-op for non-EB attacks.
+- **Handover commit (4a878a2 — this file):** Test Suite `success` ✅. No code changes (markdown-only), so the green result from 1dc7128 carries forward.
+- **Final state:** All green on the latest commit (4a878a2). No red X.
