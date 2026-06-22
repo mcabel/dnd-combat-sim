@@ -445,6 +445,17 @@ export interface CharacterSheet {
   // ---- Concentration (PHB p.203) ----------------------------
   // Name of the spell currently being concentrated on; null/absent = not concentrating.
   concentrating?: string | null;
+
+  // ---- Eldritch Invocations (PHB p.110, Warlock-only) --------
+  // List of Eldritch Invocation names this Warlock knows. Populated by
+  // chooseEldritchInvocations() in improvements.ts after the player picks
+  // them at Warlock level 2/5/7/9/12/15/18. The names must match the keys
+  // of ELDRITCH_INVOCATIONS in src/spells/_invocations.ts exactly.
+  // undefined or empty for non-Warlocks; the builder transfers this list
+  // to Combatant.eldritchInvocations at runtime so the engine's invocation
+  // hooks (Repelling Blast, Agonizing Blast, Grasp of Hadar, Lance of
+  // Lethargy) can fire.
+  eldritchInvocations?: string[];
 }
 
 // ---- Party --------------------------------------------------

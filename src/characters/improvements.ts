@@ -20,6 +20,8 @@
 
 import { CharacterSheet, ClassName, CharacterFeature, totalLevel } from './types';
 import { getFeat } from './feat_data';
+import { getMaxInvocationSlots } from './leveler';
+import { ELDRITCH_INVOCATIONS } from '../spells/_invocations';
 
 // Valid ability score keys
 const ABILITY_KEYS = ['str', 'dex', 'con', 'int', 'wis', 'cha'] as const;
@@ -387,6 +389,109 @@ export function chooseSubclass(
       ...sheet.subclassChoices,
       [className]: subclassName.trim(),
     },
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+
+// ============================================================
+// chooseEldritchInvocations
+// ============================================================
+//
+// PHB p.110: "At 2nd level, you gain two eldritch invocations of your
+// choice. ... You learn one additional invocation at 5th, 7th, 9th,
+// 12th, 15th, and 18th level."
+//
+// PHB p.110 also says: "Whenever you gain a warlock level, you can
+// swap one invocation you know for another." For v1 we allow the full
+// list to be replaced at any time (the player picks the entire list,
+// not just swaps one). This matches the existing chooseSubclass
+// pattern: the caller knows when the swap is allowed (on level-up),
+// and the helper just validates the resulting list.
+//
+// Scope (v1): only the 4 EB-augmenting invocations from Sessions 38–39
+// are in the registry:
+//   - Repelling Blast   (push 10 ft)
+//   - Agonizing Blast   (+CHA mod damage)
+//   - Grasp of Hadar    (pull 10 ft)
+//   - Lance of Lethargy (reduce speed 10 ft)
+// Other invocations (Thirsting Blade, Eldritch Spear, etc.) are out of
+// scope for v1 and will be rejected as unknown.
+// ============================================================
+
+/**
+ * Set the character's Eldritch Invocations list (Warlock-only).
+ *
+ * Rules enforced:
+ *   - sheet must have at least one Warlock class level
+ *   - invocations.length must equal getMaxInvocationSlots(warlockLevel)
+ *     (use the full list each call — partial lists are rejected so the
+ *     sheet is always in a complete, runnable state)
+ *   - each invocation name must be a key of ELDRITCH_INVOCATIONS
+ *   - no duplicate invocation names
+ *
+ * @param sheet        Current character sheet
+ * @param invocations  Full list of Eldritch Invocation names to set
+ * @returns Updated sheet (new object, no mutation)
+ * @throws Error if validation fails
+ */
+export function chooseEldritchInvocations(
+  sheet: CharacterSheet,
+  invocations: string[],
+): CharacterSheet {
+  // ---- Validate Warlock class present -----------------------
+  const warlockEntry = sheet.classLevels.find(cl => cl.className === 'Warlock');
+  if (!warlockEntry) {
+    throw new Error(
+      `Cannot choose Eldritch Invocations: character has no Warlock class levels. ` +
+      `Known classes: ${sheet.classLevels.map(cl => cl.className).join(', ') || '(none)'}.`
+    );
+  }
+
+  // ---- Validate count vs Warlock level ----------------------
+  const warlockLevel = warlockEntry.level;
+  const maxSlots = getMaxInvocationSlots(warlockLevel);
+  if (maxSlots === 0) {
+    throw new Error(
+      `Cannot choose Eldritch Invocations: Warlock level ${warlockLevel} is below 2 ` +
+      `(the feature unlocks at Warlock 2).`
+    );
+  }
+  if (invocations.length !== maxSlots) {
+    throw new Error(
+      `Eldritch Invocations count mismatch: Warlock level ${warlockLevel} allows ` +
+      `exactly ${maxSlots} invocation${maxSlots === 1 ? '' : 's'}, got ${invocations.length}. ` +
+      `(Provide the full list — partial lists are rejected so the sheet stays complete.)`
+    );
+  }
+
+  // ---- Validate each invocation name is in the registry -----
+  // Build a list of all unknown names for a single, helpful error message.
+  const known = Object.keys(ELDRITCH_INVOCATIONS);
+  const unknown = invocations.filter(n => !known.includes(n));
+  if (unknown.length > 0) {
+    throw new Error(
+      `Unknown Eldritch Invocation${unknown.length === 1 ? '' : 's'}: ` +
+      `${unknown.map(n => `"${n}"`).join(', ')}. ` +
+      `Known invocations (v1): ${known.sort().join(', ')}.`
+    );
+  }
+
+  // ---- Validate no duplicates -------------------------------
+  const seen = new Set<string>();
+  for (const name of invocations) {
+    if (seen.has(name)) {
+      throw new Error(
+        `Duplicate Eldritch Invocation "${name}" — each invocation can only be chosen once.`
+      );
+    }
+    seen.add(name);
+  }
+
+  // ---- Apply ------------------------------------------------
+  return {
+    ...sheet,
+    eldritchInvocations: [...invocations],
     updatedAt: new Date().toISOString(),
   };
 }

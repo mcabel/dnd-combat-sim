@@ -308,6 +308,12 @@ function sheetToRawEntry(sheet: CharacterSheet): RawPCEntry {
  * by the tested parser code.
  *
  * Name and id are patched after creation to use the sheet's identity.
+ *
+ * Eldritch Invocations (Session 40): if the sheet has `eldritchInvocations`
+ * set (Warlock PCs only — populated via chooseEldritchInvocations() in
+ * improvements.ts), it is transferred to the Combatant so the engine's
+ * invocation hooks (Repelling Blast, Agonizing Blast, Grasp of Hadar,
+ * Lance of Lethargy) can fire on Eldritch Blast hits.
  */
 export function buildCombatant(
   sheet: CharacterSheet,
@@ -320,6 +326,15 @@ export function buildCombatant(
   // Patch identity: use the character's actual name and a stable id
   combatant.name = sheet.name;
   combatant.id   = `sheet_${sheet.id}`;
+
+  // Transfer Eldritch Invocations (Warlock-only; undefined for non-Warlocks).
+  // The list is validated by chooseEldritchInvocations() before being stored
+  // on the sheet, so we just pass it through. Empty arrays are normalized to
+  // undefined to match the existing engine convention (hasInvocation helper
+  // treats undefined and [] the same — both return false for any name lookup).
+  if (sheet.eldritchInvocations && sheet.eldritchInvocations.length > 0) {
+    combatant.eldritchInvocations = [...sheet.eldritchInvocations];
+  }
 
   return combatant;
 }

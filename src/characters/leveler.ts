@@ -177,6 +177,63 @@ const WARLOCK_PACT_SLOTS: [number, number][] = [
   /* 20 */ [4, 5],
 ];
 
+/**
+ * Warlock Eldritch Invocations known by level (PHB p.108).
+ * Index = warlock level (1–20). Value = max invocations known.
+ *
+ *   Lv 1:  0   (no invocations yet — feature unlocks at level 2)
+ *   Lv 2:  2   (gain Eldritch Invocations feature, choose 2)
+ *   Lv 3-4: 2
+ *   Lv 5:  3   (+1 invocation)
+ *   Lv 6:  3
+ *   Lv 7:  4   (+1 invocation)
+ *   Lv 8:  4
+ *   Lv 9:  5   (+1 invocation)
+ *   Lv 10-11: 5
+ *   Lv 12: 6   (+1 invocation)
+ *   Lv 13-14: 6
+ *   Lv 15: 7   (+1 invocation)
+ *   Lv 16-17: 7
+ *   Lv 18: 8   (+1 invocation)
+ *   Lv 19-20: 8
+ *
+ * Used by chooseEldritchInvocations() in improvements.ts to enforce the
+ * "max invocations known" cap when the player picks invocations.
+ */
+const WARLOCK_INVOCATION_SLOTS: number[] = [
+  /* 0  */ 0,
+  /* 1  */ 0,
+  /* 2  */ 2,
+  /* 3  */ 2,
+  /* 4  */ 2,
+  /* 5  */ 3,
+  /* 6  */ 3,
+  /* 7  */ 4,
+  /* 8  */ 4,
+  /* 9  */ 5,
+  /* 10 */ 5,
+  /* 11 */ 5,
+  /* 12 */ 6,
+  /* 13 */ 6,
+  /* 14 */ 6,
+  /* 15 */ 7,
+  /* 16 */ 7,
+  /* 17 */ 7,
+  /* 18 */ 8,
+  /* 19 */ 8,
+  /* 20 */ 8,
+];
+
+/**
+ * Return the maximum number of Eldritch Invocations a Warlock of the
+ * given level can know. Returns 0 for level < 2 (the feature unlocks
+ * at Warlock 2). Levels are clamped to 1–20.
+ */
+export function getMaxInvocationSlots(warlockLevel: number): number {
+  const clamped = Math.min(Math.max(Math.floor(warlockLevel), 0), 20);
+  return WARLOCK_INVOCATION_SLOTS[clamped] ?? 0;
+}
+
 /** Classes that contribute fully (1:1) to combined caster level. */
 const FULL_CASTERS = new Set<ClassName>(['Bard','Cleric','Druid','Sorcerer','Wizard']);
 /** Classes that contribute half their levels (rounded down) to combined caster level. */
@@ -1194,5 +1251,6 @@ export {
   HALF_CASTER_SLOTS,
   ARTIFICER_SLOTS,
   WARLOCK_PACT_SLOTS,
+  WARLOCK_INVOCATION_SLOTS,
   computeStandardSlots,
 };
