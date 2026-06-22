@@ -479,6 +479,14 @@ export interface Combatant {
   // undefined.
   classLevels?: Record<string, number>;
 
+  // ── Session 47 Task #29-follow-up-5: Draconic ancestry for Sorcerers ──
+  // Optional. Stores the damage type associated with the Draconic Bloodline
+  // ancestry (e.g. 'fire', 'cold', 'lightning', 'acid', 'poison'). Used by
+  // Elemental Affinity (Draconic Sorcerer 6, PHB p.102) to add CHA mod to
+  // damage of spells matching the ancestry type. Set manually in tests or
+  // by the character builder (future: UI for choosing ancestry at creation).
+  draconicAncestry?: string;
+
   // Position (grid squares; 1 square = 5ft)
   pos: Vec3;
 

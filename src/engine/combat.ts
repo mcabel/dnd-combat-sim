@@ -22,6 +22,7 @@ import {
   effectiveSpeed, rollDie, abilityMod, proficiencyBonus,
   rollDiceString as rollBoomingBladeDice,
   rollAbilityCheck,  // Session 43 Task #26: for rollAbilityCheckReactable
+  elementalAffinityBonus,  // Session 47 Task #29-follow-up-5: Draconic Sorcerer
 } from './utils';
 import {
   chebyshev3D, distanceFt, euclideanDistFt, canReach, estimateMoveCostFt,
@@ -1271,7 +1272,9 @@ export function resolveAttack(
       target.id, save.roll);
 
     if (action.damage) {
-      const dmg = rollDamage(action.damage, false);
+      // Session 47 Task #29-follow-up-5: Elemental Affinity (Draconic Sorcerer 6)
+      // adds CHA mod to damage of spells matching the sorcerer's ancestry type.
+      const dmg = rollDamage(action.damage, false) + elementalAffinityBonus(attacker, action.damageType);
       const actual = save.success ? Math.floor(dmg / 2) : dmg; // half on save success
       const dealt = applyDamageWithTempHP(target, actual, action.damageType);
       // TG-008: Absorb Elements / Hellish Rebuke reaction trigger (XGE p.150 / PHB p.249)
@@ -1317,7 +1320,8 @@ export function resolveAttack(
   // Auto-hit (no hitBonus — e.g. Reaping Scythe, Magic Missile)
   if (action.hitBonus === null) {
     if (action.damage) {
-      const dmg = rollDamage(action.damage, false);
+      // Session 47: Elemental Affinity bonus for auto-hit spells.
+      const dmg = rollDamage(action.damage, false) + elementalAffinityBonus(attacker, action.damageType);
       const dealt = applyDamageWithTempHP(target, dmg, action.damageType);
       // TG-008: Absorb Elements / Hellish Rebuke reaction trigger.
       // (Shield's "blocks Magic Missile" is NOT modelled in v1 — the auto-hit
@@ -1728,6 +1732,18 @@ export function resolveAttack(
 
   if (action.damage) {
     let dmg = rollDamage(action.damage, isCrit);
+
+    // ── Session 47 Task #29-follow-up-5: Elemental Affinity (Draconic Sorcerer 6) ──
+    // PHB p.102: add CHA mod to damage of spells matching draconic ancestry.
+    // Applies to spell attacks (this path). Also wired in the save-spell and
+    // auto-hit paths above. The bonus is flat (NOT dice, so NOT doubled on crit).
+    const eaBonus = elementalAffinityBonus(attacker, action.damageType);
+    if (eaBonus > 0) {
+      dmg += eaBonus;
+      log(state, 'action', attacker.id,
+        `${attacker.name} adds Elemental Affinity bonus (+${eaBonus} ${action.damageType}) to ${target.name}!`,
+        target.id, eaBonus);
+    }
 
     // ── Session 39: Eldritch Invocation — Agonizing Blast ──
     // PHB p.110: "When you cast Eldritch Blast, add your Charisma modifier

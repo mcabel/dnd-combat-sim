@@ -681,6 +681,36 @@ export function effectiveSpeed(c: Combatant): number {
   return speed;
 }
 
+// ---- Elemental Affinity (Draconic Sorcerer 6) ----------------
+
+/**
+ * Returns the CHA modifier bonus for Elemental Affinity (Draconic Sorcerer 6,
+ * PHB p.102): "when you cast a spell that deals damage of the type associated
+ * with your draconic ancestry, you can add your Charisma modifier to that
+ * damage."
+ *
+ * Returns 0 if:
+ *   - The caster doesn't have the 'Elemental Affinity' classFeature
+ *   - The damage type doesn't match the caster's draconicAncestry
+ *   - The caster's CHA mod is ≤ 0 (no bonus to add)
+ *
+ * @param caster      The spellcasting combatant
+ * @param damageType  The spell's damage type (e.g. 'fire', 'cold')
+ * @returns           CHA modifier (≥ 0) to add to the spell's damage roll
+ *
+ * Session 47 Task #29-follow-up-2: wired in the generic 'cast' case and
+ * Fireball's execute function. Future: wire in all bespoke spell execute
+ * functions (Lightning Bolt, Cone of Cold, etc.).
+ */
+export function elementalAffinityBonus(caster: Combatant, damageType: string | null | undefined): number {
+  if (!damageType) return 0;
+  if (!caster.classFeatures?.includes('Elemental Affinity')) return 0;
+  if (!caster.draconicAncestry) return 0;
+  if (caster.draconicAncestry.toLowerCase() !== damageType.toLowerCase()) return 0;
+  const chaMod = abilityMod(caster.cha);
+  return chaMod > 0 ? chaMod : 0;
+}
+
 // ---- Initiative --------------------------------------------
 
 /**
