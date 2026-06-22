@@ -106,6 +106,10 @@ import { removeEffectsFromCaster } from '../engine/spell_effects';
 import { startConcentration } from '../engine/utils';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 import { CONJURE_CELESTIAL_OPTIONS, DEFAULT_CC_OPTION } from '../summons/cr_picker';
+import {
+  pickConjureCelestialSummon,
+  buildSummonCombatant,
+} from '../summons/summon_picker';
 
 // ---- Metadata -----------------------------------------------
 
@@ -444,7 +448,13 @@ export function shouldCast(caster: Combatant, bf: Battlefield): boolean {
  *  1. Consume a spell slot (find the lowest available L7+ slot).
  *  2. Break any existing concentration (safety net).
  *  3. Start concentration on Conjure Celestial.
- *  4. Create the Couatl combatant (built manually, NOT from bestiary).
+ *  4. Create the celestial combatant.
+ *     - Session 41 Task #3: bestiary integration. Tries to pick the
+ *       appropriate celestial from the bestiary based on slot level
+ *       (L7 → Couatl CR 4, L8 → Unicorn CR 5 in MM, L9 → CR 6 — no
+ *       CR 6 celestials in MM, falls back to Couatl).
+ *     - Falls back to the hardcoded createCouatl() if the bestiary is
+ *       not loaded or no matching creature is found.
  *  5. Add to battlefield combatants.
  *  6. Insert into initiative (pendingInitiativeInserts for after-caster insertion).
  *  7. Log the summon.
@@ -463,12 +473,22 @@ export function execute(
   }
   startConcentration(caster, 'Conjure Celestial');
 
-  // v1 simplification: always spawn a Couatl (CR 4). The Couatl stat
-  // block is valid for any L7+ slot per the spell's CR-scaling rule.
-  // A future v2 should pick higher-CR celestials when bestiary loading
-  // is standardised (no CR 5-6 celestials exist in the MM, so v2 would
-  // need to pull from VGM/MTF/etc.).
-  const summon = createCouatl(caster, slotLevel);
+  // Session 41 Task #3: bestiary-driven summon selection.
+  // L7: Couatl (canonical, only CR 4 celestial in MM).
+  // L8: Unicorn (CR 5 celestial in MM) — NEW in Session 41.
+  // L9: no CR 6 celestials in MM; picker returns null → fall back to Couatl.
+  // L7 also returns null if bestiary isn't loaded → fall back to createCouatl.
+  const pick = pickConjureCelestialSummon(slotLevel);
+  let summon: Combatant;
+  let summonName: string;
+  if (pick) {
+    summon = buildSummonCombatant(pick, caster, 'Conjure Celestial');
+    summonName = pick.name;
+  } else {
+    // Fallback: hardcoded Couatl stat block (v1 behavior).
+    summon = createCouatl(caster, slotLevel);
+    summonName = 'Couatl';
+  }
 
   // Add to battlefield
   state.battlefield.combatants.set(summon.id, summon);
@@ -484,7 +504,7 @@ export function execute(
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Conjure Celestial (slot L${slotLevel})! Couatl appears with ${summon.maxHP} HP, AC ${summon.ac}.`,
+    `${caster.name} casts Conjure Celestial (slot L${slotLevel})! ${summonName} appears with ${summon.maxHP} HP, AC ${summon.ac}.`,
     summon.id,
   );
 }
