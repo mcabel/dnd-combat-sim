@@ -238,6 +238,19 @@ export function rollSave(
   const effectiveTotal = listedSaveBonus !== undefined
     ? roll + listedSaveBonus + biBonus + blessBonus - banePenalty + wbBonus - mindSliverPenalty + resistanceBonus
     : total;
+
+  // ── Session 52 Creature Megabatch Batch 3b: Legendary Resistance ──
+  // MM p.11: "If the [creature] fails a saving throw, it can choose to
+  // succeed instead." Used only by legendary creatures (28 in MM). v1
+  // simplification: the creature ALWAYS spends a use on a failed save
+  // (no AI judgment of save-significance). Remaining uses reset only on a
+  // long rest (per-combat for monsters in v1).
+  const failed = effectiveTotal < dc;
+  if (failed && combatant.legendaryResistance && combatant.legendaryResistance.remaining > 0) {
+    combatant.legendaryResistance.remaining -= 1;
+    return { roll, total: dc, success: true };  // forced success — total set to dc exactly
+  }
+
   return { roll, total: effectiveTotal, success: effectiveTotal >= dc };
 }
 
@@ -685,6 +698,31 @@ export function resetBudget(c: Combatant): void {
   };
   // Legendary action pool resets at start of own turn (MM p.11)
   c.legendaryActionPool = c.legendaryActionPoolMax;
+
+  // ── Session 52 Creature Megabatch Batch 3a: Recharge ──
+  // MM p.8 / MM p.11: at the start of each of its turns, a creature rolls 1d6
+  // for each Recharge action; if the roll meets the threshold (min), the
+  // action recharges (becomes available again this turn). rollRecharge()
+  // mutates each Action.recharge.recharged in place.
+  rollRecharge(c);
+}
+
+/**
+ * Session 52 Creature Megabatch Batch 3a: roll 1d6 per Recharge action at the
+ * start of the creature's turn. Actions whose roll meets the threshold (min)
+ * become available (`recharged = true`). Actions below the threshold stay
+ * unavailable until next turn. Actions without a `recharge` field are skipped.
+ *
+ * Mutates `c.actions` in place. Called by resetBudget() so it fires at the
+ * start of every one of this creature's turns (resetBudget is invoked from
+ * combat.ts at the start-of-turn hook).
+ */
+export function rollRecharge(c: Combatant): void {
+  for (const a of c.actions) {
+    if (!a.recharge) continue;
+    const d6 = rollDie(6);   // 1d6
+    a.recharge.recharged = d6 >= a.recharge.min;
+  }
 }
 
 /** Reset only the reaction (used when "reaction refund" scenarios arise). */

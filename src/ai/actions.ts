@@ -9,6 +9,23 @@ import { canReach, livingEnemiesOf, adjacentEnemyCount, distanceFt } from '../en
 import { expectedDamage, isBloodied, unarmedStrikeAction, hasAmmo, shouldGrapple, rollGrappleContest, rollShoveContest, makeImprovisedUnarmed, makeImprovisedWeapon, canGrappleOrShoveTarget } from '../engine/utils';
 import { hasSpellSlot } from './resources';
 
+// ---- Recharge availability (Session 52 Batch 3a) ------------
+
+/**
+ * True when the action is available THIS turn.
+ *
+ * Session 52 Batch 3a: a Recharge action (Action.recharge set) is only
+ * available when `recharge.recharged === true`. The engine's resetBudget()
+ * rolls 1d6 per recharge action at the start of each turn and sets
+ * `recharged` accordingly; combat.ts sets `recharged = false` when the
+ * action is dispatched. Actions without a `recharge` field are always
+ * available (subject to other constraints like ammo / spell slots).
+ */
+export function isActionAvailable(a: Action): boolean {
+  if (a.recharge && !a.recharge.recharged) return false;
+  return true;
+}
+
 // ---- Best single-target attack for a given target -----------
 
 /**
@@ -26,6 +43,7 @@ export function bestAttackAction(
   const candidates = self.actions.filter(a =>
     !a.isMultiattack &&
     a.costType === 'action' &&
+    isActionAvailable(a) &&
     a.attackType !== null &&
     (reachable || a.attackType === 'ranged' || a.attackType === 'spell') &&
     // Ammo check: skip ranged weapons when out of ammo (fall back to melee)
@@ -52,14 +70,14 @@ export function bestAttackAction(
  * never for Opportunity Attacks.
  */
 export function getMultiattack(self: Combatant): Action | null {
-  return self.actions.find(a => a.isMultiattack && a.costType === 'action') ?? null;
+  return self.actions.find(a => a.isMultiattack && a.costType === 'action' && isActionAvailable(a)) ?? null;
 }
 
 /**
  * Best AoE action, if any. Returns null if no AoE action exists.
  */
 export function bestAoEAction(self: Combatant): Action | null {
-  const aoes = self.actions.filter(a => a.isAoE && a.costType === 'action');
+  const aoes = self.actions.filter(a => a.isAoE && a.costType === 'action' && isActionAvailable(a));
   if (aoes.length === 0) return null;
   // Prefer highest average damage
   return aoes.reduce((best, a) =>
@@ -71,7 +89,7 @@ export function bestAoEAction(self: Combatant): Action | null {
  * Best control action, if any.
  */
 export function bestControlAction(self: Combatant): Action | null {
-  const controls = self.actions.filter(a => a.isControl && a.costType === 'action');
+  const controls = self.actions.filter(a => a.isControl && a.costType === 'action' && isActionAvailable(a));
   return controls[0] ?? null;
 }
 
@@ -269,6 +287,7 @@ export function selectAction(
     // (slotLevel > 0 spells are filtered out if no slots remain — checked in bestRangedAction)
     const rangedCandidates = self.actions.filter(
       a => a.costType === 'action' &&
+        isActionAvailable(a) &&
         (a.attackType === 'ranged' || a.attackType === 'spell' || a.attackType === 'save') &&
         canReach(self, target, a) &&
         !(a.slotLevel && a.slotLevel > 0 && !hasSpellSlot(self))

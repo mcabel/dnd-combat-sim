@@ -206,6 +206,40 @@ function parseDamageType(text: string): DamageType | null {
 function detectConcentration(text: string): boolean {
   return /\bconcentration\b/i.test(text);
 }
+
+/**
+ * Session 52 Batch 3a: detect a {@recharge N} or {@recharge} tag in an
+ * action name. Returns { min, recharged } where min is the threshold (default
+ * 6 for bare {@recharge}) and recharged=true (available on spawn). Returns
+ * undefined when no recharge tag is present.
+ */
+function parseRechargeTag(actionName: string): { min: number; recharged: boolean } | undefined {
+  const m = actionName.match(/\{@recharge(?:\s+(\d+))?\}/);
+  if (!m) return undefined;
+  const min = m[1] ? parseInt(m[1], 10) : 6;  // bare {@recharge} = Recharge 6
+  return { min, recharged: true };            // available on first turn
+}
+
+/** Strip the {@recharge ...} tag (and surrounding whitespace) from a name. */
+function stripRechargeTag(actionName: string): string {
+  return actionName.replace(/\s*\{@recharge[^}]*\}\s*/g, ' ').trim();
+}
+
+/**
+ * Session 52 Batch 3b: parse "Legendary Resistance (N/Day)" trait name into
+ * { max: N, remaining: N }. Returns undefined if the trait name doesn't match.
+ */
+function parseLegendaryResistance(traitNames: string[]): { max: number; remaining: number } | undefined {
+  for (const name of traitNames) {
+    const m = name.match(/Legendary\s+Resistance\s*\((\d+)\s*\/\s*Day\)/i);
+    if (m) {
+      const max = parseInt(m[1], 10);
+      return { max, remaining: max };
+    }
+  }
+  return undefined;
+}
+
 export function parseAction(
   raw: RawAction,
   costType: Action['costType'] = 'action',
@@ -220,6 +254,12 @@ export function parseAction(
   const isControl = detectControl(description);
   const damageType = parseDamageType(description);
   const isMultiattack = /multiattack/i.test(raw.name);
+
+  // Session 52 Batch 3a: strip {@recharge N} from the display name and
+  // record the recharge threshold on the Action. The tag is NOT part of
+  // the canonical action name (MM prints "Fire Breath (Recharge 5-6)").
+  const cleanName = stripRechargeTag(raw.name);
+  const recharge = parseRechargeTag(raw.name);
 
   // Primary damage: first {@damage ...} tag, then fallback to plain dice pattern
   let damage: DiceExpression | null = null;
@@ -236,7 +276,7 @@ export function parseAction(
   if (save) { saveDC = save.dc; saveAbility = save.ability; }
 
   return {
-    name: raw.name,
+    name: cleanName,
     isMultiattack,
     attackType,
     reach,
@@ -252,6 +292,7 @@ export function parseAction(
     costType,
     legendaryCost,
     description,
+    recharge,
   };
 }
 
@@ -755,6 +796,8 @@ export function monsterToCombatant(
 
   const traits: string[] = (raw.trait ?? []).map(t => t.name);
   const legendaryPoolMax = legendaryActions.length > 0 ? 3 : 0;
+  // Session 52 Batch 3b: parse "Legendary Resistance (N/Day)" trait
+  const legendaryResistance = parseLegendaryResistance(traits);
 
   return {
     id: nextId(raw.name),
@@ -782,6 +825,7 @@ export function monsterToCombatant(
     legendaryActions,
     legendaryActionPool: legendaryPoolMax,
     legendaryActionPoolMax: legendaryPoolMax,
+    legendaryResistance,   // Session 52 Batch 3b: undefined for non-legendary creatures
     budget: freshBudget(speeds.ground),
     conditions: new Set(),
     aiProfile: resolvedProfile,

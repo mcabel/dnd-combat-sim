@@ -302,6 +302,26 @@ export interface Action {
    * cover blocking per PHB line-of-effect rules.
    */
   bypassesCover?: boolean;
+
+  /**
+   * ── Session 52 Creature Megabatch Batch 3: Recharge ──
+   *
+   * MM p.8 / MM p.11: "Recharge X-Y" or "Recharge X" — after a creature uses
+   * a Recharge action, it can't use that action again until a certain die
+   * roll is met at the START of its turn. The roll is 1d6; the action
+   * recharges on a roll of `min` or higher. Bare "{@recharge}" (no number)
+   * means Recharge 6 (only on a 6).
+   *
+   * `recharge` is set by the parser when an action name contains a
+   * `{@recharge N}` or `{@recharge}` tag (the tag is stripped from `name`).
+   * `recharged` tracks availability: true on spawn (available immediately),
+   * set false on use, set true again at start-of-turn when the d6 roll meets
+   * the threshold. The AI planner skips actions where `recharge && !recharged`.
+   *
+   * 84 MM creatures have recharge actions (dragons' breath weapons, mephits'
+   * breath, yeti Cold Breath, etc.).
+   */
+  recharge?: { min: number; recharged: boolean };
 }
 
 // ---- LegendaryAction ----------------------------------------
@@ -519,6 +539,23 @@ export interface Combatant {
   legendaryActions: LegendaryAction[];
   legendaryActionPool: number;            // resets at start of own turn
   legendaryActionPoolMax: number;
+
+  /**
+   * ── Session 52 Creature Megabatch Batch 3: Legendary Resistance ──
+   *
+   * MM p.11: "Legendary Resistance (N/Day). If the [creature] fails a saving
+   * throw, it can choose to succeed instead." Used only by legendary creatures
+   * (28 in MM: ancient/adult dragons, liches, kraken, tarrasque, etc.).
+   *
+   * Parsed from a trait named "Legendary Resistance (N/Day)" — N extracted
+   * into `max`. `remaining` decrements on use; resets to `max` only on a
+   * long rest (v1: per-combat only — monsters don't short-rest in combat).
+   *
+   * rollSave() consults this when the save FAILS: if remaining > 0, the
+   * creature (v1 simplification: always, on any failed save) spends a use to
+   * force success. Emit a log line so the result is visible.
+   */
+  legendaryResistance?: { max: number; remaining: number };
 
   // Turn resources
   budget: ActionBudget;
