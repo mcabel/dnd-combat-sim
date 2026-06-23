@@ -240,6 +240,57 @@ function parseLegendaryResistance(traitNames: string[]): { max: number; remainin
   return undefined;
 }
 
+/**
+ * Session 52 Batch 4b: parse a Regeneration trait. Scans the trait entries
+ * (flattened to text) for:
+ *   - "regains N hit points" → amount = N
+ *   - "takes [acid or fire|radiant or ...] damage, this trait doesn't function"
+ *     → stopTypes = [acid, fire] (lowercased DamageType strings)
+ *
+ * Returns undefined if no "regains N hit points" pattern is found. Creatures
+ * without a stop clause (e.g. Oni: just "regains 10 hit points") get
+ * stopTypes: []. The Vampire's "holy water" stop clause is mapped to 'radiant'
+ * (holy water deals radiant damage per DMG) — v1 simplification documented in
+ * the worklog.
+ */
+function parseRegeneration(
+  traits: { name: string; entries: (string | object)[] }[],
+): { amount: number; stopTypes: import('../types/core').DamageType[]; suppressedNextTurn: boolean } | undefined {
+  const VALID_DAMAGE_TYPES: ReadonlySet<string> = new Set<import('../types/core').DamageType>([
+    'acid', 'bludgeoning', 'cold', 'fire', 'force', 'lightning',
+    'necrotic', 'piercing', 'poison', 'psychic', 'radiant', 'slashing', 'thunder',
+  ]);
+  for (const t of traits) {
+    if (!/Regeneration/i.test(t.name)) continue;
+    const text = flattenEntries(t.entries);
+    // "regains N hit points"
+    const amtMatch = text.match(/regains\s+(\d+)\s+hit\s+points/i);
+    if (!amtMatch) continue;
+    const amount = parseInt(amtMatch[1], 10);
+
+    // Stop clause: find the sentence containing "doesn't function" (or "does not
+    // function"), then scan it for damage-type keywords. This handles both the
+    // Troll form ("takes acid or fire damage, this trait doesn't function") and
+    // the Vampire form ("takes radiant damage or damage from holy water, this
+    // trait doesn't function"). "Holy water" is mapped to 'radiant' (it deals
+    // radiant damage per DMG).
+    const stopTypes: import('../types/core').DamageType[] = [];
+    const stopSentenceMatch = text.match(/[^.]*?(?:doesn'?t|does\s+not)\s+function[^.]*/i);
+    if (stopSentenceMatch) {
+      const stopSentence = stopSentenceMatch[0].toLowerCase();
+      // Map "holy water" → "radiant" before keyword scanning
+      const normalized = stopSentence.replace(/holy\s+water/g, 'radiant');
+      for (const dt of VALID_DAMAGE_TYPES) {
+        if (new RegExp(`\\b${dt}\\b`).test(normalized)) {
+          stopTypes.push(dt as import('../types/core').DamageType);
+        }
+      }
+    }
+    return { amount, stopTypes, suppressedNextTurn: false };
+  }
+  return undefined;
+}
+
 export function parseAction(
   raw: RawAction,
   costType: Action['costType'] = 'action',
@@ -798,6 +849,8 @@ export function monsterToCombatant(
   const legendaryPoolMax = legendaryActions.length > 0 ? 3 : 0;
   // Session 52 Batch 3b: parse "Legendary Resistance (N/Day)" trait
   const legendaryResistance = parseLegendaryResistance(traits);
+  // Session 52 Batch 4b: parse Regeneration trait (amount + stop-clause types)
+  const regeneration = parseRegeneration(raw.trait ?? []);
 
   return {
     id: nextId(raw.name),
@@ -826,6 +879,7 @@ export function monsterToCombatant(
     legendaryActionPool: legendaryPoolMax,
     legendaryActionPoolMax: legendaryPoolMax,
     legendaryResistance,   // Session 52 Batch 3b: undefined for non-legendary creatures
+    regeneration,          // Session 52 Batch 4b: undefined for non-regenerating creatures
     budget: freshBudget(speeds.ground),
     conditions: new Set(),
     aiProfile: resolvedProfile,

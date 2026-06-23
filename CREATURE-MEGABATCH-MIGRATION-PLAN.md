@@ -401,8 +401,8 @@ Documented for future sessions. NOT in scope for the immediate megabatch.
 | 1 | ✅ DONE | 52 | 2ee8600 | defenses (immune/resist/vulnerable/conditionImmune); 92 new test assertions; fixed applyDamageWithTempHP vuln-then-resist bug |
 | 2 | ✅ DONE | 52 | ea9a72d | saves/senses/passive; 58 new test assertions; rollSave uses listed save bonus |
 | 3 | ✅ DONE | 52 | 3fb8be8 | recharge + leg-resist; 52 new test assertions; 84 recharge + 28 LR creatures |
-| 4a | NOT STARTED | — | — | Magic Resistance |
-| 4b | NOT STARTED | — | — | Regeneration |
+| 4a | ✅ DONE | 52 | (pending) | Magic Resistance (65 creatures); rollSave grants advantage |
+| 4b | ✅ DONE | 52 | (pending) | Regeneration (13 creatures); start-of-turn heal + stop-clause suppression |
 | 4c | NOT STARTED | — | — | Magic Weapons |
 | 4d | NOT STARTED | — | — | Death Burst |
 | 4e | NOT STARTED | — | — | remaining traits |

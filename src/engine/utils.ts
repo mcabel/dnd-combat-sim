@@ -164,7 +164,18 @@ export function rollSave(
   // disadvantage — modeled via the ability_disadvantage ActiveEffect
   // (queried by hasAbilityDisadvantage).
   const abilityDisadvantage = hasAbilityDisadvantage(combatant, ability);
-  const hasAdvantage   = selfSave.advantage   || allSave.advantage   || rageStrAdvantage    || enlargeStrAdvantage;
+
+  // ── Session 52 Creature Megabatch Batch 4a: Magic Resistance ──
+  // MM p.11 / various: "The [creature] has advantage on saving throws against
+  // spells and other magical effects." v1 simplification: the engine does not
+  // tag saves by source (spell vs non-spell), so we grant advantage on ALL
+  // saves for creatures with the 'Magic Resistance' trait. This is slightly
+  // more generous than canon (a non-magical poison save would canonically
+  // NOT get advantage) but covers the common case (most monster saves in
+  // combat ARE vs spells/magical effects). Documented in the migration plan.
+  const magicResistanceAdvantage = combatant.traits.includes('Magic Resistance');
+
+  const hasAdvantage   = selfSave.advantage   || allSave.advantage   || rageStrAdvantage    || enlargeStrAdvantage || magicResistanceAdvantage;
   const hasDisadvantage = combatant.conditions.has('poisoned') // PHB Appendix A: poisoned → disadv on saves
     || selfSave.disadvantage || allSave.disadvantage
     || enlargeStrDisadvantage || abilityDisadvantage
@@ -705,6 +716,26 @@ export function resetBudget(c: Combatant): void {
   // action recharges (becomes available again this turn). rollRecharge()
   // mutates each Action.recharge.recharged in place.
   rollRecharge(c);
+
+  // ── Session 52 Creature Megabatch Batch 4b: Regeneration ──
+  // MM p.11: "The [creature] regains N hit points at the start of its turn if
+  // it has at least 1 hit point." If suppressedNextTurn is true (creature took
+  // a stop-clause damage type last turn), skip regen this turn and clear the
+  // flag. Heal min(amount, maxHP - currentHP) — no overheal.
+  if (c.regeneration && c.currentHP > 0 && c.currentHP < c.maxHP) {
+    if (!c.regeneration.suppressedNextTurn) {
+      const heal = Math.min(c.regeneration.amount, c.maxHP - c.currentHP);
+      c.currentHP += heal;
+    } else {
+      // Suppressed this turn; clear the flag so regen resumes next turn
+      // (unless re-suppressed by another stop-type hit).
+      c.regeneration.suppressedNextTurn = false;
+    }
+  } else if (c.regeneration && c.regeneration.suppressedNextTurn) {
+    // Creature is at full HP or dead, but still clear the suppression flag
+    // so it doesn't linger indefinitely.
+    c.regeneration.suppressedNextTurn = false;
+  }
 }
 
 /**
@@ -1205,6 +1236,15 @@ export function applyDamageWithTempHP(
       BLADE_WARD_PHYSICAL_TYPES.includes(damageType));
   if (hasResistance) {
     effective = Math.floor(effective / 2);
+  }
+
+  // ── Session 52 Creature Megabatch Batch 4b: Regeneration suppression ──
+  // If this damage type is in the creature's regen stopTypes (e.g. acid/fire
+  // for trolls, radiant for vampires), set suppressedNextTurn so the start-
+  // of-turn regen in resetBudget() skips one turn. Per MM: "this trait
+  // doesn't function at the start of the [creature]'s next turn."
+  if (damageType != null && target.regeneration && target.regeneration.stopTypes.includes(damageType)) {
+    target.regeneration.suppressedNextTurn = true;
   }
 
   let remaining = effective;

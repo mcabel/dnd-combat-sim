@@ -557,6 +557,23 @@ export interface Combatant {
    */
   legendaryResistance?: { max: number; remaining: number };
 
+  /**
+   * ── Session 52 Creature Megabatch Batch 4b: Regeneration ──
+   *
+   * MM p.11 / various: "The [creature] regains N hit points at the start of
+   * its turn if it has at least 1 hit point." Some creatures have a stop
+   * clause ("If the troll takes acid or fire damage, this trait doesn't
+   * function at the start of the troll's next turn").
+   *
+   * `amount` = HP regained per turn. `stopTypes` = damage types that suppress
+   * regen for one turn (e.g. ['acid','fire'] for trolls). `suppressedNextTurn`
+   * is set true when the creature takes a stop-type damage; resetBudget()
+   * checks it at start-of-turn and skips regen if true, then clears it.
+   *
+   * 13 MM creatures (all slaad, trolls, oni, vampire, etc.).
+   */
+  regeneration?: { amount: number; stopTypes: DamageType[]; suppressedNextTurn: boolean };
+
   // Turn resources
   budget: ActionBudget;
 
