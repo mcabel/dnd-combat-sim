@@ -58,6 +58,28 @@ export interface Raw5etoolsMonster {
     headerEntries?: string[];  // may contain "is a Nth-level spellcaster"
     [k: string]: unknown;
   }>;
+  // ── Session 52 Creature Megabatch Batch 1: damage defenses ──
+  // Each is an array of EITHER a plain damage-type string ('fire') OR an
+  // object with an inner same-named array (`{immune:['bludgeoning','piercing',
+  // 'slashing'], note:'from nonmagical attacks', cond:true}`) OR an object
+  // with a `special` field (`{special:'damage from spells'}`). The helper
+  // parseDamageDefenseList() below handles all three shapes (mirrors
+  // scripts/creature_analysis.ts defenseFieldPresent()).
+  immune?: Array<string | { [k: string]: unknown }>;
+  resist?: Array<string | { [k: string]: unknown }>;
+  vulnerable?: Array<string | { [k: string]: unknown }>;
+  // conditionImmune is always a string[] in MM data (verified across all 453
+  // creatures by creature_analysis.ts), but we accept the same permissive
+  // shape for forward-compat with future sourcebooks.
+  conditionImmune?: Array<string | { [k: string]: unknown }>;
+  // ── Session 52 Creature Megabatch Batch 2: saves/skills/senses ──
+  // save/skill: { ability: "+N" } maps (e.g. { "con":"+13", "dex":"+6" }).
+  // senses: string array like ["blindsight 60 ft.", "darkvision 120 ft."].
+  // passive: integer passive perception score.
+  save?: Record<string, string>;
+  skill?: Record<string, string>;
+  senses?: string[];
+  passive?: number;
 }
 
 // ---- Dice parsing -------------------------------------------
@@ -184,6 +206,91 @@ function parseDamageType(text: string): DamageType | null {
 function detectConcentration(text: string): boolean {
   return /\bconcentration\b/i.test(text);
 }
+
+/**
+ * Session 52 Batch 3a: detect a {@recharge N} or {@recharge} tag in an
+ * action name. Returns { min, recharged } where min is the threshold (default
+ * 6 for bare {@recharge}) and recharged=true (available on spawn). Returns
+ * undefined when no recharge tag is present.
+ */
+function parseRechargeTag(actionName: string): { min: number; recharged: boolean } | undefined {
+  const m = actionName.match(/\{@recharge(?:\s+(\d+))?\}/);
+  if (!m) return undefined;
+  const min = m[1] ? parseInt(m[1], 10) : 6;  // bare {@recharge} = Recharge 6
+  return { min, recharged: true };            // available on first turn
+}
+
+/** Strip the {@recharge ...} tag (and surrounding whitespace) from a name. */
+function stripRechargeTag(actionName: string): string {
+  return actionName.replace(/\s*\{@recharge[^}]*\}\s*/g, ' ').trim();
+}
+
+/**
+ * Session 52 Batch 3b: parse "Legendary Resistance (N/Day)" trait name into
+ * { max: N, remaining: N }. Returns undefined if the trait name doesn't match.
+ */
+function parseLegendaryResistance(traitNames: string[]): { max: number; remaining: number } | undefined {
+  for (const name of traitNames) {
+    const m = name.match(/Legendary\s+Resistance\s*\((\d+)\s*\/\s*Day\)/i);
+    if (m) {
+      const max = parseInt(m[1], 10);
+      return { max, remaining: max };
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Session 52 Batch 4b: parse a Regeneration trait. Scans the trait entries
+ * (flattened to text) for:
+ *   - "regains N hit points" → amount = N
+ *   - "takes [acid or fire|radiant or ...] damage, this trait doesn't function"
+ *     → stopTypes = [acid, fire] (lowercased DamageType strings)
+ *
+ * Returns undefined if no "regains N hit points" pattern is found. Creatures
+ * without a stop clause (e.g. Oni: just "regains 10 hit points") get
+ * stopTypes: []. The Vampire's "holy water" stop clause is mapped to 'radiant'
+ * (holy water deals radiant damage per DMG) — v1 simplification documented in
+ * the worklog.
+ */
+function parseRegeneration(
+  traits: { name: string; entries: (string | object)[] }[],
+): { amount: number; stopTypes: import('../types/core').DamageType[]; suppressedNextTurn: boolean } | undefined {
+  const VALID_DAMAGE_TYPES: ReadonlySet<string> = new Set<import('../types/core').DamageType>([
+    'acid', 'bludgeoning', 'cold', 'fire', 'force', 'lightning',
+    'necrotic', 'piercing', 'poison', 'psychic', 'radiant', 'slashing', 'thunder',
+  ]);
+  for (const t of traits) {
+    if (!/Regeneration/i.test(t.name)) continue;
+    const text = flattenEntries(t.entries);
+    // "regains N hit points"
+    const amtMatch = text.match(/regains\s+(\d+)\s+hit\s+points/i);
+    if (!amtMatch) continue;
+    const amount = parseInt(amtMatch[1], 10);
+
+    // Stop clause: find the sentence containing "doesn't function" (or "does not
+    // function"), then scan it for damage-type keywords. This handles both the
+    // Troll form ("takes acid or fire damage, this trait doesn't function") and
+    // the Vampire form ("takes radiant damage or damage from holy water, this
+    // trait doesn't function"). "Holy water" is mapped to 'radiant' (it deals
+    // radiant damage per DMG).
+    const stopTypes: import('../types/core').DamageType[] = [];
+    const stopSentenceMatch = text.match(/[^.]*?(?:doesn'?t|does\s+not)\s+function[^.]*/i);
+    if (stopSentenceMatch) {
+      const stopSentence = stopSentenceMatch[0].toLowerCase();
+      // Map "holy water" → "radiant" before keyword scanning
+      const normalized = stopSentence.replace(/holy\s+water/g, 'radiant');
+      for (const dt of VALID_DAMAGE_TYPES) {
+        if (new RegExp(`\\b${dt}\\b`).test(normalized)) {
+          stopTypes.push(dt as import('../types/core').DamageType);
+        }
+      }
+    }
+    return { amount, stopTypes, suppressedNextTurn: false };
+  }
+  return undefined;
+}
+
 export function parseAction(
   raw: RawAction,
   costType: Action['costType'] = 'action',
@@ -198,6 +305,12 @@ export function parseAction(
   const isControl = detectControl(description);
   const damageType = parseDamageType(description);
   const isMultiattack = /multiattack/i.test(raw.name);
+
+  // Session 52 Batch 3a: strip {@recharge N} from the display name and
+  // record the recharge threshold on the Action. The tag is NOT part of
+  // the canonical action name (MM prints "Fire Breath (Recharge 5-6)").
+  const cleanName = stripRechargeTag(raw.name);
+  const recharge = parseRechargeTag(raw.name);
 
   // Primary damage: first {@damage ...} tag, then fallback to plain dice pattern
   let damage: DiceExpression | null = null;
@@ -214,7 +327,7 @@ export function parseAction(
   if (save) { saveDC = save.dc; saveAbility = save.ability; }
 
   return {
-    name: raw.name,
+    name: cleanName,
     isMultiattack,
     attackType,
     reach,
@@ -230,6 +343,7 @@ export function parseAction(
     costType,
     legendaryCost,
     description,
+    recharge,
   };
 }
 
@@ -276,6 +390,218 @@ function parseSpeeds(speed: RawSpeed | undefined): {
     swim: speed.swim ?? null,
     burrow: speed.burrow ?? null,
   };
+}
+
+// ---- Defense field parsers (Session 52 Batch 1) -------------
+
+/**
+ * The set of damage types the engine recognises. Used to validate strings
+ * parsed from 5etools defense arrays before they enter a `DamageType[]`
+ * field — anything else (typos, future sourcebook additions, or damage-type
+ * qualifiers like "from nonmagical attacks") is silently dropped.
+ */
+const VALID_DAMAGE_TYPES: ReadonlySet<string> = new Set<DamageType>([
+  'acid', 'bludgeoning', 'cold', 'fire', 'force', 'lightning',
+  'necrotic', 'piercing', 'poison', 'psychic', 'radiant', 'slashing', 'thunder',
+]);
+
+/**
+ * Parse a 5etools damage-defense field (immune / resist / vulnerable) into a
+ * `DamageType[]`. Handles every shape observed across all 453 creatures
+ * (mirrors `defenseFieldPresent()` in scripts/creature_analysis.ts):
+ *
+ *   1. Plain string array:       `["fire"]`
+ *   2. Object with inner array:  `[{ immune:["bludgeoning","piercing","slashing"],
+ *                                    note:"from nonmagical attacks", cond:true }]`
+ *                                (the inner array key matches `fieldName`)
+ *   3. Object with `special`:    `[{ special:"damage from spells" }]`
+ *                                (rare — v1 SKIPS these; the engine has no way
+ *                                to enumerate the matched damage types)
+ *
+ * v1 simplification — conditional defenses (the `cond: true` flag paired with
+ * a note like "from nonmagical attacks" / "that aren't silvered"): applied
+ * UNCONDITIONALLY in v1. Honouring the "nonmagical only" condition requires
+ * an `isNonmagical` flag on incoming attacks — deferred to Batch 4c Magic
+ * Weapons, which adds `attacksAreMagical?: boolean` to Combatant and updates
+ * applyDamageWithTempHP to skip conditional defenses for magical attacks.
+ *
+ * @param rawField   The raw 5etools field value (e.g. `raw.immune`).
+ * @param fieldName  The field's own name ('immune' | 'resist' | 'vulnerable')
+ *                   — used to find the inner array on object entries that use
+ *                   the same key.
+ */
+function parseDamageDefenseList(
+  rawField: Raw5etoolsMonster['immune'],
+  fieldName: 'immune' | 'resist' | 'vulnerable',
+): DamageType[] {
+  if (!rawField || !Array.isArray(rawField) || rawField.length === 0) {
+    return [];
+  }
+  const out: DamageType[] = [];
+  for (const entry of rawField) {
+    if (typeof entry === 'string') {
+      // Plain damage-type string (e.g. "fire").
+      const t = entry.toLowerCase();
+      if (VALID_DAMAGE_TYPES.has(t)) {
+        out.push(t as DamageType);
+      }
+      // else: silently drop unknown strings (5etools occasionally uses tags
+      // we don't model, e.g. "psychic" is valid but "force" qualifies).
+    } else if (entry && typeof entry === 'object') {
+      // Object form — look for an inner array under the same key as the
+      // outer field (e.g. immune:[...] inside an entry of raw.immune).
+      const innerArr = (entry as Record<string, unknown>)[fieldName];
+      if (Array.isArray(innerArr)) {
+        for (const inner of innerArr) {
+          if (typeof inner === 'string') {
+            const t = inner.toLowerCase();
+            if (VALID_DAMAGE_TYPES.has(t)) {
+              out.push(t as DamageType);
+            }
+          }
+        }
+      }
+      // Object form with `special` (e.g. {special:"damage from spells"}):
+      // skipped — no way to enumerate the matched types in v1. Documented
+      // in CREATURE-MEGABATCH-MIGRATION-PLAN.md Batch 1.
+      // Unknown object shapes are also silently dropped (the analysis script
+      // reported 0 unparseable shapes across all 453 creatures, so this is
+      // purely defensive).
+    }
+  }
+  // Dedupe (a creature may legitimately list both "fire" plain and inside a
+  // conditional object form).
+  return Array.from(new Set(out));
+}
+
+/**
+ * Parse a 5etools `conditionImmune` field into an array of lowercased
+ * condition-name strings. Handles both the canonical string-array shape
+ * (`["charmed","frightened"]`) and the object-with-inner-array shape used by
+ * some 5etools entries (`[{conditionImmune:["charmed","frightened"]}]`),
+ * for forward-compatibility with future sourcebooks even though MM data is
+ * always the plain string-array form (verified across all 453 creatures).
+ *
+ * Returned names are lowercased to match the engine's `Condition` type
+ * strings ('charmed', 'frightened', 'paralyzed', etc.). Unknown strings are
+ * still included — engine's addCondition() checks `conditionImmunities`
+ * before validating the condition name, so unknown-immune entries are
+ * harmless (they just never match a real Condition).
+ */
+function parseConditionImmune(
+  rawField: Raw5etoolsMonster['conditionImmune'],
+): string[] {
+  if (!rawField || !Array.isArray(rawField) || rawField.length === 0) {
+    return [];
+  }
+  const out: string[] = [];
+  for (const entry of rawField) {
+    if (typeof entry === 'string') {
+      out.push(entry.toLowerCase());
+    } else if (entry && typeof entry === 'object') {
+      // Forward-compat: object form `{conditionImmune:[...]}` (none in MM
+      // data today, but the parallel immune/resist/vulnerable fields use it).
+      const innerArr = (entry as Record<string, unknown>)['conditionImmune'];
+      if (Array.isArray(innerArr)) {
+        for (const inner of innerArr) {
+          if (typeof inner === 'string') out.push(inner.toLowerCase());
+        }
+      }
+      // `special` and other object shapes: skipped (no condition name to
+      // extract).
+    }
+  }
+  return Array.from(new Set(out));
+}
+
+// ---- Save / skill / senses parsers (Session 52 Batch 2) ----
+
+/** Map 5etools ability keys to our AbilityScore union. */
+const ABILITY_KEY_MAP: Record<string, import('../types/core').AbilityScore> = {
+  str: 'str', strength: 'str',
+  dex: 'dex', dexterity: 'dex',
+  con: 'con', constitution: 'con',
+  int: 'int', intelligence: 'int',
+  wis: 'wis', wisdom: 'wis',
+  cha: 'cha', charisma: 'cha',
+};
+
+/**
+ * Parse a 5etools `save` field (`{ "dex":"+6", "con":"+13", ... }`) into a
+ * per-ability bonus map. The values are the FULL listed save bonus (ability
+ * mod + proficiency already folded in) — rollSave() uses this total directly
+ * instead of recomputing abilityMod + profBonus(CR).
+ *
+ * Keys may be full ability names ("dexterity") or 3-letter codes ("dex");
+ * both appear in 5etools data. Values are signed-int strings ("+6", "-1").
+ */
+function parseSaves(
+  rawField: Raw5etoolsMonster['save'],
+): Partial<Record<import('../types/core').AbilityScore, number>> {
+  if (!rawField || typeof rawField !== 'object') return {};
+  const out: Partial<Record<import('../types/core').AbilityScore, number>> = {};
+  for (const [key, val] of Object.entries(rawField)) {
+    const ability = ABILITY_KEY_MAP[key.toLowerCase()];
+    if (!ability) continue;            // unknown key — skip
+    const n = parseInt(String(val), 10);
+    if (!isNaN(n)) out[ability] = n;
+  }
+  return out;
+}
+
+/**
+ * Parse a 5etools `skill` field (`{ "perception":"+13", "stealth":"+6" }`)
+ * into a skill-name → bonus map. Skill names are lowercased. Not consumed by
+ * the engine in v1 (no skill-check subsystem); recorded as metadata.
+ */
+function parseSkills(
+  rawField: Raw5etoolsMonster['skill'],
+): Record<string, number> {
+  if (!rawField || typeof rawField !== 'object') return {};
+  const out: Record<string, number> = {};
+  for (const [key, val] of Object.entries(rawField)) {
+    const n = parseInt(String(val), 10);
+    if (!isNaN(n)) out[key.toLowerCase()] = n;
+  }
+  return out;
+}
+
+/**
+ * Parse a 5etools `senses` string array (e.g.
+ * `["blindsight 60 ft.", "darkvision 120 ft."]`) into a structured object.
+ * Also folds in `passive` (integer passive perception) if provided.
+ *
+ * Each sense string is matched for a vision-mode keyword + a number (the
+ * range in feet). Parenthetical qualifiers like "(blind beyond this radius)"
+ * are ignored. Unknown sense types are silently dropped.
+ */
+function parseSenses(
+  rawSenses: Raw5etoolsMonster['senses'],
+  rawPassive: Raw5etoolsMonster['passive'],
+): Combatant['senses'] {
+  const out: NonNullable<Combatant['senses']> = {};
+  if (rawSenses && Array.isArray(rawSenses)) {
+    for (const s of rawSenses) {
+      if (typeof s !== 'string') continue;
+      const lower = s.toLowerCase();
+      // Match "<mode> <number> ft." — capture mode + number.
+      const m = lower.match(/(darkvision|blindsight|truesight|tremorsense)\s+(\d+)\s*ft/);
+      if (m) {
+        const key = m[1] as 'darkvision' | 'blindsight' | 'truesight' | 'tremorsense';
+        out[key] = parseInt(m[2], 10);
+      }
+      // "passive perception N" — rare in the string form (usually the separate
+      // `passive` integer field), but handle it for robustness.
+      const ppm = lower.match(/passive\s+perception\s+(\d+)/);
+      if (ppm) out.passivePerception = parseInt(ppm[1], 10);
+    }
+  }
+  if (rawPassive !== undefined && typeof rawPassive === 'number') {
+    out.passivePerception = rawPassive;
+  }
+  // Return undefined if nothing was parsed (keeps Combatant clean for
+  // creatures with no senses, e.g. Cat).
+  return Object.keys(out).length > 0 ? out : undefined;
 }
 
 // ---- Legendary action cost detection -----------------------
@@ -489,7 +815,15 @@ export function monsterToCombatant(
   pos: Vec3 = { x: 0, y: 0, z: 0 },
   profile?: AIProfile,  // if omitted, auto-detected from creature type
   faction: 'enemy' | 'neutral' = 'enemy',
-  hpOverride?: number
+  hpOverride?: number,
+  /**
+   * Session 52 Creature Megabatch Batch 0: optional sourcebook code to append
+   * as a subname suffix (e.g. "VGM") when this creature is a genuine reprint
+   * (same name exists in 2+ sourcebooks). Computed by spawnMonster() from the
+   * bestiary's reprintNames index; undefined for unique-name creatures → no
+   * suffix. Direct monsterToCombatant() callers can pass it explicitly.
+   */
+  subname?: string
 ): Combatant {
   // Auto-detect profile from creature type if not explicitly provided
   const resolvedProfile: AIProfile = profile ?? defaultProfileForType(raw.type);
@@ -513,12 +847,21 @@ export function monsterToCombatant(
 
   const traits: string[] = (raw.trait ?? []).map(t => t.name);
   const legendaryPoolMax = legendaryActions.length > 0 ? 3 : 0;
+  // Session 52 Batch 3b: parse "Legendary Resistance (N/Day)" trait
+  const legendaryResistance = parseLegendaryResistance(traits);
+  // Session 52 Batch 4b: parse Regeneration trait (amount + stop-clause types)
+  const regeneration = parseRegeneration(raw.trait ?? []);
+  // Session 52 Batch 4c/4e: trait-name flags (parsed once at spawn; engine
+  // checks the flag rather than re-scanning the traits array each call).
+  const attacksAreMagical = traits.some(t => /^Magic\s+Weapons$/i.test(t.trim()));
+  const cannotRegainHP = traits.some(t => /^Swarm/i.test(t.trim()));
 
   return {
     id: nextId(raw.name),
-    name: raw.name,
+    name: subname ? `${raw.name} (${subname})` : raw.name,
     isPlayer: false,
     faction,
+    source: raw.source,                       // Session 52 Batch 0: sourcebook provenance
     maxHP: hp,
     currentHP: hp,
     ac,
@@ -539,6 +882,10 @@ export function monsterToCombatant(
     legendaryActions,
     legendaryActionPool: legendaryPoolMax,
     legendaryActionPoolMax: legendaryPoolMax,
+    legendaryResistance,   // Session 52 Batch 3b: undefined for non-legendary creatures
+    regeneration,          // Session 52 Batch 4b: undefined for non-regenerating creatures
+    attacksAreMagical,     // Session 52 Batch 4c: true for "Magic Weapons" trait (19 creatures)
+    cannotRegainHP,        // Session 52 Batch 4e: true for "Swarm" trait (10 creatures)
     budget: freshBudget(speeds.ground),
     conditions: new Set(),
     aiProfile: resolvedProfile,
@@ -569,8 +916,24 @@ export function monsterToCombatant(
     isDead: false,
     isUnconscious: false,
     advantages:      [],
-    vulnerabilities: [],
-    resistances:     [],
+    vulnerabilities: [],   // d20-roll vulnerabilities (Dodge/Reckless Attack); NOT damage types
+    // ── Session 52 Creature Megabatch Batch 1: damage defenses ──
+    // Populated from raw 5etools fields. Mirrors `defenseFieldPresent()` +
+    // `conditionImmune` handling in scripts/creature_analysis.ts (handles
+    // string-array, object-with-inner-array, and `{special:"..."}` shapes —
+    // `special` is skipped because the engine can't enumerate the matched
+    // damage types). Conditional defenses (`cond:true` nonmagical-only) are
+    // applied UNCONDITIONALLY in v1 — see parseDamageDefenseList() comment.
+    // Honoring the "nonmagical only" condition requires an `isNonmagical`
+    // attack flag, deferred to Batch 4c Magic Weapons.
+    resistances:            parseDamageDefenseList(raw.resist,    'resist'),
+    immunities:             parseDamageDefenseList(raw.immune,    'immune'),
+    damageVulnerabilities:  parseDamageDefenseList(raw.vulnerable,'vulnerable'),
+    conditionImmunities:    parseConditionImmune(raw.conditionImmune),
+    // ── Session 52 Creature Megabatch Batch 2: saves/skills/senses ──
+    saveProficiencies:      parseSaves(raw.save),
+    skillProficiencies:     parseSkills(raw.skill),
+    senses:                 parseSenses(raw.senses, raw.passive),
     bardicInspirationDie: null,
     wardingBond: null,
     activeEffects:   [],
@@ -578,8 +941,41 @@ export function monsterToCombatant(
 }
 
 /**
+ * Session 52 Creature Megabatch Batch 0: a bestiary map with reprint awareness.
+ *
+ * The map is DUAL-KEYED for backward compatibility + disambiguation:
+ *   - Bare lowercased name (`'goblin'`) → first entry encountered for that name
+ *     across all loaded files. Backward compatible with `map.get(name)`.
+ *   - `name|source` lowercased (`'goblin|vgm'`) → the specific source's entry.
+ *     Used by spawnMonster() when disambiguating reprints.
+ *
+ * `reprintNames` lists bare names that appear in 2+ DIFFERENT sourcebooks
+ * (genuine reprints). For those names, spawnMonster() appends the source as a
+ * subname suffix (e.g. "Goblin (VGM)") so callers can visually differentiate.
+ *
+ * Two entries with the SAME source (e.g. a duplicated file) are NOT reprints —
+ * the second is silently dropped (first-wins) to avoid false-reprint artifacts.
+ */
+export type BestiaryMap = Map<string, Raw5etoolsMonster> & {
+  reprintNames: Set<string>;
+};
+
+/** Create an empty BestiaryMap with the reprintNames side-index initialized. */
+function newBestiaryMap(): BestiaryMap {
+  const map = new Map<string, Raw5etoolsMonster>() as BestiaryMap;
+  map.reprintNames = new Set<string>();
+  return map;
+}
+
+/** Build the `name|source` lookup key (both lowercased). */
+function bestiaryKey(name: string, source: string): string {
+  return `${name.toLowerCase()}|${source.toLowerCase()}`;
+}
+
+/**
  * Load all monsters from a 5etools bestiary JSON into a lookup map.
- * Key is lowercased monster name.
+ * Single-file load: no reprints possible (one source), but the map is still
+ * dual-keyed (bare name + name|source) for consistency with mergeBestiaries().
  *
  * Usage:
  *   import data from './bestiary-dmg.json';
@@ -587,26 +983,44 @@ export function monsterToCombatant(
  */
 export function loadBestiaryJson(
   fileData: { monster: Raw5etoolsMonster[] }
-): Map<string, Raw5etoolsMonster> {
-  const map = new Map<string, Raw5etoolsMonster>();
+): BestiaryMap {
+  const map = newBestiaryMap();
   for (const m of fileData.monster) {
-    map.set(m.name.toLowerCase(), m);
+    const bareKey = m.name.toLowerCase();
+    if (!map.has(bareKey)) map.set(bareKey, m);            // first-wins (backward compat)
+    map.set(bestiaryKey(m.name, m.source ?? ''), m);       // explicit source key
   }
   return map;
 }
 
 /**
  * Merge multiple bestiary files into one lookup map.
- * Later files win on name collision (allows overrides).
+ * Dual-keyed (bare name + name|source). First file wins on the bare-name key
+ * (stable ordering). `reprintNames` is populated with any name appearing in
+ * 2+ DIFFERENT sourcebooks.
  */
 export function mergeBestiaries(
   ...files: { monster: Raw5etoolsMonster[] }[]
-): Map<string, Raw5etoolsMonster> {
-  const map = new Map<string, Raw5etoolsMonster>();
+): BestiaryMap {
+  const map = newBestiaryMap();
+  // Track which sources each name appeared in (to detect genuine reprints).
+  const nameSources = new Map<string, Set<string>>();
   for (const file of files) {
     for (const m of file.monster) {
-      map.set(m.name.toLowerCase(), m);
+      const bareKey = m.name.toLowerCase();
+      const src = (m.source ?? '').toLowerCase();
+      // Record source provenance
+      if (!nameSources.has(bareKey)) nameSources.set(bareKey, new Set());
+      nameSources.get(bareKey)!.add(src);
+      // Bare-name key: first-wins (stable, backward compat for map.get(name))
+      if (!map.has(bareKey)) map.set(bareKey, m);
+      // name|source key: always set (last-wins within same source is harmless)
+      map.set(bestiaryKey(m.name, m.source ?? ''), m);
     }
+  }
+  // Genuine reprint = name in 2+ distinct sources
+  for (const [name, srcs] of nameSources) {
+    if (srcs.size > 1) map.reprintNames.add(name);
   }
   return map;
 }
@@ -614,6 +1028,15 @@ export function mergeBestiaries(
 /**
  * Instantiate a named monster from a loaded bestiary map.
  * Returns null if the name is not found — never throws.
+ *
+ * Session 52 Batch 0: if the name is a genuine reprint (in bestiary.reprintNames)
+ * OR `sourceOverride` is provided, the spawned Combatant's `name` gets a
+ * `(SOURCE)` subname suffix and `source` is set to the sourcebook code.
+ * Unique-name creatures get no suffix (backward compatible).
+ *
+ * @param sourceOverride Optional sourcebook code (e.g. 'VGM') to disambiguate
+ *                       a reprint. When omitted, the first entry for the name
+ *                       is used (backward compat).
  */
 export function spawnMonster(
   bestiaryMap: Map<string, Raw5etoolsMonster>,
@@ -621,14 +1044,58 @@ export function spawnMonster(
   pos: Vec3,
   profile: AIProfile = 'smart',
   faction: 'enemy' | 'neutral' = 'enemy',
-  hpOverride?: number
+  hpOverride?: number,
+  sourceOverride?: string
 ): Combatant | null {
-  const raw = bestiaryMap.get(name.toLowerCase());
+  const nameKey = name.toLowerCase();
+  let raw: Raw5etoolsMonster | undefined;
+  if (sourceOverride) {
+    raw = bestiaryMap.get(bestiaryKey(name, sourceOverride));
+  } else {
+    raw = bestiaryMap.get(nameKey);
+  }
   if (!raw) return null;
-  return monsterToCombatant(raw, pos, profile, faction, hpOverride);
+  // Subname suffix when this is a reprint (auto-detected) or explicitly disambiguated
+  const isReprint = (bestiaryMap as BestiaryMap).reprintNames?.has(nameKey) ?? false;
+  const subname = (isReprint || sourceOverride) ? raw.source : undefined;
+  return monsterToCombatant(raw, pos, profile, faction, hpOverride, subname);
 }
 
-/** List all monster names in a bestiary map (sorted). */
+/**
+ * List all monster names in a bestiary map (sorted).
+ * Returns the bare display names (excludes the `name|source` disambiguation
+ * keys). For reprinted names, returns the bare name — callers who need the
+ * disambiguated form should use listMonstersDetailed().
+ */
 export function listMonsters(bestiaryMap: Map<string, Raw5etoolsMonster>): string[] {
-  return [...bestiaryMap.keys()].sort();
+  const names: string[] = [];
+  for (const key of bestiaryMap.keys()) {
+    if (!key.includes('|')) names.push(key);   // exclude name|source keys
+  }
+  return names.sort();
+}
+
+/**
+ * Session 52 Batch 0: list all monsters with source provenance + reprint flag.
+ * Each entry is `{ name, source, isReprint }`. Reprinted names appear once per
+ * source. Useful for UI dropdowns that need to show "Goblin (MM)" vs "Goblin (VGM)".
+ */
+export function listMonstersDetailed(
+  bestiaryMap: Map<string, Raw5etoolsMonster>
+): { name: string; source: string; isReprint: boolean }[] {
+  const out: { name: string; source: string; isReprint: boolean }[] = [];
+  const reprintNames = (bestiaryMap as BestiaryMap).reprintNames ?? new Set<string>();
+  const seen = new Set<string>();
+  for (const [key, m] of bestiaryMap) {
+    if (!key.includes('|')) continue;   // skip bare-name keys; iterate name|source keys
+    const composite = `${m.name.toLowerCase()}|${(m.source ?? '').toLowerCase()}`;
+    if (seen.has(composite)) continue;
+    seen.add(composite);
+    out.push({
+      name: m.name,
+      source: m.source ?? '',
+      isReprint: reprintNames.has(m.name.toLowerCase()),
+    });
+  }
+  return out.sort((a, b) => a.name.localeCompare(b.name) || a.source.localeCompare(b.source));
 }

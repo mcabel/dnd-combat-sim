@@ -24,6 +24,13 @@ export interface LoadResult {
   filesSkipped: string[];          // non-JSON or missing 'monster' array
   summonTypeSkipped: string[];     // monsters skipped due to missing/special CR
   monsterCount: number;
+  /**
+   * Session 52 Creature Megabatch Batch 0: creature names that appear in 2+
+   * DIFFERENT sourcebooks (genuine reprints). Populated by mergeBestiaries();
+   * used by spawnMonster() to append a "(SOURCE)" subname suffix. Empty when
+   * only one sourcebook is loaded.
+   */
+  reprintNames: Set<string>;
 }
 
 /**
@@ -107,12 +114,20 @@ export function loadBestiaryDir(dirPath: string, verbose = false): LoadResult {
 
   const bestiary = loaded.length > 0 ? mergeBestiaries(...loaded) : new Map();
 
+  // Count unique creatures (bare-name keys only — dual-keying adds name|source keys
+  // that would double-count if we used bestiary.size directly).
+  let uniqueCount = 0;
+  for (const key of bestiary.keys()) {
+    if (!key.includes('|')) uniqueCount++;
+  }
+
   return {
     bestiary,
     filesLoaded,
     filesSkipped,
     summonTypeSkipped,
-    monsterCount: bestiary.size,
+    monsterCount: uniqueCount,
+    reprintNames: (bestiary as import('../parser/fivetools').BestiaryMap).reprintNames ?? new Set<string>(),
   };
 }
 

@@ -278,7 +278,7 @@ import { GENERIC_SPELL_LIST } from '../spells/_generic_registry';
 import { hasInvocation } from '../spells/_invocations';
 // ── Session 43 Task #24 — Extra Attack feature check ──
 import { hasFeature } from '../characters/builder';
-import { selectAction, selfPreserveDecision, selectLegendaryAction } from './actions';
+import { selectAction, selfPreserveDecision, selectLegendaryAction, isActionAvailable } from './actions';
 import {
   canReach, bestAdjacentPos, bestRangedPosition,
   adjacentEnemyCount, livingEnemiesOf, livingAlliesOf, posKey, distanceFt, chebyshev3D
@@ -473,7 +473,7 @@ function planCunningAction(
 
     // Find the best melee action available to the Rogue.
     const meleeCandidates = self.actions.filter(
-      a => !a.isMultiattack && a.costType === 'action' && a.attackType === 'melee'
+      a => !a.isMultiattack && a.costType === 'action' && a.attackType === 'melee' && isActionAvailable(a)
     );
     const bestReach = meleeCandidates.length > 0
       ? Math.max(...meleeCandidates.map(a => a.reach))
@@ -4928,6 +4928,7 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
       // Pick the best weapon attack (melee or ranged, excluding spells/saves).
       const weaponAttack = self.actions.find(a =>
         !a.isMultiattack && a.costType === 'action' &&
+        isActionAvailable(a) &&
         (a.attackType === 'melee' || a.attackType === 'ranged')
       );
       if (weaponAttack) {

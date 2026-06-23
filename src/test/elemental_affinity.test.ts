@@ -309,24 +309,32 @@ console.log('\n--- 8. Spell attack: fire + fire ancestry → bonus damage ---');
   sorc.draconicAncestry = 'fire';
   sorc.actions = [FIRE_BOLT_ACTION];
 
-  const enemy = makeEnemy('e', { x: 1, y: 0, z: 0 }, { ac: 5 });  // easy hit
+  const enemy = makeEnemy('e', { x: 1, y: 0, z: 0 }, { ac: 5, maxHP: 10000, currentHP: 10000 });  // easy hit
   const bf = makeBF([sorc, enemy]);
-  const state = makeState(bf);
 
-  const hpBefore = enemy.currentHP;
-  // Execute a 'cast' action (spell attack) on the enemy.
-  executePlannedAction(sorc, {
-    type: 'cast',
-    action: FIRE_BOLT_ACTION,
-    targetId: enemy.id,
-    description: `${sorc.name} casts Fire Bolt`,
-  }, state);
+  // De-flake: nat 1 (5%) → auto-miss → no EA log. Retry up to 50 times
+  // until the attack hits. With 95% hit rate, P(50 consecutive misses)
+  // ≈ 0.05^50 ≈ 10^-65 — effectively impossible.
+  let eaLog: any = undefined;
+  for (let attempt = 0; attempt < 50; attempt++) {
+    // Reset enemy HP each attempt so damage doesn't accumulate to 0 (which
+    // would mark the enemy dead and skip subsequent attempts).
+    enemy.currentHP = 10000;
+    const state = makeState(bf);
+    executePlannedAction(sorc, {
+      type: 'cast',
+      action: FIRE_BOLT_ACTION,
+      targetId: enemy.id,
+      description: `${sorc.name} casts Fire Bolt`,
+    }, state);
+    eaLog = state.log.events.find(
+      (e: any) => e.type === 'action' && e.description.includes('Elemental Affinity'),
+    );
+    if (eaLog !== undefined) break;
+  }
 
   // The enemy should have taken damage. Check the log for the Elemental
   // Affinity bonus event.
-  const eaLog = state.log.events.find(
-    (e: any) => e.type === 'action' && e.description.includes('Elemental Affinity'),
-  );
   assert('8. Elemental Affinity log found on spell attack', eaLog !== undefined);
   if (eaLog) {
     console.log(`    Log: ${eaLog.description}`);

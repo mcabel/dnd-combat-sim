@@ -310,6 +310,26 @@ export interface Action {
    * cover blocking per PHB line-of-effect rules.
    */
   bypassesCover?: boolean;
+
+  /**
+   * ── Session 52 Creature Megabatch Batch 3: Recharge ──
+   *
+   * MM p.8 / MM p.11: "Recharge X-Y" or "Recharge X" — after a creature uses
+   * a Recharge action, it can't use that action again until a certain die
+   * roll is met at the START of its turn. The roll is 1d6; the action
+   * recharges on a roll of `min` or higher. Bare "{@recharge}" (no number)
+   * means Recharge 6 (only on a 6).
+   *
+   * `recharge` is set by the parser when an action name contains a
+   * `{@recharge N}` or `{@recharge}` tag (the tag is stripped from `name`).
+   * `recharged` tracks availability: true on spawn (available immediately),
+   * set false on use, set true again at start-of-turn when the d6 roll meets
+   * the threshold. The AI planner skips actions where `recharge && !recharged`.
+   *
+   * 84 MM creatures have recharge actions (dragons' breath weapons, mephits'
+   * breath, yeti Cold Breath, etc.).
+   */
+  recharge?: { min: number; recharged: boolean };
 }
 
 // ---- LegendaryAction ----------------------------------------
@@ -473,6 +493,16 @@ export interface Combatant {
   isPlayer: boolean;
   faction: 'party' | 'enemy' | 'neutral';
 
+  // ── Session 52 Creature Megabatch Batch 0: sourcebook provenance ──
+  // The 5etools sourcebook code this creature was loaded from (e.g. 'MM',
+  // 'DMG', 'VGM', 'MTF'). Always populated for monsters by
+  // monsterToCombatant(); undefined for PCs. When the same creature name
+  // appears in multiple sourcebooks (a genuine reprint), monsterToCombatant
+  // ALSO appends the source as a subname suffix to `name` above
+  // (e.g. "Goblin (VGM)") so callers can visually differentiate them.
+  // See CREATURE-MEGABATCH-MIGRATION-PLAN.md Batch 0.
+  source?: string;
+
   // Stats
   maxHP: number;
   currentHP: number;
@@ -517,6 +547,60 @@ export interface Combatant {
   legendaryActions: LegendaryAction[];
   legendaryActionPool: number;            // resets at start of own turn
   legendaryActionPoolMax: number;
+
+  /**
+   * ── Session 52 Creature Megabatch Batch 3: Legendary Resistance ──
+   *
+   * MM p.11: "Legendary Resistance (N/Day). If the [creature] fails a saving
+   * throw, it can choose to succeed instead." Used only by legendary creatures
+   * (28 in MM: ancient/adult dragons, liches, kraken, tarrasque, etc.).
+   *
+   * Parsed from a trait named "Legendary Resistance (N/Day)" — N extracted
+   * into `max`. `remaining` decrements on use; resets to `max` only on a
+   * long rest (v1: per-combat only — monsters don't short-rest in combat).
+   *
+   * rollSave() consults this when the save FAILS: if remaining > 0, the
+   * creature (v1 simplification: always, on any failed save) spends a use to
+   * force success. Emit a log line so the result is visible.
+   */
+  legendaryResistance?: { max: number; remaining: number };
+
+  /**
+   * ── Session 52 Creature Megabatch Batch 4b: Regeneration ──
+   *
+   * MM p.11 / various: "The [creature] regains N hit points at the start of
+   * its turn if it has at least 1 hit point." Some creatures have a stop
+   * clause ("If the troll takes acid or fire damage, this trait doesn't
+   * function at the start of the troll's next turn").
+   *
+   * `amount` = HP regained per turn. `stopTypes` = damage types that suppress
+   * regen for one turn (e.g. ['acid','fire'] for trolls). `suppressedNextTurn`
+   * is set true when the creature takes a stop-type damage; resetBudget()
+   * checks it at start-of-turn and skips regen if true, then clears it.
+   *
+   * 13 MM creatures (all slaad, trolls, oni, vampire, etc.).
+   */
+  regeneration?: { amount: number; stopTypes: DamageType[]; suppressedNextTurn: boolean };
+
+  /**
+   * ── Session 52 Creature Megabatch Batch 4c: Magic Weapons ──
+   * MM p.11 / various: "The [creature]'s weapon attacks are magical." 19 MM
+   * creatures. When true, the creature's weapon attacks bypass resistance
+   * to nonmagical B/P/S (the `cond:true` form in 5etools). v1 simplification:
+   * the flag is PARSED and stored, but full nonmagical-resistance bypass
+   * requires re-working Batch 1's unconditional cond-resistance handling to
+   * honor an `isNonmagical` attack flag — deferred. The flag is consumed in
+   * applyDamageWithTempHP when the attacker is known (combat.ts passes it).
+   */
+  attacksAreMagical?: boolean;
+
+  /**
+   * ── Session 52 Creature Megabatch Batch 4e: Swarm ──
+   * MM p.11 / various: "The swarm can't regain hit points or gain temporary
+   * hit points." 10 MM swarm creatures. When true, grantTempHP + healing
+   * functions are no-ops on this combatant.
+   */
+  cannotRegainHP?: boolean;
 
   // Turn resources
   budget: ActionBudget;
@@ -674,6 +758,63 @@ export interface Combatant {
   // immunities field. New code should set this explicitly to [] when constructing
   // a Combatant.
   immunities?: DamageType[];
+
+  // ── Session 52 Creature Megabatch Batch 1: damage vulnerabilities ──
+  // PHB p.197: incoming damage of listed types is DOUBLED. NOTE this is
+  // SEPARATE from `vulnerabilities: AdvantageEntry[]` above — that field
+  // tracks d20-roll vulnerabilities (Dodge/Reckless Attack style: attacks
+  // vs you have adv/disadv), NOT damage-type vulnerabilities.
+  //
+  // Creature Megabatch Batch 1 introduced this field so 5etools-parsed
+  // creatures (e.g. Skeletons vuln to bludgeoning) gain their damage-type
+  // vulnerability. applyDamageWithTempHP() in utils.ts consumes it:
+  // vulnerability applies FIRST (PHB p.197) — before resistance halves
+  // and before immunity zeroes (immunity still overrides vulnerability).
+  //
+  // OPTIONAL: undefined is treated as "no damage vulnerabilities" (equivalent
+  // to []); existing test factories don't need updates.
+  damageVulnerabilities?: DamageType[];
+
+  // ── Session 52 Creature Megabatch Batch 1: condition immunities ──
+  // Condition NAMES (e.g. 'charmed', 'frightened', 'paralyzed') this creature
+  // is immune to, parsed from 5etools `conditionImmune`. applyCondition (the
+  // internal name for `addCondition` in utils.ts) checks this and skips
+  // application. PHB p.197: condition immunity = the condition is never
+  // applied to the creature.
+  //
+  // Names are lowercased to match the engine's `Condition` type strings.
+  // OPTIONAL: undefined = no condition immunities; existing factories don't
+  // need updates.
+  conditionImmunities?: string[];
+
+  // ── Session 52 Creature Megabatch Batch 2: save/skill/senses proficiencies ──
+  // Parsed from 5etools `save` / `skill` / `senses` / `passive` fields. These
+  // let monsters use their listed save bonuses (e.g. Adult Red Dragon CON save
+  // +13) instead of the default abilityMod + profBonus(CR) derivation, and
+  // record vision modes + passive perception for future LOS work (TG-007).
+
+  /** Save bonuses per ability (e.g. { con: 13, dex: 6 }). When set for an
+   *  ability, rollSave() uses this TOTAL bonus instead of abilityMod + prof.
+   *  The 5etools `save` field value is the full listed bonus (ability mod +
+   *  proficiency already folded in) — do NOT double-add proficiency. */
+  saveProficiencies?: Partial<Record<AbilityScore, number>>;
+
+  /** Skill bonuses per skill name (e.g. { perception: 13, stealth: 6 }).
+   *  Not yet consumed by the engine (no skill-check subsystem in v1 combat);
+   *  recorded as metadata for future work. */
+  skillProficiencies?: Record<string, number>;
+
+  /** Vision modes + passive perception, parsed from 5etools `senses` +
+   *  `passive`. Range in feet (e.g. { darkvision: 120, blindsight: 60,
+   *  passivePerception: 23 }). Not yet consumed by the LOS engine (TG-007);
+   *  recorded as metadata so adding more bestiary sources auto-populates it. */
+  senses?: {
+    darkvision?: number;
+    blindsight?: number;
+    truesight?: number;
+    tremorsense?: number;
+    passivePerception?: number;
+  };
 
   // Bardic Inspiration die granted by a Bard (PHB p.54).
   // Die size (e.g. 6 for d6). Consumed on the next attack roll or saving throw.

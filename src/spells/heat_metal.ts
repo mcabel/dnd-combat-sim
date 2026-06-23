@@ -53,7 +53,7 @@
 import { Combatant, Battlefield } from '../types/core';
 import { rollSaveReactable, CombatEvent, EngineState } from '../engine/combat';
 import { applySpellEffect, removeEffectsFromCaster } from '../engine/spell_effects';
-import { startConcentration, rollDie, applyDamageWithTempHP } from '../engine/utils';
+import { startConcentration, rollDie, applyDamageWithTempHP, elementalAffinityBonus } from '../engine/utils';
 import { chebyshev3D } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 
@@ -193,11 +193,18 @@ export function execute(
   if (target.isDead || target.isUnconscious) return;
 
   // On-cast damage: 2d8 fire (no save — automatic per PHB p.250).
-  const immediateDmg = rollDamage();
+  // Session 51 Task #29-follow-up-5c-4: Elemental Affinity (Draconic
+  // Sorcerer 6) adds CHA mod to the fire damage if the caster's ancestry
+  // is fire. Heat Metal has no save on the on-cast damage (it's automatic
+  // per PHB p.250), so the EA bonus is NOT halved — full bonus applies.
+  // The damage_zone tick (start-of-turn) does NOT get EA — the tick
+  // handler in combat.ts has no caster context.
+  const eaBonus = elementalAffinityBonus(caster, metadata.damageType);
+  const immediateDmg = rollDamage() + eaBonus;
   const dealtImmediate = applyDamageWithTempHP(target, immediateDmg, metadata.damageType);
   emit(
     state, 'damage', caster.id,
-    `${target.name} takes ${dealtImmediate} ${metadata.damageType} damage from Heat Metal (on cast: ${metadata.dieCount}d${metadata.dieSides}=${immediateDmg})`,
+    `${target.name} takes ${dealtImmediate} ${metadata.damageType} damage from Heat Metal (on cast: ${metadata.dieCount}d${metadata.dieSides}=${immediateDmg}${eaBonus > 0 ? ` + ${eaBonus} EA` : ''})`,
     target.id, dealtImmediate,
   );
 

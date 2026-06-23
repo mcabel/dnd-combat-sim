@@ -2614,6 +2614,13 @@ export function executePlannedAction(
   switch (plan.type) {
     case 'attack':
     case 'cast': {
+      // Session 52 Batch 3a: mark a Recharge action as spent the moment it's
+      // dispatched. The action won't be available again until a 1d6 roll at
+      // the start of the creature's next turn meets the threshold (handled by
+      // rollRecharge() in resetBudget). Mutates in place — no log needed.
+      if (plan.action?.recharge) {
+        plan.action.recharge.recharged = false;
+      }
       // Non-attack self-buff cantrips (e.g. Blade Ward, PHB p.218): route via the
       // CANTRIP_SELF_EFFECTS registry instead of resolveAttack. These have no
       // target, so they must be handled BEFORE the target-null guard below. This
@@ -2699,6 +2706,11 @@ export function executePlannedAction(
       const target = plan.targetId ? bf.combatants.get(plan.targetId) : null;
       if (!target || target.isDead || target.isUnconscious) break;
       if (!plan.action) break;
+      // Session 52 Batch 3a: legendary actions can also have recharge tags
+      // (rare but possible). Mark spent on dispatch, same as regular actions.
+      if (plan.action.recharge) {
+        plan.action.recharge.recharged = false;
+      }
       // ST-5A: Mounted Combatant — redirect legendary attack to rider if feat active
       const legEffectiveTarget = checkMountedCombatant(target, plan.action, bf) ?? target;
       if (legEffectiveTarget !== target) {

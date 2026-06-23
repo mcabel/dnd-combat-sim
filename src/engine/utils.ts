@@ -164,7 +164,18 @@ export function rollSave(
   // disadvantage — modeled via the ability_disadvantage ActiveEffect
   // (queried by hasAbilityDisadvantage).
   const abilityDisadvantage = hasAbilityDisadvantage(combatant, ability);
-  const hasAdvantage   = selfSave.advantage   || allSave.advantage   || rageStrAdvantage    || enlargeStrAdvantage;
+
+  // ── Session 52 Creature Megabatch Batch 4a: Magic Resistance ──
+  // MM p.11 / various: "The [creature] has advantage on saving throws against
+  // spells and other magical effects." v1 simplification: the engine does not
+  // tag saves by source (spell vs non-spell), so we grant advantage on ALL
+  // saves for creatures with the 'Magic Resistance' trait. This is slightly
+  // more generous than canon (a non-magical poison save would canonically
+  // NOT get advantage) but covers the common case (most monster saves in
+  // combat ARE vs spells/magical effects). Documented in the migration plan.
+  const magicResistanceAdvantage = combatant.traits.includes('Magic Resistance');
+
+  const hasAdvantage   = selfSave.advantage   || allSave.advantage   || rageStrAdvantage    || enlargeStrAdvantage || magicResistanceAdvantage;
   const hasDisadvantage = combatant.conditions.has('poisoned') // PHB Appendix A: poisoned → disadv on saves
     || selfSave.disadvantage || allSave.disadvantage
     || enlargeStrDisadvantage || abilityDisadvantage
@@ -224,7 +235,34 @@ export function rollSave(
   }
 
   const total = roll + mod + prof + biBonus + blessBonus - banePenalty + wbBonus - mindSliverPenalty + resistanceBonus;
-  return { roll, total, success: total >= dc };
+  // ── Session 52 Creature Megabatch Batch 2: monster save proficiencies ──
+  // 5etools `save` field lists the FULL save bonus (ability mod + proficiency
+  // already folded in, e.g. Adult Red Dragon CON save "+13"). When present
+  // for this ability, use that bonus INSTEAD of the derived (mod + prof) —
+  // otherwise we'd double-count proficiency. The listed bonus already
+  // accounts for the creature's actual CR-based proficiency, so it's more
+  // accurate than the derived value for creatures with non-standard prof.
+  // (e.g. a CR 17 dragon's CON prof is +7, but its listed +13 = CON +6 mod
+  //  + +7 prof — matches. For creatures whose listed bonus differs from the
+  //  derived one, trust the stat block.)
+  const listedSaveBonus = combatant.saveProficiencies?.[ability];
+  const effectiveTotal = listedSaveBonus !== undefined
+    ? roll + listedSaveBonus + biBonus + blessBonus - banePenalty + wbBonus - mindSliverPenalty + resistanceBonus
+    : total;
+
+  // ── Session 52 Creature Megabatch Batch 3b: Legendary Resistance ──
+  // MM p.11: "If the [creature] fails a saving throw, it can choose to
+  // succeed instead." Used only by legendary creatures (28 in MM). v1
+  // simplification: the creature ALWAYS spends a use on a failed save
+  // (no AI judgment of save-significance). Remaining uses reset only on a
+  // long rest (per-combat for monsters in v1).
+  const failed = effectiveTotal < dc;
+  if (failed && combatant.legendaryResistance && combatant.legendaryResistance.remaining > 0) {
+    combatant.legendaryResistance.remaining -= 1;
+    return { roll, total: dc, success: true };  // forced success — total set to dc exactly
+  }
+
+  return { roll, total: effectiveTotal, success: effectiveTotal >= dc };
 }
 
 /**
@@ -488,6 +526,15 @@ export function effectiveMaxHP(c: Combatant): number {
 // ---- Conditions ---------------------------------------------
 
 export function addCondition(target: Combatant, condition: Condition): void {
+  // ── Session 52 Creature Megabatch Batch 1: condition immunity ──
+  // 5etools `conditionImmune` field → Combatant.conditionImmunities (parsed
+  // by fivetools.ts:parseConditionImmune). PHB p.197: condition immunity =
+  // the condition is never applied. Names are lowercased on both sides so
+  // the lookup is case-insensitive. Mirrors the Nature's Ward 'poisoned'
+  // immunity pattern above (just generalized to any condition name).
+  if (target.conditionImmunities && target.conditionImmunities.includes(condition.toLowerCase())) {
+    return; // immune — condition not applied
+  }
   // ── Session 47 Task #29-follow-up-3: Nature's Ward (Land Druid 10) ──
   // PHB p.68: "Starting at 10th level, you can't be charmed or frightened by
   // fey or elementals. You are also immune to poison and disease."
@@ -662,6 +709,52 @@ export function resetBudget(c: Combatant): void {
   };
   // Legendary action pool resets at start of own turn (MM p.11)
   c.legendaryActionPool = c.legendaryActionPoolMax;
+
+  // ── Session 52 Creature Megabatch Batch 3a: Recharge ──
+  // MM p.8 / MM p.11: at the start of each of its turns, a creature rolls 1d6
+  // for each Recharge action; if the roll meets the threshold (min), the
+  // action recharges (becomes available again this turn). rollRecharge()
+  // mutates each Action.recharge.recharged in place.
+  rollRecharge(c);
+
+  // ── Session 52 Creature Megabatch Batch 4b: Regeneration ──
+  // MM p.11: "The [creature] regains N hit points at the start of its turn if
+  // it has at least 1 hit point." If suppressedNextTurn is true (creature took
+  // a stop-clause damage type last turn), skip regen this turn and clear the
+  // flag. Heal min(amount, maxHP - currentHP) — no overheal.
+  // Session 52 Batch 4e: Swarm trait (cannotRegainHP) blocks ALL healing.
+  if (c.regeneration && !c.cannotRegainHP && c.currentHP > 0 && c.currentHP < c.maxHP) {
+    if (!c.regeneration.suppressedNextTurn) {
+      const heal = Math.min(c.regeneration.amount, c.maxHP - c.currentHP);
+      c.currentHP += heal;
+    } else {
+      // Suppressed this turn; clear the flag so regen resumes next turn
+      // (unless re-suppressed by another stop-type hit).
+      c.regeneration.suppressedNextTurn = false;
+    }
+  } else if (c.regeneration && c.regeneration.suppressedNextTurn) {
+    // Creature is at full HP or dead, but still clear the suppression flag
+    // so it doesn't linger indefinitely.
+    c.regeneration.suppressedNextTurn = false;
+  }
+}
+
+/**
+ * Session 52 Creature Megabatch Batch 3a: roll 1d6 per Recharge action at the
+ * start of the creature's turn. Actions whose roll meets the threshold (min)
+ * become available (`recharged = true`). Actions below the threshold stay
+ * unavailable until next turn. Actions without a `recharge` field are skipped.
+ *
+ * Mutates `c.actions` in place. Called by resetBudget() so it fires at the
+ * start of every one of this creature's turns (resetBudget is invoked from
+ * combat.ts at the start-of-turn hook).
+ */
+export function rollRecharge(c: Combatant): void {
+  for (const a of c.actions) {
+    if (!a.recharge) continue;
+    const d6 = rollDie(6);   // 1d6
+    a.recharge.recharged = d6 >= a.recharge.min;
+  }
 }
 
 /** Reset only the reaction (used when "reaction refund" scenarios arise). */
@@ -847,6 +940,16 @@ export function attackAdvantageState(
   const vulnAdv = queryVulnerability(target, 'attack');
   if (vulnAdv.advantage)    advantage    = true;
   if (vulnAdv.disadvantage) disadvantage = true;
+
+  // ── Session 52 Creature Megabatch Batch 4e: Blood Frenzy ──
+  // MM p.11 / various: "The [creature] has advantage on melee attack rolls
+  // against any creature that doesn't have all its hit points." 7 MM
+  // creatures (sharks, quippers, etc.). The melee-only restriction is
+  // enforced downstream in resolveAttackAdvantage (which knows attackType);
+  // here we just set advantage — it'll be filtered to melee only.
+  if (attacker.traits.includes('Blood Frenzy') && target.currentHP < target.maxHP) {
+    advantage = true;
+  }
 
   return { advantage, disadvantage };
 }
@@ -1094,13 +1197,19 @@ export function rollDeathSave(pc: Combatant): 'stable' | 'dead' | 'ongoing' {
  * Grant temporary HP. Temp HP don't stack — take the higher value (PHB p.198).
  */
 export function grantTempHP(target: Combatant, amount: number): void {
+  // Session 52 Batch 4e: Swarm trait — "can't regain hit points or gain
+  // temporary hit points". 10 MM swarm creatures. No-op if cannotRegainHP.
+  if (target.cannotRegainHP) return;
   target.tempHP = Math.max(target.tempHP, amount);
 }
 
 /**
  * Apply damage accounting for temp HP first (PHB p.198).
- * If damageType is provided and the target has resistance to it, damage is halved
- * before temp HP absorption (PHB p.197 — resistance applied before any other reduction).
+ * If damageType is provided and the target has immunity to it, damage is
+ * reduced to 0 (PHB p.197). If the target has vulnerability to it, damage
+ * is DOUBLED. If the target has resistance to it, damage is HALVED (rounded
+ * down). Per PHB p.197, the order is: immunity (0) > vulnerability (×2) >
+ * resistance (÷2); an immune creature takes 0 regardless of vuln/resist.
  * Overrides the base applyDamage for combatants with tempHP.
  */
 export function applyDamageWithTempHP(
@@ -1109,10 +1218,23 @@ export function applyDamageWithTempHP(
   damageType?: DamageType | null,
 ): number {
   // PHB p.197: immunity reduces damage to 0. Checked FIRST — before resistance,
-  // temp HP, or any other mitigation. An immune creature takes 0 damage regardless
-  // of any resistance/vulnerability entries (immunity overrides everything).
+  // vulnerability, temp HP, or any other mitigation. An immune creature takes
+  // 0 damage regardless of any resistance/vulnerability entries (immunity
+  // overrides everything).
   if (damageType != null && (target.immunities?.includes(damageType) ?? false)) {
     return 0;
+  }
+
+  let effective = amount;
+
+  // PHB p.197: vulnerability doubles damage. Applied BEFORE resistance
+  // (if a creature has BOTH vuln and resist to the same type, vuln applies
+  // first then resist halves — net = original). Immunity already short-
+  // circuited above. NOTE this uses Combatant.damageVulnerabilities (NOT
+  // Combatant.vulnerabilities, which is for d20-roll vulns like Dodge).
+  // Added in Session 52 Creature Megabatch Batch 1.
+  if (damageType != null && (target.damageVulnerabilities?.includes(damageType) ?? false)) {
+    effective = effective * 2;
   }
 
   // PHB p.197: resistance halves damage (rounded down) before temp HP absorption.
@@ -1120,7 +1242,6 @@ export function applyDamageWithTempHP(
   // Blade Ward (PHB p.218) grants resistance to bludgeoning/piercing/slashing.
   // All three are folded into a single boolean so resistance never stacks
   // (PHB p.197: two sources of the same resistance = half, not quarter).
-  let effective = amount;
   const hasResistance =
     target.wardingBond !== null ||
     (damageType != null && (target.resistances?.includes(damageType) ?? false)) ||
@@ -1128,7 +1249,16 @@ export function applyDamageWithTempHP(
       damageType != null &&
       BLADE_WARD_PHYSICAL_TYPES.includes(damageType));
   if (hasResistance) {
-    effective = Math.floor(amount / 2);
+    effective = Math.floor(effective / 2);
+  }
+
+  // ── Session 52 Creature Megabatch Batch 4b: Regeneration suppression ──
+  // If this damage type is in the creature's regen stopTypes (e.g. acid/fire
+  // for trolls, radiant for vampires), set suppressedNextTurn so the start-
+  // of-turn regen in resetBudget() skips one turn. Per MM: "this trait
+  // doesn't function at the start of the [creature]'s next turn."
+  if (damageType != null && target.regeneration && target.regeneration.stopTypes.includes(damageType)) {
+    target.regeneration.suppressedNextTurn = true;
   }
 
   let remaining = effective;
