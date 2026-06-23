@@ -8,7 +8,7 @@
 //   3. metadata exposes rider scaling (1d8 → 4d8 by level)
 //   4. metadata exposes components (S + M, no V)
 //   5. metadata exposes riderDiceByLevel
-//   6. applyCantripEffect (module) — sets _boomingBladePendingDamageDice
+//   6. applyCantripEffect (module) — pushes movement_rider ActiveEffect
 //   7. dispatcher integration — 'Booming Blade' registered in CANTRIP_EFFECTS
 //   8. dispatcher safety — unknown cantrip name is a no-op
 //   9. resetBudget cleanup clears the flag
@@ -32,7 +32,7 @@ import {
 import { applyCantripEffect as dispatchCantrip } from '../engine/cantrip_effects';
 import { resetBudget } from '../engine/utils';
 import { resolveAttack, executeMove, EngineState } from '../engine/combat';
-import { Combatant, Action, Vec3, Cell, Obstacle } from '../types/core';
+import { Combatant, ActiveEffect, Action, Vec3, Cell, Obstacle } from '../types/core';
 
 let passed = 0, failed = 0;
 
@@ -133,6 +133,36 @@ const BOOMING_BLADE_ACTION: Action = {
 // Guaranteed-miss variant.
 const BOOMING_BLADE_MISS: Action = { ...BOOMING_BLADE_ACTION, hitBonus: -100 };
 
+// ---- Booming Blade movement_rider test helpers (Session 48 RFC-001) -------
+
+/** Build a movement_rider ActiveEffect as pushed by applyCantripEffect. */
+function makeBBRider(casterId: string, dice = '1d8'): ActiveEffect {
+  return {
+    id: `eff_bb_${casterId}`,
+    casterId,
+    spellName: 'Booming Blade',
+    effectType: 'movement_rider',
+    payload: { moveDamageDice: dice, moveDamageType: 'thunder' },
+    sourceIsConcentration: false,
+  };
+}
+
+/** True if the combatant has an active movement_rider for Booming Blade with the given dice. */
+function hasBBRider(c: Combatant, dice = '1d8'): boolean {
+  return c.activeEffects.some(
+    e => e.effectType === 'movement_rider' &&
+         e.spellName === 'Booming Blade' &&
+         e.payload.moveDamageDice === dice,
+  );
+}
+
+/** Find the movement_rider effect for Booming Blade (undefined if none). */
+function getBBRider(c: Combatant): ActiveEffect | undefined {
+  return c.activeEffects.find(
+    e => e.effectType === 'movement_rider' && e.spellName === 'Booming Blade',
+  );
+}
+
 // ============================================================
 // 1. metadata
 // ============================================================
@@ -199,7 +229,7 @@ console.log('\n--- 5. riderDiceByLevel ---');
 }
 
 // ============================================================
-// 6. applyCantripEffect (module) — sets _boomingBladePendingDamageDice
+// 6. applyCantripEffect (module) — pushes movement_rider ActiveEffect
 // ============================================================
 console.log('\n--- 6. applyCantripEffect: sets flag ---');
 {
@@ -208,12 +238,12 @@ console.log('\n--- 6. applyCantripEffect: sets flag ---');
   const bf = makeBF([caster, target]);
   const state = makeState(bf);
 
-  eq('6a. flag undefined before', target._boomingBladePendingDamageDice, undefined);
+  eq('6a. no movement_rider before', hasBBRider(target), false);
 
   const ret = applyCantripEffect(caster, target, state);
   eq('6b. returns true', ret, true);
-  eq('6c. flag set to 1d8 (level 1 default)', target._boomingBladePendingDamageDice, '1d8');
-  eq('6d. casterId set', target._boomingBladeCasterId, 'fighter');
+  eq('6c. movement_rider dice = 1d8 (level 1 default)', getBBRider(target)?.payload.moveDamageDice, '1d8');
+  eq('6d. movement_rider casterId = fighter', getBBRider(target)?.casterId, 'fighter');
 
   const logEntry = state.log.events.find(
     (e: any) => e.type === 'action' && e.description.includes('Booming Blade'),
@@ -234,7 +264,7 @@ console.log('\n--- 7. dispatcher integration ---');
 
   dispatchCantrip(caster, target, 'Booming Blade', state);
 
-  eq('7a. dispatcher set flag = 1d8', target._boomingBladePendingDamageDice, '1d8');
+  eq('7a. dispatcher pushed movement_rider dice = 1d8', getBBRider(target)?.payload.moveDamageDice, '1d8');
   const logHit = state.log.events.find((e: any) => e.description.includes('Booming Blade'));
   assert('7b. dispatcher emitted Booming Blade log', logHit !== undefined);
 }
@@ -250,12 +280,12 @@ console.log('\n--- 8. dispatcher safety ---');
   const state = makeState(bf);
 
   dispatchCantrip(caster, target, 'Definitely Not A Cantrip', state);
-  eq('8a. unknown cantrip → no flag', target._boomingBladePendingDamageDice, undefined);
+  eq('8a. unknown cantrip → no movement_rider', hasBBRider(target), false);
   eq('8b. unknown cantrip → no log events', state.log.events.length, 0);
 }
 
 // ============================================================
-// 9. resetBudget cleanup clears the flag
+// 9. resetBudget cleanup clears the movement_rider
 // ============================================================
 console.log('\n--- 9. resetBudget cleanup ---');
 {
@@ -265,12 +295,11 @@ console.log('\n--- 9. resetBudget cleanup ---');
   const state = makeState(bf);
 
   applyCantripEffect(caster, target, state);
-  eq('9a. flag set', target._boomingBladePendingDamageDice, '1d8');
+  eq('9a. movement_rider active before resetBudget', hasBBRider(target), true);
 
   // Start of target's next turn — resetBudget clears the rider if not triggered.
   resetBudget(target);
-  eq('9b. flag cleared by resetBudget', target._boomingBladePendingDamageDice, undefined);
-  eq('9c. casterId cleared by resetBudget', target._boomingBladeCasterId, undefined);
+  eq('9b. movement_rider cleared by resetBudget', hasBBRider(target), false);
 }
 
 // ============================================================
@@ -303,9 +332,9 @@ console.log('\n--- 10. resolveAttack HIT → rider applies ---');
   const onHitDmg = 100 - target.currentHP;
   assert('10d. on-hit damage in 2..16 (2d8 crit)', onHitDmg >= 2 && onHitDmg <= 16,
     `onHitDmg = ${onHitDmg}`);
-  // Rider flag set after the hit (rider is 1d8, NOT doubled by crit).
-  eq('10e. rider flag set after hit', target._boomingBladePendingDamageDice, '1d8');
-  eq('10f. rider casterId set', target._boomingBladeCasterId, 'fighter');
+  // Rider set after the hit (rider is 1d8, NOT doubled by crit — PHB p.196).
+  eq('10e. movement_rider dice = 1d8 after hit', getBBRider(target)?.payload.moveDamageDice, '1d8');
+  eq('10f. movement_rider casterId = fighter', getBBRider(target)?.casterId, 'fighter');
 }
 
 // ============================================================
@@ -327,7 +356,7 @@ console.log('\n--- 11. resolveAttack MISS → no rider ---');
   const missEvent = state.log.events.find((e: any) => e.type === 'attack_miss');
   assert('11a. attack_miss logged', missEvent !== undefined);
   // No rider on a miss.
-  eq('11b. rider flag NOT set after miss', target._boomingBladePendingDamageDice, undefined);
+  eq('11b. no movement_rider after miss', hasBBRider(target), false);
 }
 
 // ============================================================
@@ -339,11 +368,11 @@ console.log('\n--- 12. executeMove willing move → rider detonates ---');
   const mover = makeCombatant('goblin', {
     pos: { x: 5, y: 5, z: 0 }, // start here
     ac: 10, currentHP: 100, maxHP: 100,
-    _boomingBladePendingDamageDice: '1d8',
-    _boomingBladeCasterId: 'fighter',
     // movement budget: 30 ft
     budget: { movementFt: 30, actionUsed: false, bonusActionUsed: false, reactionUsed: false, freeObjectUsed: false },
   });
+  // Inject movement_rider (as if caster landed BB on a prior hit).
+  mover.activeEffects.push(makeBBRider('fighter'));
   const bf = makeBF([caster, mover]);
   const state = makeState(bf);
 
@@ -357,9 +386,8 @@ console.log('\n--- 12. executeMove willing move → rider detonates ---');
   assert('12a. mover took rider damage (1..8)', dmgTaken >= 1 && dmgTaken <= 8,
     `dmgTaken = ${dmgTaken}`);
 
-  // The rider flag should be CLEARED after detonation (one-shot).
-  eq('12b. rider flag cleared after detonation', mover._boomingBladePendingDamageDice, undefined);
-  eq('12c. casterId cleared after detonation', mover._boomingBladeCasterId, undefined);
+  // The movement_rider should be CLEARED after detonation (one-shot, TCE p.106).
+  eq('12b. movement_rider cleared after detonation', hasBBRider(mover), false);
 
   // The detonation should be logged as a damage event mentioning Booming Blade.
   const detonationLog = state.log.events.find(
@@ -382,7 +410,7 @@ console.log('\n--- 13. no rider → no detonation ---');
   const mover = makeCombatant('goblin', {
     pos: { x: 5, y: 5, z: 0 },
     currentHP: 100, maxHP: 100,
-    // NO _boomingBladePendingDamageDice — rider not active.
+    // NO movement_rider pushed — rider not active.
     budget: { movementFt: 30, actionUsed: false, bonusActionUsed: false, reactionUsed: false, freeObjectUsed: false },
   });
   const bf = makeBF([mover]);
@@ -390,7 +418,7 @@ console.log('\n--- 13. no rider → no detonation ---');
 
   executeMove(mover, { x: 6, y: 5, z: 0 }, state, false);
 
-  eq('13a. no rider flag set (still undefined)', mover._boomingBladePendingDamageDice, undefined);
+  eq('13a. no movement_rider (never set)', hasBBRider(mover), false);
   eq('13b. mover HP unchanged (no rider)', mover.currentHP, 100);
 
   // No "detonates" damage event should be in the log.
@@ -406,7 +434,7 @@ console.log('\n--- 13. no rider → no detonation ---');
 // ============================================================
 console.log('\n--- 14. forced movement → no detonation ---');
 {
-  // Mover has the rider flag. Forced movement (Thorn Whip pull, Thunderwave push,
+  // Mover has a movement_rider. Forced movement (Thorn Whip pull, Thunderwave push,
   // grapple drag) modifies `pos` directly WITHOUT calling executeMove. The
   // Booming Blade hook lives inside executeMove, so forced movement does NOT
   // trigger the rider. PHB p.196 / TCE p.106: "willingly moves" = uses the
@@ -414,15 +442,15 @@ console.log('\n--- 14. forced movement → no detonation ---');
   const mover = makeCombatant('goblin', {
     pos: { x: 5, y: 0, z: 0 },
     currentHP: 100, maxHP: 100,
-    _boomingBladePendingDamageDice: '1d8',
-    _boomingBladeCasterId: 'fighter',
   });
+  // Inject movement_rider (as if caster landed BB on a prior hit).
+  mover.activeEffects.push(makeBBRider('fighter'));
 
   // Simulate forced movement: directly set pos (as Thorn Whip / Thunderwave do).
   mover.pos = { x: 3, y: 0, z: 0 }; // pulled 2 squares west (10 ft)
 
-  // The rider flag is STILL set (forced movement didn't trigger the hook).
-  eq('14a. rider flag still set after forced movement', mover._boomingBladePendingDamageDice, '1d8');
+  // The movement_rider is STILL active (forced movement didn't trigger the hook).
+  eq('14a. movement_rider still active after forced movement', hasBBRider(mover), true);
   // HP unchanged (no detonation).
   eq('14b. mover HP unchanged after forced movement', mover.currentHP, 100);
 }
@@ -436,13 +464,13 @@ console.log('\n--- 15. second move after detonation → no further damage ---');
   const mover = makeCombatant('goblin', {
     pos: { x: 6, y: 5, z: 0 },
     currentHP: 92, maxHP: 100, // took 8 thunder from the first detonation
-    // NO rider flag — already consumed.
+    // NO movement_rider — already consumed.
     budget: { movementFt: 30, actionUsed: false, bonusActionUsed: false, reactionUsed: false, freeObjectUsed: false },
   });
   const bf = makeBF([mover]);
   const state = makeState(bf);
 
-  eq('15a. rider flag undefined (consumed)', mover._boomingBladePendingDamageDice, undefined);
+  eq('15a. no movement_rider (already consumed)', hasBBRider(mover), false);
 
   // A second willing move does NOT re-trigger the rider.
   executeMove(mover, { x: 7, y: 5, z: 0 }, state, false);
@@ -480,7 +508,7 @@ console.log('\n--- 16. Booming Blade respects Total Cover ---');
   const damageEvent = state.log.events.find((e: any) => e.type === 'damage');
   assert('16a. Total Cover event logged', coverBlock !== undefined);
   assert('16b. no damage dealt (blocked by Total Cover)', damageEvent === undefined);
-  eq('16c. rider flag NOT set (blocked by cover)', target._boomingBladePendingDamageDice, undefined);
+  eq('16c. no movement_rider (blocked by Total Cover)', hasBBRider(target), false);
   eq('16d. target HP unchanged', target.currentHP, 100);
 }
 

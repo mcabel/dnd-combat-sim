@@ -57,6 +57,7 @@
 
 import { Combatant } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
+import { applySpellEffect } from '../engine/spell_effects';
 
 // ---- Metadata -----------------------------------------------
 
@@ -136,15 +137,13 @@ function emit(
  *   Implementation:
  *     target._boomingBladePendingDamageDice = riderDice
  *       (e.g. '1d8' at 1st–4th, '2d8' at 5th–10th, etc.)
- *     target._boomingBladeCasterId = caster.id
- *       (for log attribution when the rider detonates)
- *
- *   The rider is triggered by executeMove() in combat.ts (added
- *   in this session) — see the movement hook in executeMove.
- *   Forced movement (Thorn Whip pull, Thunderwave push, grapple
- *   drag) does NOT go through executeMove and does NOT trigger
- *   the rider (PHB p.196: "willingly" = uses the creature's own
- *   movement, not forced).
+ *   Session 48 (RFC-001): the rider is now a typed 'movement_rider'
+ *   ActiveEffect pushed to target.activeEffects, replacing the former
+ *   _boomingBladePendingDamageDice / _boomingBladeCasterId scratch fields.
+ *   executeMove() reads target.activeEffects for 'movement_rider' effects.
+ *   Forced movement (Thorn Whip pull, Thunderwave push, grapple drag)
+ *   does NOT go through executeMove and does NOT trigger the rider
+ *   (PHB p.196: "willingly" = uses the creature's own movement).
  *
  * @returns true if the rider was applied
  */
@@ -153,14 +152,20 @@ export function applyCantripEffect(
   target: Combatant,
   state: EngineState,
 ): boolean {
-  // v1: default to 1d8 rider. The AI/parser can override this by
-  // setting target._boomingBladePendingDamageDice before calling
-  // resolveAttack (it would do this when building the Action for
-  // a high-level caster). Here we use the 1st-level default.
+  // Session 48 (RFC-001): rider is now a typed 'movement_rider' ActiveEffect
+  // stored in target.activeEffects — replaces the former scratch fields
+  // (_boomingBladePendingDamageDice / _boomingBladeCasterId).
+  // executeMove reads target.activeEffects for 'movement_rider' effects;
+  // cleanup() removes them at the start of the target's next turn.
   const riderDice = metadata.riderDiceByLevel[1];
 
-  target._boomingBladePendingDamageDice = riderDice;
-  target._boomingBladeCasterId = caster.id;
+  applySpellEffect(target, {
+    casterId: caster.id,
+    spellName: 'Booming Blade',
+    effectType: 'movement_rider',
+    payload: { moveDamageDice: riderDice, moveDamageType: 'thunder' },
+    sourceIsConcentration: false,
+  });
 
   emit(
     state, 'action', caster.id,
@@ -185,12 +190,14 @@ export function applyCantripEffect(
  * with how Vicious Mockery and Mind Sliver are timed).
  */
 export function cleanup(combatant: Combatant): void {
-  if (combatant._boomingBladePendingDamageDice !== undefined) {
-    delete combatant._boomingBladePendingDamageDice;
-  }
-  if (combatant._boomingBladeCasterId !== undefined) {
-    delete combatant._boomingBladeCasterId;
-  }
+  // Session 48 (RFC-001): remove any unexpired movement_rider effect for
+  // Booming Blade at the start of the target's next turn (TCE p.106:
+  // rider expires before the start of the caster's next turn — v1 uses
+  // target's turn start as the clearance point, consistent with other
+  // cantrip cleanups).
+  combatant.activeEffects = combatant.activeEffects.filter(
+    e => !(e.effectType === 'movement_rider' && e.spellName === 'Booming Blade'),
+  );
 }
 
 // ---- Rider detonation helper --------------------------------

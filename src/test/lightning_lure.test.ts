@@ -37,7 +37,7 @@ import {
 import { applyCantripEffect as dispatchCantrip } from '../engine/cantrip_effects';
 import { resetBudget } from '../engine/utils';
 import { resolveAttack, CombatEvent } from '../engine/combat';
-import { Combatant, Action, Vec3, Cell, Obstacle } from '../types/core';
+import { Combatant, ActiveEffect, Action, Vec3, Cell, Obstacle } from '../types/core';
 
 let passed = 0, failed = 0;
 
@@ -526,10 +526,9 @@ console.log('\n--- 16. pull does NOT trigger Booming Blade (forced movement) ---
     str: 10,
     currentHP: 100, maxHP: 100,
     faction: 'enemy',
-    // Mark the target with Booming Blade's pending damage flag.
-    _boomingBladePendingDamageDice: '1d8',
-    _boomingBladeCasterId: 'other-caster',
   });
+  // Inject movement_rider to simulate BB landed on a prior turn (RFC-001).
+  target.activeEffects.push(makeBBRider('other-caster'));
   const bf = makeBF([caster, target]);
   const state = makeState(bf);
 
@@ -540,9 +539,9 @@ console.log('\n--- 16. pull does NOT trigger Booming Blade (forced movement) ---
   assert('16a. target was pulled by Lightning Lure',
     target.pos.x !== 3, `pos.x=${target.pos.x}`);
 
-  // Verify the Booming Blade flag is STILL set (NOT consumed by the pull).
-  eq('16b. Booming Blade flag still set (pull is forced movement)',
-    target._boomingBladePendingDamageDice, '1d8');
+  // Verify the movement_rider is STILL active (pull is forced — NOT willing movement).
+  eq('16b. movement_rider still active (pull is forced movement)',
+    hasBBRider(target), true);
 
   // Verify the damage taken = ONLY the Lightning Lure damage (1..8),
   // NOT Lightning Lure + Booming Blade detonation (which would be 1..8 + 1..8 = 2..16).
@@ -635,6 +634,24 @@ console.log('\n--- 18. Total Cover blocks Lightning Lure ---');
   eq('18c. target HP unchanged (spell blocked)', target.currentHP, 100);
   // Target NOT pulled.
   eq('18d. target NOT pulled (spell blocked)', target.pos.x, 2);
+}
+
+function makeBBRider(casterId: string, dice = '1d8') {
+  return {
+    id: `eff_bb_${casterId}`,
+    casterId,
+    spellName: 'Booming Blade',
+    effectType: 'movement_rider' as const,
+    payload: { moveDamageDice: dice, moveDamageType: 'thunder' as const },
+    sourceIsConcentration: false,
+  };
+}
+function hasBBRider(c: any, dice = '1d8'): boolean {
+  return (c.activeEffects ?? []).some(
+    (e: any) => e.effectType === 'movement_rider' &&
+                e.spellName === 'Booming Blade' &&
+                e.payload.moveDamageDice === dice,
+  );
 }
 
 // ============================================================

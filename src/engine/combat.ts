@@ -2460,39 +2460,37 @@ export function executeMove(
     undefined);
   mover.pos = { ...dest };
 
-  // ── Booming Blade (TCE p.106) movement-triggered rider ──────────────────
-  // If the mover is sheathed in booming energy from a Booming Blade hit and
-  // just moved WILLINGLY 5+ ft (executeMove is only called for willing
-  // movement — forced movement like Thorn Whip pull / Thunderwave push /
-  // grapple drag modifies `pos` directly without calling executeMove), roll
-  // the stored thunder dice, apply the damage, and clear the rider.
+  // ── Movement riders (Session 48 RFC-001) ────────────────────────────────
+  // If the mover has any 'movement_rider' ActiveEffect and just moved
+  // WILLINGLY 5+ ft (executeMove is only called for willing movement —
+  // forced movement like Thorn Whip pull / Thunderwave push / grapple drag
+  // modifies `pos` directly without calling executeMove), fire each rider,
+  // apply the damage, and clear it.
+  //
+  // Current rider: Booming Blade (TCE p.106) — thunder damage when the
+  // sheathed target willingly moves. Architecture is generic so any future
+  // movement-triggered spell can push a 'movement_rider' effect and fire here.
   //
   // PHB p.196 / TCE p.106: "If the target willingly moves 5 feet or more
   // before then [the start of the caster's next turn], the target takes
-  // 1d8 thunder damage, and the spell ends." Movement via Dash, normal
-  // movement, or Cunning Action all count as willing. Being pushed/pulled/
-  // dragged does NOT. The cost ≥5 ft check excludes the no-op case where
-  // dest === fromPos (already-there early return above handles that too).
-  if (mover._boomingBladePendingDamageDice && cost >= 5) {
-    const dice = mover._boomingBladePendingDamageDice;
-    const casterId = mover._boomingBladeCasterId;
-    const casterLabel = casterId
-      ? (bf.combatants.get(casterId)?.name ?? casterId)
-      : 'Booming Blade';
-    const dmg = rollDiceString(dice);
-    // Apply with thunder damage type so resistances/immunities compose
-    // correctly via applyDamageWithTempHP (Blade Ward doesn't apply — it
-    // only resists B/P/S — but other sources like a hypothetical thunder
-    // resistance would).
-    const dealt = applyDamageWithTempHP(mover, dmg, 'thunder');
-    log(state, 'damage', mover.id,
-      `${casterLabel}'s Booming Blade detonates as ${mover.name} moves willingly — ${dealt} thunder damage! (rolled ${dmg} on ${dice})`,
-      mover.id, dealt);
-    // Clear the rider (spell ends, TCE p.106).
-    delete mover._boomingBladePendingDamageDice;
-    delete mover._boomingBladeCasterId;
-    // If the mover died from the rider damage, skip the OA loop.
-    if (mover.isDead || mover.isUnconscious) return;
+  // 1d8 thunder damage, and the spell ends." The cost ≥5 ft check excludes
+  // the no-op case where dest === fromPos (already-there early return above).
+  if (cost >= 5) {
+    const movementRiders = mover.activeEffects.filter(e => e.effectType === 'movement_rider');
+    for (const rider of movementRiders) {
+      const dice = rider.payload.moveDamageDice ?? '1d8';
+      const dmgType = rider.payload.moveDamageType ?? 'thunder';
+      const casterLabel = bf.combatants.get(rider.casterId)?.name ?? rider.spellName;
+      const dmg = rollDiceString(dice);
+      const dealt = applyDamageWithTempHP(mover, dmg, dmgType);
+      log(state, 'damage', mover.id,
+        `${casterLabel}'s ${rider.spellName} detonates as ${mover.name} moves willingly — ${dealt} ${dmgType} damage! (rolled ${dmg} on ${dice})`,
+        mover.id, dealt);
+      // Clear this rider (spell ends, TCE p.106).
+      mover.activeEffects = mover.activeEffects.filter(e => e.id !== rider.id);
+      // If the mover died from the rider damage, skip the OA loop.
+      if (mover.isDead || mover.isUnconscious) return;
+    }
   }
 
   // OA check: did any watcher's melee reach get left?

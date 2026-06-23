@@ -2,36 +2,44 @@
 
 ## Active Objective
 
-**TG-001: Persistent-buff subsystem** — concentration-tracked per-turn riders
-(Green-Flame Blade lingering fire, Booming Blade thunder rider, Sapping Sting
-prone-on-move, etc.) currently fire via one-shot logic in individual spell
-modules. A unified `applyOngoingEffect` hook called from `resetBudget` /
-`beginTurn` is needed so these riders persist correctly across rounds.
+**TG-005: Witch Bolt** — implement Witch Bolt (PHB p.289) as a concentration
+spell that deals 1d12 lightning damage on hit, then 1d12 per turn if the caster
+uses their action to maintain it and the target stays in range (≤30 ft). Both
+initial hit and subsequent ticks use `applySpellEffect` / `activeEffects`;
+concentration broken by caster taking damage. Cantrip-z owns spell module;
+Core Engine owns planner branch and concentration-break hook.
 
 ## Current Phase
 
-Not started. Prerequisite groundwork is complete:
-- Concentration enforcement (TG-002) ✅
-- Parser fields incl. `isUndead`/`isConstruct`/`hasMetalArmor` (TG-004) ✅
-- Cantrip planner branches 13A-13N (TG-003) ✅
-- Reaction registry / TG-008 partial (Shield, Hellish Rebuke, Absorb Elements,
-  Feather Fall, Silvery Barbs, Counterspell, Dispel Magic, Prot. from Energy) ✅
+Not started.
 
 ## Acceptance Criteria
 
-- `Combatant` has a typed `ongoingEffects` collection (or reuses `activeEffects`)
-- At least Booming Blade thunder rider and GFB lingering fire use it
-- Per-turn damage triggers correctly on move / start-of-turn
-- Existing tests do not regress
+- `witch_bolt.ts` spell module with `shouldCast / execute / metadata`
+- On-hit: applies `damage_zone`-style tick rider as a `concentration` effect
+- Per-turn action cost: planner consumes action slot when maintaining
+- Range check (30 ft): if caster or target moves out of range, effect ends
+- Concentration broken on caster damage (already wired in `applyDamageWithTempHP`)
+- Passing tests covering hit, miss, maintain, break on move, break on damage
 
 ## Immediate Priority
 
-1. Read ROADMAP.md for subsystem boundary guidance
-2. Audit `activeEffects` on `Combatant` — determine if it can be extended or
-   a new `ongoingEffects` array is needed
-3. Design minimal hook; RFC to TEAMGOALS.md before touching `combat.ts`
+1. Check TEAMGOALS.md for Cantrip-z Witch Bolt status (TG-005)
+2. Post RFC if touching `runCombat` loop
+3. Implement planner branch in `planner.ts`
 
 ## Notes
 
+**GFB lingering fire discrepancy** (documented Session 48):
+TASK.md previously claimed Green-Flame Blade has a "lingering fire" persistent
+rider. This is incorrect — GFB's fire splash is INSTANT (applied on hit,
+TCE p.107). No cross-round persistence is needed or implemented. The TASK.md
+description was erroneous. TG-001 closure covers only Booming Blade thunder
+rider migration; GFB requires no change.
+
+**TG-001 closure** (Session 48):
+`_boomingBladePendingDamageDice` / `_boomingBladeCasterId` scratch fields on
+`Combatant` replaced by a typed `'movement_rider'` entry in `activeEffects`.
+RFC-001 in TEAMGOALS.md. All 4 affected test files updated. Zero regressions.
+
 - Sheet agent owns `leveler.ts` / `builder.ts` — do not touch
-- Cantrip-z's summon Phase 1 is live; RFC required before Phase 2 (`combat.ts`)

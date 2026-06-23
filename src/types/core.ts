@@ -108,6 +108,8 @@ export type SpellEffectType =
   | 'terrain_zone'          // persistent terrain effect on the battlefield (Grease/Sleet Storm/Watery Sphere)
   | 'exhaustion_level'      // increment exhaustion level (Sickening Radiance XGE p.164, future spells)
   | 'invisible'             // true invisibility: attacks vs creature have disadv + own attacks have adv (PHB p.194)
+  // ── Session 48 — movement_rider typed effect (replaces BB scratch fields) ──
+  | 'movement_rider'        // fires when bearer willingly moves 5+ ft; cleared at bearer's next turn start
   // ── Session 27 — Batch 3 concentration buffs ────────────────────────
   // bane_die: inverse of bless_die (Bane PHB p.219: -1d4 to attacks/saves).
   // weapon_enchant extended with damageDie/damageDieCount/damageDieType
@@ -243,6 +245,12 @@ export interface ActiveEffect {
     terrainCenterY?: number;                              // center position Y (grid squares)
     terrainCenterZ?: number;                              // center position Z (grid squares)
     terrainDifficulty?: boolean;                          // if true, this terrain_zone marks cells as difficult terrain (PHB p.182)
+    // ── movement_rider (Session 48 — replaces _boomingBladePendingDamageDice) ─
+    // Fires in executeMove when the bearer willingly moves 5+ ft. Cleared
+    // at the start of the bearer's next turn by the spell module's cleanup()
+    // (called from resetBudget). Stored on the TARGET (the hit combatant).
+    moveDamageDice?: string;      // e.g. '1d8' for Booming Blade thunder rider
+    moveDamageType?: DamageType;  // e.g. 'thunder'
   };
   sourceIsConcentration: boolean;     // if true, removed when caster's concentration ends
   /**
@@ -792,25 +800,10 @@ export interface Combatant {
   // with how Vicious Mockery is timed).
   _mindSliverDiePenaltyNextSave?: number;
 
-  // ---- Booming Blade (TCE p.106) scratch fields ----
-  // Set on the TARGET when it is hit by Booming Blade (post-hit rider
-  // dispatched from CANTRIP_EFFECTS). The target becomes sheathed in
-  // booming energy until the start of the caster's next turn. If the
-  // target WILLS itself to move 5+ ft before then (i.e. executeMove is
-  // called on it — forced movement like Thorn Whip pull / Thunderwave
-  // push bypasses executeMove and does NOT trigger this rider), it
-  // immediately takes thunder damage equal to the stored dice string
-  // (e.g. '1d8') and the spell ends.
-  //
-  // _boomingBladePendingDamageDice: dice expression to roll on willing
-  //   movement (e.g. '1d8', '2d8' at higher levels). Cleared by cleanup()
-  //   called from resetBudget() if not triggered by movement before the
-  //   start of the target's next turn (codebase convention — slightly
-  //   more lenient than PHB's "start of caster's next turn").
-  // _boomingBladeCasterId: ID of the caster who applied the rider, used
-  //   for log attribution when the rider detonates. Optional.
-  _boomingBladePendingDamageDice?: string;
-  _boomingBladeCasterId?: string;
+  // ---- Booming Blade (TCE p.106) movement rider ----
+  // Session 48: migrated from scratch fields (_boomingBladePendingDamageDice /
+  // _boomingBladeCasterId) to a typed ActiveEffect with effectType 'movement_rider'
+  // in target.activeEffects. See RFC-001 in TEAMGOALS.md.
 
   // ---- Frostbite (XGE p.156) scratch field ----
   // Set on the TARGET when it fails its CON save against Frostbite

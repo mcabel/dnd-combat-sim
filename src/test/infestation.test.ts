@@ -547,10 +547,9 @@ console.log('\n--- 19. forced movement does NOT trigger Booming Blade ---');
   const target = makeCombatant('goblin', {
     pos: { x: 12, y: 10, z: 0 },
     con: 10, currentHP: 100, maxHP: 100, faction: 'enemy',
-    // Mark the target with Booming Blade's pending damage flag.
-    _boomingBladePendingDamageDice: '1d8',
-    _boomingBladeCasterId: 'other-caster',
   });
+  // Inject movement_rider to simulate BB landed on a prior turn (RFC-001).
+  target.activeEffects.push(makeBBRider('other-caster'));
   const bf = makeBF([caster, target]);
   const state = makeState(bf);
 
@@ -561,9 +560,9 @@ console.log('\n--- 19. forced movement does NOT trigger Booming Blade ---');
   assert('19a. target was moved by Infestation',
     target.pos.x !== 12 || target.pos.y !== 10, `pos=(${target.pos.x},${target.pos.y})`);
 
-  // Verify the Booming Blade flag is STILL set (NOT consumed by the move).
-  eq('19b. Booming Blade flag still set (move is forced movement)',
-    target._boomingBladePendingDamageDice, '1d8');
+  // Verify the movement_rider is STILL active (Infestation move is forced — NOT willing).
+  eq('19b. movement_rider still active (move is forced movement)',
+    hasBBRider(target), true);
 
   // Verify the damage taken = ONLY the Infestation damage (1..6 poison),
   // NOT Infestation + Booming Blade detonation (which would be 1..6 + 1..8 = 2..14).
@@ -770,6 +769,24 @@ console.log('\n--- 23. Huge target IS moved (no size constraint) ---');
       `pos=(${hugeTarget.pos.x},${hugeTarget.pos.y})`);
     if (hugeTarget.pos.x === 12 && hugeTarget.pos.y === 10) break; // stop on first failure
   }
+}
+
+function makeBBRider(casterId: string, dice = '1d8') {
+  return {
+    id: `eff_bb_${casterId}`,
+    casterId,
+    spellName: 'Booming Blade',
+    effectType: 'movement_rider' as const,
+    payload: { moveDamageDice: dice, moveDamageType: 'thunder' as const },
+    sourceIsConcentration: false,
+  };
+}
+function hasBBRider(c: any, dice = '1d8'): boolean {
+  return (c.activeEffects ?? []).some(
+    (e: any) => e.effectType === 'movement_rider' &&
+                e.spellName === 'Booming Blade' &&
+                e.payload.moveDamageDice === dice,
+  );
 }
 
 // ============================================================

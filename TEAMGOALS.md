@@ -400,7 +400,26 @@ completed by a single agent without coordination.
 > RFCs are PROPOSED — they become binding only when an owning agent implements
 > them and removes the RFC section.
 
-(none yet)
+### RFC-001: `movement_rider` ActiveEffect type (replaces BB scratch fields)
+
+- **Proposed by:** Core Engine (Session 48)
+- **Target file:** `src/types/core.ts` (`SpellEffectType` + `ActiveEffect.payload`)
+- **Shape:**
+  ```typescript
+  // Added to SpellEffectType union:
+  | 'movement_rider'   // fires when bearer willingly moves 5+ ft; cleared at start of bearer's next turn
+
+  // Added to ActiveEffect.payload:
+  moveDamageDice?: string;      // e.g. '1d8' for Booming Blade thunder rider
+  moveDamageType?: DamageType;  // e.g. 'thunder'
+  ```
+- **Rationale:** `_boomingBladePendingDamageDice` / `_boomingBladeCasterId` are loose untyped scratch
+  fields on `Combatant`. Migrating to a typed `movement_rider` entry in `activeEffects` makes the
+  pattern extensible (any future spell with a movement trigger reuses the same infra) and inherits
+  `removeEffectsFromCaster` lifecycle management for free.
+- **Files touched:** `core.ts`, `spell_effects.ts`, `combat.ts` (`executeMove`), `booming_blade.ts`.
+  No `runCombat` loop change — only `executeMove`. Cantrip-z: no action required.
+- **Status:** APPROVED (Core Engine self-approves; Cantrip-z owns no affected files)
 
 ### TG-013: Move `rollDiceString` from `booming_blade.ts` to `utils.ts`
 

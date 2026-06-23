@@ -599,10 +599,9 @@ console.log('\n--- 21. forced movement does NOT trigger Booming Blade ---');
     pos: { x: 7, y: 5, z: 0 },
     size: 'Medium',
     str: 10, currentHP: 100, maxHP: 100, faction: 'enemy',
-    // Mark the target with Booming Blade's pending damage flag.
-    _boomingBladePendingDamageDice: '1d8',
-    _boomingBladeCasterId: 'other-caster',
   });
+  // Inject movement_rider to simulate BB landed on a prior turn (RFC-001).
+  target.activeEffects.push(makeBBRider('other-caster'));
   const bf = makeBF([caster, target]);
   const state = makeState(bf);
 
@@ -612,9 +611,9 @@ console.log('\n--- 21. forced movement does NOT trigger Booming Blade ---');
   assert('21a. target was moved by Gust',
     target.pos.x !== 7 || target.pos.y !== 5, `pos=(${target.pos.x},${target.pos.y})`);
 
-  // Verify the Booming Blade flag is STILL set (NOT consumed by the move).
-  eq('21b. Booming Blade flag still set (move is forced movement)',
-    target._boomingBladePendingDamageDice, '1d8');
+  // Verify the movement_rider is STILL active (Gust push is forced — NOT willing movement).
+  eq('21b. movement_rider still active (move is forced movement)',
+    hasBBRider(target), true);
 
   // Verify NO damage was dealt (Gust has no damage dice; Booming Blade
   // did NOT detonate). The target's HP should be unchanged at 100.
@@ -728,6 +727,24 @@ console.log('\n--- 24. push direction AWAY (vs Thorn Whip / Lightning Lure TOWAR
   assert('24b. push log mentions "away"',
     pushLog !== undefined,
     `events: ${state.log.events.map((e: CombatEvent) => e.description).join(' | ')}`);
+}
+
+function makeBBRider(casterId: string, dice = '1d8') {
+  return {
+    id: `eff_bb_${casterId}`,
+    casterId,
+    spellName: 'Booming Blade',
+    effectType: 'movement_rider' as const,
+    payload: { moveDamageDice: dice, moveDamageType: 'thunder' as const },
+    sourceIsConcentration: false,
+  };
+}
+function hasBBRider(c: any, dice = '1d8'): boolean {
+  return (c.activeEffects ?? []).some(
+    (e: any) => e.effectType === 'movement_rider' &&
+                e.spellName === 'Booming Blade' &&
+                e.payload.moveDamageDice === dice,
+  );
 }
 
 // ============================================================

@@ -127,11 +127,14 @@ export function applySpellEffect(
     case 'weapon_enchant':
     case 'enlarge_reduce':
     case 'terrain_zone':
+    case 'movement_rider':
       // No immediate side-effect — read at resolution time.
       // (damage_zone: the start-of-turn damage tick is in combat.ts's
       // runCombat loop, right after resetBudget.)
       // (terrain_zone: the start-of-turn terrain check is in combat.ts's
       // runCombat loop, after damage_zone ticks.)
+      // (movement_rider: fires in executeMove when bearer willingly moves
+      // 5+ ft; cleared at start of bearer's next turn by cleanup().)
       break;
   }
 
@@ -283,6 +286,7 @@ function _undoEffect(target: Combatant, effect: ActiveEffect): void {
     case 'weapon_enchant':
     case 'enlarge_reduce':
     case 'terrain_zone':
+    case 'movement_rider':
       // Read-only at resolution — nothing to undo structurally.
       break;
 
