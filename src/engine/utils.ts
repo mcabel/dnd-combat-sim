@@ -707,6 +707,10 @@ export function resetBudget(c: Combatant): void {
     reactionUsed: false,        // reaction resets at START of own turn (PHB p.190)
     freeObjectUsed: false,
   };
+  // Session 53 Batch 4g: capture turn-start position for Charge/Pounce
+  // movement-tracking. Compares _turnStartPos → current pos vs target pos
+  // to determine if the creature "moved ≥N ft straight toward the target".
+  c._turnStartPos = { ...c.pos };
   // Legendary action pool resets at start of own turn (MM p.11)
   c.legendaryActionPool = c.legendaryActionPoolMax;
 

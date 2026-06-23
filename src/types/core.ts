@@ -741,6 +741,61 @@ export interface Combatant {
    */
   incorporealMovement?: boolean;
 
+  /**
+   * ── Session 53 Creature Megabatch Batch 4g: Charge ──
+   * MM p.11 / various: "If the [creature] moves at least N feet straight
+   * toward a target and then hits it with a [weapon] attack on the same
+   * turn, the target takes an extra XdY [type] damage. If the target is a
+   * creature, it must succeed on a DC N Strength saving throw or be pushed
+   * up to M feet away and knocked prone."
+   *
+   * 49 pre-2024 creatures. The rider fires when:
+   *   - The creature moved ≥ `minMoveFt` toward the target this turn
+   *     (measured as: distance at turn start - distance now ≥ minMoveFt)
+   *   - The creature hits with a melee attack
+   * v1 simplification: "straight toward" is approximated as net movement
+   * toward the target (Chebyshev distance decreased), not a literal
+   * straight-line path.
+   */
+  charge?: {
+    minMoveFt: number;
+    damage: DiceExpression;
+    damageType: DamageType;
+    saveDC: number;
+    pushFt?: number;      // optional push distance (0 = no push)
+    knockProne: boolean;  // true if failed save knocks prone
+  };
+
+  /**
+   * ── Session 53 Creature Megabatch Batch 4g: Pounce ──
+   * MM p.11 / various: "If the [creature] moves at least N feet straight
+   * toward a creature and then hits it with a [weapon] attack on the same
+   * turn, that target must succeed on a DC N Strength saving throw or be
+   * knocked prone. If the target is prone, the [creature] can make one
+   * [weapon] attack against it as a bonus action."
+   *
+   * 24 pre-2024 creatures. Same movement trigger as Charge. The rider
+   * applies a STR save vs prone. The bonus-action attack is v1-deferred
+   * (would need planner integration to check if target is prone + queue
+   * the bonus action — complex; the prone save is the main mechanical
+   * effect).
+   */
+  pounce?: {
+    minMoveFt: number;
+    saveDC: number;
+    bonusActionAttackName?: string;  // e.g. "Bite" — metadata only in v1
+  };
+
+  /**
+   * ── Session 53 Creature Megabatch Batch 4g: Turn-start position tracking ──
+   * Internal scratch field set by resetBudget() at the start of each turn.
+   * Used by Charge/Pounce to check "did the creature move ≥N ft toward the
+   * target this turn?" Compares _turnStartPos → current pos vs target pos.
+   * Undefined on turn 1 (before first resetBudget call) — treated as
+   * current position (no movement credit).
+   */
+  _turnStartPos?: Vec3;
+
   // Turn resources
   budget: ActionBudget;
 

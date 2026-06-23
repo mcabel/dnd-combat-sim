@@ -2111,6 +2111,72 @@ export function resolveAttack(
     }
 
     const dealt = applyDamageWithTempHP(target, dmg, action.damageType);
+
+    // ── Session 53 Batch 4g: Charge / Pounce movement-triggered rider ──
+    // Fires when the attacker moved ≥ minMoveFt toward the target this turn
+    // (measured as: Chebyshev distance at turn start - Chebyshev distance now
+    // ≥ minMoveFt, in feet). v1 simplification: "straight toward" = net
+    // movement toward target (not literal straight-line path).
+    if ((attacker.charge || attacker.pounce) && attacker._turnStartPos) {
+      const distBefore = chebyshev3D(attacker._turnStartPos, target.pos) * 5;
+      const distAfter = chebyshev3D(attacker.pos, target.pos) * 5;
+      const movedToward = distBefore - distAfter;
+
+      // Charge rider: extra damage + STR save vs push/prone
+      if (attacker.charge && movedToward >= attacker.charge.minMoveFt) {
+        const chargeDmg = rollDice(attacker.charge.damage);
+        const chargeDealt = applyDamageWithTempHP(target, chargeDmg, attacker.charge.damageType);
+        log(state, 'damage', attacker.id,
+          `${attacker.name}'s Charge deals +${chargeDealt} ${attacker.charge.damageType} damage to ${target.name}!`,
+          target.id, chargeDealt);
+        // STR save vs push/prone (only if the Charge variant has a save DC;
+        // some variants like Centaur only deal extra damage, no save)
+        if (attacker.charge.saveDC > 0) {
+          const save = rollSave(target, 'str', attacker.charge.saveDC);
+          if (!save.success) {
+            if (attacker.charge.pushFt && attacker.charge.pushFt > 0) {
+              const dx = Math.sign(target.pos.x - attacker.pos.x);
+              const dy = Math.sign(target.pos.y - attacker.pos.y);
+              const pushSquares = Math.floor(attacker.charge.pushFt / 5);
+              target.pos.x = Math.max(0, Math.min(bf.width - 1, target.pos.x + dx * pushSquares));
+              target.pos.y = Math.max(0, Math.min(bf.height - 1, target.pos.y + dy * pushSquares));
+              log(state, 'action', attacker.id,
+                `${target.name} is pushed ${attacker.charge.pushFt} ft away by ${attacker.name}'s Charge!`,
+                target.id);
+            }
+            if (attacker.charge.knockProne) {
+              addCondition(target, 'prone');
+              log(state, 'condition_add', attacker.id,
+                `${target.name} is knocked prone by ${attacker.name}'s Charge!`,
+                target.id);
+            }
+          } else {
+            log(state, 'save_success', target.id,
+              `${target.name} resists ${attacker.name}'s Charge push/prone (STR save ${save.total} vs DC ${attacker.charge.saveDC}).`,
+              target.id, save.roll);
+          }
+        }
+      }
+
+      // Pounce rider: STR save vs prone (no damage)
+      if (attacker.pounce && movedToward >= attacker.pounce.minMoveFt) {
+        const save = rollSave(target, 'str', attacker.pounce.saveDC);
+        if (!save.success) {
+          addCondition(target, 'prone');
+          log(state, 'condition_add', attacker.id,
+            `${target.name} is knocked prone by ${attacker.name}'s Pounce!`,
+            target.id);
+          // v1 simplification: the bonus-action attack against a prone target
+          // is NOT modelled (would need planner integration to queue a bonus
+          // action). The prone condition is the main mechanical effect.
+        } else {
+          log(state, 'save_success', target.id,
+            `${target.name} resists ${attacker.name}'s Pounce (STR save ${save.total} vs DC ${attacker.pounce.saveDC}).`,
+            target.id, save.roll);
+        }
+      }
+    }
+
     // TG-008: Absorb Elements / Hellish Rebuke reaction trigger (XGE p.150 / PHB p.249)
     // These fire AFTER damage is applied. The triggering damage still applies
     // (resistance from Absorb Elements protects against FUTURE damage of

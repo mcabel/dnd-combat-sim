@@ -404,6 +404,114 @@ function parseDeathBurst(
   return undefined;
 }
 
+/**
+ * Session 53 Batch 4g: parse a Charge trait. Scans the trait entries
+ * (flattened + 5etools tags stripped) for:
+ *   - "moves at least N feet straight toward" → minMoveFt = N
+ *   - "extra X (YdZ) [type] damage" → damage + damageType
+ *   - "DC N Strength saving throw" → saveDC = N
+ *   - "pushed up to M feet away" → pushFt = M (optional)
+ *   - "knocked prone" → knockProne = true
+ *
+ * Returns undefined if the trait name isn't "Charge" or no minMoveFt is found.
+ */
+function parseCharge(
+  traits: { name: string; entries: (string | object)[] }[],
+): Combatant['charge'] | undefined {
+  const VALID_DAMAGE_TYPES: ReadonlySet<string> = new Set<DamageType>([
+    'acid', 'bludgeoning', 'cold', 'fire', 'force', 'lightning',
+    'necrotic', 'piercing', 'poison', 'psychic', 'radiant', 'slashing', 'thunder',
+  ]);
+  for (const t of traits) {
+    if (!/^Charge$/i.test(t.name.trim())) continue;
+    const rawText = flattenEntries(t.entries);
+    const text = rawText.replace(/\{@(\w+)\s+([^}]+)\}/g, (_m, _tag, args) => {
+      return String(args).split('|')[0].trim();
+    });
+
+    // minMoveFt: "moves at least 20 feet straight toward"
+    const minMatch = text.match(/moves\s+at\s+least\s+(\d+)\s+feet\s+straight\s+toward/i);
+    if (!minMatch) continue;
+    const minMoveFt = parseInt(minMatch[1], 10);
+
+    // Damage: "extra 27 (6d8) bludgeoning damage" or "extra 11 (2d10) slashing"
+    // After tag stripping: "extra 27 (6d8) bludgeoning damage"
+    let damage: DiceExpression | undefined;
+    let damageType: DamageType = 'bludgeoning';
+    const dmgMatch = text.match(/(\d+)d(\d+)/i);
+    if (dmgMatch) {
+      const count = parseInt(dmgMatch[1], 10);
+      const sides = parseInt(dmgMatch[2], 10);
+      const bonusMatch = text.match(/\d+d\d+\s*\+\s*(\d+)/i);
+      const bonus = bonusMatch ? parseInt(bonusMatch[1], 10) : 0;
+      const average = Math.floor(count * (sides + 1) / 2) + bonus;
+      damage = { count, sides, bonus, average };
+      for (const dt of VALID_DAMAGE_TYPES) {
+        if (new RegExp(`\\b${dt}\\b`, 'i').test(text)) {
+          damageType = dt as DamageType;
+          break;
+        }
+      }
+    }
+    if (!damage) continue; // no damage → not a valid Charge
+
+    // Save DC: after tag stripping, "{@dc 21}" → "21", so the text reads
+    // "succeed on a 21 Strength saving throw". Match "(?:dc )?N Strength".
+    // Some Charge variants (e.g. Centaur) have NO save — just extra damage.
+    // saveDC is optional; if absent, pushFt/knockProne are not applied.
+    const dcMatch = text.match(/(?:dc\s+)?(\d+)\s+strength/i);
+    const saveDC = dcMatch ? parseInt(dcMatch[1], 10) : 0;  // 0 = no save
+
+    // Push: "pushed up to 20 feet away" (optional)
+    const pushMatch = text.match(/pushed\s+up\s+to\s+(\d+)\s+feet/i);
+    const pushFt = pushMatch ? parseInt(pushMatch[1], 10) : undefined;
+
+    // Knock prone: "knocked prone" or "knocked {@condition prone}"
+    const knockProne = /\bprone\b/i.test(text);
+
+    return { minMoveFt, damage, damageType, saveDC, pushFt, knockProne };
+  }
+  return undefined;
+}
+
+/**
+ * Session 53 Batch 4g: parse a Pounce trait. Scans for:
+ *   - "moves at least N feet straight toward" → minMoveFt = N
+ *   - "DC N Strength saving throw" → saveDC = N
+ *   - "make one [weapon] attack against it as a bonus action" → bonusActionAttackName
+ *
+ * Returns undefined if the trait name isn't "Pounce" or no minMoveFt is found.
+ */
+function parsePounce(
+  traits: { name: string; entries: (string | object)[] }[],
+): Combatant['pounce'] | undefined {
+  for (const t of traits) {
+    if (!/^Pounce$/i.test(t.name.trim())) continue;
+    const rawText = flattenEntries(t.entries);
+    const text = rawText.replace(/\{@(\w+)\s+([^}]+)\}/g, (_m, _tag, args) => {
+      return String(args).split('|')[0].trim();
+    });
+
+    // minMoveFt: "moves at least 30 feet straight toward"
+    const minMatch = text.match(/moves\s+at\s+least\s+(\d+)\s+feet\s+straight\s+toward/i);
+    if (!minMatch) continue;
+    const minMoveFt = parseInt(minMatch[1], 10);
+
+    // Save DC: after tag stripping, "{@dc 13}" → "13", so the text reads
+    // "succeed on a 13 Strength saving throw". Match "(?:dc )?N Strength".
+    const dcMatch = text.match(/(?:dc\s+)?(\d+)\s+strength/i);
+    if (!dcMatch) continue;
+    const saveDC = parseInt(dcMatch[1], 10);
+
+    // Bonus action attack: "make one bite attack" or "make one claw attack"
+    const bonusMatch = text.match(/make\s+one\s+(\w+)\s+attack/i);
+    const bonusActionAttackName = bonusMatch ? bonusMatch[1] : undefined;
+
+    return { minMoveFt, saveDC, bonusActionAttackName };
+  }
+  return undefined;
+}
+
 export function parseAction(
   raw: RawAction,
   costType: Action['costType'] = 'action',
@@ -1007,6 +1115,9 @@ export function monsterToCombatant(
   // Session 53 Batch 4f: Superior Invisibility + Incorporeal Movement
   const superiorInvisibility = traits.some(t => /^Superior\s+Invisibility$/i.test(t.trim()));
   const incorporealMovement = traits.some(t => /^Incorporeal\s+Movement$/i.test(t.trim()));
+  // Session 53 Batch 4g: Charge + Pounce (movement-triggered riders)
+  const charge = parseCharge(raw.trait ?? []);
+  const pounce = parsePounce(raw.trait ?? []);
   // Hold Breath: extract the minutes count from the entry text
   // ("can hold its breath for 1 hour" → 60 minutes; "for 30 minutes" → 30)
   let holdBreathMinutes: number | undefined;
@@ -1061,6 +1172,8 @@ export function monsterToCombatant(
     holdBreathMinutes,     // Session 53 Batch 4e: N minutes (undefined if no Hold Breath trait)
     superiorInvisibility,  // Session 53 Batch 4f: true for Superior Invisibility trait
     incorporealMovement,   // Session 53 Batch 4f: true for Incorporeal Movement trait
+    charge,                // Session 53 Batch 4g: undefined for non-Charge creatures
+    pounce,                // Session 53 Batch 4g: undefined for non-Pounce creatures
     budget: freshBudget(speeds.ground),
     conditions: new Set(),
     aiProfile: resolvedProfile,

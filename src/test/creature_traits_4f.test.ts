@@ -174,8 +174,8 @@ console.log('\n=== 4. Engine — Superior Invisibility grants attack advantage =
 
   const enemy = spawn('Goblin', { x: 5, y: 6, z: 0 });
 
-  // attackAdvantageState(attacker, target, attackType) returns {advantage, disadvantage}
-  const advState = attackAdvantageState(faerie, enemy, 'melee');
+  // attackAdvantageState(attacker, target) returns {advantage, disadvantage}
+  const advState = attackAdvantageState(faerie, enemy);
   assert('Invisible attacker has advantage on attack', advState.advantage === true);
 }
 
@@ -189,7 +189,7 @@ console.log('\n=== 5. Engine — Superior Invisibility imposes disadvantage on a
 
   const attacker = spawn('Goblin', { x: 5, y: 6, z: 0 });
 
-  const advState = attackAdvantageState(attacker, faerie, 'melee');
+  const advState = attackAdvantageState(attacker, faerie);
   assert('Attack vs invisible creature has disadvantage', advState.disadvantage === true);
 }
 
