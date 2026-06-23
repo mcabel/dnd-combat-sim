@@ -851,6 +851,10 @@ export function monsterToCombatant(
   const legendaryResistance = parseLegendaryResistance(traits);
   // Session 52 Batch 4b: parse Regeneration trait (amount + stop-clause types)
   const regeneration = parseRegeneration(raw.trait ?? []);
+  // Session 52 Batch 4c/4e: trait-name flags (parsed once at spawn; engine
+  // checks the flag rather than re-scanning the traits array each call).
+  const attacksAreMagical = traits.some(t => /^Magic\s+Weapons$/i.test(t.trim()));
+  const cannotRegainHP = traits.some(t => /^Swarm/i.test(t.trim()));
 
   return {
     id: nextId(raw.name),
@@ -880,6 +884,8 @@ export function monsterToCombatant(
     legendaryActionPoolMax: legendaryPoolMax,
     legendaryResistance,   // Session 52 Batch 3b: undefined for non-legendary creatures
     regeneration,          // Session 52 Batch 4b: undefined for non-regenerating creatures
+    attacksAreMagical,     // Session 52 Batch 4c: true for "Magic Weapons" trait (19 creatures)
+    cannotRegainHP,        // Session 52 Batch 4e: true for "Swarm" trait (10 creatures)
     budget: freshBudget(speeds.ground),
     conditions: new Set(),
     aiProfile: resolvedProfile,

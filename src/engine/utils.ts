@@ -722,7 +722,8 @@ export function resetBudget(c: Combatant): void {
   // it has at least 1 hit point." If suppressedNextTurn is true (creature took
   // a stop-clause damage type last turn), skip regen this turn and clear the
   // flag. Heal min(amount, maxHP - currentHP) — no overheal.
-  if (c.regeneration && c.currentHP > 0 && c.currentHP < c.maxHP) {
+  // Session 52 Batch 4e: Swarm trait (cannotRegainHP) blocks ALL healing.
+  if (c.regeneration && !c.cannotRegainHP && c.currentHP > 0 && c.currentHP < c.maxHP) {
     if (!c.regeneration.suppressedNextTurn) {
       const heal = Math.min(c.regeneration.amount, c.maxHP - c.currentHP);
       c.currentHP += heal;
@@ -939,6 +940,16 @@ export function attackAdvantageState(
   const vulnAdv = queryVulnerability(target, 'attack');
   if (vulnAdv.advantage)    advantage    = true;
   if (vulnAdv.disadvantage) disadvantage = true;
+
+  // ── Session 52 Creature Megabatch Batch 4e: Blood Frenzy ──
+  // MM p.11 / various: "The [creature] has advantage on melee attack rolls
+  // against any creature that doesn't have all its hit points." 7 MM
+  // creatures (sharks, quippers, etc.). The melee-only restriction is
+  // enforced downstream in resolveAttackAdvantage (which knows attackType);
+  // here we just set advantage — it'll be filtered to melee only.
+  if (attacker.traits.includes('Blood Frenzy') && target.currentHP < target.maxHP) {
+    advantage = true;
+  }
 
   return { advantage, disadvantage };
 }
@@ -1186,6 +1197,9 @@ export function rollDeathSave(pc: Combatant): 'stable' | 'dead' | 'ongoing' {
  * Grant temporary HP. Temp HP don't stack — take the higher value (PHB p.198).
  */
 export function grantTempHP(target: Combatant, amount: number): void {
+  // Session 52 Batch 4e: Swarm trait — "can't regain hit points or gain
+  // temporary hit points". 10 MM swarm creatures. No-op if cannotRegainHP.
+  if (target.cannotRegainHP) return;
   target.tempHP = Math.max(target.tempHP, amount);
 }
 

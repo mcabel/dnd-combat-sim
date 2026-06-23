@@ -574,6 +574,26 @@ export interface Combatant {
    */
   regeneration?: { amount: number; stopTypes: DamageType[]; suppressedNextTurn: boolean };
 
+  /**
+   * ── Session 52 Creature Megabatch Batch 4c: Magic Weapons ──
+   * MM p.11 / various: "The [creature]'s weapon attacks are magical." 19 MM
+   * creatures. When true, the creature's weapon attacks bypass resistance
+   * to nonmagical B/P/S (the `cond:true` form in 5etools). v1 simplification:
+   * the flag is PARSED and stored, but full nonmagical-resistance bypass
+   * requires re-working Batch 1's unconditional cond-resistance handling to
+   * honor an `isNonmagical` attack flag — deferred. The flag is consumed in
+   * applyDamageWithTempHP when the attacker is known (combat.ts passes it).
+   */
+  attacksAreMagical?: boolean;
+
+  /**
+   * ── Session 52 Creature Megabatch Batch 4e: Swarm ──
+   * MM p.11 / various: "The swarm can't regain hit points or gain temporary
+   * hit points." 10 MM swarm creatures. When true, grantTempHP + healing
+   * functions are no-ops on this combatant.
+   */
+  cannotRegainHP?: boolean;
+
   // Turn resources
   budget: ActionBudget;
 
