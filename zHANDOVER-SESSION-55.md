@@ -134,7 +134,7 @@ These were dead code before TG-024 (the sheet had the fields but they never reac
 ## CI Status
 
 Single commit pushed to `main` (this session):
-- `Session 55 Core Engine TG-024: Ki + Sorcery Points transfer to Combatant`
+- `1b6898a` — Session 55 Core Engine TG-024: Ki + Sorcery Points transfer to Combatant
 
 CI should pass (all local tests green; the only files touched are `core.ts` type additions, `builder.ts`/`pc.ts` mechanical mirror of existing `actionSurge` pattern, and a new test file — no engine logic changed).
 

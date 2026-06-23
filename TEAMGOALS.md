@@ -743,7 +743,7 @@ completed by a single agent without coordination.
 
 #### TG-024: Sorcery Points + Ki transfer to Combatant (combines TG-016 + TG-017 step 1-2)
 
-- **Status:** DONE — Session 55 (commit pending)
+- **Status:** DONE — Session 55 (commit `1b6898a`)
 - **Owners:** Core Engine (driving — owns `src/parser/pc.ts` `buildResources` + `src/types/core.ts` `PlayerResources`) + Sheet (reviewer — owns `src/characters/builder.ts` `buildRawResources`)
 - **Source:** Session 53 audit; combines TG-016 + TG-017 step 1-2 into one commit (kinematic mirror of the `actionSurge` pattern at `builder.ts:226`).
 - **Summary:** `CharacterResources` already has `ki?` and `sorceryPoints?` (populated by `leveler.ts:923, 930-931`) but `buildRawResources` (Sheet) and `buildResources` (Core) both SKIP these fields. Result: a Monk or Sorcerer PC has zero ki/sorcery points in combat. This blocks TG-017 Quivering Palm, TG-015 Draconic Presence 5-SP cost, and any ki-based subclass feature.
