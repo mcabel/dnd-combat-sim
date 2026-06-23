@@ -398,7 +398,7 @@ Documented for future sessions. NOT in scope for the immediate megabatch.
 | Batch | Status | Session | Commit | Notes |
 |-------|--------|---------|--------|-------|
 | 0 | ✅ DONE | 52 | 547a361 | reprint-safe loader + source provenance; 453 unique creatures; 34 new test assertions |
-| 1 | ✅ DONE | 52 | (pending) | defenses (immune/resist/vulnerable/conditionImmune); 92 new test assertions; fixed applyDamageWithTempHP vuln-then-resist bug |
+| 1 | ✅ DONE | 52 | 2ee8600 | defenses (immune/resist/vulnerable/conditionImmune); 92 new test assertions; fixed applyDamageWithTempHP vuln-then-resist bug |
 | 2 | NOT STARTED | — | — | saves/senses |
 | 3 | NOT STARTED | — | — | recharge + leg-resist |
 | 4a | NOT STARTED | — | — | Magic Resistance |
