@@ -62,6 +62,9 @@ interface RawResources {
   secondWind?:         RawResource;
   // Session 43 Task #23: Action Surge (Fighter 2+)
   actionSurge?:        RawResource;
+  // TG-024: Monk Ki (Monk 1+) + Sorcerer Sorcery Points (Sorcerer 2+)
+  ki?:                 RawResource;
+  sorceryPoints?:      RawResource;
   bardicInspiration?:  RawResource;
   sneakAttack?:        RawResource;
   divineSmite?:        boolean | RawResource;
@@ -259,6 +262,26 @@ function buildResources(raw: RawPCEntry): PlayerResources | null {
   if (r?.actionSurge) {
     const max = r.actionSurge.uses ?? 1;
     result.actionSurge = { max, remaining: max };
+  }
+
+  // ── TG-024: Monk Ki (PHB p.76) + Sorcerer Sorcery Points (PHB p.101) ──
+  // Ki: monk-level points, short or long rest. Sorcery Points: sorcerer-level
+  // points (unlocks at Sorcerer 2), long rest only. Both are populated by
+  // leveler.ts and passed through buildRawResources as `uses` (= max). We
+  // populate { max, remaining } here (full on combat start). The rest-recovery
+  // hooks in character_router.ts already restore these on the sheet; a future
+  // engine-side rest hook can mirror that for the Combatant (currently the
+  // Combatant's resources are rebuilt from the sheet on each combat start,
+  // so they're always full at combat start — matching the v1 single-combat
+  // model). Unblocks TG-030 (Quivering Palm 3 ki) + TG-031 (Open Hand
+  // Technique Flurry 1 ki) + Draconic Presence 5-SP cost.
+  if (r?.ki) {
+    const max = r.ki.uses ?? 0;
+    result.ki = { max, remaining: max };
+  }
+  if (r?.sorceryPoints) {
+    const max = r.sorceryPoints.uses ?? 0;
+    result.sorceryPoints = { max, remaining: max };
   }
 
   // Bardic Inspiration (Bard)

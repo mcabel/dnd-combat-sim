@@ -224,6 +224,16 @@ function buildRawResources(res: CharacterResources): any {
   // Fighter 2+ has 1 use; Fighter 17+ has 2 uses. Pass max through so
   // buildResources (pc.ts) can populate { max, remaining } on the Combatant.
   if (res.actionSurge)       out.actionSurge       = { uses: res.actionSurge.max };
+  // ── TG-024: Monk Ki + Sorcerer Sorcery Points transfer ──
+  // PHB p.76 (Ki): monk-level points. PHB p.101 (Sorcery Points): sorcerer-
+  // level points, unlocks at Sorcerer 2. Both are populated by leveler.ts
+  // and recovered by character_router.ts rest hooks (short rest for ki,
+  // long rest for sorcery points). Pass max through as `uses` so
+  // buildResources (pc.ts) can populate { max, remaining } on the Combatant.
+  // This unblocks TG-030 (Quivering Palm, 3 ki) + TG-031 (Open Hand Technique,
+  // Flurry-of-Blows 1 ki) + the 5-SP cost on Draconic Presence.
+  if (res.ki)                out.ki                = { uses: res.ki.max };
+  if (res.sorceryPoints)     out.sorceryPoints     = { uses: res.sorceryPoints.max };
   if (res.bardicInspiration) out.bardicInspiration = {
     uses: res.bardicInspiration.max,
     die:  `d${res.bardicInspiration.dieSides}`,
@@ -434,13 +444,14 @@ export function buildCombatant(
   // your choice within 60 feet of you must succeed on a Wisdom saving throw or
   // become frightened of you until the end of your next turn."
   //
-  // v1 simplification: instead of tracking the 5-sorcery-point cost (sorcery
-  // points are NOT yet transferred to the Combatant — deferred to a future
-  // session), we treat Draconic Presence as a 1/combat action (like Wholeness
-  // of Body). The frightened-aura effect is canon. Documented via the resource
-  // flag `draconicPresence: { max: 1, remaining: 1 }`. The engine's
-  // 'draconicPresence' action type consumes one use and applies frightened to
-  // all enemies within 60 ft who fail a WIS save.
+  // v1 simplification: instead of tracking the 5-sorcery-point cost
+  // dynamically, we treat Draconic Presence as a 1/combat action (like
+  // Wholeness of Body). The frightened-aura effect is canon. Documented via
+  // the resource flag `draconicPresence: { max: 1, remaining: 1 }`. The
+  // engine's 'draconicPresence' action type consumes one use and applies
+  // frightened to all enemies within 60 ft who fail a WIS save. (TG-024
+  // landed the sorceryPoints transfer to the Combatant, so a future
+  // refinement can decrement sorceryPoints.remaining by 5 when this fires.)
   if (combatant.classFeatures?.includes('Draconic Presence')) {
     if (!combatant.resources) combatant.resources = {} as any;
     (combatant.resources as any).draconicPresence = { max: 1, remaining: 1 };

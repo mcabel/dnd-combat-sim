@@ -9,21 +9,16 @@
 
 ## Core Engine Workstream (HANDOVER-SESSION-XX)
 
-### Active Objective (Session 54 refresh)
+### Active Objective (Session 55 refresh)
 
-**TG-024: Sorcery Points + Ki transfer to Combatant** (combines old TG-016 +
-TG-017 step 1-2 into a single commit). `CharacterResources` already has `ki?`
-and `sorceryPoints?` (populated by `leveler.ts`), but both `buildRawResources`
-(Sheet) and `buildResources` (Core, `pc.ts:208-320`) SKIP these fields — a Monk
-or Sorcerer PC has zero ki/sorcery points in combat. This blocks TG-017
-Quivering Palm (now TG-030), TG-015 Draconic Presence 5-SP cost, and any
-ki-based subclass feature. Fix is structurally identical to the existing
-`actionSurge` pattern at `builder.ts:226` — kinematic mirror for both
-resources in one commit.
+**TG-032: Land Druid Nature's Ward** (PHB p.69 — fey/elemental charm/frighten
+immunity). Now the #1 Tier-A priority after TG-024 + TG-027 both landed.
+Core Engine drives unilaterally — owns `src/engine/combat.ts` condition-
+application paths. Low risk: additive immunity check.
 
 ### Current Phase
 
-**TG-027 DONE (Session 54).** Prerequisite groundwork complete:
+**TG-024 DONE (Session 55).** Prerequisite groundwork complete:
 - Concentration enforcement (TG-002) ✅
 - Parser fields incl. `isUndead`/`isConstruct`/`hasMetalArmor` (TG-004) ✅
 - Cantrip planner branches 13A-13N (TG-003) ✅
@@ -32,32 +27,37 @@ resources in one commit.
 - `elementalAffinityBonus` helper (Sessions 47-51) ✅
 - **TG-027** Elemental Affinity wired into all 3 weapon-rider damage sites
   in `combat.ts` (Flame Blade, `_nextHitRider` smites, `weapon_enchant` dice) ✅
+- **TG-024** Monk Ki + Sorcerer Sorcery Points transferred to `PlayerResources`
+  via `buildRawResources` → `buildResources` pipeline (mirrors `actionSurge`) ✅
 
-### Acceptance Criteria
+### Acceptance Criteria (TG-032)
 
-- `PlayerResources` has typed `ki?: { max, current }` and
-  `sorceryPoints?: { max, current }` (both already optional in `core.ts`)
-- `buildRawResources` (Sheet `builder.ts`) writes both fields when present
-- `buildResources` (Core `pc.ts`) reads both fields back into `PlayerResources`
-- New tests in `resources.test.ts`: Monk 5 has `ki.current === 5`; Sorcerer 5
-  has `sorceryPoints.current === 5`
+- `PlayerResources` or `Combatant` has a flag/field for Nature's Ward
+  (Land Druid 10 feature: "you cannot be charmed or frightened by elementals
+  or fey" — PHB p.69)
+- Engine's condition-application path (charm/frighten) checks the flag and
+  skips application when the source is fey/elemental and the target has
+  Nature's Ward
+- New test: Land Druid 10 vs a fey casting Charm Person → not charmed;
+  vs a humanoid caster → charmed normally
 - All existing tests still pass; `tsc --noEmit` clean
 
 ### Immediate Priority (reverse published order, newest pre-2024 first)
 
-1. **TG-024** (PHB 2014): ki + sorcery points transfer (single commit) — was #2,
-   promoted to #1 after TG-027 landed in Session 54
-2. **TG-032** (PHB 2014): Land Druid Nature's Ward fey/elemental immunity
-3. **TG-030** (PHB 2014): Quivering Palm action type — blocked on TG-024
-4. **TG-031** (PHB 2014): Open Hand Technique Flurry rider — blocked on TG-024
-5. **TG-028** (PHB 2014/TCE): Booming/Green-Flame Blade "melee spell attack"
+1. **TG-032** (PHB 2014): Land Druid Nature's Ward fey/elemental immunity —
+   promoted to #1 after TG-024 landed in Session 55
+2. **TG-028** (PHB 2014/TCE): Booming/Green-Flame Blade "melee spell attack"
    label fix — comment-only, can be slotted in any session
+3. **TG-030** (PHB 2014): Quivering Palm action type — UNBLOCKED (TG-024 done)
+4. **TG-031** (PHB 2014): Open Hand Technique Flurry rider — UNBLOCKED (TG-024 done)
 
 ### Notes
 
-- Sheet agent owns `leveler.ts` / `builder.ts` — coordinate TG-024 step 1 with
-  Sheet reviewer (Sheet makes the `buildRawResources` change, Core makes the
-  `pc.ts` mirror change, both in one PR).
+- TG-024 DONE (Session 55): `ki` + `sorceryPoints` now transfer to the
+  Combatant. Used `{ max, remaining }` shape (NOT `{ max, current }`) to
+  match all other `PlayerResources` fields. Sheet reviewer not available
+  in-session; the `builder.ts` change is a 2-line mechanical mirror of
+  `actionSurge` — Sheet can audit in a future session.
 - Cantrip-z's summon Phase 1 is live; Phase 4 spells still need bespoke
   subsystems (deferred under TG-006 Phase 4).
 - TG-001 (persistent-buff subsystem): **DONE** (Session 48 RFC-001) —

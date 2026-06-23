@@ -443,10 +443,27 @@ export interface PlayerResources {
   // once per long rest. Tracked as max=1/remaining=1; consumed when used.
   wholenessOfBody?: { max: number; remaining: number };
 
+  // ── TG-024: Monk Ki (PHB p.76) + Sorcerer Sorcery Points (PHB p.101) ──
+  // Ki: monk-level points, short or long rest recovery. Populated by
+  // leveler.ts (Monk 1+) and transferred via buildRawResources (builder.ts)
+  // → buildResources (pc.ts). Used by Flurry of Blows / Patient Defense /
+  // Step of the Wind (1 ki each), Stunning Strike (1 ki), Deflect Missiles
+  // throw-back (1 ki), Diamond Soul save reroll (1 ki), Empty Body (4 ki),
+  // Perfect Self (refill 4). The rest-recovery hook in character_router.ts
+  // already restores ki on short/long rest.
+  ki?: { max: number; remaining: number };   // short rest, Monk 1+
+  // Sorcery Points: sorcerer-level points, long rest recovery only. Used by
+  // Flexible Casting (convert slot↔points), Metamagic options, and subclass
+  // features like Draconic Presence (5 SP). Populated by leveler.ts
+  // (Sorcerer 2+) and transferred via the same pipeline as ki.
+  sorceryPoints?: { max: number; remaining: number };   // long rest, Sorcerer 2+
+
   // ── Session 49 Task #29-follow-up-5d: Draconic Presence ──
   // Draconic Sorcerer 18 (PHB p.102): action + 5 sorcery points, frighten
-  // all enemies within 60 ft (WIS save). v1 simplification: 1/combat (sorcery
-  // points not yet transferred to Combatant — deferred to a future session).
+  // all enemies within 60 ft (WIS save). v1 simplification: 1/combat tracked
+  // here. The 5-sorcery-point cost is now payable via `sorceryPoints` above
+  // (TG-024 landed the transfer); the draconicPresence engine hook can
+  // decrement sorceryPoints.remaining when it fires (future TG-030-style work).
   draconicPresence?: { max: number; remaining: number };
 
   // Innate Spellcasting (MM p.10–11; e.g. Couatl, Drow, Druidic casters).

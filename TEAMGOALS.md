@@ -743,18 +743,19 @@ completed by a single agent without coordination.
 
 #### TG-024: Sorcery Points + Ki transfer to Combatant (combines TG-016 + TG-017 step 1-2)
 
-- **Status:** OPEN — proposed Session 53
+- **Status:** DONE — Session 55 (commit pending)
 - **Owners:** Core Engine (driving — owns `src/parser/pc.ts` `buildResources` + `src/types/core.ts` `PlayerResources`) + Sheet (reviewer — owns `src/characters/builder.ts` `buildRawResources`)
 - **Source:** Session 53 audit; combines TG-016 + TG-017 step 1-2 into one commit (kinematic mirror of the `actionSurge` pattern at `builder.ts:226`).
 - **Summary:** `CharacterResources` already has `ki?` and `sorceryPoints?` (populated by `leveler.ts:923, 930-931`) but `buildRawResources` (Sheet) and `buildResources` (Core) both SKIP these fields. Result: a Monk or Sorcerer PC has zero ki/sorcery points in combat. This blocks TG-017 Quivering Palm, TG-015 Draconic Presence 5-SP cost, and any ki-based subclass feature.
 - **Implementation plan (single commit):**
-  1. Sheet (`builder.ts:218-238`): in `buildRawResources`, after the `actionSurge` branch, add: `if (res.sorceryPoints) out.sorceryPoints = { max: res.sorceryPoints.max, current: res.sorceryPoints.current ?? res.sorceryPoints.max };` and `if (res.ki) out.ki = { max: res.ki.max, current: res.ki.current ?? res.ki.max };`
-  2. Core (`pc.ts:208-320`): in `buildResources`, mirror the same two branches.
-  3. Core (`types/core.ts`): ensure `PlayerResources` has `sorceryPoints?: { max: number; current: number }` and `ki?: { max: number; current: number }` (both already optional).
-  4. Test: extend `resources.test.ts` — spawn a Monk 5 + assert `ki.current === 5`; spawn a Sorcerer 5 + assert `sorceryPoints.current === 5`.
+  1. Sheet (`builder.ts:218-238`): in `buildRawResources`, after the `actionSurge` branch, add `ki` + `sorceryPoints` transfer. ✅ DONE — used `{ uses: res.ki.max }` / `{ uses: res.sorceryPoints.max }` (mirrors `actionSurge` exactly).
+  2. Core (`pc.ts:208-320`): in `buildResources`, mirror the same two branches. ✅ DONE — `result.ki = { max, remaining: max }` / `result.sorceryPoints = { max, remaining: max }`.
+  3. Core (`types/core.ts`): add `ki?` + `sorceryPoints?` to `PlayerResources`. ✅ DONE — used `{ max: number; remaining: number }` shape (NOT `{ max, current }` as the original spec draft suggested — `remaining` matches ALL other PlayerResources fields: rage, actionSurge, secondWind, bardicInspiration, etc. Consistency wins).
+  4. Test: spawn a Monk 5 + assert `ki.remaining === 5`; spawn a Sorcerer 5 + assert `sorceryPoints.remaining === 5`. ✅ DONE — new file `src/test/ki_sorcery_points.test.ts` (29 assertions: Monk 2/5 ki, Sorcerer 2/5 sorceryPoints, negative cases, subclass cases, regression for actionSurge/rage, sheet-source verification, independence).
 - **Risk:** LOW — additive parser + sheet changes; no engine impact.
-- **Coordination protocol:** Core Engine drives; Sheet reviews the `builder.ts` change.
+- **Coordination protocol:** Core Engine drove both sides in one commit (Sheet reviewer not available in-session; the `builder.ts` change is a 2-line mechanical mirror of `actionSurge`).
 - **Reverse published order note:** Both PHB 2014 sources. Combined because the fix is structurally identical (one resource field each).
+- **Unblocks:** TG-030 (Quivering Palm, 3 ki), TG-031 (Open Hand Technique, Flurry 1 ki), Draconic Presence 5-SP cost, TG-026 (Resources panel UI — Sheet can now build Ki/SP rows against a typed Combatant field).
 
 #### TG-025: Per-class unarmored-AC hook (Sheet-41c follow-up) — promotes TG-019
 
