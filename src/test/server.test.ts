@@ -2642,6 +2642,256 @@ async function run() {
     });
   }
 
+  // ── POST /api/characters/:id/damage ──────────────────────
+  {
+    let dmgCharId = '';
+
+    await test('setup: create character for damage/heal tests', async () => {
+      const created = await request(BASE, '/api/characters', 'POST', {
+        name: 'DamageTestChar', race: 'Human', background: 'Soldier', alignment: 'True Neutral',
+        firstClass: 'Fighter',
+        classLevels: [{ className: 'Fighter', level: 1 }],
+        subclassChoices: {}, experiencePoints: 0,
+        baseStats: { str: 16, dex: 14, con: 14, int: 10, wis: 10, cha: 10 },
+        stats:     { str: 16, dex: 14, con: 14, int: 10, wis: 10, cha: 10 },
+        maxHP: 12, currentHP: 12, temporaryHP: 0,
+        armorClass: 16, acFormula: 'Chain Mail', speed: 30,
+        hitDice: [{ className: 'Fighter', dieSides: 10, total: 1, remaining: 1 }],
+        proficiencies: { armor: ['light','medium','heavy','shield'], weapons: ['simple-melee','martial-melee'], tools: [], savingThrows: ['str','con'], skills: ['Athletics','Perception'], expertise: [] },
+        languages: ['Common'],
+        resources: {}, equipment: [], gold: 10,
+        level1Features: [], allFeatures: [], feats: [],
+        backgroundFeature: 'Military Rank', exhaustionLevel: 0,
+      });
+      assert(created.status === 201, `Expected 201, got ${created.status}: ${JSON.stringify(created.json)}`);
+      dmgCharId = created.json.character.id;
+    });
+
+    await test('POST /damage 400 for missing amount', async () => {
+      const { status } = await request(BASE, `/api/characters/${dmgCharId}/damage`, 'POST', {});
+      assert(status === 400, `Expected 400, got ${status}`);
+    });
+
+    await test('POST /damage 400 for zero amount', async () => {
+      const { status } = await request(BASE, `/api/characters/${dmgCharId}/damage`, 'POST', { amount: 0 });
+      assert(status === 400, `Expected 400, got ${status}`);
+    });
+
+    await test('POST /damage 400 for negative amount', async () => {
+      const { status } = await request(BASE, `/api/characters/${dmgCharId}/damage`, 'POST', { amount: -5 });
+      assert(status === 400, `Expected 400, got ${status}`);
+    });
+
+    await test('POST /damage 404 for missing character', async () => {
+      const { status } = await request(BASE, '/api/characters/no-such-char/damage', 'POST', { amount: 5 });
+      assert(status === 404, `Expected 404, got ${status}`);
+    });
+
+    await test('POST /damage 200 reduces HP', async () => {
+      const { status, json } = await request(BASE, `/api/characters/${dmgCharId}/damage`, 'POST', { amount: 4 });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(json.newHP === 8, `Expected newHP=8, got ${json.newHP}`);
+      assert(json.absorbed === 0, `Expected absorbed=0, got ${json.absorbed}`);
+      assert(json.wasKO === false, `Expected wasKO=false`);
+      assert(json.character.currentHP === 8, 'character.currentHP updated');
+    });
+
+    await test('POST /damage 200 absorbs temp HP first', async () => {
+      // Give the char 5 temp HP via PUT, then deal 3 damage
+      await request(BASE, `/api/characters/${dmgCharId}`, 'PUT', { currentHP: 12, temporaryHP: 5 });
+      const { status, json } = await request(BASE, `/api/characters/${dmgCharId}/damage`, 'POST', { amount: 3 });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(json.absorbed === 3, `Expected absorbed=3, got ${json.absorbed}`);
+      assert(json.newTempHP === 2, `Expected newTempHP=2, got ${json.newTempHP}`);
+      assert(json.newHP === 12, `Expected newHP=12, got ${json.newHP}`);
+    });
+
+    await test('POST /damage 200 temp HP overflow spills to real HP', async () => {
+      // 2 temp HP remaining; deal 5 damage → 2 absorbed, 3 to real HP (12 → 9)
+      const { status, json } = await request(BASE, `/api/characters/${dmgCharId}/damage`, 'POST', { amount: 5 });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(json.absorbed === 2, `Expected absorbed=2, got ${json.absorbed}`);
+      assert(json.newTempHP === 0, `Expected newTempHP=0, got ${json.newTempHP}`);
+      assert(json.newHP === 9, `Expected newHP=9, got ${json.newHP}`);
+    });
+
+    await test('POST /damage 200 wasKO true when HP drops to 0', async () => {
+      await request(BASE, `/api/characters/${dmgCharId}`, 'PUT', { currentHP: 3, temporaryHP: 0 });
+      const { status, json } = await request(BASE, `/api/characters/${dmgCharId}/damage`, 'POST', { amount: 10 });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(json.newHP === 0, `Expected newHP=0, got ${json.newHP}`);
+      assert(json.wasKO === true, 'Expected wasKO=true');
+      assert(json.character.deathSaves?.successes === 0 && json.character.deathSaves?.failures === 0, 'deathSaves reset on KO');
+    });
+
+    // ── POST /api/characters/:id/heal ────────────────────────
+
+    await test('POST /heal 400 for missing amount', async () => {
+      const { status } = await request(BASE, `/api/characters/${dmgCharId}/heal`, 'POST', {});
+      assert(status === 400, `Expected 400, got ${status}`);
+    });
+
+    await test('POST /heal 404 for missing character', async () => {
+      const { status } = await request(BASE, '/api/characters/no-such-char/heal', 'POST', { amount: 5 });
+      assert(status === 404, `Expected 404, got ${status}`);
+    });
+
+    await test('POST /heal 200 restores HP', async () => {
+      // Character is at 0 HP from last test
+      const { status, json } = await request(BASE, `/api/characters/${dmgCharId}/heal`, 'POST', { amount: 6 });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(json.newHP === 6, `Expected newHP=6, got ${json.newHP}`);
+      assert(json.healed === 6, `Expected healed=6, got ${json.healed}`);
+      assert(json.character.deathSaves?.successes === 0, 'deathSaves cleared on revive');
+    });
+
+    await test('POST /heal 200 caps at maxHP', async () => {
+      // currentHP=6, maxHP=12; heal 20 → capped at 12
+      const { status, json } = await request(BASE, `/api/characters/${dmgCharId}/heal`, 'POST', { amount: 20 });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(json.newHP === 12, `Expected newHP=12, got ${json.newHP}`);
+      assert(json.healed === 6, `Expected healed=6 (only 6 applied), got ${json.healed}`);
+    });
+
+    // ── POST /api/characters/:id/conditions ──────────────────
+
+    await test('POST /conditions 400 for invalid action', async () => {
+      const { status } = await request(BASE, `/api/characters/${dmgCharId}/conditions`, 'POST', { action: 'toggle', condition: 'Poisoned' });
+      assert(status === 400, `Expected 400, got ${status}`);
+    });
+
+    await test('POST /conditions 400 for missing condition on add', async () => {
+      const { status } = await request(BASE, `/api/characters/${dmgCharId}/conditions`, 'POST', { action: 'add' });
+      assert(status === 400, `Expected 400, got ${status}`);
+    });
+
+    await test('POST /conditions 400 for empty string condition on remove', async () => {
+      const { status } = await request(BASE, `/api/characters/${dmgCharId}/conditions`, 'POST', { action: 'remove', condition: '   ' });
+      assert(status === 400, `Expected 400, got ${status}`);
+    });
+
+    await test('POST /conditions 200 add returns condition list', async () => {
+      const { status, json } = await request(BASE, `/api/characters/${dmgCharId}/conditions`, 'POST', { action: 'add', condition: 'Poisoned' });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(Array.isArray(json.conditions), 'conditions is array');
+      assert(json.conditions.includes('Poisoned'), 'Poisoned in conditions');
+      assert(json.character.conditions.includes('Poisoned'), 'character.conditions updated');
+    });
+
+    await test('POST /conditions 200 add is idempotent (no duplicates)', async () => {
+      const { status, json } = await request(BASE, `/api/characters/${dmgCharId}/conditions`, 'POST', { action: 'add', condition: 'Poisoned' });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(json.conditions.filter((c: string) => c === 'Poisoned').length === 1, 'No duplicate Poisoned');
+    });
+
+    await test('POST /conditions 200 add multiple conditions', async () => {
+      await request(BASE, `/api/characters/${dmgCharId}/conditions`, 'POST', { action: 'add', condition: 'Blinded' });
+      const { json } = await request(BASE, `/api/characters/${dmgCharId}/conditions`, 'POST', { action: 'add', condition: 'Frightened' });
+      assert(json.conditions.includes('Poisoned'), 'Poisoned still present');
+      assert(json.conditions.includes('Blinded'), 'Blinded present');
+      assert(json.conditions.includes('Frightened'), 'Frightened present');
+    });
+
+    await test('POST /conditions 200 remove specific condition', async () => {
+      const { status, json } = await request(BASE, `/api/characters/${dmgCharId}/conditions`, 'POST', { action: 'remove', condition: 'Blinded' });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(!json.conditions.includes('Blinded'), 'Blinded removed');
+      assert(json.conditions.includes('Poisoned'), 'Poisoned still present');
+    });
+
+    await test('POST /conditions 200 clear removes all conditions', async () => {
+      const { status, json } = await request(BASE, `/api/characters/${dmgCharId}/conditions`, 'POST', { action: 'clear' });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(json.conditions.length === 0, 'All conditions cleared');
+    });
+
+    // ── POST /api/characters/:id/useslot ─────────────────────
+
+    await test('POST /useslot 400 for non-integer level', async () => {
+      const { status } = await request(BASE, `/api/characters/${dmgCharId}/useslot`, 'POST', { level: 1.5 });
+      assert(status === 400, `Expected 400, got ${status}`);
+    });
+
+    await test('POST /useslot 400 for out-of-range level', async () => {
+      const { status } = await request(BASE, `/api/characters/${dmgCharId}/useslot`, 'POST', { level: 10 });
+      assert(status === 400, `Expected 400, got ${status}`);
+    });
+
+    await test('POST /useslot 400 when character has no spellcasting', async () => {
+      const { status } = await request(BASE, `/api/characters/${dmgCharId}/useslot`, 'POST', { level: 1 });
+      assert(status === 400, `Expected 400, got ${status}`);
+    });
+
+    // Promote character to Wizard 1 so it has spell slots
+    await test('setup: promote dmgChar to Wizard so it has spell slots', async () => {
+      // Level it up to Fighter 2 then start a fresh Wizard character for slots
+      // Easier: just PUT the spellcasting block directly
+      await request(BASE, `/api/characters/${dmgCharId}`, 'PUT', {
+        spellcasting: {
+          ability: 'int',
+          spellAttackBonus: 5,
+          saveDC: 13,
+          slots: { '1': 2, '2': 1 },
+          slotsUsed: { '1': 0, '2': 0 },
+          cantrips: [],
+          knownSpells: [],
+          preparedSpells: [],
+        },
+      });
+    });
+
+    await test('POST /useslot 400 when no slots exist at that level', async () => {
+      const { status } = await request(BASE, `/api/characters/${dmgCharId}/useslot`, 'POST', { level: 9 });
+      assert(status === 400, `Expected 400, got ${status}`);
+    });
+
+    await test('POST /useslot 200 expends a level-1 slot', async () => {
+      const { status, json } = await request(BASE, `/api/characters/${dmgCharId}/useslot`, 'POST', { level: 1 });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(json.level === 1, `level in response`);
+      assert(json.remaining === 1, `Expected remaining=1, got ${json.remaining}`);
+      assert(json.used === 1, `Expected used=1, got ${json.used}`);
+      assert(json.character.spellcasting.slotsUsed['1'] === 1, 'slotsUsed updated');
+    });
+
+    await test('POST /useslot 200 expend last slot', async () => {
+      const { status, json } = await request(BASE, `/api/characters/${dmgCharId}/useslot`, 'POST', { level: 1 });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(json.remaining === 0, `Expected remaining=0, got ${json.remaining}`);
+    });
+
+    await test('POST /useslot 400 when all slots at level already used', async () => {
+      const { status } = await request(BASE, `/api/characters/${dmgCharId}/useslot`, 'POST', { level: 1 });
+      assert(status === 400, `Expected 400, got ${status}`);
+    });
+
+    // ── POST /api/characters/:id/restoreslot ─────────────────
+
+    await test('POST /restoreslot 400 for missing level', async () => {
+      const { status } = await request(BASE, `/api/characters/${dmgCharId}/restoreslot`, 'POST', {});
+      assert(status === 400, `Expected 400, got ${status}`);
+    });
+
+    await test('POST /restoreslot 400 when no used slots to restore', async () => {
+      // level 2 has 1 slot, used=0
+      const { status } = await request(BASE, `/api/characters/${dmgCharId}/restoreslot`, 'POST', { level: 2 });
+      assert(status === 400, `Expected 400, got ${status}`);
+    });
+
+    await test('POST /restoreslot 200 restores a level-1 slot', async () => {
+      // level 1 has 2 slots, used=2 (from last use test)
+      const { status, json } = await request(BASE, `/api/characters/${dmgCharId}/restoreslot`, 'POST', { level: 1 });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(json.remaining === 1, `Expected remaining=1, got ${json.remaining}`);
+      assert(json.used === 1, `Expected used=1, got ${json.used}`);
+    });
+
+    await test('cleanup: delete damage/heal/conditions/slot test character', async () => {
+      const { deleteCharacter } = require('../characters/storage');
+      try { deleteCharacter(dmgCharId); } catch {}
+    });
+  }
+
   // ── Tear down ─────────────────────────────────────────────
 
   // Clean up test parties created during this run

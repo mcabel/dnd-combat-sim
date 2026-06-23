@@ -935,6 +935,243 @@ router.post('/characters/:id/settempstats', async (req: Request, res: Response) 
 });
 
 // ============================================================
+// POST /api/characters/:id/damage
+// Apply damage to a character with proper temp-HP absorption (PHB p.198).
+//   Body:     { amount: number }
+//   Response: { character, applied, absorbed, newHP, newTempHP, wasKO }
+// Temp HP is depleted first; remainder reduces current HP (min 0).
+// Clears deathSaves when the character drops to 0.
+// ============================================================
+router.post('/characters/:id/damage', async (req: Request, res: Response) => {
+  try {
+    const id     = String(req.params.id);
+    const amount = req.body?.amount;
+
+    if (typeof amount !== 'number' || !Number.isInteger(amount) || amount <= 0) {
+      return res.status(400).json({ error: 'amount must be a positive integer.' });
+    }
+
+    const sheet = loadCharacter(id);
+    if (!sheet) return res.status(404).json({ error: `Character not found: ${id}` });
+
+    const curHP  = Math.max(0, sheet.currentHP);
+    const curTHP = Math.max(0, sheet.temporaryHP || 0);
+
+    // THP absorbs damage first (PHB p.198)
+    const absorbed = Math.min(curTHP, amount);
+    const newTHP   = curTHP - absorbed;
+    const remaining = amount - absorbed;
+    const newHP    = Math.max(0, curHP - remaining);
+    const wasKO    = newHP === 0 && curHP > 0;
+    const applied  = Math.min(curHP, remaining) + absorbed; // total damage dealt
+
+    const updated: typeof sheet = {
+      ...sheet,
+      currentHP:   newHP,
+      temporaryHP: newTHP,
+      updatedAt:   new Date().toISOString(),
+    };
+    // Clear death saves when freshly knocked out
+    if (wasKO) {
+      updated.deathSaves = { successes: 0, failures: 0 };
+    }
+
+    await saveCharacter(updated);
+    return res.json({ character: updated, applied, absorbed, newHP, newTempHP: newTHP, wasKO });
+  } catch (err) {
+    return handleError(res, err);
+  }
+});
+
+// ============================================================
+// POST /api/characters/:id/heal
+// Heal a character, capping at maxHP (PHB p.197).
+//   Body:     { amount: number }
+//   Response: { character, healed, newHP }
+// Clears deathSaves automatically when returning from 0 HP.
+// ============================================================
+router.post('/characters/:id/heal', async (req: Request, res: Response) => {
+  try {
+    const id     = String(req.params.id);
+    const amount = req.body?.amount;
+
+    if (typeof amount !== 'number' || !Number.isInteger(amount) || amount <= 0) {
+      return res.status(400).json({ error: 'amount must be a positive integer.' });
+    }
+
+    const sheet = loadCharacter(id);
+    if (!sheet) return res.status(404).json({ error: `Character not found: ${id}` });
+
+    const wasDown = sheet.currentHP <= 0;
+    const newHP   = Math.min(sheet.maxHP, sheet.currentHP + amount);
+    const healed  = newHP - sheet.currentHP;
+
+    const updated: typeof sheet = {
+      ...sheet,
+      currentHP: newHP,
+      updatedAt: new Date().toISOString(),
+    };
+    // Reset death saves when regaining consciousness
+    if (wasDown && newHP > 0) {
+      updated.deathSaves = { successes: 0, failures: 0 };
+    }
+
+    await saveCharacter(updated);
+    return res.json({ character: updated, healed, newHP });
+  } catch (err) {
+    return handleError(res, err);
+  }
+});
+
+// ============================================================
+// POST /api/characters/:id/conditions
+// Add, remove, or clear conditions (PHB p.290).
+//   Body:     { action: 'add'|'remove'|'clear', condition?: string }
+//   Response: { character, conditions: string[] }
+// Duplicate adds are silently ignored; removes of absent conditions
+// are silently ignored. Custom condition names are accepted.
+// ============================================================
+router.post('/characters/:id/conditions', async (req: Request, res: Response) => {
+  try {
+    const id     = String(req.params.id);
+    const { action, condition } = req.body ?? {};
+
+    const VALID_ACTIONS = new Set(['add', 'remove', 'clear']);
+    if (!VALID_ACTIONS.has(action)) {
+      return res.status(400).json({ error: 'action must be "add", "remove", or "clear".' });
+    }
+    if (action !== 'clear') {
+      if (typeof condition !== 'string' || condition.trim() === '') {
+        return res.status(400).json({ error: 'condition (non-empty string) required for add/remove.' });
+      }
+    }
+
+    const sheet = loadCharacter(id);
+    if (!sheet) return res.status(404).json({ error: `Character not found: ${id}` });
+
+    let conditions = [...(sheet.conditions ?? [])];
+    const cond = (condition ?? '').trim();
+
+    if (action === 'add') {
+      if (!conditions.includes(cond)) conditions.push(cond);
+    } else if (action === 'remove') {
+      conditions = conditions.filter(c => c !== cond);
+    } else {
+      // clear
+      conditions = [];
+    }
+
+    const updated = {
+      ...sheet,
+      conditions,
+      updatedAt: new Date().toISOString(),
+    };
+    await saveCharacter(updated);
+    return res.json({ character: updated, conditions });
+  } catch (err) {
+    return handleError(res, err);
+  }
+});
+
+// ============================================================
+// POST /api/characters/:id/useslot
+// Expend one spell slot of the given level.
+//   Body:     { level: number }   (1-9, or pact slot via level 0)
+//   Response: { character, level, remaining, used }
+// Returns 400 if no slots are available at that level.
+// ============================================================
+router.post('/characters/:id/useslot', async (req: Request, res: Response) => {
+  try {
+    const id    = String(req.params.id);
+    const level = req.body?.level;
+
+    if (typeof level !== 'number' || !Number.isInteger(level) || level < 1 || level > 9) {
+      return res.status(400).json({ error: 'level must be an integer 1–9.' });
+    }
+
+    const sheet = loadCharacter(id);
+    if (!sheet) return res.status(404).json({ error: `Character not found: ${id}` });
+    if (!sheet.spellcasting) {
+      return res.status(400).json({ error: 'Character has no spellcasting block.' });
+    }
+
+    const key  = String(level);
+    const max  = (sheet.spellcasting.slots?.[key]) ?? 0;
+    const used = (sheet.spellcasting.slotsUsed?.[key]) ?? 0;
+
+    if (max === 0) {
+      return res.status(400).json({ error: `No level-${level} slots available for this character.` });
+    }
+    if (used >= max) {
+      return res.status(400).json({ error: `No level-${level} slots remaining (${used}/${max} used).` });
+    }
+
+    const newUsed = used + 1;
+    const updated = {
+      ...sheet,
+      spellcasting: {
+        ...sheet.spellcasting,
+        slotsUsed: { ...(sheet.spellcasting.slotsUsed ?? {}), [key]: newUsed },
+      },
+      updatedAt: new Date().toISOString(),
+    };
+    await saveCharacter(updated);
+    return res.json({ character: updated, level, remaining: max - newUsed, used: newUsed });
+  } catch (err) {
+    return handleError(res, err);
+  }
+});
+
+// ============================================================
+// POST /api/characters/:id/restoreslot
+// Restore one used spell slot of the given level.
+//   Body:     { level: number }   (1-9)
+//   Response: { character, level, remaining, used }
+// Returns 400 if no used slots exist at that level.
+// ============================================================
+router.post('/characters/:id/restoreslot', async (req: Request, res: Response) => {
+  try {
+    const id    = String(req.params.id);
+    const level = req.body?.level;
+
+    if (typeof level !== 'number' || !Number.isInteger(level) || level < 1 || level > 9) {
+      return res.status(400).json({ error: 'level must be an integer 1–9.' });
+    }
+
+    const sheet = loadCharacter(id);
+    if (!sheet) return res.status(404).json({ error: `Character not found: ${id}` });
+    if (!sheet.spellcasting) {
+      return res.status(400).json({ error: 'Character has no spellcasting block.' });
+    }
+
+    const key  = String(level);
+    const max  = (sheet.spellcasting.slots?.[key]) ?? 0;
+    const used = (sheet.spellcasting.slotsUsed?.[key]) ?? 0;
+
+    if (max === 0) {
+      return res.status(400).json({ error: `No level-${level} slots exist for this character.` });
+    }
+    if (used <= 0) {
+      return res.status(400).json({ error: `No used level-${level} slots to restore.` });
+    }
+
+    const newUsed = used - 1;
+    const updated = {
+      ...sheet,
+      spellcasting: {
+        ...sheet.spellcasting,
+        slotsUsed: { ...(sheet.spellcasting.slotsUsed ?? {}), [key]: newUsed },
+      },
+      updatedAt: new Date().toISOString(),
+    };
+    await saveCharacter(updated);
+    return res.json({ character: updated, level, remaining: max - newUsed, used: newUsed });
+  } catch (err) {
+    return handleError(res, err);
+  }
+});
+
+// ============================================================
 // POST /api/characters/:id/longrest
 // Apply a long rest: restore HP, spell slots, per-long-rest resources, hit dice.
 // Response: { character: CharacterSheet; restored: string[] }
