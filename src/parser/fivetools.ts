@@ -512,6 +512,51 @@ function parsePounce(
   return undefined;
 }
 
+/**
+ * Session 53 Batch 4h: parse a Rejuvenation trait. Extracts:
+ *   - reformTimeHours: N (from "1 hour", "24 hours", "1d6 days", "1d10 days")
+ *     For dice-based times (1d6 days), uses the MINIMUM roll (1 day = 24 hrs).
+ *   - conditionText: the "if X" clause (e.g. "if its phylactery is intact")
+ *
+ * Returns undefined if the trait name isn't "Rejuvenation". v1 metadata-only
+ * — the trait only matters in multi-day scenarios (not simulated in v1).
+ */
+function parseRejuvenation(
+  traits: { name: string; entries: (string | object)[] }[],
+): Combatant['rejuvenation'] | undefined {
+  for (const t of traits) {
+    if (!/^Rejuvenation$/i.test(t.name.trim())) continue;
+    const rawText = flattenEntries(t.entries);
+    const text = rawText.replace(/\{@(\w+)\s+([^}]+)\}/g, (_m, _tag, args) => {
+      return String(args).split('|')[0].trim();
+    });
+
+    let reformTimeHours = 24; // default: 24 hours (most common)
+
+    // "1 hour" / "1 hours"
+    const hrMatch = text.match(/(\d+)\s+hours?/i);
+    if (hrMatch) {
+      reformTimeHours = parseInt(hrMatch[1], 10);
+    }
+    // "1d6 days" / "1d10 days" — use minimum roll (1 day = 24 hrs)
+    const diceDaysMatch = text.match(/(\d+)d(\d+)\s+days?/i);
+    if (diceDaysMatch) {
+      reformTimeHours = 24; // min roll = 1 day
+    }
+    // "24 hours" (already captured by hrMatch above)
+
+    // Condition: text after "if" (e.g. "if its phylactery is intact")
+    let conditionText: string | undefined;
+    const condMatch = text.match(/\bif\s+(.+?)(?:\.|$)/i);
+    if (condMatch) {
+      conditionText = condMatch[1].trim();
+    }
+
+    return { reformTimeHours, conditionText };
+  }
+  return undefined;
+}
+
 export function parseAction(
   raw: RawAction,
   costType: Action['costType'] = 'action',
@@ -1118,6 +1163,8 @@ export function monsterToCombatant(
   // Session 53 Batch 4g: Charge + Pounce (movement-triggered riders)
   const charge = parseCharge(raw.trait ?? []);
   const pounce = parsePounce(raw.trait ?? []);
+  // Session 53 Batch 4h: Rejuvenation (metadata-only)
+  const rejuvenation = parseRejuvenation(raw.trait ?? []);
   // Hold Breath: extract the minutes count from the entry text
   // ("can hold its breath for 1 hour" → 60 minutes; "for 30 minutes" → 30)
   let holdBreathMinutes: number | undefined;
@@ -1174,6 +1221,7 @@ export function monsterToCombatant(
     incorporealMovement,   // Session 53 Batch 4f: true for Incorporeal Movement trait
     charge,                // Session 53 Batch 4g: undefined for non-Charge creatures
     pounce,                // Session 53 Batch 4g: undefined for non-Pounce creatures
+    rejuvenation,          // Session 53 Batch 4h: undefined for non-Rejuvenation creatures
     budget: freshBudget(speeds.ground),
     conditions: new Set(),
     aiProfile: resolvedProfile,

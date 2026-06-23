@@ -804,6 +804,27 @@ export interface Combatant {
    */
   _turnStartPos?: Vec3;
 
+  /**
+   * ── Session 53 Creature Megabatch Batch 4h: Rejuvenation ──
+   * MM p.11 / various: "If the [creature] is destroyed, it gains a new body
+   * in [N time] if [condition], regaining all its hit points."
+   *
+   * 33 pre-2024 creatures (Lich, Mummy Lord, Revenant, Guardian Naga, etc.).
+   * v1 simplification: METADATA-ONLY. v1 combats are single-encounter; the
+   * creature dies → combat ends. Rejuvenation only matters in multi-day
+   * adventuring-day scenarios (not yet simulated). The flag records:
+   *   - reformTimeHours: N (1 hour for Flameskull, 24 for Mummy Lord,
+   *     1d6 days = 144-864 hours for Guardian Naga — uses the min roll)
+   *   - conditionText: the "if X" clause (phylactery intact, holy water
+   *     not sprinkled, etc.) — stored as-is for future display/logic
+   * Future: when multi-day simulation is added, a long-rest hook can
+   * check this flag + conditionText to respawn the creature.
+   */
+  rejuvenation?: {
+    reformTimeHours: number;
+    conditionText?: string;  // e.g. "if its phylactery is intact"
+  };
+
   // Turn resources
   budget: ActionBudget;
 
