@@ -20,6 +20,7 @@ import {
   parseDieSides, consumeBardicInspiration,
   teamHasNoAttackCapability, canDealDamage, makeImprovisedUnarmed, makeImprovisedWeapon,
   effectiveSpeed, rollDie, abilityMod, proficiencyBonus,
+  rollDice,
   rollDiceString as rollBoomingBladeDice,
   rollAbilityCheck,  // Session 43 Task #26: for rollAbilityCheckReactable
   elementalAffinityBonus,  // Session 47 Task #29-follow-up-5: Draconic Sorcerer
@@ -2275,6 +2276,77 @@ function checkDeath(target: Combatant, state: EngineState, attacker?: Combatant)
   if (target.conditions.has('grappled')) {
     removeCondition(target, 'grappled');
     target.grappledBy = undefined;
+  }
+
+  // ── Session 53 Creature Megabatch Batch 4d: Death Burst ──
+  // MM p.215 (Mephits/Magmin), MM p.138 (Gas Spore), BGG hulks, EGW Frost
+  // Worm, GGR Galvanice Weird, ~27 creatures total across pre-2024 sources.
+  // The trait fires when the creature drops to 0 HP — applies AoE damage +
+  // conditions to all combatants in radius (including allies).
+  if (target.deathBurst) {
+    triggerDeathBurst(target, state);
+  }
+}
+
+/**
+ * Session 53 Batch 4d: Fire a creature's Death Burst AoE.
+ *
+ * Applies damage (with save-for-half if halfOnSuccess) + conditions (on
+ * failed save) to all non-dead combatants within `radius` feet of the
+ * bursting creature. v1 simplification: hits ALL factions (allies too);
+ * the bursting creature itself is already at 0 HP so it's skipped.
+ *
+ * Exported for direct testing — see src/test/creature_death_burst.test.ts.
+ *
+ * @param burster  The dying creature with `deathBurst` populated.
+ * @param state    Current engine state (for damage application + logging).
+ */
+export function triggerDeathBurst(burster: Combatant, state: EngineState): void {
+  const burst = burster.deathBurst!;
+  const bf = state.battlefield;
+  log(state, 'action', burster.id,
+    `${burster.name} explodes in a Death Burst! (${burst.radius} ft radius, DC ${burst.saveDC} ${burst.saveAbility.toUpperCase()})`,
+    undefined, 0);
+
+  for (const c of bf.combatants.values()) {
+    if (c.id === burster.id) continue;       // self — already dying
+    if (c.isDead) continue;                   // already dead — skip
+    const distFt = chebyshev3D(burster.pos, c.pos) * 5;
+    if (distFt > burst.radius) continue;      // out of range
+
+    // Save
+    const save = rollSave(c, burst.saveAbility, burst.saveDC);
+    const failed = !save.success;
+
+    // Damage (if any)
+    if (burst.damage) {
+      let dmg = rollDice(burst.damage);
+      if (burst.halfOnSuccess && !failed) {
+        dmg = Math.floor(dmg / 2);
+      }
+      if (dmg > 0) {
+        const dealt = applyDamageWithTempHP(c, dmg, burst.damageType);
+        log(state, 'damage', burster.id,
+          `${c.name} ${failed ? 'fails' : 'succeeds'} the ${burst.saveAbility.toUpperCase()} save and takes ${dealt} ${burst.damageType} damage from ${burster.name}'s Death Burst.`,
+          c.id, dealt);
+        // Recursively check death (the burst may kill a creature, which could
+        // trigger ITS death burst — chain reaction). Guard against infinite
+        // recursion via the isDead flag (checkDeath is a no-op at >0 HP).
+        if (c.currentHP <= 0 && !c.isDead) {
+          checkDeath(c, state, burster);
+        }
+      }
+    }
+
+    // Conditions (on failed save)
+    if (failed && burst.conditions) {
+      for (const cond of burst.conditions) {
+        addCondition(c, cond as any);
+        log(state, 'condition_add', burster.id,
+          `${c.name} is ${cond} by ${burster.name}'s Death Burst.`,
+          c.id, 0);
+      }
+    }
   }
 }
 

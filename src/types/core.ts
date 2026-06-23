@@ -594,6 +594,37 @@ export interface Combatant {
    */
   cannotRegainHP?: boolean;
 
+  /**
+   * ── Session 53 Creature Megabatch Batch 4d: Death Burst ──
+   * MM p.215 (Mephits), p.215 (Magmin), p.138 (Gas Spore); also BGG hulks,
+   * EGW Frost Worm, GGR Galvanice Weird, and ~20 more across pre-2024 sources.
+   *
+   * "When the [creature] dies, it explodes in a burst of [element]. Each
+   * creature within N feet of it must make a [ability] saving throw, taking
+   * XdY [type] damage on a failed save, or half as much on a successful one.
+   * [Optional: on a failed save, a creature has the {condition} condition.]"
+   *
+   * `damage` = dice to roll (count + sides + bonus). `damageType` = the
+   * damage type. `saveDC` + `saveAbility` = the save that halves. `radius`
+   * = feet. `conditions` = optional list of conditions to apply on a FAILED
+   * save (e.g. ['blinded'] for Dust Mephit, ['restrained'] for Mud Mephit).
+   * `halfOnSuccess` = true for damage-dealing bursts (typical), false for
+   * condition-only bursts (Mud Mephit, Dust Mephit — no damage).
+   *
+   * checkDeath() in combat.ts fires this when the creature drops to 0 HP.
+   * v1 simplification: the burst hits ALL non-dead combatants in radius,
+   * including allies (PHB p.X: most Death Bursts don't discriminate).
+   */
+  deathBurst?: {
+    damage: DiceExpression | null;
+    damageType: DamageType;
+    saveDC: number;
+    saveAbility: 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha';
+    radius: number;       // in feet
+    conditions?: string[]; // applied on FAILED save
+    halfOnSuccess: boolean;
+  };
+
   // Turn resources
   budget: ActionBudget;
 
