@@ -54,7 +54,7 @@
 import { Combatant, Battlefield } from '../types/core';
 import { rollSaveReactable, CombatEvent, EngineState } from '../engine/combat';
 import { applySpellEffect, removeEffectsFromCaster } from '../engine/spell_effects';
-import { startConcentration, rollDie, applyDamageWithTempHP } from '../engine/utils';
+import { startConcentration, rollDie, applyDamageWithTempHP, elementalAffinityBonus } from '../engine/utils';
 import { chebyshev3D } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 
@@ -195,8 +195,15 @@ export function execute(
   if (target.isDead || target.isUnconscious) return;
 
   // On-cast damage: DEX save for half.
+  // Session 51 Task #29-follow-up-5c-4: Elemental Affinity (Draconic
+  // Sorcerer 6) adds CHA mod to the fire damage if the caster's ancestry
+  // is fire. The bonus is added BEFORE save halving (so it IS halved on
+  // save success — consistent with the v1 model where the bonus is part
+  // of the total damage roll). The damage_zone tick (start-of-turn)
+  // does NOT get EA — the tick handler in combat.ts has no caster context.
+  const eaBonus = elementalAffinityBonus(caster, metadata.damageType);
   const save = rollSaveReactable(state, caster, target, 'dex', saveDC);
-  const fullDmg = rollDamage();
+  const fullDmg = rollDamage() + eaBonus;
   const dmg = save.success ? Math.floor(fullDmg / 2) : fullDmg;
   const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);
 
@@ -204,7 +211,7 @@ export function execute(
     state,
     save.success ? 'save_success' : 'save_fail',
     caster.id,
-    `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} DEX save vs Flaming Sphere (rolled ${save.total}) — ${dealt} ${metadata.damageType} damage (${metadata.dieCount}d${metadata.dieSides}=${fullDmg}${save.success ? ', halved' : ''})`,
+    `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} DEX save vs Flaming Sphere (rolled ${save.total}) — ${dealt} ${metadata.damageType} damage (${metadata.dieCount}d${metadata.dieSides}=${fullDmg}${eaBonus > 0 ? ` + ${eaBonus} EA` : ''}${save.success ? ', halved' : ''})`,
     target.id, save.roll,
   );
   emit(
