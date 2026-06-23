@@ -22,11 +22,16 @@ The user redirected from executing `zHANDOVER-SESSION-50.md` (a spells-only Cant
 | **0 — reprint-safe loader + source provenance** | ✅ DONE | 453 (infra) | 34 new | 547a361 |
 | **1 — defenses (immune/resist/vulnerable/conditionImmune)** | ✅ DONE | 173+105+20+141 | 92 new | 2ee8600 |
 | **2 — saves/skills/senses/passive** | ✅ DONE | 127+277+senses | 58 new | ea9a72d |
-| **3 — recharge + Legendary Resistance** | NOT STARTED | 84+28 | — | — |
-| **4 — bespoke trait modules** | NOT STARTED | ~200 | — | — |
+| **3 — recharge + Legendary Resistance** | ✅ DONE | 84+28 | 52 new | 3fb8be8 |
+| **4a — Magic Resistance** | ✅ DONE | 65 | 34 new (with 4b) | 2f7ced4 |
+| **4b — Regeneration** | ✅ DONE | 13 | (in 4a test) | 2f7ced4 |
+| **4c — Magic Weapons (flag)** | ✅ DONE | 19 | 15 new (with 4e) | cfb8a11 |
+| **4d — Death Burst** | DEFERRED | 8 | — | needs on-death hook in combat.ts |
+| **4e — Blood Frenzy + Swarm + Siege Monster** | ✅ PARTIAL | 7+10+5 | (in 4c test) | cfb8a11 |
+| **4e-remaining — Charge/Pounce/Incorporeal/Avoidance/etc.** | DEFERRED | ~60 | — | needs movement/engine hooks |
 | **5 — lair + monster spellcasting + shapechanger** | DEFERRED | 41+83+23 | — | — |
 
-**Total this session:** ~1250 lines of new/modified code, 3 new test files (184 new assertions), 2 new planning/analysis artifacts, 1 new analysis script. All 0 failures across the full regression sweep.
+**Total this session:** ~2500 lines of new/modified code, 6 new test files (285 new assertions), 2 new planning/analysis artifacts, 1 new analysis script. All 0 failures across the full regression sweep.
 
 ---
 
@@ -141,20 +146,20 @@ CI checks should mirror the prior green baseline (build/test/deploy/report-build
 
 ## Next Session Priorities
 
-Session 52 completed Batches 0, 1, 2 (3 of 5 active batches). The remaining active batches, in priority order:
+Session 52 completed Batches 0, 1, 2, 3, 4a, 4b, 4c, and partial 4e (8 of ~10 sub-batches). The remaining creature work:
 
-### Batch 3 — Recharge mechanic + Legendary Resistance trait (84 + 28 creatures)
-- **3a. Recharge:** Add `recharge?: {min: number; recharged: boolean}` to `Action` type. Parser strips `{@recharge N}` from action names, sets the field. Engine: at start of each of the creature's turns, roll 1d6 per recharge action; if `>= min`, set `recharged = true`. AI planner skips actions where `recharge && !recharged`. Unlocks 84 creatures' breath weapons (dragons, mephits, etc.). Mirror: Blink Dog (Teleport), Mud Mephit (Mud Breath).
-- **3b. Legendary Resistance:** Trait name `"Legendary Resistance (N/Day)"` → parse N → `Combatant.legendaryResistance?: {max, remaining}`. In `rollSave()`, if save FAILED + `remaining > 0` + (v1 simplification) the save would cause significant damage, force success + decrement. 28 creatures (all ancient/adult dragons, liches, etc.). Mirror: Adult Brass Dragon (LR 3/day).
-- See `CREATURE-MEGABATCH-MIGRATION-PLAN.md` Batch 3 section for full spec.
+### Batch 4d — Death Burst (8 creatures) — NEXT
+- Needs an on-death hook in `combat.ts` (the `isDead` transition point). Parse the Death Burst trait description for damage dice + type + save DC + radius. On death, apply to all creatures in radius. Mirror: Mud Mephit (DC 10 CON, dust/piercing), Flameskull (fire). Medium complexity — the hook point exists (death is detected in combat.ts), just needs the AoE-application logic.
 
-### Batch 4 — Bespoke trait modules (~200 creatures, the spells-megabatch analogue)
-Grouped by engine hook, each sub-batch is one commit:
-- **4a. Magic Resistance (65)** — advantage on saves vs magic. Hook: `rollSave()`.
-- **4b. Regeneration (13)** — start-of-turn HP regen. Hook: `beginTurn()`. Parse regen amount + acid/fire stop clause.
-- **4c. Magic Weapons (19)** — attacks count as magical. Requires revisiting Batch 1's `cond:true` handling to honor `isNonmagical`.
-- **4d. Death Burst (8)** — AoE on death. Hook: `onDeath` in `combat.ts`. Parse damage/type/DC/radius from trait description.
-- **4e. Remaining traits (~95)** — Blood Frenzy (7), Incorporeal Movement (8), Avoidance (2), Charge (14), Pounce (6), Swarm (10), Superior Invisibility (7), Rejuvenation (6), Sunlight Sensitivity (18), False Appearance (22), etc. Each is a small bespoke hook.
+### Batch 4e-remaining — ~60 creatures across several traits
+- **Charge (14) + Pounce (6):** bonus-action rider when moving 20-30ft straight then hitting. Needs movement-tracking (did the creature move ≥N ft straight toward the target this turn?). Medium complexity — movement.ts tracks movement, needs a "straight-line distance toward target" check.
+- **Incorporeal Movement (8):** move through creatures/objects as difficult terrain. Movement-engine change in `movement.ts`.
+- **Avoidance (2):** no damage (instead of half) on successful save vs half-damage effect. Needs save-source tagging (which saves allow half damage) — plumb a `halfDamageOnSuccess` flag through the save→damage flow.
+- **Superior Invisibility (7):** at-will invisibility (bonus action). AI planner hook to self-cast.
+- **Rejuvenation (6):** death respawn (Tiamat, liches, etc.). Complex — needs a death-state-with-respawn mechanic.
+- **Sunlight Sensitivity (18):** disadvantage in sunlight. Needs a `battlefield.lightLevel` flag (v1: default indoors/night = no penalty).
+- **False Appearance (22):** mostly flavor (stealth advantage when motionless) — record as metadata.
+- **Remaining low-frequency traits** (Keen Senses, Hold Breath, Water Breathing, Web Walker, etc.): mostly flavor/metadata; record where relevant.
 
 ### Batch 5 — DEFERRED (lair + monster spellcasting + shapechanger)
 - **5a. Lair actions (41)** — needs initiative-count-20 hook in `runCombat` + lair-actions JSON source (DMCA'd — user must provide).
