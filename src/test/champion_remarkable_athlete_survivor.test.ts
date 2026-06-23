@@ -428,6 +428,16 @@ console.log('\n--- 21. Survivor does NOT fire when HP = 0 ---');
   champion.maxHP = 100;
   champion.currentHP = 0;
   champion.isUnconscious = true;
+  // Session 49 de-flake: null out deathSaves to prevent the 5% nat-20
+  // death-save revival path. Without this, a nat 20 revives the champion
+  // at 1 HP, at which point Survivor CORRECTLY fires (HP 1 > 0, < half max),
+  // causing this assertion to flake ~5% of runs. By nulling deathSaves, the
+  // unconscious champion skips the death-save roll entirely (combat.ts line
+  // ~5051: `if (actor.isUnconscious && actor.isPlayer && actor.deathSaves)`),
+  // and the turn is skipped via the `else if (actor.isUnconscious) continue`
+  // branch — so Survivor never gets a chance to fire. This isolates the
+  // intended test case: "Survivor does not fire when HP = 0".
+  champion.deathSaves = null;
   const enemy = makeEnemy('e', { x: 15, y: 0, z: 0 }, { maxHP: 10000, currentHP: 10000, ac: 30 });
   const bf = makeBF([champion, enemy]);
   const combatLog = runCombat(bf, [champion.id, enemy.id], { maxRounds: 1 });
