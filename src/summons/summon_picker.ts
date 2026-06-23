@@ -29,7 +29,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { Raw5etoolsMonster, monsterToCombatant, mergeBestiaries } from '../parser/fivetools';
+import { Raw5etoolsMonster, monsterToCombatant, mergeBestiaries, rawCreatureType } from '../parser/fivetools';
 import { parseCR } from './cr_picker';
 import { Combatant, AIProfile, Vec3 } from '../types/core';
 
@@ -141,11 +141,12 @@ export function pickSummonByCR(
   const candidates: SummonPick[] = [];
 
   for (const [, raw] of bestiary) {
-    // Type filter
-    const rawType = typeof raw.type === 'string'
-      ? raw.type
-      : (typeof raw.type === 'object' && raw.type ? (raw.type as any).type ?? '' : '');
-    if (rawType.toLowerCase() !== creatureType.toLowerCase()) continue;
+    // Type filter — Session 53: use rawCreatureType() to handle every
+    // 5etools type shape (string, {type:string}, {type:string[]},
+    // {type:{choose:[...]}}, {choose:[...]}). The old `raw.type as any`
+    // path crashed on `{ type: { choose: [...] } }` (bestiary-mpp.json).
+    const rawType = rawCreatureType(raw.type);
+    if (rawType !== creatureType.toLowerCase()) continue;
 
     // CR filter
     const cr = parseCR(raw.cr);

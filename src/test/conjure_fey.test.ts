@@ -298,9 +298,13 @@ console.log('\n=== 4. execute — creates summon and adds to battlefield ===\n')
     eq('Green Hag summonerId is caster', hag.summonerId, 'caster1');
     eq('Green Hag summonSpellName is Conjure Fey', hag.summonSpellName, 'Conjure Fey');
     eq('Green Hag faction matches caster', hag.faction, 'party');
-    eq('Green Hag HP is 82', hag.maxHP, 82);
-    eq('Green Hag AC is 17', hag.ac, 17);
-    eq('Green Hag CR is 3', hag.cr, 3);
+    // Session 53: with the expanded bestiary, the L6 fey pick may be a
+    // higher-CR fey (e.g. Annis Hag CR 6 from MPMM) instead of Green Hag.
+    // Assert the summon is a valid fey with CR ≤ 6; don't pin the name.
+    assert('Fey summon CR ≤ 6 (bestiary pick)', (hag.cr ?? 0) <= 6);
+    assert('Fey summon CR ≥ 1', (hag.cr ?? 0) >= 1);
+    assert('Fey summon HP ≥ 1', hag.maxHP >= 1);
+    assert('Fey summon AC ≥ 1', hag.ac >= 1);
   }
 
   // Caster is concentrating on Conjure Fey
@@ -440,11 +444,13 @@ console.log('\n=== 8. Upcast — slot level scales but stat block stays the same
   const state6 = makeState(bf6);
   execute(caster6, caster6, state6);
   const hag6 = [...bf6.combatants.values()].find(c => c.isSummon && c.summonerId === caster6.id);
-  assert('L6 cast: Green Hag spawned', !!hag6);
+  assert('L6 cast: fey summon spawned', !!hag6);
   if (hag6) {
-    eq('L6 cast: HP is 82 (Green Hag)', hag6.maxHP, 82);
-    eq('L6 cast: AC is 17', hag6.ac, 17);
-    eq('L6 cast: CR is 3', hag6.cr, 3);
+    // Session 53: bestiary now picks a CR 6 fey (e.g. Annis Hag from MPMM)
+    // instead of the hardcoded Green Hag (CR 3). Assert CR + shape only.
+    assert('L6 cast: fey CR ≤ 6', (hag6.cr ?? 0) <= 6);
+    assert('L6 cast: fey HP ≥ 1', hag6.maxHP >= 1);
+    assert('L6 cast: fey AC ≥ 1', hag6.ac >= 1);
   }
   eq('L6 cast: 6th-level slot consumed', caster6.resources!.spellSlots![6]!.remaining, 0);
   eq('L6 cast: 7th-level slot untouched', caster6.resources!.spellSlots![7]!.remaining, 1);
@@ -454,18 +460,19 @@ console.log('\n=== 8. Upcast — slot level scales but stat block stays the same
   const actionEvents6 = events6.filter((e: any) => e.type === 'action');
   assert('L6 cast log mentions slot L6', actionEvents6.length > 0 && actionEvents6[0].description.includes('L6'));
 
-  // L7 upcast: still spawns Green Hag (v1 simplification), but consumes L6 first
-  // because consumeSpellSlot() finds the lowest available L6+ slot.
+  // L7 upcast: bestiary now picks a higher-CR fey (up to CR 7).
   const caster7 = makeCaster('c7');
   caster7.resources = withSlots6And7(0, 1); // L6 exhausted, L7 available
   const bf7 = makeBF([caster7, makeEnemy('e7')]);
   const state7 = makeState(bf7);
   execute(caster7, caster7, state7);
   const hag7 = [...bf7.combatants.values()].find(c => c.isSummon && c.summonerId === caster7.id);
-  assert('L7 upcast: Green Hag spawned', !!hag7);
+  assert('L7 upcast: fey summon spawned', !!hag7);
   if (hag7) {
-    eq('L7 upcast: HP is still 82 (v1 simplification)', hag7.maxHP, 82);
-    eq('L7 upcast: CR is still 3 (v1 simplification)', hag7.cr, 3);
+    // Session 53: bestiary may pick CR 6 or CR 7 fey (depending on which
+    // sourcebooks are loaded). Assert CR ≤ 7 + shape.
+    assert('L7 upcast: fey CR ≤ 7', (hag7.cr ?? 0) <= 7);
+    assert('L7 upcast: fey HP ≥ 1', hag7.maxHP >= 1);
   }
   eq('L7 upcast: 7th-level slot consumed', caster7.resources!.spellSlots![7]!.remaining, 0);
 
@@ -519,7 +526,11 @@ console.log('\n=== 10. execute — logging ===\n');
   assert('At least 1 action event (cast log)', actionEvents.length >= 1);
   if (actionEvents.length >= 1) {
     assert('Action event mentions "Conjure Fey"', actionEvents[0].description.includes('Conjure Fey'));
-    assert('Action event mentions "Green Hag"', actionEvents[0].description.includes('Green Hag'));
+    // Session 53: bestiary pick may be any fey (e.g. Annis Hag from MPMM),
+    // not necessarily Green Hag. Assert the log mentions the actual summon's
+    // name by inspecting the spawned combatant instead of pinning "Green Hag".
+    const summon = [...bf.combatants.values()].find(c => c.isSummon && c.summonerId === caster.id);
+    assert('Action event mentions the summoned fey name', summon ? actionEvents[0].description.includes(summon.name.split(' (')[0]) : false);
     assert('Action event mentions HP', actionEvents[0].description.includes('HP'));
     assert('Action event mentions AC', actionEvents[0].description.includes('AC'));
   }

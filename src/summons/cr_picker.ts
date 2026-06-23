@@ -19,7 +19,7 @@
 // loading is standardised at combat-setup time.
 // ============================================================
 
-import { Raw5etoolsMonster } from '../parser/fivetools';
+import { Raw5etoolsMonster, rawCreatureType } from '../parser/fivetools';
 
 // ---- Types --------------------------------------------------
 
@@ -90,9 +90,9 @@ export function pickCreaturesByCR(
     const cr = parseCR(raw.cr);
     if (cr === null || cr > maxCR) continue;
     if (creatureType) {
-      const type = typeof raw.type === 'string'
-        ? raw.type.toLowerCase()
-        : (typeof raw.type === 'object' && raw.type ? (raw.type as any).type?.toLowerCase?.() ?? '' : '');
+      // Session 53: use rawCreatureType() — handles every 5etools type shape
+      // (string, {type:string}, {type:string[]}, {type:{choose:[...]}}, {choose:[...]}).
+      const type = rawCreatureType(raw.type);
       if (type !== creatureType.toLowerCase()) continue;
     }
     candidates.push({ name: raw.name, cr });

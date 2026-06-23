@@ -50,7 +50,7 @@ export interface Raw5etoolsMonster {
   action?: RawAction[];
   legendary?: RawAction[];
   trait?: RawAction[];
-  type?: string | { type: string };
+  type?: string | { type: string | string[] | { choose?: string[] } } | { choose?: string[] };
   size?: string | string[];
   /** 5etools spellcasting block — present on spellcasting monsters only. */
   spellcasting?: Array<{
@@ -649,9 +649,8 @@ function nextId(name: string): string {
  */
 
 // ---- Q7: Default AI profile per creature type ---------------
-export function defaultProfileForType(typeStr: string | { type: string } | undefined): AIProfile {
-  const raw = typeof typeStr === 'string' ? typeStr : (typeStr as any)?.type ?? '';
-  const t = raw.toLowerCase();
+export function defaultProfileForType(typeStr: Raw5etoolsMonster['type'] | undefined): AIProfile {
+  const t = rawCreatureType(typeStr);
   if (t.includes('beast'))       return 'attackNearest';
   if (t.includes('undead'))      return 'attackNearest';
   if (t.includes('construct'))   return 'attackNearest';
@@ -696,10 +695,10 @@ export function parseSizeCode(
  * Full hasHands parser coverage is a future improvement; this covers ~90% of CR 0-1 monsters.
  */
 export function hasHandsForType(
-  typeStr: string | { type: string } | undefined,
+  typeStr: Raw5etoolsMonster['type'] | undefined,
   raw: { name?: string; entries?: string[]; actions?: { entries?: string[] }[] }
 ): boolean {
-  const t = (typeof typeStr === 'string' ? typeStr : (typeStr as any)?.type ?? '').toLowerCase();
+  const t = rawCreatureType(typeStr);
 
   // Types that reliably have hands/tentacles
   if (t.includes('humanoid'))    return true;
@@ -737,10 +736,34 @@ export function hasHandsForType(
 // ---- TG-004: parser tech debt helpers -----------------------
 
 /** Extract the base type string from raw.type (string or object form). */
-function rawCreatureType(type: Raw5etoolsMonster['type']): string {
+export function rawCreatureType(type: Raw5etoolsMonster['type']): string {
   if (!type) return '';
   if (typeof type === 'string') return type.toLowerCase();
-  return (type.type ?? '').toLowerCase();
+  // Session 53: bestiary-mpp.json (and possibly others) uses the
+  // `{ type: { choose: ['celestial', 'fiend'] } }` shape for creatures whose
+  // type is chosen at spawn time (e.g. Planar Incarnate). We return the first
+  // candidate — v1 doesn't model the choice, and parsers downstream tolerate
+  // an empty-string return. Future: extend monsterToCombatant to surface the
+  // choice list as metadata.
+  const inner = type.type;
+  if (typeof inner === 'string') return inner.toLowerCase();
+  if (Array.isArray(inner) && inner.length > 0 && typeof inner[0] === 'string') {
+    return inner[0].toLowerCase();
+  }
+  if (inner && typeof inner === 'object' && 'choose' in inner) {
+    const choose = (inner as { choose?: unknown }).choose;
+    if (Array.isArray(choose) && choose.length > 0 && typeof choose[0] === 'string') {
+      return String(choose[0]).toLowerCase();
+    }
+  }
+  // Direct `choose` on the outer object (rare): `{ choose: ['celestial','fiend'] }`
+  if ('choose' in type) {
+    const choose = (type as { choose?: unknown }).choose;
+    if (Array.isArray(choose) && choose.length > 0 && typeof choose[0] === 'string') {
+      return String(choose[0]).toLowerCase();
+    }
+  }
+  return '';
 }
 
 /** True when the creature is of type Undead (PHB — Chill Touch, Cure Wounds, etc.). */
