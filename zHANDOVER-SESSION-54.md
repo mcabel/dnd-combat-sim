@@ -142,7 +142,7 @@ The main-path `eaBonus` at line 1796 uses `action.damageType` (the weapon's type
 ## CI Status
 
 Single commit pushed to `main` (this session):
-- `Session 54 Core Engine TG-027: Elemental Affinity on weapon-rider damage sites`
+- `e657815` — Session 54 Core Engine TG-027: Elemental Affinity on weapon-rider damage sites
 
 CI should pass (all local tests green; the only `combat.ts` paths touched are the 3 weapon-rider damage sites, which are exercised by the 22 test files listed above — all green).
 

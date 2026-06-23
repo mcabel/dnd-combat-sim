@@ -786,7 +786,7 @@ completed by a single agent without coordination.
 
 #### TG-027: Wire Elemental Affinity into weapon-rider damage sites in `combat.ts` (Core Engine side of TG-015)
 
-- **Status:** DONE — Session 54 (commit pending)
+- **Status:** DONE — Session 54 (commit `e657815`)
 - **Owners:** Core Engine (driving — owns `src/engine/combat.ts`)
 - **Source:** Session 53 audit; TG-015 spell-module side already done (Sessions 47-51).
 - **Summary:** Three damage-roll sites in `combat.ts` apply weapon-rider bonus damage (Flame Blade rider ~line 2007, `_nextHitRider` consume ~line 1886 for Lightning Arrow + Searing Smite, `weapon_enchant` dice ~line 1988 for Elemental Weapon). None of them call `elementalAffinityBonus(attacker, rider.damageType)`, so a Draconic Sorcerer 6 with red ancestry doesn't get +CHA to fire-rider damage from these sources.
