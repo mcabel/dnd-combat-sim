@@ -119,10 +119,13 @@ const PHB_ARMOR_AC: Record<string, { base: number; dex: 'full' | 'max2' | 'none'
 /**
  * Recompute armorClass and acFormula from the character's equipped items.
  * Returns null when no recognized armor is equipped (preserves existing AC).
+ * toggledCategory: pass 'shield' when the toggled item was a shield, so that
+ *   unequipping a shield (equippedShield becomes undefined) still triggers a recompute.
  */
 function computeArmorAC(
   sheet: import('./characters/types').CharacterSheet,
   newEquipment: import('./characters/types').EquipmentItem[],
+  toggledCategory?: 'armor' | 'shield',
 ): { armorClass: number; acFormula: string } | null {
   const dexScore = sheet.stats?.dex ?? 10;
   const dexMod   = Math.floor((dexScore - 10) / 2);
@@ -131,14 +134,30 @@ function computeArmorAC(
   const equippedShield = newEquipment.find(e => e.equipped && e.category === 'shield');
 
   if (!equippedArmor) {
-    // Unarmored — only update if a shield was toggled (add/remove +2)
-    if (equippedShield !== undefined) {
-      // Use existing acFormula base and recompute shield component
-      const baseAC = sheet.armorClass - (equippedShield ? 0 : 2); // approximate
-      // Better: detect from existing formula — unarmored = 10 + DEX
-      const unarmoredBase = 10 + dexMod;
+    // Unarmored — update when a shield was toggled (equip OR unequip)
+    if (equippedShield !== undefined || toggledCategory === 'shield') {
+      // Per-class Unarmored Defense (PHB p.48 Barbarian, p.78 Monk)
+      const classNames = (sheet.classLevels ?? []).map(cl => cl.className);
+      const conScore = sheet.stats?.con ?? 10;
+      const conMod   = Math.floor((conScore - 10) / 2);
+      const wisScore = sheet.stats?.wis ?? 10;
+      const wisMod   = Math.floor((wisScore - 10) / 2);
+
+      let unarmoredBase: number;
+      let baseLabel: string;
+      if (classNames.includes('Barbarian')) {
+        unarmoredBase = 10 + dexMod + conMod;
+        baseLabel = `Unarmored Defense (Barbarian): ${unarmoredBase}`;
+      } else if (classNames.includes('Monk')) {
+        unarmoredBase = 10 + dexMod + wisMod;
+        baseLabel = `Unarmored Defense (Monk): ${unarmoredBase}`;
+      } else {
+        unarmoredBase = 10 + dexMod;
+        baseLabel = `Unarmored: ${unarmoredBase}`;
+      }
+
       const total = unarmoredBase + (equippedShield ? 2 : 0);
-      const formula = `Unarmored: ${unarmoredBase}${equippedShield ? ' + Shield: +2' : ''}`;
+      const formula = `${baseLabel}${equippedShield ? ' + Shield: +2' : ''}`;
       return { armorClass: total, acFormula: formula };
     }
     // No armor and shield state unchanged — let existing AC stand
@@ -1616,7 +1635,7 @@ router.post('/characters/:id/equip', async (req: Request, res: Response) => {
     const toggledItem = items[itemIndex];
     let acPatch: { armorClass: number; acFormula: string } | null = null;
     if (toggledItem.category === 'armor' || toggledItem.category === 'shield') {
-      acPatch = computeArmorAC(sheet, newItems);
+      acPatch = computeArmorAC(sheet, newItems, toggledItem.category as 'armor' | 'shield');
     }
 
     const updated = {

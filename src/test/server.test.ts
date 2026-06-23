@@ -2642,6 +2642,114 @@ async function run() {
     });
   }
 
+  // ── TG-025: Per-class Unarmored Defense AC via /equip ────
+  {
+    let barbId = '';
+    let monkId = '';
+
+    await test('setup: create Barbarian 1 DEX 14 CON 16 for unarmored-defense tests', async () => {
+      const body = {
+        name: 'UDBarb', race: 'Human', background: 'Outlander', alignment: 'True Neutral',
+        firstClass: 'Barbarian',
+        classLevels: [{ className: 'Barbarian', level: 1 }],
+        subclassChoices: {}, experiencePoints: 0,
+        baseStats: { str: 16, dex: 14, con: 16, int: 8, wis: 10, cha: 8 },
+        stats:     { str: 16, dex: 14, con: 16, int: 8, wis: 10, cha: 8 },
+        maxHP: 14, currentHP: 14, temporaryHP: 0,
+        armorClass: 15, acFormula: 'Unarmored Defense (Barbarian)', speed: 30,
+        hitDice: [{ className: 'Barbarian', dieSides: 12, total: 1, remaining: 1 }],
+        proficiencies: { armor: [], weapons: ['simple-melee','martial-melee'], tools: [], savingThrows: ['str','con'], skills: ['Athletics'], expertise: [] },
+        languages: ['Common'],
+        resources: {}, gold: 10, exhaustionLevel: 0,
+        equipment: [{ name: 'Shield', category: 'shield', quantity: 1, weight: 6, equipped: false }],
+        level1Features: [], allFeatures: [], feats: [], backgroundFeature: 'Wanderer',
+      };
+      const { status, json } = await request(BASE, '/api/characters', 'POST', body);
+      assert(status === 201, `Expected 201, got ${status}: ${JSON.stringify(json)}`);
+      barbId = json.character.id;
+    });
+
+    await test('TG-025 Barbarian + shield → AC 17 (10+DEX2+CON3+Shield2)', async () => {
+      const { status, json } = await request(BASE, `/api/characters/${barbId}/equip`, 'POST', { itemIndex: 0, equipped: true });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(json.character.armorClass === 17, `Expected AC 17, got ${json.character.armorClass}`);
+      assert(json.character.acFormula.includes('Barbarian'), `acFormula should mention Barbarian, got: ${json.character.acFormula}`);
+      assert(json.acUpdated === true, 'acUpdated should be true');
+    });
+
+    await test('TG-025 Barbarian unequip shield → AC 15 (10+DEX2+CON3)', async () => {
+      const { status, json } = await request(BASE, `/api/characters/${barbId}/equip`, 'POST', { itemIndex: 0, equipped: false });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(json.character.armorClass === 15, `Expected AC 15, got ${json.character.armorClass}`);
+      assert(json.acUpdated === true, 'acUpdated should be true');
+    });
+
+    await test('setup: create Monk 1 DEX 14 WIS 16 for unarmored-defense tests', async () => {
+      const body = {
+        name: 'UDMonk', race: 'Human', background: 'Hermit', alignment: 'Lawful Good',
+        firstClass: 'Monk',
+        classLevels: [{ className: 'Monk', level: 1 }],
+        subclassChoices: {}, experiencePoints: 0,
+        baseStats: { str: 10, dex: 14, con: 12, int: 10, wis: 16, cha: 8 },
+        stats:     { str: 10, dex: 14, con: 12, int: 10, wis: 16, cha: 8 },
+        maxHP: 9, currentHP: 9, temporaryHP: 0,
+        armorClass: 15, acFormula: 'Unarmored Defense (Monk)', speed: 30,
+        hitDice: [{ className: 'Monk', dieSides: 8, total: 1, remaining: 1 }],
+        proficiencies: { armor: [], weapons: ['simple-melee'], tools: [], savingThrows: ['str','dex'], skills: ['Insight'], expertise: [] },
+        languages: ['Common'],
+        resources: {}, gold: 5, exhaustionLevel: 0,
+        equipment: [{ name: 'Shield', category: 'shield', quantity: 1, weight: 6, equipped: false }],
+        level1Features: [], allFeatures: [], feats: [], backgroundFeature: 'Discovery',
+      };
+      const { status, json } = await request(BASE, '/api/characters', 'POST', body);
+      assert(status === 201, `Expected 201, got ${status}: ${JSON.stringify(json)}`);
+      monkId = json.character.id;
+    });
+
+    await test('TG-025 Monk + shield → AC 17 (10+DEX2+WIS3+Shield2)', async () => {
+      const { status, json } = await request(BASE, `/api/characters/${monkId}/equip`, 'POST', { itemIndex: 0, equipped: true });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(json.character.armorClass === 17, `Expected AC 17, got ${json.character.armorClass}`);
+      assert(json.character.acFormula.includes('Monk'), `acFormula should mention Monk, got: ${json.character.acFormula}`);
+      assert(json.acUpdated === true, 'acUpdated should be true');
+    });
+
+    await test('TG-025 Fighter (no Unarmored Defense) + shield → AC 12 (10+DEX2+Shield2)', async () => {
+      // Uses the Fighter from the damage tests (DEX 14 → mod+2); re-equip shield
+      // Create a fresh Fighter with no armor to avoid dependency on dmgCharId order
+      const bodyF = {
+        name: 'UDFighter', race: 'Human', background: 'Soldier', alignment: 'True Neutral',
+        firstClass: 'Fighter', classLevels: [{ className: 'Fighter', level: 1 }],
+        subclassChoices: {}, experiencePoints: 0,
+        baseStats: { str: 10, dex: 14, con: 10, int: 10, wis: 10, cha: 10 },
+        stats:     { str: 10, dex: 14, con: 10, int: 10, wis: 10, cha: 10 },
+        maxHP: 10, currentHP: 10, temporaryHP: 0,
+        armorClass: 12, acFormula: 'Unarmored: 12', speed: 30,
+        hitDice: [{ className: 'Fighter', dieSides: 10, total: 1, remaining: 1 }],
+        proficiencies: { armor: [], weapons: [], tools: [], savingThrows: [], skills: [], expertise: [] },
+        languages: ['Common'], resources: {}, gold: 0, exhaustionLevel: 0,
+        equipment: [{ name: 'Shield', category: 'shield', quantity: 1, weight: 6, equipped: false }],
+        level1Features: [], allFeatures: [], feats: [], backgroundFeature: 'Military Rank',
+      };
+      const created = await request(BASE, '/api/characters', 'POST', bodyF);
+      assert(created.status === 201, `Expected 201, got ${created.status}`);
+      const fighterId = created.json.character.id;
+      const { status, json } = await request(BASE, `/api/characters/${fighterId}/equip`, 'POST', { itemIndex: 0, equipped: true });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(json.character.armorClass === 14, `Expected AC 14 (10+DEX2+Shield2), got ${json.character.armorClass}`);
+      assert(!json.character.acFormula.includes('Barbarian') && !json.character.acFormula.includes('Monk'),
+        `acFormula should not mention Barbarian/Monk: ${json.character.acFormula}`);
+      const { deleteCharacter } = require('../characters/storage');
+      try { deleteCharacter(fighterId); } catch {}
+    });
+
+    await test('cleanup: delete unarmored-defense test characters', async () => {
+      const { deleteCharacter } = require('../characters/storage');
+      try { deleteCharacter(barbId); } catch {}
+      try { deleteCharacter(monkId); } catch {}
+    });
+  }
+
   // ── POST /api/characters/:id/damage ──────────────────────
   {
     let dmgCharId = '';
