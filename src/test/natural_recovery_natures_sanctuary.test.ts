@@ -203,7 +203,14 @@ function makeLandDruid(level: number, slots: Record<number, number> = {}): Comba
 const BEAST_ATTACK: Action = {
   name: 'Bite', isMultiattack: false, attackType: 'melee',
   reach: 5, range: { normal: 5, long: 5 },
-  hitBonus: 20,  // high to guarantee hit (low AC target)
+  // Session 49 de-flake: use auto-hit (hitBonus = null) so the test focuses
+  // on Nature's Sanctuary rather than the attack roll. With a standard
+  // attack roll, nat 1 is always a miss (5% chance), causing sections 11
+  // and 14 to flake when the beast rolls nat 1 → no damage → assertion fails.
+  // Auto-hit bypasses the attack roll entirely (resolveAttack auto-hit branch).
+  // Nature's Sanctuary still fires BEFORE the auto-hit branch, so the cancel
+  // behavior is correctly tested.
+  hitBonus: null,
   damage: { count: 1, sides: 6, bonus: 0, average: 4 },
   damageType: 'piercing',
   saveDC: null, saveAbility: null, isAoE: false, isControl: false,
