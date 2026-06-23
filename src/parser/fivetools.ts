@@ -994,6 +994,28 @@ export function monsterToCombatant(
   // checks the flag rather than re-scanning the traits array each call).
   const attacksAreMagical = traits.some(t => /^Magic\s+Weapons$/i.test(t.trim()));
   const cannotRegainHP = traits.some(t => /^Swarm/i.test(t.trim()));
+  // Session 53 Batch 4e-remaining: trait-name flags + small numeric traits.
+  // Each is parsed once at spawn; engine consumption varies (see core.ts
+  // doc comments for which are wired vs metadata-only).
+  const sunlightSensitivity = traits.some(t => /^Sunlight\s+Sensitivity$/i.test(t.trim()));
+  const avoidance = traits.some(t => /^Avoidance$/i.test(t.trim()));
+  const ambusher = traits.some(t => /^Ambusher$/i.test(t.trim()));
+  const brute = traits.some(t => /^Brute$/i.test(t.trim()));
+  const falseAppearance = traits.some(t => /^False\s+Appearance$/i.test(t.trim()));
+  const siegeMonster = traits.some(t => /^Siege\s+Monster$/i.test(t.trim()));
+  const waterBreathing = traits.some(t => /^Water\s+Breathing$/i.test(t.trim()));
+  // Hold Breath: extract the minutes count from the entry text
+  // ("can hold its breath for 1 hour" → 60 minutes; "for 30 minutes" → 30)
+  let holdBreathMinutes: number | undefined;
+  for (const t of raw.trait ?? []) {
+    if (!/^Hold\s+Breath$/i.test(t.name)) continue;
+    const text = flattenEntries(t.entries);
+    const minMatch = text.match(/(\d+)\s*(?:minutes|minute)/i);
+    const hrMatch = text.match(/(\d+)\s*(?:hours|hour)/i);
+    if (minMatch) holdBreathMinutes = parseInt(minMatch[1], 10);
+    else if (hrMatch) holdBreathMinutes = parseInt(hrMatch[1], 10) * 60;
+    break;
+  }
 
   return {
     id: nextId(raw.name),
@@ -1026,6 +1048,14 @@ export function monsterToCombatant(
     attacksAreMagical,     // Session 52 Batch 4c: true for "Magic Weapons" trait (19 creatures)
     cannotRegainHP,        // Session 52 Batch 4e: true for "Swarm" trait (10 creatures)
     deathBurst,            // Session 53 Batch 4d: undefined for non-death-burst creatures
+    sunlightSensitivity,   // Session 53 Batch 4e: true for Sunlight Sensitivity trait
+    avoidance,             // Session 53 Batch 4e: true for Avoidance trait
+    ambusher,              // Session 53 Batch 4e: true for Ambusher trait
+    brute,                 // Session 53 Batch 4e: true for Brute trait
+    falseAppearance,       // Session 53 Batch 4e: true for False Appearance trait
+    siegeMonster,          // Session 53 Batch 4e: true for Siege Monster trait
+    waterBreathing,        // Session 53 Batch 4e: true for Water Breathing trait
+    holdBreathMinutes,     // Session 53 Batch 4e: N minutes (undefined if no Hold Breath trait)
     budget: freshBudget(speeds.ground),
     conditions: new Set(),
     aiProfile: resolvedProfile,

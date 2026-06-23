@@ -625,6 +625,91 @@ export interface Combatant {
     halfOnSuccess: boolean;
   };
 
+  /**
+   * ── Session 53 Creature Megabatch Batch 4e: Sunlight Sensitivity ──
+   * MM p.11 / various: "While in sunlight, the [creature] has disadvantage
+   * on attack rolls, as well as on Wisdom (Perception) checks that rely on
+   * sight." 120 creatures across pre-2024 sources (Drow, Kobolds, etc.).
+   *
+   * When true AND `battlefield.lightLevel === 'daylight'`, the creature has
+   * disadvantage on attack rolls + sight-based Perception checks. v1
+   * simplification: the engine default is `'indoors'` (no sunlight) so the
+   * penalty never fires unless the scenario explicitly sets daylight.
+   */
+  sunlightSensitivity?: boolean;
+
+  /**
+   * ── Session 53 Creature Megabatch Batch 4e: Avoidance ──
+   * MM p.11 / various: "If the [creature] is subjected to an effect that
+   * allows it to make a saving throw to take only half damage, it instead
+   * takes no damage if it succeeds on the saving throw, and only half
+   * damage if it fails." 8 creatures (Displacer Fiend, etc.).
+   *
+   * Consumed in `rollSave` callers (combat.ts applyDamage paths): when the
+   * target has Avoidance AND the effect allows save-for-half, flip the
+   * outcomes (success → 0 damage, failure → half damage).
+   */
+  avoidance?: boolean;
+
+  /**
+   * ── Session 53 Creature Megabatch Batch 4e: Ambusher ──
+   * MM p.11 / various: "During the first round of combat, the [creature]
+   * has advantage on attack rolls against any creature that hasn't had a
+   * turn yet." 10 creatures.
+   *
+   * Consumed in `resolveAttack`: if `state.round === 1` AND the target
+   * hasn't acted this combat (tracked via `hadTurn` flag — to be added),
+   * the attacker gains advantage.
+   * v1 simplification: not yet wired into resolveAttack; flag is parsed
+   * and stored for future engine integration.
+   */
+  ambusher?: boolean;
+
+  /**
+   * ── Session 53 Creature Megabatch Batch 4e: Brute ──
+   * MM p.11 / various: "A melee weapon deals one extra die of its damage
+   * when the [creature] hits with it (included in the attack)." 14 creatures.
+   *
+   * v1 simplification: flag is parsed and stored. The "extra die" is
+   * typically already factored into the 5etools action damage entries, so
+   * no engine change needed — the flag is metadata-only for now.
+   */
+  brute?: boolean;
+
+  /**
+   * ── Session 53 Creature Megabatch Batch 4e: False Appearance ──
+   * MM p.11 / various: "If the [creature] is motionless at the start of
+   * combat, it has advantage on its initiative roll. Moreover, if a
+   * creature hasn't observed the [creature] move or act, that creature
+   * must succeed on a [DC] check to discern that the [creature] is
+   * animate." 100 creatures (animated objects, mimics, etc.).
+   *
+   * v1 simplification: flag is parsed and stored. The initiative-advantage
+   * effect is not yet wired (would need a hook in rollInitiative).
+   */
+  falseAppearance?: boolean;
+
+  /**
+   * ── Session 53 Creature Megabatch Batch 4e: Hold Breath ──
+   * MM p.11 / various: "The [creature] can hold its breath for N minutes."
+   * 57 creatures. v1 metadata-only (no drowning subsystem).
+   */
+  holdBreathMinutes?: number;
+
+  /**
+   * ── Session 53 Creature Megabatch Batch 4e: Water Breathing ──
+   * MM p.11 / various: "The [creature] can breathe only underwater."
+   * 33 creatures. v1 metadata-only.
+   */
+  waterBreathing?: boolean;
+
+  /**
+   * ── Session 53 Creature Megabatch Batch 4e: Siege Monster ──
+   * MM p.11 / various: "The [creature] deals double damage to objects and
+   * structures." 71 creatures. v1 metadata-only (no object HP subsystem).
+   */
+  siegeMonster?: boolean;
+
   // Turn resources
   budget: ActionBudget;
 
@@ -1736,6 +1821,11 @@ export interface Battlefield {
   // Reset to 0 whenever a team deals ≥1 damage in a round.
   // At 10 consecutive rounds → team is auto-defeated.
   noDamageRounds?: Map<string, number>;   // keyed by faction
+  // Session 53 Batch 4e: Sunlight Sensitivity — when set to 'daylight',
+  // creatures with `sunlightSensitivity: true` have disadvantage on attack
+  // rolls + sight-based Perception checks. Default (absent) is treated as
+  // 'indoors' (no sunlight) for v1 simplicity. Scenarios can override.
+  lightLevel?: 'indoors' | 'daylight' | 'dim';
   // LOS/Cover: static obstacles on the map (walls, pillars, doors, fog, etc.)
   // Optional — absent means open terrain (no cover calculations).
   obstacles?: Obstacle[];

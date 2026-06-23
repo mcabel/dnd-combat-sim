@@ -1312,7 +1312,15 @@ export function resolveAttack(
       // Session 47 Task #29-follow-up-5: Elemental Affinity (Draconic Sorcerer 6)
       // adds CHA mod to damage of spells matching the sorcerer's ancestry type.
       const dmg = rollDamage(action.damage, false) + elementalAffinityBonus(attacker, action.damageType);
-      const actual = save.success ? Math.floor(dmg / 2) : dmg; // half on save success
+      // Session 53 Batch 4e: Avoidance trait. "If subjected to an effect that
+      // allows a save for half damage, takes NO damage on success and HALF on
+      // fail." Flip the save-for-half outcome.
+      let actual: number;
+      if (target.avoidance) {
+        actual = save.success ? 0 : Math.floor(dmg / 2);
+      } else {
+        actual = save.success ? Math.floor(dmg / 2) : dmg; // half on save success
+      }
       const dealt = applyDamageWithTempHP(target, actual, action.damageType);
       // TG-008: Absorb Elements / Hellish Rebuke reaction trigger (XGE p.150 / PHB p.249)
       // These fire AFTER damage is applied. The triggering damage still applies
@@ -1502,7 +1510,17 @@ export function resolveAttack(
     log(state, 'action', attacker.id,
       `${attacker.name} attacks ${target.name} with Disadvantage (Bestow Curse — disadvantaged vs curse caster).`, target.id);
   }
-  const disadvantage = baseDisadv || !!protectionRider || losDisadvantage || chillTouchDisadv || viciousMockeryDisadv || frostbiteDisadv || tauntDisadvantage || curseAttackDisadv
+  // Session 53 Batch 4e: Sunlight Sensitivity — disadvantage on attack rolls
+  // while in sunlight. Only fires when `battlefield.lightLevel === 'daylight'`
+  // (engine default is 'indoors' so the penalty never fires unless the
+  // scenario explicitly sets daylight).
+  const sunlightDisadv = attacker.sunlightSensitivity === true
+    && state.battlefield.lightLevel === 'daylight';
+  if (sunlightDisadv) {
+    log(state, 'action', attacker.id,
+      `${attacker.name} attacks with Disadvantage (Sunlight Sensitivity).`, target.id);
+  }
+  const disadvantage = baseDisadv || !!protectionRider || losDisadvantage || chillTouchDisadv || viciousMockeryDisadv || frostbiteDisadv || tauntDisadvantage || curseAttackDisadv || sunlightDisadv
     || attacker.exhaustionLevel >= 3;  // Exhaustion level 3: disadvantage on attack rolls (PHB p.291)
   const advantage = baseAdv || packTacticsAdvantage || attacker.helpedThisTurn || cantripAdv || trueStrikeAdv;
 

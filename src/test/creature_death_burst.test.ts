@@ -29,7 +29,8 @@ import {
   mergeBestiaries,
   Raw5etoolsMonster,
 } from '../parser/fivetools';
-import { Combatant, Vec3, Battlefield, EngineState } from '../types/core';
+import { Combatant, Vec3, Battlefield } from '../types/core';
+import { EngineState } from '../engine/combat';
 
 // ---- Test harness -------------------------------------------
 
@@ -93,9 +94,9 @@ function makeState(bf: MutableBF): EngineState {
     battlefield: bf as Battlefield,
     log: { events: [] } as any,
     round: 1,
-    activeCombatantId: combatants[0]?.id ?? null,
+    activeCombatantId: null,
     pendingActions: [],
-  } as EngineState;
+  } as unknown as EngineState;
 }
 
 // We'll rebuild state per-section.
@@ -107,7 +108,8 @@ function freshState(combatants: Combatant[]): { state: EngineState; bf: MutableB
     round: 1,
     activeCombatantId: combatants[0]?.id ?? null,
     pendingActions: [],
-  } as EngineState;
+    rageDamagedSinceLastTurn: new Set<string>(),
+  } as unknown as EngineState;
   return { state, bf };
 }
 
