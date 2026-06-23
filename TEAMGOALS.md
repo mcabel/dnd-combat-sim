@@ -431,6 +431,282 @@ completed by a single agent without coordination.
 
 ---
 
+## NEW CROSS-WORKSTREAM TASKS (proposed Session 51 by Cantrip-z)
+
+> The following TG entries were added by Cantrip-z in Session 51 to capture
+> mechanics discovered while exploring the project for unimplemented features.
+> Per the user's priority directive: **mechanics are listed in reverse published
+> order (newest pre-2024 source first)** so the driving agent can pick the
+> newest-first item that fits their available scope.
+>
+> Source key:
+>   - SCC  = Strixhaven: A Curriculum of Chaos (2021)
+>   - FTD  = Fizban's Treasury of Dragons (2021)
+>   - TCE  = Tasha's Cauldron of Everything (2020)
+>   - IDRotF= Icewind Dale: Rime of the Frostmaiden (2020)
+>   - EGtW = Explorer's Guide to Wildemount (2020)
+>   - XGE  = Xanathar's Guide to Everything (2017)
+>   - PHB  = Player's Handbook (2014)
+
+### TG-015: Wire Elemental Affinity (Draconic Sorcerer 6) into weapon-rider spells
+
+- **Status:** OPEN — Cantrip-z can wire spell-module side; Core Engine owns
+  the `combat.ts` damage-roll sites where the bonus fire/lightning dice are
+  added to weapon attacks.
+- **Owners:** Core Engine (driving — owns `src/engine/combat.ts` damage-roll
+  branch around `_nextHitRider`, `_flameBladeActive`, `weapon_enchant`) +
+  Cantrip-z (reviewer — owns the spell modules whose metadata describes the
+  rider)
+- **Source:** zHANDOVER-SESSION-50 Next-Session Priority #29-follow-up-5c-4
+- **Summary:** Elemental Affinity (PHB p.102) adds CHA mod to "one damage roll
+  of [the] spell" when the spell deals damage of the caster's draconic ancestry
+  type. For spells whose damage roll happens inside `combat.ts` (the engine's
+  `resolveAttack` damage branch), EA is NOT currently applied. Per SAC v2.7
+  (2019) clarification: bonus damage dealt BY a spell — even when triggered by
+  a weapon attack — counts as "the spell's damage" for EA. Therefore EA should
+  apply to the bonus fire/lightning dice added by:
+  - **Flame Blade** (PHB p.242, 2014): +3d6 fire rider on melee weapon attacks
+    while `_flameBladeActive` is true (combat.ts line ~2007)
+  - **Lightning Arrow** (PHB p.255, 2014): +4d8 lightning rider on next ranged
+    weapon attack via `_nextHitRider` (combat.ts line ~1886)
+  - **Elemental Weapon** (PHB p.234, 2014): +1d4 elemental rider on every weapon
+    attack via `weapon_enchant` effect (combat.ts line ~1988)
+  - **Searing Smite** (PHB p.274, 2014): +1d6 fire rider on next weapon hit via
+    `_nextHitRider` (combat.ts line ~1886)
+- **Implementation plan:**
+  1. Core Engine: at each of the 3 damage-roll sites (Flame Blade rider,
+     `_nextHitRider` consume, `weapon_enchant` dice), call
+     `elementalAffinityBonus(attacker, rider.damageType)` and add it to the
+     bonus damage. The bonus is flat (NOT doubled on crit — PHB p.196).
+  2. Core Engine: add a regression test in `combat.test.ts` covering a Draconic
+     Sorcerer 6 casting Flame Blade + making a melee weapon attack — the +3d6
+     fire bonus should include +CHA mod when ancestry = fire.
+- **Risk:** LOW — additive bonus in 3 well-isolated damage-roll sites; no
+  engine-loop restructuring.
+- **Coordination protocol:** Cantrip-z has confirmed (this TG entry) that the
+  spell-module side already exposes the correct `damageType` on every rider
+  payload; Core Engine can implement unilaterally. Add a single commit, then
+  note in the next HANDOVER-SESSION-XX.md.
+- **Reverse-published-order note:** All 4 affected spells are PHB 2014 — no
+  newer-source variants exist for this mechanic.
+
+### TG-016: Transfer sorcery points to Combatant (29-follow-up-5e)
+
+- **Status:** OPEN
+- **Owners:** Core Engine (driving — owns `src/characters/builder.ts`
+  `buildRawResources()` AND `src/parser/pc.ts` `buildResources()`) + Sheet
+  (reviewer — owns `src/characters/types.ts` `CharacterResources` shape, which
+  already has `sorceryPoints?`)
+- **Source:** zHANDOVER-SESSION-50 Next-Session Priority #29-follow-up-5e
+- **Summary:** `CharacterResources.sorceryPoints?` exists (types.ts line 221)
+  and is populated by the leveler when a Sorcerer reaches level 2. However,
+  `buildRawResources()` in `builder.ts` (line ~218) does NOT pass `sorceryPoints`
+  through to the Combatant — it stops at `arcaneRecovery` and never reaches the
+  Sorcerer's resource. The Combatant therefore starts combat with 0 sorcery
+  points, which means:
+  - `Draconic Presence` (Sorcerer 18, 5 SP cost) uses a v1 simplification of
+    "1/combat" instead of the canon 5-SP cost.
+  - `Flexible Casting` (Sorcerer 2, convert SP↔slots) cannot be implemented.
+  - Any future Metamagic options cannot be costed in SP.
+- **Implementation plan:**
+  1. Core Engine: add `if (res.sorceryPoints) out.sorceryPoints = { max: res.sorceryPoints.max, remaining: res.sorceryPoints.max };` to `buildRawResources` (mirrors `actionSurge` / `bardicInspiration` pattern).
+  2. Core Engine: ensure `buildResources` in `pc.ts` reads the `sorceryPoints` field and populates `Combatant.resources.sorceryPoints = { max, remaining }`.
+  3. Core Engine: in `draconic_presence.ts` (or wherever the action fires), replace the v1 "1/combat" gate with a `sorceryPoints.remaining >= 5` check + decrement.
+  4. Sheet: add a "Sorcery Points" row to the resources panel in `docs/characters.html` for Sorcerers (mirror the existing `actionSurge` row pattern).
+- **Risk:** LOW — additive resource transfer; existing tests should be
+  unaffected (no test asserts that sorcery points are absent).
+- **Coordination protocol:** Core Engine implements steps 1-3 unilaterally;
+  Sheet picks up step 4 in its next session.
+
+### TG-017: Wire Open Hand Monk Open Hand Technique + Quivering Palm (29-follow-up-4c)
+
+- **Status:** OPEN
+- **Owners:** Core Engine (driving — owns `src/engine/combat.ts` damage branch
+  + `src/characters/builder.ts` `buildRawResources`) + Sheet (reviewer —
+  owns `src/characters/types.ts` `CharacterResources.ki?` which already exists)
+- **Source:** zHANDOVER-SESSION-50 Next-Session Priority #29-follow-up-4c
+- **Summary:** Open Hand Monk has 5 subclass features; 2 are wired (Wholeness
+  of Body, Diamond Soul). The remaining 3 need ki tracking which is the same
+  gap as TG-016 — `CharacterResources.ki?` exists but is NOT transferred to
+  the Combatant via `buildRawResources`/`buildResources` (identical pattern).
+  Once ki is available on the Combatant:
+  - **Open Hand Technique** (Monk 3, PHB p.79): once per turn when you hit
+    with Flurry of Blows, choose one: prone (no save), push 15 ft (STR save),
+    or can't take reactions until next turn (STR save).
+  - **Tranquility** (Monk 11, PHB p.80): at end of long rest, gain Sanctuary
+    (WIS save DC = monk spell save DC) — broken by attack or by being the
+    attacker.
+  - **Quivering Palm** (Monk 17, PHB p.80): touch attack, 3 ki, target makes
+    a CON save vs monk spell save DC; on fail, drops to 0 HP; on success,
+    takes 10d10 necrotic.
+- **Implementation plan:**
+  1. Core Engine: add `ki` to `buildRawResources` (mirror TG-016 step 1).
+  2. Core Engine: add `ki` consumption to the existing Flurry of Blows logic
+     in `combat.ts` (currently Flurry of Blows is implemented but ki cost is
+     not deducted — verify before implementing Open Hand Technique).
+  3. Core Engine: implement Open Hand Technique as a per-turn rider that
+     fires once when Flurry of Blows hits. Plumb a new `OpenHandTechniqueChoice`
+     field on TurnPlan (or default to "prone" for the AI).
+  4. Core Engine: implement Quivering Palm as a new `'quiveringPalm'` action
+     type in `executePlannedAction` (mirrors `draconicPresence` pattern).
+  5. Sheet: add "Ki Points" row to resources panel for Monks in
+     `docs/characters.html`.
+  6. Tranquility is DEFERRED — long-rest-triggered Sanctuary is outside the
+     combat-only scope of v1.
+- **Risk:** MEDIUM — Flurry of Blows plumbing already exists; the Open Hand
+  Technique rider needs to fire between the two Flurry attacks, which requires
+  careful sequencing.
+- **Coordination protocol:** Core Engine drives steps 1-4. Sheet picks up
+  step 5 in its next session.
+
+### TG-018: Wire Land Druid fey/elemental charm/frighten immunity (29-follow-up-3d)
+
+- **Status:** OPEN
+- **Owners:** Core Engine (driving — owns `src/engine/combat.ts`
+  `applySpellEffect` + `rollSave` paths)
+- **Source:** zHANDOVER-SESSION-50 Next-Session Priority #29-follow-up-3d
+- **Summary:** Nature's Ward (PHB p.68, Druid Circle of the Land 6) grants:
+  (1) poison immunity + disease immunity (WIRED in Session 47), and (2)
+  "you can't be charmed or frightened by elementals or fey". The second part
+  requires source-creature-type tracking on conditions: when a charm/frighten
+  effect is applied, the engine must record which creature (and its type)
+  applied it. Then on the Land Druid, if the source creature is fey or
+  elemental, the condition is suppressed.
+- **Implementation plan:**
+  1. Core Engine: extend `ActiveEffect` (or `conditions` set entries) with an
+     optional `sourceCreatureType?: string` field, populated by
+     `applySpellEffect` when the caster's `creatureType` is known.
+  2. Core Engine: add a `creatureType?` field to `Combatant` if not present
+     (populated by parser for monsters; PC race for characters).
+  3. Core Engine: in `applySpellEffect` for `condition_apply` effects of
+     `charmed`/`frightened`, check if the target has Nature's Ward + the
+     source creature is fey/elemental; if so, skip application + emit log.
+- **Risk:** MEDIUM — touches `Combatant` type + `applySpellEffect` hot path.
+- **Coordination protocol:** Core Engine drives. Add RFC to TEAMGOALS.md
+  RFCs section if the `ActiveEffect` shape needs review.
+
+### TG-019: Per-class unarmored-AC hook for shield equip (Sheet-41c follow-up)
+
+- **Status:** OPEN
+- **Owners:** Sheet (driving — owns `src/character_router.ts` `computeArmorAC`
+  + `docs/characters.html`)
+- **Source:** SHEET-HANDOVER-41.md "DISCOVERIES RELEVANT TO NEXT TASK"
+- **Summary:** SHEET-41c added AC auto-update on armor/shield equip. The
+  unarmored formula uses `10 + DEX mod` as the base. If the character has a
+  class feature that changes their unarmored AC (Barbarian: `10 + DEX mod +
+  CON mod`; Monk: `10 + DEX mod + WIS mod`), the formula base should be
+  different. Currently equipping/unequipping a shield on a Barbarian or Monk
+  uses the wrong base — undercounting their AC.
+- **Implementation plan:**
+  1. Sheet: in `computeArmorAC`, detect class features `Unarmored Defense`
+     (Barbarian) and `Unarmored Defense` (Monk) on the character sheet. Use
+     the appropriate formula: `10 + DEX mod + CON mod` for Barbarian,
+     `10 + DEX mod + WIS mod` for Monk.
+  2. Sheet: extend `computeArmorAC` to accept a "shield" parameter; if the
+     equipped item is a shield, add +2 to whatever the unarmored or armored
+     formula returns.
+  3. Sheet: add tests for Barbarian + Monk shield toggle.
+- **Risk:** LOW — purely additive Sheet-side change; no engine impact.
+- **Coordination protocol:** Sheet owns all of this; no cross-workstream
+  sign-off needed.
+
+### TG-020: Model diseases for Lesser Restoration (20-follow-up-2)
+
+- **Status:** OPEN
+- **Owners:** Core Engine (driving — owns `src/engine/combat.ts` +
+  `src/types/core.ts`)
+- **Source:** zHANDOVER-SESSION-50 Next-Session Priority #20-follow-up-2
+- **Summary:** `Lesser Restoration` (PHB p.255) ends one disease OR one
+  condition (blinded/deafened/paralyzed/poisoned/stunned) on a target. v1
+  models the condition-end but NOT disease-end because diseases are not
+  tracked. Several spells/monsters inflict diseases (e.g., Contagion,
+  Mummy Lord's Rotting Fist). Without disease tracking, those mechanics are
+  silent in v1.
+- **Implementation plan:**
+  1. Core Engine: add `diseases?: DiseaseState[]` field to `Combatant`.
+  2. Core Engine: `applySpellEffect` for `contagion` (and similar) pushes a
+     `DiseaseState` with `name`, `incubationOver`, `effect`.
+  3. Core Engine: `lesser_restoration.ts` clears one disease from the list
+     (in addition to its existing condition-end).
+- **Risk:** MEDIUM — diseases are an entirely new state category; need to
+  decide if diseases have combat-time effects (most don't — they're long-rest
+  afflictions).
+- **Coordination protocol:** Core Engine drives. May DEFER if combat-time
+  disease effects are deemed out-of-scope for v1.
+
+### TG-021: Devil's Sight invocation (continuation of Task #16)
+
+- **Status:** OPEN — DEFERRED since Session 16. Requires LOS engine changes.
+- **Owners:** Core Engine (driving — owns `src/engine/los.ts`) + Cantrip-z
+  (reviewer — owns `src/spells/_invocations.ts`)
+- **Source:** zHANDOVER-SESSION-50 Next-Session Priority #22; originally
+  zHANDOVER-SESSION-16.
+- **Summary:** Devil's Sight (PHB p.110, Warlock Invocation) lets the
+  warlock see normally in darkness (including magical darkness) within 120
+  ft. v1's `computeLOS` does not query "is the target in magical darkness?"
+  state. Wiring requires:
+  1. A `magicalDarknessCells?: Set<string>` field on `Battlefield` (TG-010
+     adjacent — Darkness / Hunger of Hadar push to this set).
+  2. `computeLOS` checks the field; if both attacker and target are in
+     magical darkness AND the attacker has Devil's Sight, treat as normal
+     LOS. If the attacker has Devil's Sight but the target is in normal
+     darkness, no change (Devil's Sight doesn't grant darkvision — only the
+     ability to see through magical darkness).
+- **Risk:** MEDIUM — touches `computeLOS` which is on every attack path.
+- **Coordination protocol:** Coordinate with TG-010 (vision-blocking
+  subsystem) since both touch the same `Battlefield` field.
+
+### TG-022: Additional Fighting Style for Champion 10 (29-follow-up-6)
+
+- **Status:** OPEN
+- **Owners:** Sheet (driving — owns `src/characters/leveler.ts` +
+  `docs/characters.html`) + Core Engine (reviewer — owns
+  `src/characters/builder.ts` if Fighting Style needs to flow to Combatant)
+- **Source:** zHANDOVER-SESSION-50 Next-Session Priority #29-follow-up-6
+- **Summary:** Champion (Fighter subclass) gets a second Fighting Style at
+  level 10 (PHB p.72). v1 has no character-build choice for this — the
+  leveler picks the first Fighting Style at Fighter 1 but doesn't expose a
+  second choice at Fighter 10. Currently the second style is silently
+  absent.
+- **Implementation plan:**
+  1. Sheet: add a `secondFightingStyle?` field to `CharacterSheet` (in
+     `subclassChoices` or a new top-level field).
+  2. Sheet: in `leveler.ts`, when applying level 10 of Champion, prompt
+     for a second Fighting Style choice (UI flow).
+  3. Sheet: `docs/characters.html` — add a dropdown in the level-up modal
+     when level 10 of Champion is reached.
+  4. Core Engine: in `builder.ts`, propagate `secondFightingStyle` to the
+     Combatant's `classFeatures` array (so e.g. Defense +1 AC from second
+     style applies in combat).
+- **Risk:** LOW — Sheet-side UI flow; small builder.ts extension.
+- **Coordination protocol:** Sheet drives steps 1-3; Core Engine picks up
+  step 4 in its next session.
+
+### TG-023: Additional Wild Magic Surge options (27-follow-up-3)
+
+- **Status:** OPEN
+- **Owners:** Core Engine (driving — owns `src/engine/combat.ts` surge
+  table)
+- **Source:** zHANDOVER-SESSION-50 Next-Session Priority #27-follow-up-3
+- **Summary:** Wild Magic Surge (PHB p.103, Sorcerer Wild Magic 1) currently
+  fires only when the main action was a spell cast. The v1 surge table
+  covers ~1/3 of the PHB surge effects. The remaining effects (e.g.,
+  "cast Fireball centered on self", "summon 2d6 pixies") need a "Surge for
+  different spells when main was Attack" branch — i.e., the surge can fire
+  on non-spell actions too if the Sorcerer cast a spell earlier in the
+  round (e.g., via Quicken Spell metamagic).
+- **Implementation plan:**
+  1. Core Engine: extend the surge trigger to fire on ANY action that
+     expends a spell slot (not just spell-cast main actions).
+  2. Core Engine: add the remaining PHB surge effects to the table.
+  3. Core Engine: add a regression test in `combat.test.ts` covering the
+     extended trigger.
+- **Risk:** MEDIUM — extending the surge trigger may cause cascading
+  flakiness (surges are random); de-flake with seeded RNG if needed.
+- **Coordination protocol:** Core Engine drives.
+
+---
+
 ## SECTION TEMPLATE
 
 When adding a new cross-workstream task, use:
