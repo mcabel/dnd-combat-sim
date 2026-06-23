@@ -9,7 +9,7 @@
 
 ## Core Engine Workstream (HANDOVER-SESSION-XX)
 
-### Active Objective (Session 53 refresh)
+### Active Objective (Session 54 refresh)
 
 **TG-024: Sorcery Points + Ki transfer to Combatant** (combines old TG-016 +
 TG-017 step 1-2 into a single commit). `CharacterResources` already has `ki?`
@@ -23,13 +23,15 @@ resources in one commit.
 
 ### Current Phase
 
-Not started. Prerequisite groundwork is complete:
+**TG-027 DONE (Session 54).** Prerequisite groundwork complete:
 - Concentration enforcement (TG-002) ✅
 - Parser fields incl. `isUndead`/`isConstruct`/`hasMetalArmor` (TG-004) ✅
 - Cantrip planner branches 13A-13N (TG-003) ✅
 - Reaction registry / TG-008 partial (Shield, Hellish Rebuke, Absorb Elements,
   Feather Fall, Silvery Barbs, Counterspell, Dispel Magic, Prot. from Energy) ✅
 - `elementalAffinityBonus` helper (Sessions 47-51) ✅
+- **TG-027** Elemental Affinity wired into all 3 weapon-rider damage sites
+  in `combat.ts` (Flame Blade, `_nextHitRider` smites, `weapon_enchant` dice) ✅
 
 ### Acceptance Criteria
 
@@ -43,12 +45,13 @@ Not started. Prerequisite groundwork is complete:
 
 ### Immediate Priority (reverse published order, newest pre-2024 first)
 
-1. **TG-027** (Core Engine side of TG-015, XGE/PHB 2017/2014): wire
-   `elementalAffinityBonus` into the 3 weapon-rider damage sites in `combat.ts`
-2. **TG-024** (PHB 2014): ki + sorcery points transfer (single commit)
-3. **TG-032** (PHB 2014): Land Druid Nature's Ward fey/elemental immunity
-4. **TG-030** (PHB 2014): Quivering Palm action type — blocked on TG-024
-5. **TG-031** (PHB 2014): Open Hand Technique Flurry rider — blocked on TG-024
+1. **TG-024** (PHB 2014): ki + sorcery points transfer (single commit) — was #2,
+   promoted to #1 after TG-027 landed in Session 54
+2. **TG-032** (PHB 2014): Land Druid Nature's Ward fey/elemental immunity
+3. **TG-030** (PHB 2014): Quivering Palm action type — blocked on TG-024
+4. **TG-031** (PHB 2014): Open Hand Technique Flurry rider — blocked on TG-024
+5. **TG-028** (PHB 2014/TCE): Booming/Green-Flame Blade "melee spell attack"
+   label fix — comment-only, can be slotted in any session
 
 ### Notes
 

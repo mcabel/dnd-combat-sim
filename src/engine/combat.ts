@@ -1914,6 +1914,22 @@ export function resolveAttack(
         dmg += riderBonus;
         log(state, 'action', attacker.id,
           `${attacker.name} adds ${rider.spellName} bonus (+${riderBonus} ${rider.damageType}${isCrit ? ' CRIT' : ''})!`, target.id, riderBonus);
+        // ── TG-027: Elemental Affinity (Draconic Sorcerer 6) on smite-spell
+        // riders. PHB p.102: "When you cast a spell that deals damage of the
+        // type associated with your draconic ancestry, you can add your
+        // Charisma modifier to that damage." Searing Smite / Lightning Arrow /
+        // Blinding Smite etc. are spells whose rider damage IS spell damage
+        // of a type (fire/lightning/radiant). The +CHA mod is flat (NOT dice,
+        // so NOT doubled on crit per PHB p.196). Wired at all 3 weapon-rider
+        // sites (this _nextHitRider site, the weapon_enchant dice site, and
+        // the Flame Blade site below) for consistency with the main spell-
+        // attack EA wiring at line ~1796.
+        const riderEA = elementalAffinityBonus(attacker, rider.damageType);
+        if (riderEA > 0) {
+          dmg += riderEA;
+          log(state, 'action', attacker.id,
+            `${attacker.name} adds Elemental Affinity bonus (+${riderEA} ${rider.damageType}) to ${rider.spellName} rider!`, target.id, riderEA);
+        }
         if (rider.condition && !target.conditions.has(rider.condition)) {
           applySpellEffect(target, {
             casterId: attacker.id, spellName: rider.spellName,
@@ -2016,6 +2032,16 @@ export function resolveAttack(
       dmg += dieBonus;
       log(state, 'action', attacker.id,
         `${attacker.name} adds weapon enchant die (+${dieBonus} ${weaponEnchant.damageDieType ?? ''}${isCrit ? ' CRIT' : ''})!`, target.id, dieBonus);
+      // ── TG-027: Elemental Affinity (Draconic Sorcerer 6) on weapon_enchant
+      // damage dice. Elemental Weapon / Flame Arrows / Holy Weapon / Divine
+      // Favor / Shadow Blade are all spells whose bonus-damage die IS spell
+      // damage of a type. +CHA mod is flat (NOT doubled on crit per PHB p.196).
+      const enchEA = elementalAffinityBonus(attacker, weaponEnchant.damageDieType);
+      if (enchEA > 0) {
+        dmg += enchEA;
+        log(state, 'action', attacker.id,
+          `${attacker.name} adds Elemental Affinity bonus (+${enchEA} ${weaponEnchant.damageDieType}) to weapon enchant die!`, target.id, enchEA);
+      }
     }
 
     // Flame Blade (PHB p.242): while the self-buff is active, MELEE weapon
@@ -2034,6 +2060,16 @@ export function resolveAttack(
       dmg += flameBladeBonus;
       log(state, 'action', attacker.id,
         `${attacker.name} adds Flame Blade bonus (+${flameBladeBonus} fire${isCrit ? ' CRIT' : ''})!`, target.id, flameBladeBonus);
+      // ── TG-027: Elemental Affinity (Draconic Sorcerer 6) on Flame Blade
+      // rider. Flame Blade IS a spell (PHB p.242 evocation) whose +3d6 fire
+      // IS spell damage of the fire type. A red/gold/brass Draconic Sorcerer
+      // 6 adds +CHA mod. Flat bonus (NOT doubled on crit per PHB p.196).
+      const flameEA = elementalAffinityBonus(attacker, 'fire');
+      if (flameEA > 0) {
+        dmg += flameEA;
+        log(state, 'action', attacker.id,
+          `${attacker.name} adds Elemental Affinity bonus (+${flameEA} fire) to Flame Blade rider!`, target.id, flameEA);
+      }
     }
 
     // Alter Self — Natural Weapons (PHB p.211): while the self-buff is

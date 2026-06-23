@@ -786,13 +786,13 @@ completed by a single agent without coordination.
 
 #### TG-027: Wire Elemental Affinity into weapon-rider damage sites in `combat.ts` (Core Engine side of TG-015)
 
-- **Status:** OPEN — proposed Session 53 (promotes the Core Engine half of TG-015)
+- **Status:** DONE — Session 54 (commit pending)
 - **Owners:** Core Engine (driving — owns `src/engine/combat.ts`)
 - **Source:** Session 53 audit; TG-015 spell-module side already done (Sessions 47-51).
 - **Summary:** Three damage-roll sites in `combat.ts` apply weapon-rider bonus damage (Flame Blade rider ~line 2007, `_nextHitRider` consume ~line 1886 for Lightning Arrow + Searing Smite, `weapon_enchant` dice ~line 1988 for Elemental Weapon). None of them call `elementalAffinityBonus(attacker, rider.damageType)`, so a Draconic Sorcerer 6 with red ancestry doesn't get +CHA to fire-rider damage from these sources.
 - **Implementation plan:**
-  1. At each of the 3 sites, after computing the rider's bonus damage, call `elementalAffinityBonus(attacker, rider.damageType)` (already exported from `utils.ts`) and add it. Bonus is flat (NOT doubled on crit — PHB p.196).
-  2. Test: extend `combat.test.ts` — spawn a Sorcerer 6 red ancestry with Flame Blade cast + assert rider damage includes +CHA.
+  1. At each of the 3 sites, after computing the rider's bonus damage, call `elementalAffinityBonus(attacker, rider.damageType)` (already exported from `utils.ts`) and add it. Bonus is flat (NOT doubled on crit — PHB p.196). ✅ DONE
+  2. Test: extend `combat.test.ts` — spawn a Sorcerer 6 red ancestry with Flame Blade cast + assert rider damage includes +CHA. ✅ DONE (new file `src/test/elemental_affinity_weapon_riders.test.ts`, 33 assertions across 3 sites × {match, no-match, non-Sorcerer, crit-flatness} + 4 cross-cutting).
 - **Risk:** LOW — additive damage bonus; no engine restructuring.
 - **Coordination protocol:** Core Engine drives unilaterally.
 
