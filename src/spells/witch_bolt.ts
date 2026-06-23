@@ -88,7 +88,7 @@
 
 import { Combatant, Battlefield } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
-import { rollAttack, rollDie, applyDamageWithTempHP, abilityMod } from '../engine/utils';
+import { rollAttack, rollDie, applyDamageWithTempHP, abilityMod, elementalAffinityBonus } from '../engine/utils';
 import { chebyshev3D, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 
@@ -291,7 +291,8 @@ export function execute(
       return;
     }
 
-    const dmg = rollDamage(false);
+    const eaBonus = elementalAffinityBonus(caster, metadata.damageType);
+    const dmg = rollDamage(false) + eaBonus;
     const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);
     emit(
       state, 'damage', caster.id,
@@ -338,7 +339,12 @@ export function execute(
   );
 
   // 1d12 lightning damage; crit doubles the dice (PHB p.196).
-  const dmg = rollDamage(result.isCrit);
+  // Session 50 Task #29-follow-up-5c-3: Elemental Affinity (Draconic
+  // Sorcerer 6) adds CHA mod to the lightning damage if the caster's
+  // ancestry is lightning. EA applies per damage roll — both the initial
+  // hit AND each DoT tick (above) get the +CHA mod bonus independently.
+  const eaBonus = elementalAffinityBonus(caster, metadata.damageType);
+  const dmg = rollDamage(result.isCrit) + eaBonus;
   const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);
   emit(
     state, 'damage', caster.id,

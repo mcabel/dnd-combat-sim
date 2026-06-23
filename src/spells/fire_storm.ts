@@ -25,7 +25,7 @@
 
 import { Combatant, Battlefield } from '../types/core';
 import { rollSaveReactable, CombatEvent, EngineState } from '../engine/combat';
-import { rollDie, applyDamageWithTempHP } from '../engine/utils';
+import { rollDie, applyDamageWithTempHP, elementalAffinityBonus } from '../engine/utils';
 import { chebyshev3D, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 
@@ -97,7 +97,11 @@ export function execute(caster: Combatant, targets: Combatant[], state: EngineSt
     if (target.isDead || target.isUnconscious) continue;
 
     const save = rollSaveReactable(state, caster, target, 'dex', saveDC);
-    const fullDmg = rollDamage();
+    // Session 50 Task #29-follow-up-5c-3: Elemental Affinity (Draconic
+    // Sorcerer 6) adds CHA mod to the fire damage if the caster's
+    // ancestry is fire. Bonus is added once before save halving.
+    const eaBonus = elementalAffinityBonus(caster, metadata.damageType);
+    const fullDmg = rollDamage() + eaBonus;
     const dmg = save.success ? Math.floor(fullDmg / 2) : fullDmg;
     const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);
 

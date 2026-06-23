@@ -77,7 +77,7 @@
 
 import { Combatant, Battlefield } from '../types/core';
 import { rollSaveReactable, CombatEvent, EngineState } from '../engine/combat';
-import { rollDie, applyDamageWithTempHP, startConcentration } from '../engine/utils';
+import { rollDie, applyDamageWithTempHP, startConcentration, elementalAffinityBonus } from '../engine/utils';
 import { chebyshev3D, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 import { applySpellEffect, removeEffectsFromCaster } from '../engine/spell_effects';
@@ -231,7 +231,12 @@ export function execute(
     if (target.isDead || target.isUnconscious) continue;
 
     const save = rollSaveReactable(state, caster, target, 'con', saveDC);
-    const fullDmg = rollDamage();
+    // Session 50 Task #29-follow-up-5c-3: Elemental Affinity (Draconic
+    // Sorcerer 6) adds CHA mod to the poison damage if the caster's
+    // ancestry is poison. The bonus is added once to the total damage
+    // roll (before save halving).
+    const eaBonus = elementalAffinityBonus(caster, metadata.damageType);
+    const fullDmg = rollDamage() + eaBonus;
     const dmg = save.success ? Math.floor(fullDmg / 2) : fullDmg;
     const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);
 

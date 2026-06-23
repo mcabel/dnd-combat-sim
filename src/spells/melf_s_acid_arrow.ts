@@ -45,7 +45,7 @@
 import { Combatant, Battlefield } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
 import { applySpellEffect } from '../engine/spell_effects';
-import { rollDie, rollAttack, applyDamageWithTempHP, abilityMod } from '../engine/utils';
+import { rollDie, rollAttack, applyDamageWithTempHP, abilityMod, elementalAffinityBonus } from '../engine/utils';
 import { chebyshev3D } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 
@@ -206,7 +206,12 @@ export function execute(
   // "damage dice in the attack"; v1 simplification: no crit doubling for
   // Melf's Acid Arrow's fixed spell damage. Documented via the metadata
   // flag `melfsAcidArrowCritNoDoubleV1Simplified: true` (implicit)).
-  const immediateDmg = rollImmediateDamage();
+  // Session 50 Task #29-follow-up-5c-3: Elemental Affinity (Draconic
+  // Sorcerer 6) adds CHA mod to the immediate acid hit if the caster's
+  // ancestry is acid. Delayed 2d4 acid (damage_zone) does NOT get EA —
+  // the damage_zone tick handler has no caster context for the bonus.
+  const eaBonus = elementalAffinityBonus(caster, metadata.damageType);
+  const immediateDmg = rollImmediateDamage() + eaBonus;
   const dealtImmediate = applyDamageWithTempHP(target, immediateDmg, metadata.damageType);
   emit(
     state, 'damage', caster.id,

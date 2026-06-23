@@ -37,7 +37,7 @@
 
 import { Combatant, Battlefield } from '../types/core';
 import { rollSaveReactable, CombatEvent, EngineState } from '../engine/combat';
-import { rollDie, applyDamageWithTempHP } from '../engine/utils';
+import { rollDie, applyDamageWithTempHP, elementalAffinityBonus } from '../engine/utils';
 import { chebyshev3D, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 
@@ -118,7 +118,12 @@ export function execute(caster: Combatant, targets: Combatant[], state: EngineSt
 
     const save = rollSaveReactable(state, caster, target, 'dex', saveDC);
 
-    const fireRaw = rollDamageFire();
+    // Session 50 Task #29-follow-up-5c-3: Elemental Affinity (Draconic
+    // Sorcerer 6) adds CHA mod to the FIRE damage only if the caster's
+    // ancestry is fire. The radiant portion does NOT get EA — radiant is
+    // not a draconic ancestry type.
+    const eaBonus = elementalAffinityBonus(caster, 'fire');
+    const fireRaw = rollDamageFire() + eaBonus;
     const radRaw = rollDamageRadiant();
     const fire = save.success ? Math.floor(fireRaw / 2) : fireRaw;
     const rad = save.success ? Math.floor(radRaw / 2) : radRaw;

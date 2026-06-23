@@ -42,7 +42,7 @@
 
 import { Combatant, Battlefield } from '../types/core';
 import { rollSaveReactable, CombatEvent, EngineState } from '../engine/combat';
-import { rollDie, applyDamageWithTempHP } from '../engine/utils';
+import { rollDie, applyDamageWithTempHP, elementalAffinityBonus } from '../engine/utils';
 import { chebyshev3D, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 
@@ -127,7 +127,12 @@ export function execute(caster: Combatant, targets: Combatant[], state: EngineSt
     const save = rollSaveReactable(state, caster, target, 'dex', saveDC);
 
     // Roll both damage types; halve each independently on save success.
-    const coldRaw = rollDamageCold();
+    // Session 50 Task #29-follow-up-5c-3: Elemental Affinity (Draconic
+    // Sorcerer 6) adds CHA mod to the COLD damage only if the caster's
+    // ancestry is cold. The bludgeoning portion does NOT get EA —
+    // bludgeoning is not a draconic ancestry type.
+    const eaBonus = elementalAffinityBonus(caster, 'cold');
+    const coldRaw = rollDamageCold() + eaBonus;
     const bludRaw = rollDamageBludgeon();
     const cold = save.success ? Math.floor(coldRaw / 2) : coldRaw;
     const blud = save.success ? Math.floor(bludRaw / 2) : bludRaw;

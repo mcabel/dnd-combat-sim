@@ -49,7 +49,7 @@
 import { Combatant, Battlefield, DamageType, Vec3 } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
 import { applySpellEffect, removeEffectsFromCaster } from '../engine/spell_effects';
-import { startConcentration, rollDie, applyDamageWithTempHP } from '../engine/utils';
+import { startConcentration, rollDie, applyDamageWithTempHP, elementalAffinityBonus } from '../engine/utils';
 import { chebyshev3D } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 
@@ -208,7 +208,13 @@ export function execute(
     if (target.isDead || target.isUnconscious) continue;
 
     // 1. Immediate on-cast damage (3d10 lightning, no save).
-    const immediateDmg = rollDamage();
+    // Session 50 Task #29-follow-up-5c-3: Elemental Affinity (Draconic
+    // Sorcerer 6) adds CHA mod to the lightning damage if the caster's
+    // ancestry is lightning. No save → no halving. The damage_zone tick
+    // (start-of-turn bolt) does NOT get EA — the tick handler has no
+    // caster context.
+    const eaBonus = elementalAffinityBonus(caster, metadata.damageType);
+    const immediateDmg = rollDamage() + eaBonus;
     const dealtImmediate = applyDamageWithTempHP(target, immediateDmg, metadata.damageType);
     emit(
       state, 'damage', caster.id,
