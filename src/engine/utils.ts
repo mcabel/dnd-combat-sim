@@ -488,6 +488,15 @@ export function effectiveMaxHP(c: Combatant): number {
 // ---- Conditions ---------------------------------------------
 
 export function addCondition(target: Combatant, condition: Condition): void {
+  // ── Session 52 Creature Megabatch Batch 1: condition immunity ──
+  // 5etools `conditionImmune` field → Combatant.conditionImmunities (parsed
+  // by fivetools.ts:parseConditionImmune). PHB p.197: condition immunity =
+  // the condition is never applied. Names are lowercased on both sides so
+  // the lookup is case-insensitive. Mirrors the Nature's Ward 'poisoned'
+  // immunity pattern above (just generalized to any condition name).
+  if (target.conditionImmunities && target.conditionImmunities.includes(condition.toLowerCase())) {
+    return; // immune — condition not applied
+  }
   // ── Session 47 Task #29-follow-up-3: Nature's Ward (Land Druid 10) ──
   // PHB p.68: "Starting at 10th level, you can't be charmed or frightened by
   // fey or elementals. You are also immune to poison and disease."
@@ -1099,8 +1108,11 @@ export function grantTempHP(target: Combatant, amount: number): void {
 
 /**
  * Apply damage accounting for temp HP first (PHB p.198).
- * If damageType is provided and the target has resistance to it, damage is halved
- * before temp HP absorption (PHB p.197 — resistance applied before any other reduction).
+ * If damageType is provided and the target has immunity to it, damage is
+ * reduced to 0 (PHB p.197). If the target has vulnerability to it, damage
+ * is DOUBLED. If the target has resistance to it, damage is HALVED (rounded
+ * down). Per PHB p.197, the order is: immunity (0) > vulnerability (×2) >
+ * resistance (÷2); an immune creature takes 0 regardless of vuln/resist.
  * Overrides the base applyDamage for combatants with tempHP.
  */
 export function applyDamageWithTempHP(
@@ -1109,10 +1121,23 @@ export function applyDamageWithTempHP(
   damageType?: DamageType | null,
 ): number {
   // PHB p.197: immunity reduces damage to 0. Checked FIRST — before resistance,
-  // temp HP, or any other mitigation. An immune creature takes 0 damage regardless
-  // of any resistance/vulnerability entries (immunity overrides everything).
+  // vulnerability, temp HP, or any other mitigation. An immune creature takes
+  // 0 damage regardless of any resistance/vulnerability entries (immunity
+  // overrides everything).
   if (damageType != null && (target.immunities?.includes(damageType) ?? false)) {
     return 0;
+  }
+
+  let effective = amount;
+
+  // PHB p.197: vulnerability doubles damage. Applied BEFORE resistance
+  // (if a creature has BOTH vuln and resist to the same type, vuln applies
+  // first then resist halves — net = original). Immunity already short-
+  // circuited above. NOTE this uses Combatant.damageVulnerabilities (NOT
+  // Combatant.vulnerabilities, which is for d20-roll vulns like Dodge).
+  // Added in Session 52 Creature Megabatch Batch 1.
+  if (damageType != null && (target.damageVulnerabilities?.includes(damageType) ?? false)) {
+    effective = effective * 2;
   }
 
   // PHB p.197: resistance halves damage (rounded down) before temp HP absorption.
@@ -1120,7 +1145,6 @@ export function applyDamageWithTempHP(
   // Blade Ward (PHB p.218) grants resistance to bludgeoning/piercing/slashing.
   // All three are folded into a single boolean so resistance never stacks
   // (PHB p.197: two sources of the same resistance = half, not quarter).
-  let effective = amount;
   const hasResistance =
     target.wardingBond !== null ||
     (damageType != null && (target.resistances?.includes(damageType) ?? false)) ||
@@ -1128,7 +1152,7 @@ export function applyDamageWithTempHP(
       damageType != null &&
       BLADE_WARD_PHYSICAL_TYPES.includes(damageType));
   if (hasResistance) {
-    effective = Math.floor(amount / 2);
+    effective = Math.floor(effective / 2);
   }
 
   let remaining = effective;

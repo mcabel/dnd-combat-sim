@@ -58,6 +58,20 @@ export interface Raw5etoolsMonster {
     headerEntries?: string[];  // may contain "is a Nth-level spellcaster"
     [k: string]: unknown;
   }>;
+  // ── Session 52 Creature Megabatch Batch 1: damage defenses ──
+  // Each is an array of EITHER a plain damage-type string ('fire') OR an
+  // object with an inner same-named array (`{immune:['bludgeoning','piercing',
+  // 'slashing'], note:'from nonmagical attacks', cond:true}`) OR an object
+  // with a `special` field (`{special:'damage from spells'}`). The helper
+  // parseDamageDefenseList() below handles all three shapes (mirrors
+  // scripts/creature_analysis.ts defenseFieldPresent()).
+  immune?: Array<string | { [k: string]: unknown }>;
+  resist?: Array<string | { [k: string]: unknown }>;
+  vulnerable?: Array<string | { [k: string]: unknown }>;
+  // conditionImmune is always a string[] in MM data (verified across all 453
+  // creatures by creature_analysis.ts), but we accept the same permissive
+  // shape for forward-compat with future sourcebooks.
+  conditionImmune?: Array<string | { [k: string]: unknown }>;
 }
 
 // ---- Dice parsing -------------------------------------------
@@ -276,6 +290,128 @@ function parseSpeeds(speed: RawSpeed | undefined): {
     swim: speed.swim ?? null,
     burrow: speed.burrow ?? null,
   };
+}
+
+// ---- Defense field parsers (Session 52 Batch 1) -------------
+
+/**
+ * The set of damage types the engine recognises. Used to validate strings
+ * parsed from 5etools defense arrays before they enter a `DamageType[]`
+ * field — anything else (typos, future sourcebook additions, or damage-type
+ * qualifiers like "from nonmagical attacks") is silently dropped.
+ */
+const VALID_DAMAGE_TYPES: ReadonlySet<string> = new Set<DamageType>([
+  'acid', 'bludgeoning', 'cold', 'fire', 'force', 'lightning',
+  'necrotic', 'piercing', 'poison', 'psychic', 'radiant', 'slashing', 'thunder',
+]);
+
+/**
+ * Parse a 5etools damage-defense field (immune / resist / vulnerable) into a
+ * `DamageType[]`. Handles every shape observed across all 453 creatures
+ * (mirrors `defenseFieldPresent()` in scripts/creature_analysis.ts):
+ *
+ *   1. Plain string array:       `["fire"]`
+ *   2. Object with inner array:  `[{ immune:["bludgeoning","piercing","slashing"],
+ *                                    note:"from nonmagical attacks", cond:true }]`
+ *                                (the inner array key matches `fieldName`)
+ *   3. Object with `special`:    `[{ special:"damage from spells" }]`
+ *                                (rare — v1 SKIPS these; the engine has no way
+ *                                to enumerate the matched damage types)
+ *
+ * v1 simplification — conditional defenses (the `cond: true` flag paired with
+ * a note like "from nonmagical attacks" / "that aren't silvered"): applied
+ * UNCONDITIONALLY in v1. Honouring the "nonmagical only" condition requires
+ * an `isNonmagical` flag on incoming attacks — deferred to Batch 4c Magic
+ * Weapons, which adds `attacksAreMagical?: boolean` to Combatant and updates
+ * applyDamageWithTempHP to skip conditional defenses for magical attacks.
+ *
+ * @param rawField   The raw 5etools field value (e.g. `raw.immune`).
+ * @param fieldName  The field's own name ('immune' | 'resist' | 'vulnerable')
+ *                   — used to find the inner array on object entries that use
+ *                   the same key.
+ */
+function parseDamageDefenseList(
+  rawField: Raw5etoolsMonster['immune'],
+  fieldName: 'immune' | 'resist' | 'vulnerable',
+): DamageType[] {
+  if (!rawField || !Array.isArray(rawField) || rawField.length === 0) {
+    return [];
+  }
+  const out: DamageType[] = [];
+  for (const entry of rawField) {
+    if (typeof entry === 'string') {
+      // Plain damage-type string (e.g. "fire").
+      const t = entry.toLowerCase();
+      if (VALID_DAMAGE_TYPES.has(t)) {
+        out.push(t as DamageType);
+      }
+      // else: silently drop unknown strings (5etools occasionally uses tags
+      // we don't model, e.g. "psychic" is valid but "force" qualifies).
+    } else if (entry && typeof entry === 'object') {
+      // Object form — look for an inner array under the same key as the
+      // outer field (e.g. immune:[...] inside an entry of raw.immune).
+      const innerArr = (entry as Record<string, unknown>)[fieldName];
+      if (Array.isArray(innerArr)) {
+        for (const inner of innerArr) {
+          if (typeof inner === 'string') {
+            const t = inner.toLowerCase();
+            if (VALID_DAMAGE_TYPES.has(t)) {
+              out.push(t as DamageType);
+            }
+          }
+        }
+      }
+      // Object form with `special` (e.g. {special:"damage from spells"}):
+      // skipped — no way to enumerate the matched types in v1. Documented
+      // in CREATURE-MEGABATCH-MIGRATION-PLAN.md Batch 1.
+      // Unknown object shapes are also silently dropped (the analysis script
+      // reported 0 unparseable shapes across all 453 creatures, so this is
+      // purely defensive).
+    }
+  }
+  // Dedupe (a creature may legitimately list both "fire" plain and inside a
+  // conditional object form).
+  return Array.from(new Set(out));
+}
+
+/**
+ * Parse a 5etools `conditionImmune` field into an array of lowercased
+ * condition-name strings. Handles both the canonical string-array shape
+ * (`["charmed","frightened"]`) and the object-with-inner-array shape used by
+ * some 5etools entries (`[{conditionImmune:["charmed","frightened"]}]`),
+ * for forward-compatibility with future sourcebooks even though MM data is
+ * always the plain string-array form (verified across all 453 creatures).
+ *
+ * Returned names are lowercased to match the engine's `Condition` type
+ * strings ('charmed', 'frightened', 'paralyzed', etc.). Unknown strings are
+ * still included — engine's addCondition() checks `conditionImmunities`
+ * before validating the condition name, so unknown-immune entries are
+ * harmless (they just never match a real Condition).
+ */
+function parseConditionImmune(
+  rawField: Raw5etoolsMonster['conditionImmune'],
+): string[] {
+  if (!rawField || !Array.isArray(rawField) || rawField.length === 0) {
+    return [];
+  }
+  const out: string[] = [];
+  for (const entry of rawField) {
+    if (typeof entry === 'string') {
+      out.push(entry.toLowerCase());
+    } else if (entry && typeof entry === 'object') {
+      // Forward-compat: object form `{conditionImmune:[...]}` (none in MM
+      // data today, but the parallel immune/resist/vulnerable fields use it).
+      const innerArr = (entry as Record<string, unknown>)['conditionImmune'];
+      if (Array.isArray(innerArr)) {
+        for (const inner of innerArr) {
+          if (typeof inner === 'string') out.push(inner.toLowerCase());
+        }
+      }
+      // `special` and other object shapes: skipped (no condition name to
+      // extract).
+    }
+  }
+  return Array.from(new Set(out));
 }
 
 // ---- Legendary action cost detection -----------------------
@@ -578,8 +714,20 @@ export function monsterToCombatant(
     isDead: false,
     isUnconscious: false,
     advantages:      [],
-    vulnerabilities: [],
-    resistances:     [],
+    vulnerabilities: [],   // d20-roll vulnerabilities (Dodge/Reckless Attack); NOT damage types
+    // ── Session 52 Creature Megabatch Batch 1: damage defenses ──
+    // Populated from raw 5etools fields. Mirrors `defenseFieldPresent()` +
+    // `conditionImmune` handling in scripts/creature_analysis.ts (handles
+    // string-array, object-with-inner-array, and `{special:"..."}` shapes —
+    // `special` is skipped because the engine can't enumerate the matched
+    // damage types). Conditional defenses (`cond:true` nonmagical-only) are
+    // applied UNCONDITIONALLY in v1 — see parseDamageDefenseList() comment.
+    // Honoring the "nonmagical only" condition requires an `isNonmagical`
+    // attack flag, deferred to Batch 4c Magic Weapons.
+    resistances:            parseDamageDefenseList(raw.resist,    'resist'),
+    immunities:             parseDamageDefenseList(raw.immune,    'immune'),
+    damageVulnerabilities:  parseDamageDefenseList(raw.vulnerable,'vulnerable'),
+    conditionImmunities:    parseConditionImmune(raw.conditionImmune),
     bardicInspirationDie: null,
     wardingBond: null,
     activeEffects:   [],

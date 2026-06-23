@@ -677,6 +677,34 @@ export interface Combatant {
   // a Combatant.
   immunities?: DamageType[];
 
+  // ── Session 52 Creature Megabatch Batch 1: damage vulnerabilities ──
+  // PHB p.197: incoming damage of listed types is DOUBLED. NOTE this is
+  // SEPARATE from `vulnerabilities: AdvantageEntry[]` above — that field
+  // tracks d20-roll vulnerabilities (Dodge/Reckless Attack style: attacks
+  // vs you have adv/disadv), NOT damage-type vulnerabilities.
+  //
+  // Creature Megabatch Batch 1 introduced this field so 5etools-parsed
+  // creatures (e.g. Skeletons vuln to bludgeoning) gain their damage-type
+  // vulnerability. applyDamageWithTempHP() in utils.ts consumes it:
+  // vulnerability applies FIRST (PHB p.197) — before resistance halves
+  // and before immunity zeroes (immunity still overrides vulnerability).
+  //
+  // OPTIONAL: undefined is treated as "no damage vulnerabilities" (equivalent
+  // to []); existing test factories don't need updates.
+  damageVulnerabilities?: DamageType[];
+
+  // ── Session 52 Creature Megabatch Batch 1: condition immunities ──
+  // Condition NAMES (e.g. 'charmed', 'frightened', 'paralyzed') this creature
+  // is immune to, parsed from 5etools `conditionImmune`. applyCondition (the
+  // internal name for `addCondition` in utils.ts) checks this and skips
+  // application. PHB p.197: condition immunity = the condition is never
+  // applied to the creature.
+  //
+  // Names are lowercased to match the engine's `Condition` type strings.
+  // OPTIONAL: undefined = no condition immunities; existing factories don't
+  // need updates.
+  conditionImmunities?: string[];
+
   // Bardic Inspiration die granted by a Bard (PHB p.54).
   // Die size (e.g. 6 for d6). Consumed on the next attack roll or saving throw.
   // null = no inspiration die held.
