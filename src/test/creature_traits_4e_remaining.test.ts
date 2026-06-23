@@ -109,7 +109,12 @@ function freshState(combatants: Combatant[], lightLevel?: 'indoors' | 'daylight'
     round: 1,
     activeCombatantId: combatants[0]?.id ?? null,
     pendingActions: [],
+    // Engine internals accessed by resolveAttack — all must be initialized
+    // (otherwise crashes like 'Cannot read properties of undefined (reading get)' on damageThisRound).
     rageDamagedSinceLastTurn: new Set<string>(),
+    disengagedThisTurn: new Set<string>(),
+    damageThisRound: new Map<string, number>(),
+    noDamageRounds: new Map<string, number>(),
   } as unknown as EngineState;
   return { state, bf };
 }

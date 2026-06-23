@@ -121,7 +121,14 @@ function freshState(combatants: Combatant[]): { state: EngineState; bf: MutableB
     round: 1,
     activeCombatantId: combatants[0]?.id ?? null,
     pendingActions: [],
+    // Engine internals accessed by checkDeath → triggerDeathBurst chain.
+    // rageDamagedSinceLastTurn is touched by applyDamage paths; the other
+    // 3 fields are added defensively in case future engine changes extend
+    // the death-burst hook (mirrors subclass_features.test.ts makeState).
     rageDamagedSinceLastTurn: new Set<string>(),
+    disengagedThisTurn: new Set<string>(),
+    damageThisRound: new Map<string, number>(),
+    noDamageRounds: new Map<string, number>(),
   } as unknown as EngineState;
   return { state, bf };
 }
