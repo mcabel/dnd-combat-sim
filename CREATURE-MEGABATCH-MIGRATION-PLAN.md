@@ -399,7 +399,7 @@ Documented for future sessions. NOT in scope for the immediate megabatch.
 |-------|--------|---------|--------|-------|
 | 0 | ✅ DONE | 52 | 547a361 | reprint-safe loader + source provenance; 453 unique creatures; 34 new test assertions |
 | 1 | ✅ DONE | 52 | 2ee8600 | defenses (immune/resist/vulnerable/conditionImmune); 92 new test assertions; fixed applyDamageWithTempHP vuln-then-resist bug |
-| 2 | ✅ DONE | 52 | (pending) | saves/senses/passive; 58 new test assertions; rollSave uses listed save bonus |
+| 2 | ✅ DONE | 52 | ea9a72d | saves/senses/passive; 58 new test assertions; rollSave uses listed save bonus |
 | 3 | NOT STARTED | — | — | recharge + leg-resist |
 | 4a | NOT STARTED | — | — | Magic Resistance |
 | 4b | NOT STARTED | — | — | Regeneration |
