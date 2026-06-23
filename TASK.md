@@ -9,101 +9,185 @@
 
 ## Core Engine Workstream (HANDOVER-SESSION-XX)
 
-### Active Objective
+### Active Objective (Session 53 refresh)
 
-**TG-005: Witch Bolt** — implement Witch Bolt (PHB p.289) as a concentration
-spell that deals 1d12 lightning damage on hit, then 1d12 per turn if the caster
-uses their action to maintain it and the target stays in range (≤30 ft). Both
-initial hit and subsequent ticks use `applySpellEffect` / `activeEffects`;
-concentration broken by caster taking damage. Cantrip-z owns spell module;
-Core Engine owns planner branch and concentration-break hook.
+**TG-024: Sorcery Points + Ki transfer to Combatant** (combines old TG-016 +
+TG-017 step 1-2 into a single commit). `CharacterResources` already has `ki?`
+and `sorceryPoints?` (populated by `leveler.ts`), but both `buildRawResources`
+(Sheet) and `buildResources` (Core, `pc.ts:208-320`) SKIP these fields — a Monk
+or Sorcerer PC has zero ki/sorcery points in combat. This blocks TG-017
+Quivering Palm (now TG-030), TG-015 Draconic Presence 5-SP cost, and any
+ki-based subclass feature. Fix is structurally identical to the existing
+`actionSurge` pattern at `builder.ts:226` — kinematic mirror for both
+resources in one commit.
 
 ### Current Phase
 
-Not started.
+Not started. Prerequisite groundwork is complete:
+- Concentration enforcement (TG-002) ✅
+- Parser fields incl. `isUndead`/`isConstruct`/`hasMetalArmor` (TG-004) ✅
+- Cantrip planner branches 13A-13N (TG-003) ✅
+- Reaction registry / TG-008 partial (Shield, Hellish Rebuke, Absorb Elements,
+  Feather Fall, Silvery Barbs, Counterspell, Dispel Magic, Prot. from Energy) ✅
+- `elementalAffinityBonus` helper (Sessions 47-51) ✅
 
 ### Acceptance Criteria
 
-- `witch_bolt.ts` spell module with `shouldCast / execute / metadata`
-- On-hit: applies `damage_zone`-style tick rider as a `concentration` effect
-- Per-turn action cost: planner consumes action slot when maintaining
-- Range check (30 ft): if caster or target moves out of range, effect ends
-- Concentration broken on caster damage (already wired in `applyDamageWithTempHP`)
-- Passing tests covering hit, miss, maintain, break on move, break on damage
+- `PlayerResources` has typed `ki?: { max, current }` and
+  `sorceryPoints?: { max, current }` (both already optional in `core.ts`)
+- `buildRawResources` (Sheet `builder.ts`) writes both fields when present
+- `buildResources` (Core `pc.ts`) reads both fields back into `PlayerResources`
+- New tests in `resources.test.ts`: Monk 5 has `ki.current === 5`; Sorcerer 5
+  has `sorceryPoints.current === 5`
+- All existing tests still pass; `tsc --noEmit` clean
 
-### Immediate Priority
+### Immediate Priority (reverse published order, newest pre-2024 first)
 
-1. Check TEAMGOALS.md for Cantrip-z Witch Bolt status (TG-005)
-2. Post RFC if touching `runCombat` loop
-3. Implement planner branch in `planner.ts`
+1. **TG-027** (Core Engine side of TG-015, XGE/PHB 2017/2014): wire
+   `elementalAffinityBonus` into the 3 weapon-rider damage sites in `combat.ts`
+2. **TG-024** (PHB 2014): ki + sorcery points transfer (single commit)
+3. **TG-032** (PHB 2014): Land Druid Nature's Ward fey/elemental immunity
+4. **TG-030** (PHB 2014): Quivering Palm action type — blocked on TG-024
+5. **TG-031** (PHB 2014): Open Hand Technique Flurry rider — blocked on TG-024
 
 ### Notes
 
-**GFB lingering fire discrepancy** (documented Session 48):
-TASK.md previously claimed Green-Flame Blade has a "lingering fire" persistent
-rider. This is incorrect — GFB's fire splash is INSTANT (applied on hit,
-TCE p.107). No cross-round persistence is needed or implemented. The TASK.md
-description was erroneous. TG-001 closure covers only Booming Blade thunder
-rider migration; GFB requires no change.
-
-**TG-001 closure** (Session 48):
-`_boomingBladePendingDamageDice` / `_boomingBladeCasterId` scratch fields on
-`Combatant` replaced by a typed `'movement_rider'` entry in `activeEffects`.
-RFC-001 in TEAMGOALS.md. All 4 affected test files updated. Zero regressions.
-
-- Sheet agent owns `leveler.ts` / `builder.ts` — do not touch
-- Cantrip-z's summon Phase 1 is live; RFC required before Phase 2 (`combat.ts`)
+- Sheet agent owns `leveler.ts` / `builder.ts` — coordinate TG-024 step 1 with
+  Sheet reviewer (Sheet makes the `buildRawResources` change, Core makes the
+  `pc.ts` mirror change, both in one PR).
+- Cantrip-z's summon Phase 1 is live; Phase 4 spells still need bespoke
+  subsystems (deferred under TG-006 Phase 4).
+- TG-001 (persistent-buff subsystem): **DONE** (Session 48 RFC-001) —
+  `_boomingBladePendingDamageDice` scratch fields replaced by typed
+  `movement_rider` ActiveEffect. RFC-001 in TEAMGOALS.md. See HANDOVER-SESSION-48.md.
 
 ---
 
-## Cantrip-z Workstream (zHANDOVER-SESSION-XX)
+## Sheet Agent Workstream (SHEET-HANDOVER-XX)
 
-### Active Objective (Session 51)
+### Active Objective (Session 53 — newly added)
 
-**Task #29-follow-up-5c-4: Wire Elemental Affinity in remaining bespoke spells.**
-Session 50 closed #29-follow-up-5c-3 (10 more spells). The pattern is
-well-established (import `elementalAffinityBonus`, add `+ eaBonus` before
-save halving, document v1 simplifications for DoT/concentration riders).
+**TG-025: Per-class unarmored-AC hook** (SHEET-HANDOVER-41 Discovery). The
+`computeArmorAC` function in `character_router.ts:123-165` uses
+`const unarmoredBase = 10 + dexMod;` unconditionally. A Barbarian or Monk with
+a shield toggled on gets the wrong AC.
 
 ### Current Phase
 
-In progress (this session). Reverse published order (newest pre-2024 source
-first): XGE 2017 → PHB 2014.
-
-### In-Scope Spells (6 — non-weapon-rider, spell-module-owned damage roll)
-
-| # | Spell | Source | Year | Damage | Save | Pattern |
-|---|-------|--------|------|--------|------|---------| 
-| 1 | Elemental Bane | XGE p.154 | 2017 | acid (v1 default) | WIS | single-target save, half-on-success |
-| 2 | Create Bonfire | XGE p.152 | 2017 | fire (cantrip) | DEX | on-cast save + damage_zone tick |
-| 3 | Immolation | XGE p.157 | 2017 | fire | DEX | single-target save, half-on-success |
-| 4 | Incendiary Cloud | PHB p.253 | 2014 | fire | DEX | AoE save, half-on-success |
-| 5 | Flaming Sphere | PHB p.242 | 2014 | fire | DEX | on-cast save + damage_zone tick (tick NOT boosted — v1 simplification) |
-| 6 | Heat Metal | PHB p.250 | 2014 | fire | none | on-cast + damage_zone tick (tick NOT boosted — v1 simplification) |
-
-### Out-of-Scope (Core Engine cross-workstream — see TEAMGOALS TG-015)
-
-- Flame Blade, Lightning Arrow, Elemental Weapon, Searing Smite — weapon-rider
-  bonus damage is applied in `combat.ts` (Core Engine territory); EA on those
-  riders requires engine changes. Documented in TG-015.
+Not started. SHEET-HANDOVER-41 (commit `2ea3659`) closed 3 audit gaps and
+flagged this Discovery. No Sheet work in Sessions 42-52 (~10 sessions idle).
 
 ### Acceptance Criteria
 
-- `elementalAffinityBonus` is imported and called in each of the 6 spell modules
-- New test file `elemental_affinity_phase4.test.ts` covers all 6 spells with
-  matching + non-matching ancestry cases (≥ 12 assertions)
-- All existing tests still pass (no regression)
-- `tsc --noEmit` is clean
+- `computeArmorAC` detects `Unarmored Defense` (Barbarian 1 or Monk 1) from
+  `sheet.classLevels`
+- Barbarian: `unarmoredBase = 10 + dexMod + conMod`
+- Monk: `unarmoredBase = 10 + dexMod + wisMod`
+- New test in `src/test/character_router.test.ts` or
+  `src/test/unarmored_defense.test.ts`: Barbarian 1 DEX 14 CON 16 + shield →
+  AC 17; Monk 1 DEX 14 WIS 16 + shield → AC 17
+- All existing tests still pass; `tsc --noEmit` clean
 
-### Immediate Priority
+### Immediate Priority (reverse published order, newest pre-2024 first)
 
-1. Wire EA in 6 spells (incrementally — commit after all 6 + tests pass)
-2. Run new EA test file + de-flake any nat-1/nat-20 edge cases (mirror Session 50
-   de-flake approach: retry-until-hit loops, widened thresholds)
-3. Write `zHANDOVER-SESSION-51.md`, commit, verify CI green
+1. **TG-025** (PHB 2014): unarmored-AC hook — Sheet drives unilaterally
+2. **TG-026** (PHB 2014): Resources panel UI for Ki Points + Sorcery Points —
+   depends on TG-024 landing first
+3. **TG-029** (PHB 2014): Champion 10 second Fighting Style — Sheet drives
+   steps 1-4, Core reviews step 5
+4. **TG-024 step 1 (co-owned)**: `buildRawResources` adds `ki` + `sorceryPoints`
+   branches — coordinate with Core Engine
 
 ### Notes
 
-- Pattern is identical to Sessions 47-50: see `src/spells/cloudkill.ts` etc.
-- Reverse published order: XGE (2017) spells first, then PHB (2014) spells
-- Do NOT touch `combat.ts` — weapon-rider EA is a Core Engine task (TG-015)
+- Sheet section was missing from TASK.md before Session 53 — Sheet relied
+  entirely on TEAMGOALS Sheet-tagged items. This new section gives Sheet a
+  documented next-task queue.
+- Sheet agent's own latest handover is `SHEET-HANDOVER-41.md` (Session 41).
+  The next Sheet session should write `SHEET-HANDOVER-42.md`.
+- Resources panel pattern: search `docs/characters.html` for `actionSurge` to
+  find the HTML + JS template to mirror for `ki` and `sorceryPoints` rows.
+
+---
+
+## Creature Workstream (zHANDOVER-SESSION-XX) — formerly "Cantrip-z"
+
+### Active Objective (Session 52 continuation → Session 53)
+
+**Creature Megabatch Batch 4d: Death Burst (8 creatures)** + **Batch 4e
+remaining traits**. Batches 0/1/2/3/4a/4b/4c/partial-4e are DONE on `main`
+(Session 52, 6 commits). Batch 4d needs an on-death hook in `combat.ts`;
+Batch 4e-remaining is ~60 creatures across Charge/Pounce/Incorporeal
+Movement/Avoidance/Superior Invisibility/Rejuvenation/Sunlight
+Sensitivity/False Appearance + low-frequency flavor traits.
+
+### Current Phase
+
+Not started. Prerequisite groundwork is complete:
+- Reprint-safe loader (Batch 0) ✅
+- Defenses parser (Batch 1) ✅
+- Saves/senses/passive (Batch 2) ✅
+- Recharge + Legendary Resistance (Batch 3) ✅
+- Magic Resistance + Regeneration (Batch 4a/4b) ✅
+- Magic Weapons flag + Blood Frenzy + Swarm + Siege Monster (Batch 4c/4e-partial) ✅
+
+### Acceptance Criteria (per sub-batch, one commit each)
+
+- New `Combatant.deathBurst?: { damageDice, damageType, saveDC, saveAbility, radius }` (Batch 4d)
+- On-death hook in `combat.ts` applies death-burst AoE to creatures in radius
+- Each Batch 4e sub-trait has its own parser helper + engine hook + test file
+- All existing tests still pass; `tsc --noEmit` clean
+
+### Immediate Priority (reverse published order, newest pre-2024 first)
+
+> All creatures in `bestiaryData/` are from MM 2014 (450) + DMG 2014 (3), so
+> reverse-published-order is automatically satisfied for any creature batch.
+> Pre-2024 sourcebook data (VGM 2016, MTF 2018, etc.) is DMCA'd and cannot be
+> auto-fetched; the loader is forward-compatible when the user manually drops
+> more `bestiary-<source>.json` files in.
+
+1. **Batch 4d** (MM 2014, 8 creatures): Death Burst — needs on-death hook in
+   `combat.ts`. Mirror: Mud Mephit, Flameskull.
+2. **Batch 4e-1** (MM 2014, 18+22 creatures): Sunlight Sensitivity (engine
+   hook) + False Appearance (metadata-only) + low-frequency flavor traits
+   (Keen Senses, Hold Breath, Water Breathing, Web Walker — metadata).
+3. **Batch 4e-2** (MM 2014, 2 creatures): Avoidance — needs
+   `halfDamageOnSuccess` flag plumbed through save→damage flow.
+4. **Batch 4e-3** (MM 2014, 14+6 creatures): Charge + Pounce — needs
+   movement-tracking ("did creature move ≥N ft straight toward target this
+   turn?").
+5. **Batch 4e-4** (MM 2014, 8+7 creatures): Incorporeal Movement (movement.ts
+   change) + Superior Invisibility (AI planner self-cast hook).
+6. **Batch 4e-5** (MM 2014, 6 creatures): Rejuvenation — needs death-state-
+   with-respawn mechanic. Most complex 4e sub-batch; may defer.
+7. **Batch 5a/5b/5c** (DMCA'd data + complex subsystems): DEFERRED until user
+   manually provides more bestiary sourcebooks.
+
+### Notes
+
+- See `CREATURE-MEGABATCH-MIGRATION-PLAN.md` for full 6-step recipe + batch
+  acceptance criteria + live Batch Status table.
+- See `zHANDOVER-SESSION-52.md` for Session 52 commit log + key architectural
+  decisions.
+- Analysis data: `CREATURE-MEGABATCH-ANALYSIS.json` (453 creatures, 43-pattern
+  taxonomy, per-creature `patterns`/`blocked_reasons`/`priority`).
+- Coordination: any engine hook in `combat.ts` should be flagged in TEAMGOALS.md
+  in case Core Engine is also touching the same code path.
+
+---
+
+## Cross-Workstream Coordination Notes
+
+- **Session 53 red-X fix (commit `7a68d30`)**: Session 52 Batch 0 deleted the
+  byte-identical `bestiary-mm.json` (kept `bestiary-mm-2014.json`), but two
+  test files (`faerie_fire.test.ts`, `healing_spells.test.ts`) still
+  hard-coded the deleted path → CI failures. Fixed by using the same
+  `fs.existsSync()` fallback pattern already used in `src/scenarios/presets.ts`.
+- **Session 53 audit**: cleaned up stale TG-013 (DONE), TG-006 (Phase 1/2/3
+  DONE), TG-009 (Dispel Magic DONE), PENDING REVIEW log (stale TG-006 ACK
+  removed). Added Session 53 Priorities section with TG-024..TG-032 to give
+  Sheet + Core agents a fresh, ranked task queue.
+- **Handover file hygiene**: `AGENTS.md` says max 2 of each handover type in
+  repo root. Currently `zHANDOVER-SESSION-49.md` + `zHANDOVER-SESSION-50.md` +
+  `zHANDOVER-SESSION-52.md` are all in root (3 z-handovers). Session 53 should
+  archive `z-49` to `HandoverOld/`.

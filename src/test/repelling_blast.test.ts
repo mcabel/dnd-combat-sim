@@ -311,26 +311,41 @@ console.log('\n--- 8. End-to-end: Fire Bolt + Repelling Blast → no push ---');
 // ============================================================
 console.log('\n--- 9. End-to-end: EB miss + Repelling Blast → no push ---');
 {
-  const warlock = makeCombatant('warlock', {
-    pos: { x: 0, y: 0, z: 0 },
-    eldritchInvocations: ['Repelling Blast'],
-  });
-  const goblin = makeCombatant('goblin', {
-    pos: { x: 2, y: 0, z: 0 },
-    ac: 10,
-    currentHP: 100, maxHP: 100,
-    faction: 'enemy',
-  });
-  const bf = makeBF([warlock, goblin]);
-  const state = makeState(bf);
+  // De-flake (Session 53): ELDRITCH_BLAST_MISS has hitBonus: -100, but nat 20
+  // ALWAYS hits (crit) per PHB p.194 — 5% chance per run. Retry until we get
+  // a non-crit miss (up to 20 tries → P(all crit) = 0.95^20 ≈ 0.36, so
+  // P(success in 20 tries) > 99.6%).
+  let missAchieved = false;
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const warlock = makeCombatant('warlock', {
+      pos: { x: 0, y: 0, z: 0 },
+      eldritchInvocations: ['Repelling Blast'],
+    });
+    const goblin = makeCombatant('goblin', {
+      pos: { x: 2, y: 0, z: 0 },
+      ac: 10,
+      currentHP: 100, maxHP: 100,
+      faction: 'enemy',
+    });
+    const bf = makeBF([warlock, goblin]);
+    const state = makeState(bf);
 
-  resolveAttack(warlock, goblin, ELDRITCH_BLAST_MISS, state);
+    resolveAttack(warlock, goblin, ELDRITCH_BLAST_MISS, state);
 
-  // Miss → no damage, no push
-  eq('9a. goblin NOT pushed (miss)', goblin.pos.x, 2);
-  eq('9b. goblin took no damage', goblin.currentHP, 100);
-  assert('9c. no move event logged',
-    !state.log.events.some((e: CombatEvent) => e.type === 'move' && e.description.includes('Repelling Blast')));
+    // Check if the attack actually missed (no crit)
+    const hitLog = state.log.events.some((e: CombatEvent) =>
+      e.type === 'attack_hit' || e.type === 'attack_crit');
+    if (hitLog) continue; // nat 20 — retry
+
+    // Miss → no damage, no push
+    eq('9a. goblin NOT pushed (miss)', goblin.pos.x, 2);
+    eq('9b. goblin took no damage', goblin.currentHP, 100);
+    assert('9c. no move event logged',
+      !state.log.events.some((e: CombatEvent) => e.type === 'move' && e.description.includes('Repelling Blast')));
+    missAchieved = true;
+    break;
+  }
+  assert('9d. miss achieved within 20 attempts (de-flake)', missAchieved);
 }
 
 // ============================================================

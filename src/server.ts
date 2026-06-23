@@ -21,7 +21,7 @@ import characterRouter from './character_router';
 
 import { loadBestiaryDir }                        from './data/loader';
 import { loadPCStatBlocks, spawnPC, RawPCEntry }  from './parser/pc';
-import { spawnMonster, Raw5etoolsMonster }         from './parser/fivetools';
+import { spawnMonster, Raw5etoolsMonster, rawCreatureType }         from './parser/fivetools';
 import { PRESETS }                                 from './scenarios/presets';
 import { simulate, CombatantStats }               from './scenarios/simulate';
 import { generateHTMLReport }                         from './scenarios/html_report';
@@ -187,11 +187,10 @@ app.get('/api/monsters', (req: Request, res: Response) => {
         const crStr = typeof raw.cr === 'string'
           ? raw.cr
           : (raw.cr as any)?.cr ?? '?';
-        const typeStr = Array.isArray(raw.type)
-          ? raw.type.join(', ')
-          : (typeof raw.type === 'object' && raw.type !== null)
-            ? (raw.type as any).type ?? 'unknown'
-            : (raw.type ?? 'unknown');
+        // Session 53: rawCreatureType handles all 5etools type shapes
+        // (string, {type:string}, {type:string[]}, {type:{choose:[...]}}, {choose:[...]}).
+        // Falls back to 'unknown' for missing/empty.
+        const typeStr = rawCreatureType(raw.type) || 'unknown';
         monsters.push({ name, cr: crStr, type: typeStr });
       }
     });

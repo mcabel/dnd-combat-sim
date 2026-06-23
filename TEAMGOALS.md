@@ -25,14 +25,10 @@
 > `ACKNOWLEDGED — reviewing, ETA <N>` on the same line. Remove the line once
 > the underlying TG entry is actioned.
 
-- TG-006 **ACKNOWLEDGED — Core Engine session 46** (commit below).
-  Core Engine sign-off: **Phase 1 is APPROVED.** Cantrip-z may proceed with
-  all Phase 1 LOW-risk sub-phases immediately: optional type fields on
-  `Combatant`/`Battlefield`, new files under `src/summons/` and
-  `src/spells/summon_*.ts`, new `'summonSpell'` `PlannedAction` type. Do NOT
-  touch `runCombat`/`combat.ts` without a separate RFC comment in this file
-  first — that still requires explicit Core Engine sign-off per the TG-006
-  coordination protocol. Remove this line once Phase 1 is complete.
+- _(none pending — Session 53 cleanup removed the stale TG-006 ACK line;
+  TG-006 Phase 1/2/3 are DONE per `docs/TG-006-SUMMON-PLAN.md` + verified
+  by 21/22 summon/conjure modules present in `src/spells/`. Only Phase 4
+  remains open.)_
 
 ---
 
@@ -193,7 +189,7 @@ completed by a single agent without coordination.
 
 ### TG-006: Summon / Conjure subsystem (Session 19 — bulk-deferred blockers)
 
-- **Status:** OPEN — **see `docs/TG-006-SUMMON-PLAN.md` for full research + 4-phase plan (Session 21)**
+- **Status:** Phase 1/2/3 DONE — see `docs/TG-006-SUMMON-PLAN.md`. **Phase 4 OPEN (deferred — 19 bespoke summoning spells each need their own subsystem)**
 - **Owners:** Core Engine (driving — owns `src/engine/summons.ts` + `src/types/core.ts` summon-state shape) + Cantrip-z (consumes the subsystem in spell modules)
 - **Source:** `zHANDOVER-SESSION-19.md` (Session 19 bulk-implementation pass — 109 blocker spells identified); Session 21 deep-research pass produced `docs/TG-006-SUMMON-PLAN.md`
 - **Summary:** v1 has PARTIAL summon infrastructure (`src/summons/registry.ts` + `spawner.ts` + `mount.ts` — 684 lines, 9 SUMMON_REGISTRY entries, 51/51 passing tests) but NO mid-combat summon insertion, NO concentration-break despawn, and NO spell modules wired to it. **43** in-scope spells (re-categorized from original 38 — `Illusory Script`, `Programmed Illusion`, `Leomund's Secret Chest`, `Drawmij's Instant Summons`, `Conjure Constructs` were missed in Session 19's regex). Of these 43: 12 TCE `Summon *` (LOW risk), 7 PHB `Conjure *` (MEDIUM risk), 3 Find Familiar/Steed (LOW risk) are implementable by Cantrip-z in 4-6 sessions. The remaining 19 (Animate Dead, Create Undead, Magic Jar, Simulacrum, True Polymorph, Glyph of Warding, etc.) need bespoke subsystems — defer to Core Engine.
@@ -290,18 +286,17 @@ completed by a single agent without coordination.
 
 ### TG-009: Antimagic / Dispel subsystem (Session 19 — bulk-deferred blockers)
 
-- **Status:** OPEN
+- **Status:** PARTIAL — Dispel Magic (L3) ✅ DONE (`src/spells/dispel_magic.ts`, PHB p.233). Dispel Evil and Good (L5) + Antimagic Field (L8) remain OPEN.
 - **Owners:** Core Engine (driving — owns `src/engine/spell_effects.ts` `removeEffectsFromCaster`) + Cantrip-z (consumes in spell modules)
 - **Source:** `zHANDOVER-SESSION-19.md` (Session 19 bulk-implementation pass — 3 antimagic spells identified)
-- **Summary:** v1 has no spell-effect-suppression subsystem. Dispel Magic, Dispel Evil and Good, and Antimagic Field need to enumerate active effects on a target and remove them (Dispel Magic: ability-check gating; Antimagic Field: area suppress ALL magic; Dispel Evil and Good: target specific effect categories).
+- **Summary:** v1 has no spell-effect-suppression subsystem beyond Dispel Magic. Dispel Evil and Good and Antimagic Field need to enumerate active effects on a target and remove them (Antimagic Field: area suppress ALL magic; Dispel Evil and Good: target specific effect categories).
 - **Implementation plan:**
   - Core Engine adds a `dispelEffects(target, levelThreshold)` function in `spell_effects.ts`.
   - Antimagic Field requires an "is in antimagic field?" check at every spell-cast site.
-  - Cantrip-z wires Dispel Magic / Dispel Evil and Good / Antimagic Field spell modules.
-- **Risk:** MEDIUM — Dispel Magic is straightforward; Antimagic Field is invasive (every cast site).
+  - Cantrip-z wires Dispel Evil and Good / Antimagic Field spell modules.
+- **Risk:** MEDIUM — Dispel Evil and Good is straightforward; Antimagic Field is invasive (every cast site).
 - **Coordination protocol:** Core Engine designs the dispel API.
-- **Blocked spells (3):**
-  - **Level 3 (1):** Dispel Magic (PHB).
+- **Blocked spells (2 remaining):**
   - **Level 5 (1):** Dispel Evil and Good (PHB).
   - **Level 8 (1):** Antimagic Field (PHB).
 
@@ -423,7 +418,7 @@ completed by a single agent without coordination.
 
 ### TG-013: Move `rollDiceString` from `booming_blade.ts` to `utils.ts`
 
-- **Status:** IN PROGRESS — Core Engine side DONE (session 46): added to `utils.ts`, updated `combat.ts` import. Cantrip-z to clean up re-export in `booming_blade.ts`.
+- **Status:** DONE — session 46 (Core Engine: added to `utils.ts`, updated `combat.ts` import) + session 51 (Cantrip-z: cleaned up re-export in `booming_blade.ts:209` — verified `export { rollDiceString } from '../engine/utils'`).
 - **Owners:** Cantrip-z (driving — owns `src/spells/booming_blade.ts`) + Core Engine (must update `src/engine/combat.ts` import)
 - **Source:** Core Engine peer review, Session 45
 - **Summary:** `rollDiceString` (parses `"NdM"` strings and rolls them) is exported from `src/spells/booming_blade.ts` and imported directly by `src/engine/combat.ts` (line 57) for the Booming Blade detonation in `executeMove`. A spell module must not be a utility dependency of the engine. `utils.ts` already owns `rollDie` and `rollDice`; this function belongs there too.
@@ -723,6 +718,165 @@ completed by a single agent without coordination.
 - **Risk:** MEDIUM — extending the surge trigger may cause cascading
   flakiness (surges are random); de-flake with seeded RNG if needed.
 - **Coordination protocol:** Core Engine drives.
+
+---
+
+## SESSION 53 PRIORITIES (proposed by Creature workstream)
+
+> Added in Session 53 by the creature-megabatch workstream after a full
+> project audit. Per the user's priority directive: **mechanics are listed
+> in reverse published order (newest pre-2024 source first)** so the
+> driving agent can pick the newest-first item that fits their available
+> scope. All items below target pre-2024 content only.
+>
+> Source key (newest first):
+>   - SCC    = Strixhaven (2021)
+>   - FTD    = Fizban's Treasury of Dragons (2021)
+>   - TCE    = Tasha's Cauldron of Everything (2020)
+>   - IDRotF = Icewind Dale: Rime of the Frostmaiden (2020)
+>   - EGW    = Explorer's Guide to Wildemount (2020)
+>   - XGE    = Xanathar's Guide to Everything (2017)
+>   - SCAG   = Sword Coast Adventurer's Guide (2015)
+>   - MM/DMG/PHB = 2014 core
+
+### Tier-A items (LOW risk, ship first)
+
+#### TG-024: Sorcery Points + Ki transfer to Combatant (combines TG-016 + TG-017 step 1-2)
+
+- **Status:** OPEN — proposed Session 53
+- **Owners:** Core Engine (driving — owns `src/parser/pc.ts` `buildResources` + `src/types/core.ts` `PlayerResources`) + Sheet (reviewer — owns `src/characters/builder.ts` `buildRawResources`)
+- **Source:** Session 53 audit; combines TG-016 + TG-017 step 1-2 into one commit (kinematic mirror of the `actionSurge` pattern at `builder.ts:226`).
+- **Summary:** `CharacterResources` already has `ki?` and `sorceryPoints?` (populated by `leveler.ts:923, 930-931`) but `buildRawResources` (Sheet) and `buildResources` (Core) both SKIP these fields. Result: a Monk or Sorcerer PC has zero ki/sorcery points in combat. This blocks TG-017 Quivering Palm, TG-015 Draconic Presence 5-SP cost, and any ki-based subclass feature.
+- **Implementation plan (single commit):**
+  1. Sheet (`builder.ts:218-238`): in `buildRawResources`, after the `actionSurge` branch, add: `if (res.sorceryPoints) out.sorceryPoints = { max: res.sorceryPoints.max, current: res.sorceryPoints.current ?? res.sorceryPoints.max };` and `if (res.ki) out.ki = { max: res.ki.max, current: res.ki.current ?? res.ki.max };`
+  2. Core (`pc.ts:208-320`): in `buildResources`, mirror the same two branches.
+  3. Core (`types/core.ts`): ensure `PlayerResources` has `sorceryPoints?: { max: number; current: number }` and `ki?: { max: number; current: number }` (both already optional).
+  4. Test: extend `resources.test.ts` — spawn a Monk 5 + assert `ki.current === 5`; spawn a Sorcerer 5 + assert `sorceryPoints.current === 5`.
+- **Risk:** LOW — additive parser + sheet changes; no engine impact.
+- **Coordination protocol:** Core Engine drives; Sheet reviews the `builder.ts` change.
+- **Reverse published order note:** Both PHB 2014 sources. Combined because the fix is structurally identical (one resource field each).
+
+#### TG-025: Per-class unarmored-AC hook (Sheet-41c follow-up) — promotes TG-019
+
+- **Status:** OPEN — proposed Session 53 (promotes TG-019 from research to actionable)
+- **Owners:** Sheet (driving — owns `src/character_router.ts` `computeArmorAC`)
+- **Source:** Session 53 audit; SHEET-HANDOVER-41 Discovery.
+- **Summary:** `computeArmorAC` in `character_router.ts:123-165` uses `const unarmoredBase = 10 + dexMod;` unconditionally. A Barbarian or Monk with a shield toggled on gets the wrong AC (should be `10 + DEX + CON` for Barbarian's Unarmored Defense, `10 + DEX + WIS` for Monk's).
+- **Implementation plan:**
+  1. In `computeArmorAC`, detect `Unarmored Defense` class feature from `sheet.classLevels` (Barbarian 1 OR Monk 1).
+  2. If Barbarian: `unarmoredBase = 10 + dexMod + conMod`.
+  3. If Monk: `unarmoredBase = 10 + dexMod + wisMod`.
+  4. Test (`src/test/character_router.test.ts` or new `unarmored_defense.test.ts`): Barbarian 1 with DEX 14 CON 16 + shield → AC 17 (10+2+3+2). Monk 1 with DEX 14 WIS 16 + shield → AC 17.
+- **Risk:** LOW — Sheet-side only; no engine impact.
+- **Coordination protocol:** Sheet drives unilaterally.
+
+#### TG-026: Resources panel UI — Ki Points + Sorcery Points rows (Sheet-side completion of TG-016 step 4 + TG-017 step 5)
+
+- **Status:** OPEN — proposed Session 53
+- **Owners:** Sheet (driving — owns `docs/characters.html`)
+- **Source:** Session 53 audit; depends on TG-024 landing first.
+- **Summary:** `docs/characters.html` resources panel already has rows for `actionSurge`, `bardicInspiration`, `rage`, etc. Add two new rows: `ki` (visible for Monk 1+) and `sorceryPoints` (visible for Sorcerer 1+). Mirror the `actionSurge` row's HTML pattern (label + current/max + increment/decrement buttons + reset-on-rest hook).
+- **Implementation plan:**
+  1. Add HTML rows in `docs/characters.html` (search for `actionSurge` to find the pattern).
+  2. Add JS handlers in the same file (mirror `actionSurge` handlers).
+  3. Add server endpoints if missing: `POST /api/character/:id/spend-ki` and `POST /api/character/:id/spend-sorcery-point` (mirror existing `spend-action-surge`).
+  4. Test: extend `src/test/server.test.ts` — call endpoints + assert resources decrement.
+- **Risk:** LOW — UI + REST endpoints only.
+- **Coordination protocol:** Sheet drives; depends on TG-024.
+
+#### TG-027: Wire Elemental Affinity into weapon-rider damage sites in `combat.ts` (Core Engine side of TG-015)
+
+- **Status:** OPEN — proposed Session 53 (promotes the Core Engine half of TG-015)
+- **Owners:** Core Engine (driving — owns `src/engine/combat.ts`)
+- **Source:** Session 53 audit; TG-015 spell-module side already done (Sessions 47-51).
+- **Summary:** Three damage-roll sites in `combat.ts` apply weapon-rider bonus damage (Flame Blade rider ~line 2007, `_nextHitRider` consume ~line 1886 for Lightning Arrow + Searing Smite, `weapon_enchant` dice ~line 1988 for Elemental Weapon). None of them call `elementalAffinityBonus(attacker, rider.damageType)`, so a Draconic Sorcerer 6 with red ancestry doesn't get +CHA to fire-rider damage from these sources.
+- **Implementation plan:**
+  1. At each of the 3 sites, after computing the rider's bonus damage, call `elementalAffinityBonus(attacker, rider.damageType)` (already exported from `utils.ts`) and add it. Bonus is flat (NOT doubled on crit — PHB p.196).
+  2. Test: extend `combat.test.ts` — spawn a Sorcerer 6 red ancestry with Flame Blade cast + assert rider damage includes +CHA.
+- **Risk:** LOW — additive damage bonus; no engine restructuring.
+- **Coordination protocol:** Core Engine drives unilaterally.
+
+#### TG-028: Fix "melee spell attack" labels in Booming Blade + Green-Flame Blade (TG-014)
+
+- **Status:** OPEN — proposed Session 53 (promotes TG-014)
+- **Owners:** Cantrip-z (driving — owns `src/spells/booming_blade.ts` + `green_flame_blade.ts`)
+- **Source:** TG-014.
+- **Summary:** Comment-only fix. Both modules label their primary hit as "melee spell attack (attackType='spell')" when TCE clarifies it's a "melee weapon attack". Risk of misleading future implementers.
+- **Implementation plan:**
+  1. `src/spells/booming_blade.ts` line 31: change "melee spell attack (attackType='spell')" → "melee weapon attack".
+  2. `src/spells/green_flame_blade.ts` line 36: same change.
+  3. `src/spells/green_flame_blade.ts` line 263: update "after the melee spell" → "after the melee weapon attack".
+- **Risk:** ZERO — comment-only.
+- **Coordination protocol:** Cantrip-z owns both files.
+
+### Tier-B items (MEDIUM risk, ship after Tier A)
+
+#### TG-029: Champion 10 second Fighting Style (promotes TG-022)
+
+- **Status:** OPEN — proposed Session 53 (promotes TG-022)
+- **Owners:** Sheet (driving — owns `src/characters/leveler.ts:382` + `docs/characters.html`) + Core Engine (reviewer — propagates `classFeatures` to `Combatant`)
+- **Source:** Session 53 audit; TG-022.
+- **Summary:** `leveler.ts:382` flags Champion 10's "Additional Fighting Style" as `flag-only (second Fighting Style choice not modelled)`. Sheet needs to expose a UI choice at Champion 10 + Core needs to propagate the choice into `Combatant.classFeatures` so combat mechanics honor it.
+- **Implementation plan:**
+  1. Sheet: add `secondFightingStyle?: string` to `CharacterSheet` (in `subclassChoices` or top-level).
+  2. Sheet: in `leveler.ts:382`, replace the flag with a `subclassChoices.secondFightingStyle = ['Archery','Defense','Dueling','Great Weapon Fighting','Protection','Two-Weapon Fighting']` (PHB p.72 list).
+  3. Sheet: add UI dropdown in `docs/characters.html` (mirror the existing Fighting Style dropdown at Fighter 1).
+  4. Sheet (`builder.ts`): propagate `secondFightingStyle` into `classFeatures` array.
+  5. Core: no change needed — `classFeatures` already drives existing Fighting Style mechanics (the second one is purely defensive/stacking; only Defense stacks as +1 AC).
+  6. Test: extend `subclass_features.test.ts` — Champion 10 with second Defense style gets +1 AC.
+- **Risk:** LOW (Sheet-side) — Defense is the only stackable Fighting Style (PHB p.72: "you can't take a Fighting Style option more than once"); the second Defense is a rare but RAW-legal edge case the engine should honor.
+- **Coordination protocol:** Sheet drives steps 1-4; Core Engine reviews step 5.
+
+#### TG-030: Quivering Palm action type (TG-017 step 4) — blocked on TG-024
+
+- **Status:** OPEN — proposed Session 53 (promotes TG-017 step 4)
+- **Owners:** Core Engine (driving — owns `src/engine/combat.ts` `executePlannedAction`)
+- **Source:** TG-017 step 4.
+- **Summary:** Quivering Palm (Open Hand Monk 17) needs a new `'quiveringPalm'` action type in `executePlannedAction`, mirroring the `'draconicPresence'` pattern from Session 49. Touch attack + CON save + instakill on failed save / 10d8 necrotic on success. Costs 3 ki.
+- **Implementation plan:**
+  1. Add `'quiveringPalm'` case to `executePlannedAction` in `combat.ts`.
+  2. Add `quiveringPalmTargets?: Set<string>` to `Combatant` (track which targets have been "touched" and are vulnerable to the follow-up 10d8 trigger).
+  3. Planner (`planner.ts`): add a branch that picks the highest-HP target for the touch (then triggers 10d8 on a later turn if the target is still alive).
+  4. Test (`src/test/quivering_palm.test.ts`): Monk 17 vs 60-HP target — touch succeeds, follow-up triggers, CON save fails → target dies. CON save succeeds → 10d8 necrotic.
+- **Risk:** MEDIUM — touch + CON save + instakill has many edge cases.
+- **Coordination protocol:** Core Engine drives; blocked on TG-024 (ki transfer).
+
+#### TG-031: Open Hand Technique Flurry rider (TG-017 step 3) — blocked on TG-024
+
+- **Status:** OPEN — proposed Session 53 (promotes TG-017 step 3)
+- **Owners:** Core Engine (driving — owns `src/engine/combat.ts` + `src/ai/planner.ts`)
+- **Source:** TG-017 step 3.
+- **Summary:** Open Hand Technique (Monk 3) fires per Flurry-of-Blows hit: choose to push 15 ft / knock prone / disable reaction until next turn. The rider needs to fire BETWEEN the two Flurry attacks (per PHB p.79 "immediately after you hit"). v1 simplification: rider fires once per Flurry (after the second hit), not per hit.
+- **Implementation plan:**
+  1. Add `openHandTechniqueChoice?: 'prone' | 'push' | 'disabler'` to `TurnPlan` (default 'prone' for AI).
+  2. In `combat.ts` Flurry-of-Blows case, after the second attack, apply the chosen effect.
+  3. Planner: branch for `openHandTechniqueChoice` selection based on target state (knock prone if not prone; push if adjacent to pit; disable reaction if caster).
+  4. Test (`src/test/open_hand_technique.test.ts`): Monk 3 with Flurry of Blows hits target twice → target is prone (default choice). Manually-set choice 'push' → target moved 15 ft.
+- **Risk:** MEDIUM — per-turn rider sequencing is fiddly.
+- **Coordination protocol:** Core Engine drives; blocked on TG-024.
+
+#### TG-032: Land Druid fey/elemental charm/frighten immunity (promotes TG-018)
+
+- **Status:** OPEN — proposed Session 53 (promotes TG-018)
+- **Owners:** Core Engine (driving — owns `src/engine/spell_effects.ts` + `src/engine/utils.ts` `addCondition`)
+- **Source:** Session 53 audit; TG-018.
+- **Summary:** Nature's Ward (Land Druid 10) grants immunity to charmed and frightened by fey and elementals. v1's `addCondition` doesn't track source-creature-type, so it can't apply this restriction. Needs a `sourceCreatureType?: string` field on `ActiveEffect` and a check in `addCondition`.
+- **Implementation plan:**
+  1. Add `sourceCreatureType?: string` to `ActiveEffect` (in `core.ts`).
+  2. Add `creatureType?: string` to `Combatant` (parser already populates `creatureType` for monsters in `fivetools.ts`).
+  3. In `addCondition`, when applying `charmed` or `frightened`, check if the target has Nature's Ward class feature AND the source effect's `sourceCreatureType` is `fey` or `elemental` → skip application.
+  4. Test (`src/test/natures_ward.test.ts` extends existing): Land Druid 10 vs Fey caster's Charm Person → spell lands but condition is rejected.
+- **Risk:** MEDIUM — touches `addCondition` hot path.
+- **Coordination protocol:** Core Engine drives.
+
+### Tier-C items (HIGH risk or split-required, defer)
+
+> TG-001 (RFC + ongoing-effects subsystem), TG-007 (Wall subsystem),
+> TG-010 (vision-blocking) + TG-021 (Devil's Sight), TG-011 (28 complex
+> mechanics spells), TG-006 Phase 4 (19 bespoke summoning spells) all
+> remain deferred per their existing entries. Each is HIGH-risk and
+> requires an RFC before touching `combat.ts`. New agents: pick Tier A
+> first, then Tier B; leave Tier C for dedicated RFC sessions.
 
 ---
 

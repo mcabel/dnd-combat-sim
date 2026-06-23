@@ -602,6 +602,208 @@ export interface Combatant {
    */
   cannotRegainHP?: boolean;
 
+  /**
+   * ── Session 53 Creature Megabatch Batch 4d: Death Burst ──
+   * MM p.215 (Mephits), p.215 (Magmin), p.138 (Gas Spore); also BGG hulks,
+   * EGW Frost Worm, GGR Galvanice Weird, and ~20 more across pre-2024 sources.
+   *
+   * "When the [creature] dies, it explodes in a burst of [element]. Each
+   * creature within N feet of it must make a [ability] saving throw, taking
+   * XdY [type] damage on a failed save, or half as much on a successful one.
+   * [Optional: on a failed save, a creature has the {condition} condition.]"
+   *
+   * `damage` = dice to roll (count + sides + bonus). `damageType` = the
+   * damage type. `saveDC` + `saveAbility` = the save that halves. `radius`
+   * = feet. `conditions` = optional list of conditions to apply on a FAILED
+   * save (e.g. ['blinded'] for Dust Mephit, ['restrained'] for Mud Mephit).
+   * `halfOnSuccess` = true for damage-dealing bursts (typical), false for
+   * condition-only bursts (Mud Mephit, Dust Mephit — no damage).
+   *
+   * checkDeath() in combat.ts fires this when the creature drops to 0 HP.
+   * v1 simplification: the burst hits ALL non-dead combatants in radius,
+   * including allies (PHB p.X: most Death Bursts don't discriminate).
+   */
+  deathBurst?: {
+    damage: DiceExpression | null;
+    damageType: DamageType;
+    saveDC: number;
+    saveAbility: 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha';
+    radius: number;       // in feet
+    conditions?: string[]; // applied on FAILED save
+    halfOnSuccess: boolean;
+  };
+
+  /**
+   * ── Session 53 Creature Megabatch Batch 4e: Sunlight Sensitivity ──
+   * MM p.11 / various: "While in sunlight, the [creature] has disadvantage
+   * on attack rolls, as well as on Wisdom (Perception) checks that rely on
+   * sight." 120 creatures across pre-2024 sources (Drow, Kobolds, etc.).
+   *
+   * When true AND `battlefield.lightLevel === 'daylight'`, the creature has
+   * disadvantage on attack rolls + sight-based Perception checks. v1
+   * simplification: the engine default is `'indoors'` (no sunlight) so the
+   * penalty never fires unless the scenario explicitly sets daylight.
+   */
+  sunlightSensitivity?: boolean;
+
+  /**
+   * ── Session 53 Creature Megabatch Batch 4e: Avoidance ──
+   * MM p.11 / various: "If the [creature] is subjected to an effect that
+   * allows it to make a saving throw to take only half damage, it instead
+   * takes no damage if it succeeds on the saving throw, and only half
+   * damage if it fails." 8 creatures (Displacer Fiend, etc.).
+   *
+   * Consumed in `rollSave` callers (combat.ts applyDamage paths): when the
+   * target has Avoidance AND the effect allows save-for-half, flip the
+   * outcomes (success → 0 damage, failure → half damage).
+   */
+  avoidance?: boolean;
+
+  /**
+   * ── Session 53 Creature Megabatch Batch 4e: Ambusher ──
+   * MM p.11 / various: "During the first round of combat, the [creature]
+   * has advantage on attack rolls against any creature that hasn't had a
+   * turn yet." 10 creatures.
+   *
+   * Consumed in `resolveAttack`: if `state.round === 1` AND the target
+   * hasn't acted this combat (tracked via `hadTurn` flag — to be added),
+   * the attacker gains advantage.
+   * v1 simplification: not yet wired into resolveAttack; flag is parsed
+   * and stored for future engine integration.
+   */
+  ambusher?: boolean;
+
+  /**
+   * ── Session 53 Creature Megabatch Batch 4e: Brute ──
+   * MM p.11 / various: "A melee weapon deals one extra die of its damage
+   * when the [creature] hits with it (included in the attack)." 14 creatures.
+   *
+   * v1 simplification: flag is parsed and stored. The "extra die" is
+   * typically already factored into the 5etools action damage entries, so
+   * no engine change needed — the flag is metadata-only for now.
+   */
+  brute?: boolean;
+
+  /**
+   * ── Session 53 Creature Megabatch Batch 4e: False Appearance ──
+   * MM p.11 / various: "If the [creature] is motionless at the start of
+   * combat, it has advantage on its initiative roll. Moreover, if a
+   * creature hasn't observed the [creature] move or act, that creature
+   * must succeed on a [DC] check to discern that the [creature] is
+   * animate." 100 creatures (animated objects, mimics, etc.).
+   *
+   * v1 simplification: flag is parsed and stored. The initiative-advantage
+   * effect is not yet wired (would need a hook in rollInitiative).
+   */
+  falseAppearance?: boolean;
+
+  /**
+   * ── Session 53 Creature Megabatch Batch 4e: Hold Breath ──
+   * MM p.11 / various: "The [creature] can hold its breath for N minutes."
+   * 57 creatures. v1 metadata-only (no drowning subsystem).
+   */
+  holdBreathMinutes?: number;
+
+  /**
+   * ── Session 53 Creature Megabatch Batch 4e: Water Breathing ──
+   * MM p.11 / various: "The [creature] can breathe only underwater."
+   * 33 creatures. v1 metadata-only.
+   */
+  waterBreathing?: boolean;
+
+  /**
+   * ── Session 53 Creature Megabatch Batch 4e: Siege Monster ──
+   * MM p.11 / various: "The [creature] deals double damage to objects and
+   * structures." 71 creatures. v1 metadata-only (no object HP subsystem).
+   */
+  siegeMonster?: boolean;
+
+  /**
+   * ── Session 53 Creature Megabatch Batch 4f: Superior Invisibility ──
+   * MM p.321 (Faerie Dragons); also MM Ghost, Specter, Will-o'-Wisp, etc.
+   * "As a bonus action, the [creature] can magically turn invisible until
+   * its concentration ends (as if concentrating on a spell)."
+   *
+   * 15 pre-2024 creatures. When true, the AI planner self-casts invisibility
+   * as a bonus action at the start of combat (or when not already invisible
+   * + not concentrating). The effect: adds `invisible` condition (advantage
+   * on attacks, disadvantage on attacks vs creature) + starts concentration.
+   * Consumes the bonus action for that turn.
+   */
+  superiorInvisibility?: boolean;
+
+  /**
+   * ── Session 53 Creature Megabatch Batch 4f: Incorporeal Movement ──
+   * MM p.11 / various: "The [creature] can move through other creatures and
+   * objects as if they were difficult terrain. It takes 5 (1d10) force
+   * damage if it ends its turn inside an object."
+   *
+   * 51 pre-2024 creatures (Ghosts, Specters, Shadow Demons, etc.).
+   * v1 simplification: METADATA-ONLY. v1's movement engine doesn't do
+   * per-step collision detection (creatures can already move through each
+   * other's squares — the engine just calculates terrain cost). So this
+   * flag documents RAW compliance without changing behavior. Future: when
+   * collision detection is added (TG-007 LOS/wall subsystem), this flag
+   * bypasses creature/object blocking. The 1d10 force damage for ending
+   * inside an object is also skipped (no object subsystem in v1).
+   */
+  incorporealMovement?: boolean;
+
+  /**
+   * ── Session 53 Creature Megabatch Batch 4g: Charge ──
+   * MM p.11 / various: "If the [creature] moves at least N feet straight
+   * toward a target and then hits it with a [weapon] attack on the same
+   * turn, the target takes an extra XdY [type] damage. If the target is a
+   * creature, it must succeed on a DC N Strength saving throw or be pushed
+   * up to M feet away and knocked prone."
+   *
+   * 49 pre-2024 creatures. The rider fires when:
+   *   - The creature moved ≥ `minMoveFt` toward the target this turn
+   *     (measured as: distance at turn start - distance now ≥ minMoveFt)
+   *   - The creature hits with a melee attack
+   * v1 simplification: "straight toward" is approximated as net movement
+   * toward the target (Chebyshev distance decreased), not a literal
+   * straight-line path.
+   */
+  charge?: {
+    minMoveFt: number;
+    damage: DiceExpression;
+    damageType: DamageType;
+    saveDC: number;
+    pushFt?: number;      // optional push distance (0 = no push)
+    knockProne: boolean;  // true if failed save knocks prone
+  };
+
+  /**
+   * ── Session 53 Creature Megabatch Batch 4g: Pounce ──
+   * MM p.11 / various: "If the [creature] moves at least N feet straight
+   * toward a creature and then hits it with a [weapon] attack on the same
+   * turn, that target must succeed on a DC N Strength saving throw or be
+   * knocked prone. If the target is prone, the [creature] can make one
+   * [weapon] attack against it as a bonus action."
+   *
+   * 24 pre-2024 creatures. Same movement trigger as Charge. The rider
+   * applies a STR save vs prone. The bonus-action attack is v1-deferred
+   * (would need planner integration to check if target is prone + queue
+   * the bonus action — complex; the prone save is the main mechanical
+   * effect).
+   */
+  pounce?: {
+    minMoveFt: number;
+    saveDC: number;
+    bonusActionAttackName?: string;  // e.g. "Bite" — metadata only in v1
+  };
+
+  /**
+   * ── Session 53 Creature Megabatch Batch 4g: Turn-start position tracking ──
+   * Internal scratch field set by resetBudget() at the start of each turn.
+   * Used by Charge/Pounce to check "did the creature move ≥N ft toward the
+   * target this turn?" Compares _turnStartPos → current pos vs target pos.
+   * Undefined on turn 1 (before first resetBudget call) — treated as
+   * current position (no movement credit).
+   */
+  _turnStartPos?: Vec3;
+
   // Turn resources
   budget: ActionBudget;
 
@@ -1698,6 +1900,11 @@ export interface Battlefield {
   // Reset to 0 whenever a team deals ≥1 damage in a round.
   // At 10 consecutive rounds → team is auto-defeated.
   noDamageRounds?: Map<string, number>;   // keyed by faction
+  // Session 53 Batch 4e: Sunlight Sensitivity — when set to 'daylight',
+  // creatures with `sunlightSensitivity: true` have disadvantage on attack
+  // rolls + sight-based Perception checks. Default (absent) is treated as
+  // 'indoors' (no sunlight) for v1 simplicity. Scenarios can override.
+  lightLevel?: 'indoors' | 'daylight' | 'dim';
   // LOS/Cover: static obstacles on the map (walls, pillars, doors, fog, etc.)
   // Optional — absent means open terrain (no cover calculations).
   obstacles?: Obstacle[];
@@ -1761,6 +1968,7 @@ export interface PlannedAction {
     | 'shadowOfMoil'     // Shadow of Moil — self, disadv on attacks vs caster + 2d8 necrotic rider, concentration 1 min (Warlock)
     | 'blindnessDeafness'// Blindness/Deafness — CON save or blinded, 1 min, NO concentration (Cleric/Sorcerer/Wizard)
     | 'brandingSmite'    // Branding Smite — bonus action, next weapon hit +2d6 radiant, concentration 1 min (Paladin/Ranger)
+    | 'superiorInvisibility' // Session 53 Batch 4f: creature trait (Faerie Dragon, etc.) — bonus action self-cast invisibility, concentration
     | 'calmEmotions'     // Calm Emotions — 60 ft, removes charmed/frightened from allies, concentration 1 min (Bard/Cleric/Druid/Paladin)
     | 'cloudOfDaggers'   // Cloud of Daggers — 60 ft, 4d4 slashing + persistent damage_zone, concentration 1 min (Bard/Sorcerer/Warlock/Wizard)
     | 'crownOfMadness'   // Crown of Madness — 120 ft, WIS save or charmed, concentration 1 min (Bard/Sorcerer/Warlock/Wizard)

@@ -131,7 +131,15 @@ function makeState(bf: Battlefield): EngineState {
 
 const rawPCs    = JSON.parse(fs.readFileSync('pc_stat_blocks_lv1.json', 'utf8'));
 const pcMap     = loadPCStatBlocks(rawPCs);
-const rawBestiary = JSON.parse(fs.readFileSync('bestiaryData/bestiary-mm.json', 'utf8'));
+// Session 53: Batch 0 of the Creature Megabatch deleted the byte-identical
+// bestiary-mm.json (kept canonical bestiary-mm-2014.json). Try both names so
+// the test works whether or not the duplicate has been removed.
+const _mmPath = [
+  'bestiaryData/bestiary-mm-2014.json',
+  'bestiaryData/bestiary-mm.json',
+].find(p => fs.existsSync(p));
+if (!_mmPath) throw new Error('MM bestiary not found in bestiaryData/');
+const rawBestiary = JSON.parse(fs.readFileSync(_mmPath, 'utf8'));
 const bestiary  = loadBestiaryJson(rawBestiary);
 
 function spawnClass(cls: string, pos = { x: 0, y: 0, z: 0 }) {

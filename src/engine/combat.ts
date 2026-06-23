@@ -14,12 +14,14 @@ import {
   resetBudget, spendMovement, attackHits, attackAdvantageState, resolveAttackAdvantage,
   isBloodied, addCondition, removeCondition,
   rollConcentrationSave, rollDeathSave,
+  startConcentration,
   applyDamageWithTempHP, hasPackTacticsAdvantage,
   canSneakAttack, sneakAttackDice,
   addResistance, removeResistance,
   parseDieSides, consumeBardicInspiration,
   teamHasNoAttackCapability, canDealDamage, makeImprovisedUnarmed, makeImprovisedWeapon,
   effectiveSpeed, rollDie, abilityMod, proficiencyBonus,
+  rollDice,
   rollDiceString as rollBoomingBladeDice,
   rollAbilityCheck,  // Session 43 Task #26: for rollAbilityCheckReactable
   elementalAffinityBonus,  // Session 47 Task #29-follow-up-5: Draconic Sorcerer
@@ -1311,7 +1313,15 @@ export function resolveAttack(
       // Session 47 Task #29-follow-up-5: Elemental Affinity (Draconic Sorcerer 6)
       // adds CHA mod to damage of spells matching the sorcerer's ancestry type.
       const dmg = rollDamage(action.damage, false) + elementalAffinityBonus(attacker, action.damageType);
-      const actual = save.success ? Math.floor(dmg / 2) : dmg; // half on save success
+      // Session 53 Batch 4e: Avoidance trait. "If subjected to an effect that
+      // allows a save for half damage, takes NO damage on success and HALF on
+      // fail." Flip the save-for-half outcome.
+      let actual: number;
+      if (target.avoidance) {
+        actual = save.success ? 0 : Math.floor(dmg / 2);
+      } else {
+        actual = save.success ? Math.floor(dmg / 2) : dmg; // half on save success
+      }
       const dealt = applyDamageWithTempHP(target, actual, action.damageType);
       // TG-008: Absorb Elements / Hellish Rebuke reaction trigger (XGE p.150 / PHB p.249)
       // These fire AFTER damage is applied. The triggering damage still applies
@@ -1501,7 +1511,17 @@ export function resolveAttack(
     log(state, 'action', attacker.id,
       `${attacker.name} attacks ${target.name} with Disadvantage (Bestow Curse — disadvantaged vs curse caster).`, target.id);
   }
-  const disadvantage = baseDisadv || !!protectionRider || losDisadvantage || chillTouchDisadv || viciousMockeryDisadv || frostbiteDisadv || tauntDisadvantage || curseAttackDisadv
+  // Session 53 Batch 4e: Sunlight Sensitivity — disadvantage on attack rolls
+  // while in sunlight. Only fires when `battlefield.lightLevel === 'daylight'`
+  // (engine default is 'indoors' so the penalty never fires unless the
+  // scenario explicitly sets daylight).
+  const sunlightDisadv = attacker.sunlightSensitivity === true
+    && state.battlefield.lightLevel === 'daylight';
+  if (sunlightDisadv) {
+    log(state, 'action', attacker.id,
+      `${attacker.name} attacks with Disadvantage (Sunlight Sensitivity).`, target.id);
+  }
+  const disadvantage = baseDisadv || !!protectionRider || losDisadvantage || chillTouchDisadv || viciousMockeryDisadv || frostbiteDisadv || tauntDisadvantage || curseAttackDisadv || sunlightDisadv
     || attacker.exhaustionLevel >= 3;  // Exhaustion level 3: disadvantage on attack rolls (PHB p.291)
   const advantage = baseAdv || packTacticsAdvantage || attacker.helpedThisTurn || cantripAdv || trueStrikeAdv;
 
@@ -2091,6 +2111,72 @@ export function resolveAttack(
     }
 
     const dealt = applyDamageWithTempHP(target, dmg, action.damageType);
+
+    // ── Session 53 Batch 4g: Charge / Pounce movement-triggered rider ──
+    // Fires when the attacker moved ≥ minMoveFt toward the target this turn
+    // (measured as: Chebyshev distance at turn start - Chebyshev distance now
+    // ≥ minMoveFt, in feet). v1 simplification: "straight toward" = net
+    // movement toward target (not literal straight-line path).
+    if ((attacker.charge || attacker.pounce) && attacker._turnStartPos) {
+      const distBefore = chebyshev3D(attacker._turnStartPos, target.pos) * 5;
+      const distAfter = chebyshev3D(attacker.pos, target.pos) * 5;
+      const movedToward = distBefore - distAfter;
+
+      // Charge rider: extra damage + STR save vs push/prone
+      if (attacker.charge && movedToward >= attacker.charge.minMoveFt) {
+        const chargeDmg = rollDice(attacker.charge.damage);
+        const chargeDealt = applyDamageWithTempHP(target, chargeDmg, attacker.charge.damageType);
+        log(state, 'damage', attacker.id,
+          `${attacker.name}'s Charge deals +${chargeDealt} ${attacker.charge.damageType} damage to ${target.name}!`,
+          target.id, chargeDealt);
+        // STR save vs push/prone (only if the Charge variant has a save DC;
+        // some variants like Centaur only deal extra damage, no save)
+        if (attacker.charge.saveDC > 0) {
+          const save = rollSave(target, 'str', attacker.charge.saveDC);
+          if (!save.success) {
+            if (attacker.charge.pushFt && attacker.charge.pushFt > 0) {
+              const dx = Math.sign(target.pos.x - attacker.pos.x);
+              const dy = Math.sign(target.pos.y - attacker.pos.y);
+              const pushSquares = Math.floor(attacker.charge.pushFt / 5);
+              target.pos.x = Math.max(0, Math.min(bf.width - 1, target.pos.x + dx * pushSquares));
+              target.pos.y = Math.max(0, Math.min(bf.height - 1, target.pos.y + dy * pushSquares));
+              log(state, 'action', attacker.id,
+                `${target.name} is pushed ${attacker.charge.pushFt} ft away by ${attacker.name}'s Charge!`,
+                target.id);
+            }
+            if (attacker.charge.knockProne) {
+              addCondition(target, 'prone');
+              log(state, 'condition_add', attacker.id,
+                `${target.name} is knocked prone by ${attacker.name}'s Charge!`,
+                target.id);
+            }
+          } else {
+            log(state, 'save_success', target.id,
+              `${target.name} resists ${attacker.name}'s Charge push/prone (STR save ${save.total} vs DC ${attacker.charge.saveDC}).`,
+              target.id, save.roll);
+          }
+        }
+      }
+
+      // Pounce rider: STR save vs prone (no damage)
+      if (attacker.pounce && movedToward >= attacker.pounce.minMoveFt) {
+        const save = rollSave(target, 'str', attacker.pounce.saveDC);
+        if (!save.success) {
+          addCondition(target, 'prone');
+          log(state, 'condition_add', attacker.id,
+            `${target.name} is knocked prone by ${attacker.name}'s Pounce!`,
+            target.id);
+          // v1 simplification: the bonus-action attack against a prone target
+          // is NOT modelled (would need planner integration to queue a bonus
+          // action). The prone condition is the main mechanical effect.
+        } else {
+          log(state, 'save_success', target.id,
+            `${target.name} resists ${attacker.name}'s Pounce (STR save ${save.total} vs DC ${attacker.pounce.saveDC}).`,
+            target.id, save.roll);
+        }
+      }
+    }
+
     // TG-008: Absorb Elements / Hellish Rebuke reaction trigger (XGE p.150 / PHB p.249)
     // These fire AFTER damage is applied. The triggering damage still applies
     // (resistance from Absorb Elements protects against FUTURE damage of
@@ -2275,6 +2361,77 @@ function checkDeath(target: Combatant, state: EngineState, attacker?: Combatant)
   if (target.conditions.has('grappled')) {
     removeCondition(target, 'grappled');
     target.grappledBy = undefined;
+  }
+
+  // ── Session 53 Creature Megabatch Batch 4d: Death Burst ──
+  // MM p.215 (Mephits/Magmin), MM p.138 (Gas Spore), BGG hulks, EGW Frost
+  // Worm, GGR Galvanice Weird, ~27 creatures total across pre-2024 sources.
+  // The trait fires when the creature drops to 0 HP — applies AoE damage +
+  // conditions to all combatants in radius (including allies).
+  if (target.deathBurst) {
+    triggerDeathBurst(target, state);
+  }
+}
+
+/**
+ * Session 53 Batch 4d: Fire a creature's Death Burst AoE.
+ *
+ * Applies damage (with save-for-half if halfOnSuccess) + conditions (on
+ * failed save) to all non-dead combatants within `radius` feet of the
+ * bursting creature. v1 simplification: hits ALL factions (allies too);
+ * the bursting creature itself is already at 0 HP so it's skipped.
+ *
+ * Exported for direct testing — see src/test/creature_death_burst.test.ts.
+ *
+ * @param burster  The dying creature with `deathBurst` populated.
+ * @param state    Current engine state (for damage application + logging).
+ */
+export function triggerDeathBurst(burster: Combatant, state: EngineState): void {
+  const burst = burster.deathBurst!;
+  const bf = state.battlefield;
+  log(state, 'action', burster.id,
+    `${burster.name} explodes in a Death Burst! (${burst.radius} ft radius, DC ${burst.saveDC} ${burst.saveAbility.toUpperCase()})`,
+    undefined, 0);
+
+  for (const c of bf.combatants.values()) {
+    if (c.id === burster.id) continue;       // self — already dying
+    if (c.isDead) continue;                   // already dead — skip
+    const distFt = chebyshev3D(burster.pos, c.pos) * 5;
+    if (distFt > burst.radius) continue;      // out of range
+
+    // Save
+    const save = rollSave(c, burst.saveAbility, burst.saveDC);
+    const failed = !save.success;
+
+    // Damage (if any)
+    if (burst.damage) {
+      let dmg = rollDice(burst.damage);
+      if (burst.halfOnSuccess && !failed) {
+        dmg = Math.floor(dmg / 2);
+      }
+      if (dmg > 0) {
+        const dealt = applyDamageWithTempHP(c, dmg, burst.damageType);
+        log(state, 'damage', burster.id,
+          `${c.name} ${failed ? 'fails' : 'succeeds'} the ${burst.saveAbility.toUpperCase()} save and takes ${dealt} ${burst.damageType} damage from ${burster.name}'s Death Burst.`,
+          c.id, dealt);
+        // Recursively check death (the burst may kill a creature, which could
+        // trigger ITS death burst — chain reaction). Guard against infinite
+        // recursion via the isDead flag (checkDeath is a no-op at >0 HP).
+        if (c.currentHP <= 0 && !c.isDead) {
+          checkDeath(c, state, burster);
+        }
+      }
+    }
+
+    // Conditions (on failed save)
+    if (failed && burst.conditions) {
+      for (const cond of burst.conditions) {
+        addCondition(c, cond as any);
+        log(state, 'condition_add', burster.id,
+          `${c.name} is ${cond} by ${burster.name}'s Death Burst.`,
+          c.id, 0);
+      }
+    }
   }
 }
 
@@ -3292,6 +3449,36 @@ export function executePlannedAction(
       // (`_brandingSmiteActive`), consumed by resolveAttack on the next weapon
       // hit OR cleared by cleanup() at start of next turn.
       if (shouldCastBrandingSmite(actor, bf)) executeBrandingSmite(actor, state);
+      break;
+    }
+
+    case 'superiorInvisibility': {
+      // Session 53 Batch 4f: Superior Invisibility creature trait.
+      // MM p.321 (Faerie Dragons) / various: "As a bonus action, the
+      // [creature] can magically turn invisible until its concentration ends
+      // (as if concentrating on a spell)."
+      // Self-cast invisibility — no spell slot, no action (bonus action only).
+      // Mirrors Greater Invisibility (L4 spell) but as a racial trait.
+      // 1. Break existing concentration (safety net).
+      // 2. Start concentration on 'Superior Invisibility'.
+      // 3. Apply invisible effect (advantage on attacks, disadv on attacks
+      //    vs the creature). The effect does NOT end on attack/cast (same as
+      //    Greater Invisibility — the trait says "until concentration ends").
+      if (actor.concentration?.active) {
+        removeEffectsFromCaster(actor.id, bf);
+      }
+      startConcentration(actor, 'Superior Invisibility');
+      log(state, 'action', actor.id,
+        `${actor.name} uses Superior Invisibility! The creature turns invisible (concentration).`,
+        actor.id);
+      applySpellEffect(actor, {
+        casterId: actor.id,
+        spellName: 'Superior Invisibility',
+        effectType: 'invisible',
+        payload: {},
+        sourceIsConcentration: true,
+        // No breaksOnAttackOrCast — the trait persists until concentration ends.
+      });
       break;
     }
 

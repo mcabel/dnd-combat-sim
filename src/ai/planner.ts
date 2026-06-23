@@ -662,6 +662,33 @@ function planBonusAction(
     }
   }
 
+  // --- 2.11. Superior Invisibility (creature trait — Faerie Dragon, etc.) ---
+  // Session 53 Batch 4f: MM p.321 / various. "As a bonus action, the
+  // [creature] can magically turn invisible until its concentration ends."
+  // 15 pre-2024 creatures. Self-cast invisibility as a bonus action —
+  // grants advantage on attacks + disadvantage on attacks vs the creature.
+  // Priority: high (combat-opening self-buff). Fires when:
+  //   - self.superiorInvisibility === true
+  //   - not already invisible
+  //   - not already concentrating (the trait requires concentration)
+  //   - has a bonus action available (checked by caller via budget)
+  // The trait doesn't consume a spell slot — it's at-will. v1 simplification:
+  // the creature casts it on turn 1 and re-casts whenever it drops (concentration
+  // break, dispel, etc.). The invisible condition + concentration are applied
+  // in the executePlannedAction 'superiorInvisibility' case branch.
+  if (
+    self.superiorInvisibility === true &&
+    !self.conditions.has('invisible') &&
+    !self.concentration?.active
+  ) {
+    return {
+      type: 'superiorInvisibility',
+      action: null,
+      targetId: self.id,
+      description: `${self.name} uses Superior Invisibility (bonus action self-cast)`,
+    };
+  }
+
   // --- 3. Bardic Inspiration ---
   if (self.resources?.bardicInspiration !== undefined) {
     const biTarget = bardicInspirationTarget(self, battlefield);

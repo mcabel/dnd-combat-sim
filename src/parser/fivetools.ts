@@ -50,7 +50,7 @@ export interface Raw5etoolsMonster {
   action?: RawAction[];
   legendary?: RawAction[];
   trait?: RawAction[];
-  type?: string | { type: string };
+  type?: string | { type: string | string[] | { choose?: string[] } } | { choose?: string[] };
   size?: string | string[];
   /** 5etools spellcasting block — present on spellcasting monsters only. */
   spellcasting?: Array<{
@@ -287,6 +287,227 @@ function parseRegeneration(
       }
     }
     return { amount, stopTypes, suppressedNextTurn: false };
+  }
+  return undefined;
+}
+
+/**
+ * Session 53 Batch 4d: parse a Death Burst trait. Scans the trait entries
+ * (flattened to text) for:
+ *   - "{@dc N} <ability> saving throw" → saveDC = N, saveAbility = ability
+ *   - "{@damage XdY}" → damage = { count: X, sides: Y, bonus: 0 }
+ *   - "[N] foot radius" / "within N feet" → radius = N
+ *   - "[type] damage" → damageType (one of the 13 DamageTypes)
+ *   - "{@condition <name>}" → conditions list (applied on FAILED save)
+ *
+ * Returns undefined if the trait name isn't "Death Burst" or no save DC is
+ * found. Creatures with no damage (Mud Mephit: condition-only) get
+ * damage: null + halfOnSuccess: false. Creatures with damage get
+ * halfOnSuccess: true (typical "half as much on a successful one" wording).
+ *
+ * v1 simplification: complex rider effects (Frost Worm's "Each creature
+ * that fails is also {@condition paralyzed}}") are captured via conditions[]
+ * — the paralyze lasts 1 minute in the source but v1 doesn't track
+ * condition durations; the condition is applied without an expiry. Future:
+ * extend addCondition to accept a duration.
+ */
+function parseDeathBurst(
+  traits: { name: string; entries: (string | object)[] }[],
+): Combatant['deathBurst'] | undefined {
+  const VALID_DAMAGE_TYPES: ReadonlySet<string> = new Set<DamageType>([
+    'acid', 'bludgeoning', 'cold', 'fire', 'force', 'lightning',
+    'necrotic', 'piercing', 'poison', 'psychic', 'radiant', 'slashing', 'thunder',
+  ]);
+  for (const t of traits) {
+    if (!/Death\s+Burst/i.test(t.name)) continue;
+    const rawText = flattenEntries(t.entries);
+    // Strip 5etools tag wrappers: {@dc 11} → 11, {@damage 2d6} → 2d6,
+    // {@condition blinded} → blinded, {@hit +5} → +5, etc.
+    // Pattern: {@<tag> <args>} where args may contain pipe-separated parts.
+    // We keep the first pipe-separated segment of args (the canonical name).
+    const text = rawText.replace(/\{@(\w+)\s+([^}]+)\}/g, (_m, _tag, args) => {
+      const firstArg = String(args).split('|')[0].trim();
+      return firstArg;
+    });
+
+    // Save DC + ability: "DC 11 Dexterity saving throw" or "DC 14 Constitution"
+    // (after stripping, "{@dc 11}" → "11", so the text reads "make a 11 Dexterity")
+    // Match either "DC N" or the bare "N" right before the ability name.
+    const saveMatch = text.match(/(?:dc\s+)?(\d+)\s+(strength|dexterity|constitution|intelligence|wisdom|charisma)/i);
+    if (!saveMatch) continue; // no save → not a damage burst (skip; v1 only handles save-based bursts)
+    const saveDC = parseInt(saveMatch[1], 10);
+    const saveAbility = saveMatch[2].toLowerCase().slice(0, 3) as
+      'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha';
+
+    // Radius: "10-foot-radius", "10 foot radius", "within 10 feet", "within 5 feet of it"
+    let radius = 5; // default for mephits that say "within 5 feet of it"
+    const radiusMatch = text.match(/(\d+)[- ](?:foot|feet)[- ]?(?:radius|sphere|of)/i)
+      ?? text.match(/within\s+(\d+)\s+feet/i)
+      ?? text.match(/(\d+)\s+feet\s+of\s+(?:it|itself|the)/i);
+    if (radiusMatch) radius = parseInt(radiusMatch[1], 10);
+
+    // Damage: "{@damage XdY}" flattened to "XdY", optionally with a bonus like
+    // "11 ({@damage 2d10})" — we capture just the XdY part (bonus derived from
+    // the literal "N (XdY)" prefix when present, else 0).
+    let damage: DiceExpression | null = null;
+    let damageType: DamageType = 'fire'; // sensible default; overridden below
+    let halfOnSuccess = false;
+    const dmgMatch = text.match(/(\d+)d(\d+)/i);
+    if (dmgMatch) {
+      const count = parseInt(dmgMatch[1], 10);
+      const sides = parseInt(dmgMatch[2], 10);
+      // Look for the literal bonus prefix: "N (XdY)" — N is the average+bonus
+      // rolled up. We just use 0 as bonus since the dice roll is what matters
+      // for simulation (PHB average is for the DM; the engine rolls dice).
+      // If the text has "XdY+Z" form, capture Z.
+      const bonusMatch = text.match(/\d+d\d+\s*\+\s*(\d+)/i);
+      const bonus = bonusMatch ? parseInt(bonusMatch[1], 10) : 0;
+      // Average = floor(count * (sides+1) / 2) + bonus (PHB convention)
+      const average = Math.floor(count * (sides + 1) / 2) + bonus;
+      damage = { count, sides, bonus, average };
+
+      // Damage type: scan for a DamageType keyword near the dice
+      for (const dt of VALID_DAMAGE_TYPES) {
+        if (new RegExp(`\\b${dt}\\b`, 'i').test(text)) {
+          damageType = dt as DamageType;
+          break;
+        }
+      }
+      // "half as much on a successful one" → halve on success
+      halfOnSuccess = /half/i.test(text);
+    }
+
+    // Conditions: scan for {@condition <name>} tags. flattenEntries strips
+    // the {@condition ...} wrapper and leaves the condition name. Match
+    // known conditions in the text.
+    const KNOWN_CONDITIONS = [
+      'blinded', 'deafened', 'paralyzed', 'petrified', 'poisoned',
+      'prone', 'restrained', 'stunned', 'unconscious',
+    ];
+    const conditions: string[] = [];
+    for (const cond of KNOWN_CONDITIONS) {
+      if (new RegExp(`\\b${cond}\\b`, 'i').test(text)) {
+        conditions.push(cond);
+      }
+    }
+
+    return {
+      damage,
+      damageType,
+      saveDC,
+      saveAbility,
+      radius,
+      conditions: conditions.length > 0 ? conditions : undefined,
+      halfOnSuccess,
+    };
+  }
+  return undefined;
+}
+
+/**
+ * Session 53 Batch 4g: parse a Charge trait. Scans the trait entries
+ * (flattened + 5etools tags stripped) for:
+ *   - "moves at least N feet straight toward" → minMoveFt = N
+ *   - "extra X (YdZ) [type] damage" → damage + damageType
+ *   - "DC N Strength saving throw" → saveDC = N
+ *   - "pushed up to M feet away" → pushFt = M (optional)
+ *   - "knocked prone" → knockProne = true
+ *
+ * Returns undefined if the trait name isn't "Charge" or no minMoveFt is found.
+ */
+function parseCharge(
+  traits: { name: string; entries: (string | object)[] }[],
+): Combatant['charge'] | undefined {
+  const VALID_DAMAGE_TYPES: ReadonlySet<string> = new Set<DamageType>([
+    'acid', 'bludgeoning', 'cold', 'fire', 'force', 'lightning',
+    'necrotic', 'piercing', 'poison', 'psychic', 'radiant', 'slashing', 'thunder',
+  ]);
+  for (const t of traits) {
+    if (!/^Charge$/i.test(t.name.trim())) continue;
+    const rawText = flattenEntries(t.entries);
+    const text = rawText.replace(/\{@(\w+)\s+([^}]+)\}/g, (_m, _tag, args) => {
+      return String(args).split('|')[0].trim();
+    });
+
+    // minMoveFt: "moves at least 20 feet straight toward"
+    const minMatch = text.match(/moves\s+at\s+least\s+(\d+)\s+feet\s+straight\s+toward/i);
+    if (!minMatch) continue;
+    const minMoveFt = parseInt(minMatch[1], 10);
+
+    // Damage: "extra 27 (6d8) bludgeoning damage" or "extra 11 (2d10) slashing"
+    // After tag stripping: "extra 27 (6d8) bludgeoning damage"
+    let damage: DiceExpression | undefined;
+    let damageType: DamageType = 'bludgeoning';
+    const dmgMatch = text.match(/(\d+)d(\d+)/i);
+    if (dmgMatch) {
+      const count = parseInt(dmgMatch[1], 10);
+      const sides = parseInt(dmgMatch[2], 10);
+      const bonusMatch = text.match(/\d+d\d+\s*\+\s*(\d+)/i);
+      const bonus = bonusMatch ? parseInt(bonusMatch[1], 10) : 0;
+      const average = Math.floor(count * (sides + 1) / 2) + bonus;
+      damage = { count, sides, bonus, average };
+      for (const dt of VALID_DAMAGE_TYPES) {
+        if (new RegExp(`\\b${dt}\\b`, 'i').test(text)) {
+          damageType = dt as DamageType;
+          break;
+        }
+      }
+    }
+    if (!damage) continue; // no damage → not a valid Charge
+
+    // Save DC: after tag stripping, "{@dc 21}" → "21", so the text reads
+    // "succeed on a 21 Strength saving throw". Match "(?:dc )?N Strength".
+    // Some Charge variants (e.g. Centaur) have NO save — just extra damage.
+    // saveDC is optional; if absent, pushFt/knockProne are not applied.
+    const dcMatch = text.match(/(?:dc\s+)?(\d+)\s+strength/i);
+    const saveDC = dcMatch ? parseInt(dcMatch[1], 10) : 0;  // 0 = no save
+
+    // Push: "pushed up to 20 feet away" (optional)
+    const pushMatch = text.match(/pushed\s+up\s+to\s+(\d+)\s+feet/i);
+    const pushFt = pushMatch ? parseInt(pushMatch[1], 10) : undefined;
+
+    // Knock prone: "knocked prone" or "knocked {@condition prone}"
+    const knockProne = /\bprone\b/i.test(text);
+
+    return { minMoveFt, damage, damageType, saveDC, pushFt, knockProne };
+  }
+  return undefined;
+}
+
+/**
+ * Session 53 Batch 4g: parse a Pounce trait. Scans for:
+ *   - "moves at least N feet straight toward" → minMoveFt = N
+ *   - "DC N Strength saving throw" → saveDC = N
+ *   - "make one [weapon] attack against it as a bonus action" → bonusActionAttackName
+ *
+ * Returns undefined if the trait name isn't "Pounce" or no minMoveFt is found.
+ */
+function parsePounce(
+  traits: { name: string; entries: (string | object)[] }[],
+): Combatant['pounce'] | undefined {
+  for (const t of traits) {
+    if (!/^Pounce$/i.test(t.name.trim())) continue;
+    const rawText = flattenEntries(t.entries);
+    const text = rawText.replace(/\{@(\w+)\s+([^}]+)\}/g, (_m, _tag, args) => {
+      return String(args).split('|')[0].trim();
+    });
+
+    // minMoveFt: "moves at least 30 feet straight toward"
+    const minMatch = text.match(/moves\s+at\s+least\s+(\d+)\s+feet\s+straight\s+toward/i);
+    if (!minMatch) continue;
+    const minMoveFt = parseInt(minMatch[1], 10);
+
+    // Save DC: after tag stripping, "{@dc 13}" → "13", so the text reads
+    // "succeed on a 13 Strength saving throw". Match "(?:dc )?N Strength".
+    const dcMatch = text.match(/(?:dc\s+)?(\d+)\s+strength/i);
+    if (!dcMatch) continue;
+    const saveDC = parseInt(dcMatch[1], 10);
+
+    // Bonus action attack: "make one bite attack" or "make one claw attack"
+    const bonusMatch = text.match(/make\s+one\s+(\w+)\s+attack/i);
+    const bonusActionAttackName = bonusMatch ? bonusMatch[1] : undefined;
+
+    return { minMoveFt, saveDC, bonusActionAttackName };
   }
   return undefined;
 }
@@ -649,9 +870,8 @@ function nextId(name: string): string {
  */
 
 // ---- Q7: Default AI profile per creature type ---------------
-export function defaultProfileForType(typeStr: string | { type: string } | undefined): AIProfile {
-  const raw = typeof typeStr === 'string' ? typeStr : (typeStr as any)?.type ?? '';
-  const t = raw.toLowerCase();
+export function defaultProfileForType(typeStr: Raw5etoolsMonster['type'] | undefined): AIProfile {
+  const t = rawCreatureType(typeStr);
   if (t.includes('beast'))       return 'attackNearest';
   if (t.includes('undead'))      return 'attackNearest';
   if (t.includes('construct'))   return 'attackNearest';
@@ -696,10 +916,10 @@ export function parseSizeCode(
  * Full hasHands parser coverage is a future improvement; this covers ~90% of CR 0-1 monsters.
  */
 export function hasHandsForType(
-  typeStr: string | { type: string } | undefined,
+  typeStr: Raw5etoolsMonster['type'] | undefined,
   raw: { name?: string; entries?: string[]; actions?: { entries?: string[] }[] }
 ): boolean {
-  const t = (typeof typeStr === 'string' ? typeStr : (typeStr as any)?.type ?? '').toLowerCase();
+  const t = rawCreatureType(typeStr);
 
   // Types that reliably have hands/tentacles
   if (t.includes('humanoid'))    return true;
@@ -737,10 +957,35 @@ export function hasHandsForType(
 // ---- TG-004: parser tech debt helpers -----------------------
 
 /** Extract the base type string from raw.type (string or object form). */
-function rawCreatureType(type: Raw5etoolsMonster['type']): string {
+export function rawCreatureType(type: Raw5etoolsMonster['type']): string {
   if (!type) return '';
   if (typeof type === 'string') return type.toLowerCase();
-  return (type.type ?? '').toLowerCase();
+  // Session 53: bestiary-mpp.json (and possibly others) uses the
+  // `{ type: { choose: ['celestial', 'fiend'] } }` shape for creatures whose
+  // type is chosen at spawn time (e.g. Planar Incarnate). We return the first
+  // candidate — v1 doesn't model the choice, and parsers downstream tolerate
+  // an empty-string return. Future: extend monsterToCombatant to surface the
+  // choice list as metadata.
+  if (typeof type !== 'object' || type === null) return '';
+  const inner = 'type' in type ? (type as { type?: unknown }).type : undefined;
+  if (typeof inner === 'string') return inner.toLowerCase();
+  if (Array.isArray(inner) && inner.length > 0 && typeof inner[0] === 'string') {
+    return inner[0].toLowerCase();
+  }
+  if (inner && typeof inner === 'object' && 'choose' in inner) {
+    const choose = (inner as { choose?: unknown }).choose;
+    if (Array.isArray(choose) && choose.length > 0 && typeof choose[0] === 'string') {
+      return String(choose[0]).toLowerCase();
+    }
+  }
+  // Direct `choose` on the outer object (rare): `{ choose: ['celestial','fiend'] }`
+  if ('choose' in type) {
+    const choose = (type as { choose?: unknown }).choose;
+    if (Array.isArray(choose) && choose.length > 0 && typeof choose[0] === 'string') {
+      return String(choose[0]).toLowerCase();
+    }
+  }
+  return '';
 }
 
 /** True when the creature is of type Undead (PHB — Chill Touch, Cure Wounds, etc.). */
@@ -851,10 +1096,40 @@ export function monsterToCombatant(
   const legendaryResistance = parseLegendaryResistance(traits);
   // Session 52 Batch 4b: parse Regeneration trait (amount + stop-clause types)
   const regeneration = parseRegeneration(raw.trait ?? []);
+  // Session 53 Batch 4d: parse Death Burst trait (damage + save + conditions)
+  const deathBurst = parseDeathBurst(raw.trait ?? []);
   // Session 52 Batch 4c/4e: trait-name flags (parsed once at spawn; engine
   // checks the flag rather than re-scanning the traits array each call).
   const attacksAreMagical = traits.some(t => /^Magic\s+Weapons$/i.test(t.trim()));
   const cannotRegainHP = traits.some(t => /^Swarm/i.test(t.trim()));
+  // Session 53 Batch 4e-remaining: trait-name flags + small numeric traits.
+  // Each is parsed once at spawn; engine consumption varies (see core.ts
+  // doc comments for which are wired vs metadata-only).
+  const sunlightSensitivity = traits.some(t => /^Sunlight\s+Sensitivity$/i.test(t.trim()));
+  const avoidance = traits.some(t => /^Avoidance$/i.test(t.trim()));
+  const ambusher = traits.some(t => /^Ambusher$/i.test(t.trim()));
+  const brute = traits.some(t => /^Brute$/i.test(t.trim()));
+  const falseAppearance = traits.some(t => /^False\s+Appearance$/i.test(t.trim()));
+  const siegeMonster = traits.some(t => /^Siege\s+Monster$/i.test(t.trim()));
+  const waterBreathing = traits.some(t => /^Water\s+Breathing$/i.test(t.trim()));
+  // Session 53 Batch 4f: Superior Invisibility + Incorporeal Movement
+  const superiorInvisibility = traits.some(t => /^Superior\s+Invisibility$/i.test(t.trim()));
+  const incorporealMovement = traits.some(t => /^Incorporeal\s+Movement$/i.test(t.trim()));
+  // Session 53 Batch 4g: Charge + Pounce (movement-triggered riders)
+  const charge = parseCharge(raw.trait ?? []);
+  const pounce = parsePounce(raw.trait ?? []);
+  // Hold Breath: extract the minutes count from the entry text
+  // ("can hold its breath for 1 hour" → 60 minutes; "for 30 minutes" → 30)
+  let holdBreathMinutes: number | undefined;
+  for (const t of raw.trait ?? []) {
+    if (!/^Hold\s+Breath$/i.test(t.name)) continue;
+    const text = flattenEntries(t.entries);
+    const minMatch = text.match(/(\d+)\s*(?:minutes|minute)/i);
+    const hrMatch = text.match(/(\d+)\s*(?:hours|hour)/i);
+    if (minMatch) holdBreathMinutes = parseInt(minMatch[1], 10);
+    else if (hrMatch) holdBreathMinutes = parseInt(hrMatch[1], 10) * 60;
+    break;
+  }
 
   return {
     id: nextId(raw.name),
@@ -886,6 +1161,19 @@ export function monsterToCombatant(
     regeneration,          // Session 52 Batch 4b: undefined for non-regenerating creatures
     attacksAreMagical,     // Session 52 Batch 4c: true for "Magic Weapons" trait (19 creatures)
     cannotRegainHP,        // Session 52 Batch 4e: true for "Swarm" trait (10 creatures)
+    deathBurst,            // Session 53 Batch 4d: undefined for non-death-burst creatures
+    sunlightSensitivity,   // Session 53 Batch 4e: true for Sunlight Sensitivity trait
+    avoidance,             // Session 53 Batch 4e: true for Avoidance trait
+    ambusher,              // Session 53 Batch 4e: true for Ambusher trait
+    brute,                 // Session 53 Batch 4e: true for Brute trait
+    falseAppearance,       // Session 53 Batch 4e: true for False Appearance trait
+    siegeMonster,          // Session 53 Batch 4e: true for Siege Monster trait
+    waterBreathing,        // Session 53 Batch 4e: true for Water Breathing trait
+    holdBreathMinutes,     // Session 53 Batch 4e: N minutes (undefined if no Hold Breath trait)
+    superiorInvisibility,  // Session 53 Batch 4f: true for Superior Invisibility trait
+    incorporealMovement,   // Session 53 Batch 4f: true for Incorporeal Movement trait
+    charge,                // Session 53 Batch 4g: undefined for non-Charge creatures
+    pounce,                // Session 53 Batch 4g: undefined for non-Pounce creatures
     budget: freshBudget(speeds.ground),
     conditions: new Set(),
     aiProfile: resolvedProfile,
