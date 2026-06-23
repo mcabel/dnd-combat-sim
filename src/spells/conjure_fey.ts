@@ -75,6 +75,8 @@ import { removeEffectsFromCaster } from '../engine/spell_effects';
 import { startConcentration } from '../engine/utils';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 import { CONJURE_FEY_OPTIONS, DEFAULT_CF_OPTION } from '../summons/cr_picker';
+// Session 43 Task #21: bestiary-driven summon selection.
+import { pickConjureFeySummon, buildSummonCombatant } from '../summons/summon_picker';
 
 // ---- Metadata -----------------------------------------------
 
@@ -321,11 +323,22 @@ export function execute(
   }
   startConcentration(caster, 'Conjure Fey');
 
-  // v1 simplification: always spawn a Green Hag (CR 3). The Green Hag
-  // stat block is valid for any L6+ slot per the spell's CR-scaling
-  // rule. A future v2 should pick higher-CR fey (e.g. Yeth Hound CR 4
-  // from MTF, Korred CR 4 from VGM) when bestiary loading is standardised.
-  const summon = createGreenHag(caster, slotLevel);
+  // Session 43 Task #21: bestiary-driven summon selection.
+  // Tries to pick the appropriate fey from the bestiary based on slot
+  // level (L6+ → highest-CR fey ≤ slot level). Falls back to the
+  // hardcoded createGreenHag() if the bestiary is not loaded or no
+  // matching creature is found.
+  const pick = pickConjureFeySummon(slotLevel);
+  let summon: Combatant;
+  let summonName: string;
+  if (pick) {
+    summon = buildSummonCombatant(pick, caster, 'Conjure Fey');
+    summonName = pick.name;
+  } else {
+    // Fallback: hardcoded Green Hag stat block (v1 behavior).
+    summon = createGreenHag(caster, slotLevel);
+    summonName = 'Green Hag';
+  }
 
   // Add to battlefield
   state.battlefield.combatants.set(summon.id, summon);
@@ -341,7 +354,7 @@ export function execute(
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Conjure Fey (slot L${slotLevel})! Green Hag appears with ${summon.maxHP} HP, AC ${summon.ac}.`,
+    `${caster.name} casts Conjure Fey (slot L${slotLevel})! ${summonName} appears with ${summon.maxHP} HP, AC ${summon.ac}.`,
     summon.id,
   );
 }

@@ -817,6 +817,77 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
     }
   }
 
+  // ── Session 47 Task #29-follow-up-4: Wholeness of Body (Open Hand Monk 6) ──
+  // PHB p.79: "At 6th level, you gain the ability to heal yourself. As an
+  // action, you can regain hit points equal to three times your monk level."
+  // Once per long rest (v1: once per combat).
+  //
+  // Priority: BEFORE self-preserve (retreat/dodge) — if the monk has a free
+  // self-heal available, use it instead of running away. This is tactically
+  // superior: healing 18+ HP (3 × monk level 6) at 10% HP is better than
+  // disengaging and remaining at 10% HP. The self-preserve check will still
+  // fire on subsequent turns when the resource is exhausted.
+  //
+  // Only fires for Open Hand Monk 6+ (feature tracked in classFeatures by
+  // the leveler; resource set by buildCombatant). HP < 50% threshold matches
+  // the heal-self surge in planExtraAction.
+  if (self.resources?.wholenessOfBody && self.resources.wholenessOfBody.remaining > 0
+      && hasFeature(self, 'Wholeness of Body')) {
+    const hpRatio = self.maxHP > 0 ? self.currentHP / self.maxHP : 1;
+    if (hpRatio < 0.5) {
+      plan.action = {
+        type: 'wholenessOfBody',
+        action: null,
+        targetId: self.id,   // self-heal
+        description: `${self.name} uses Wholeness of Body to heal self`,
+      };
+      plan.targetId = self.id;
+      // Note: no target needed (self-heal). Still compute bonus action.
+      // Find any living enemy for planBonusAction context.
+      const anyEnemy = livingEnemiesOf(self, battlefield)[0] ?? null;
+      plan.bonusAction = planBonusAction(self, anyEnemy, battlefield);
+      return plan;
+    }
+  }
+
+  // ── Session 49 Task #29-follow-up-5d: Draconic Presence (Draconic Sorcerer 18) ──
+  // PHB p.102: "Beginning at 18th level, you can channel the dread presence
+  // of your dragon ancestor, using Action + 5 sorcery points. Each creature
+  // of your choice within 60 feet of you must succeed on a Wisdom saving
+  // throw or become frightened of you until the end of your next turn."
+  //
+  // v1 simplification: 1/combat (sorcery points not yet on Combatant).
+  //
+  // Priority: AFTER Wholeness of Body (self-heal is more urgent) but BEFORE
+  // self-preserve — a frighten aura that hits 3+ enemies is a strong
+  // offensive play worth using even when moderately hurt. The 2-enemy
+  // threshold ensures we don't waste the action on a lone target. HP > 30%
+  // threshold avoids wasting the action when about to die (retreat instead).
+  if (self.resources?.draconicPresence && self.resources.draconicPresence.remaining > 0
+      && hasFeature(self, 'Draconic Presence')) {
+    const hpRatio = self.maxHP > 0 ? self.currentHP / self.maxHP : 1;
+    if (hpRatio > 0.3) {
+      // Count living enemies within 60 ft (Draconic Presence's AoE radius).
+      let enemiesInAura = 0;
+      for (const e of livingEnemiesOf(self, battlefield)) {
+        const dFt = chebyshev3D(self.pos, e.pos) * 5;
+        if (dFt <= 60) enemiesInAura++;
+      }
+      if (enemiesInAura >= 2) {
+        plan.action = {
+          type: 'draconicPresence',
+          action: null,
+          targetId: null,   // AoE — no single target
+          description: `${self.name} channels Draconic Presence to frighten ${enemiesInAura} enemies within 60 ft`,
+        };
+        plan.targetId = null;
+        const anyEnemy = livingEnemiesOf(self, battlefield)[0] ?? null;
+        plan.bonusAction = planBonusAction(self, anyEnemy, battlefield);
+        return plan;
+      }
+    }
+  }
+
   // === SELF-PRESERVE CHECK (Smart only) ===
   if (self.aiProfile === 'smart') {
     const preserve = selfPreserveDecision(self, battlefield);
@@ -946,6 +1017,10 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
       return plan;
     }
   }
+
+  // ── Session 47 Task #29-follow-up-4: Wholeness of Body moved to BEFORE
+  // self-preserve check (see above, ~line 820). This ensures the monk uses
+  // the free self-heal before retreating.
 
   // === WARDING BOND (action buff) — protect an adjacent ally before combat heats up ===
   // Cast once, early in the fight. Requires resources.wardingBond.remaining > 0 and
@@ -1345,7 +1420,17 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
   // concentration, so it can stack with an existing concentration spell
   // (e.g. a Wizard concentrating on Blur could also cast Mirror Image).
   // Useful for squishy casters expecting to be attacked.
-  if (!plan.action && self.actions.some(a => a.name === 'Mirror Image') && shouldCastMirrorImage(self, battlefield)) {
+  //
+  // Session 46 Task #27-follow-up-2: when the combatant has Action Surge
+  // available AND is at low HP (< 50%), skip Mirror Image as the main
+  // action — save it for the Action Surge extra action (attack first,
+  // then surge Mirror Image for defense). This only affects Fighters
+  // with Action Surge; pure Wizards without Action Surge still cast
+  // Mirror Image as the main action (unchanged).
+  const _hasActionSurgeAvailable = !!(self.resources?.actionSurge && self.resources.actionSurge.remaining > 0);
+  const _lowHP = self.maxHP > 0 && self.currentHP / self.maxHP < 0.5;
+  const _skipMirrorImageForSurge = _hasActionSurgeAvailable && _lowHP;
+  if (!plan.action && !_skipMirrorImageForSurge && self.actions.some(a => a.name === 'Mirror Image') && shouldCastMirrorImage(self, battlefield)) {
     plan.action = {
       type: 'mirrorImage',
       action: null,
@@ -2525,9 +2610,20 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
   // --- 12B. FIREBALL (DEX save 8d6 fire AoE, L3, NO concentration) ---
   // PHB p.241: action, 150 ft, DEX save 8d6 fire (half on save), 20-ft radius
   // AoE. The most iconic combat spell in D&D — avg 28 dmg to each enemy in radius.
+  //
+  // Session 46 Task #27-follow-up-2: when the combatant has Action Surge
+  // available AND ≥2 enemies are clustered (so the Fireball surge will fire),
+  // skip Fireball as the main action — save it for the Action Surge extra
+  // action (attack first, then surge Fireball for AoE). When <2 clustered,
+  // Fireball is still the main action (the surge won't fire anyway). This
+  // only affects Fighters with Action Surge; pure Wizards are unchanged.
   if (!plan.action && self.actions.some(a => a.name === 'Fireball')) {
     const fbTargets = shouldCastFireball(self, battlefield);
-    if (fbTargets) {
+    // Check if the Fireball surge would fire (Action Surge + ≥2 clustered).
+    const _fireballSurgeReady = _hasActionSurgeAvailable
+      && !!fbTargets && fbTargets.length >= 2
+      && hasSpellSlot(self, 3);
+    if (fbTargets && !_fireballSurgeReady) {
       const names = fbTargets.map(t => t.name).join(', ');
       plan.action = {
         type: 'fireball',
@@ -4817,6 +4913,34 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
   // === SELECT ACTION ===
   let chosenAction = selectAction(self, target, battlefield);
 
+  // ── Session 46 Task #27-follow-up-2: Fireball surge interception ──
+  // If selectAction() picked Fireball (via its own AoE cluster logic in
+  // actions.ts) AND the Fireball surge would fire (Action Surge + ≥2
+  // clustered + L3 slot), replace the main action with the best weapon
+  // attack — save Fireball for the surge (attack + Fireball combo).
+  // This only affects Fighters with Action Surge; pure Wizards keep
+  // Fireball as the main action (no Action Surge → no surge → no intercept).
+  if (chosenAction && chosenAction.type === 'cast'
+      && chosenAction.action?.name === 'Fireball'
+      && _hasActionSurgeAvailable && hasSpellSlot(self, 3)) {
+    const fbTargetsCheck = shouldCastFireball(self, battlefield);
+    if (fbTargetsCheck && fbTargetsCheck.length >= 2) {
+      // Pick the best weapon attack (melee or ranged, excluding spells/saves).
+      const weaponAttack = self.actions.find(a =>
+        !a.isMultiattack && a.costType === 'action' &&
+        (a.attackType === 'melee' || a.attackType === 'ranged')
+      );
+      if (weaponAttack) {
+        chosenAction = {
+          type: 'attack',
+          action: weaponAttack,
+          targetId: target.id,
+          description: `${self.name} attacks ${target.name} with ${weaponAttack.name} (saving Fireball for Action Surge)`,
+        };
+      }
+    }
+  }
+
   // === IMPROVISED ATTACK FALLBACK ===
   // If the creature has no actions that apply (e.g. statblock with non-attack actions only),
   // fall back to improvised weapon (hasHands → 1d4+STR, no prof) or unarmed (1+STR, uses prof).
@@ -4844,52 +4968,31 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
   // Don't overwrite a self-buff action (e.g. mageArmor) already planned above.
   if (!plan.action) plan.action = chosenAction;
 
-  // ── Session 42 Task #18: Thirsting Blade (extra attack) ──
-  // PHB p.111: "You can attack with your pact weapon twice, instead of
-  // once, whenever you take the Attack action on your turn."
-  // Conditions: Warlock has Thirsting Blade invocation + Pact of the Blade
-  // boon + the planned action is a melee weapon attack.
-  // v1 simplification: assumes ANY melee attack from a Thirsting Blade
-  // Warlock is a pact weapon attack (no isPactWeapon Action flag needed).
-  if (
-    plan.action &&
-    plan.action.type === 'attack' &&
-    plan.action.action &&
-    plan.action.action.attackType === 'melee' &&
-    hasInvocation(self, 'Thirsting Blade') &&
-    self.pactBoon === 'blade'
-  ) {
-    plan.action.attackCount = 2;
-  }
-
-  // ── Session 43 Task #24: Extra Attack for martial classes ──
-  // PHB p.72 (Fighter), p.49 (Barbarian), p.85 (Monk), p.85 (Paladin),
-  // p.92 (Ranger): "Beginning at 5th level, you can attack twice, instead
-  // of once, whenever you take the Attack action on your turn."
-  // Fighter 11 (Extra Attack (2)) → 3 attacks; Fighter 20 (Extra Attack (3))
-  // → 4 attacks. Bard 6 (Valor/Swords) → 2 attacks, but the leveler does
-  // not currently model subclass-specific Extra Attack grants — only base
-  // class features. We check for the feature name strings set by the leveler.
+  // ── Session 42 Task #18 + Session 43 Task #24 + Session 44 Task #30 ──
+  // ── Session 45 Task #30-follow-up: maxAttackCount() helper ──
   //
-  // This applies to ANY Attack action (melee OR ranged), unlike Thirsting
-  // Blade which is melee-only. The attackCount loop in executePlannedAction
-  // already handles both attack types.
+  // All "extra attacks per Attack action" sources funnel through a single
+  // helper, maxAttackCount(self, action), defined near the bottom of this
+  // file. The helper returns the highest applicable attackCount from any
+  // source (Thirsting Blade, Extra Attack, Extra Attack (2), Extra Attack (3)).
   //
-  // We DON'T overwrite attackCount if Thirsting Blade already set it to 2
-  // (the values would be the same for a Warlock 5 / Fighter 5 multiclass,
-  // but this guard future-proofs against higher-tier Fighter Extra Attack
-  // values colliding with the Warlock-only Thirsting Blade).
-  if (
-    plan.action &&
-    plan.action.type === 'attack' &&
-    plan.action.attackCount === undefined
-  ) {
-    if (hasFeature(self, 'Extra Attack (3)')) {
-      plan.action.attackCount = 4;   // Fighter 20
-    } else if (hasFeature(self, 'Extra Attack (2)')) {
-      plan.action.attackCount = 3;   // Fighter 11
-    } else if (hasFeature(self, 'Extra Attack')) {
-      plan.action.attackCount = 2;   // Fighter/Barbarian/Monk/Paladin/Ranger 5
+  // RAW (Sage Advice Compendium v2.7): Thirsting Blade (Warlock 5+, PHB
+  // p.111) and Extra Attack (Fighter/Barbarian/Monk/Paladin/Ranger 5+,
+  // PHB p.72/49/85/85/92; Bard Valor/Swords 6, PHB p.55 / XGE p.15) do
+  // NOT stack — they all set the same "attack N times with the Attack
+  // action" property. A Warlock 5 / Fighter 11 multiclass with both
+  // Thirsting Blade (=2) and Extra Attack (2) (=3) attacks THREE times,
+  // not two or five.
+  //
+  // Pre-Session-45 implementation had an order-dependent guard (Thirsting
+  // Blade ran first and set attackCount=2, then Extra Attack (2) skipped
+  // because attackCount was already set). This silently under-modeled
+  // the Warlock 5 / Fighter 11 case. The maxAttackCount() helper fixes
+  // this by returning the MAX across all sources.
+  if (plan.action && plan.action.type === 'attack') {
+    const best = maxAttackCount(self, plan.action);
+    if (best !== undefined) {
+      plan.action.attackCount = best;
     }
   }
 
@@ -4925,66 +5028,376 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
     }
   }
 
-  // ── Session 43 Task #23: Action Surge (Fighter 2+, PHB p.72) ──
+  // ── Session 43 Task #23 / Session 44 Task #27: Action Surge (Fighter 2+, PHB p.72) ──
   // "On your turn, you can take one additional action on top of your regular
-  // action and a possible bonus action." v1: if the Fighter has an actionSurge
-  // use available, plan an extra Attack on the same target. The attackCount
-  // for this extra Attack is set by the same Extra Attack logic as the main
-  // action (so Fighter 5+ gets 2 attacks from main + 2 from surge = 4 total).
+  // action and a possible bonus action."
   //
-  // Conditions:
-  //   - self.resources.actionSurge.remaining > 0 (use available)
-  //   - plan.action is set (we have something to do this turn)
-  //   - plan.action.type === 'attack' (v1 only surges for extra attacks —
-  //     surging to cast a second spell is suboptimal in most cases since
-  //     it would consume another spell slot; future: smarter logic)
-  //   - target is alive (avoid planning a surge against a dead target —
-  //     the engine would skip it anyway, but no point planning it)
+  // Session 43 Task #23 added the basic surge: clone the main Attack action.
+  // Session 44 Task #27 introduces planExtraAction() which evaluates multiple
+  // surge options in priority order:
+  //   1. Heal-self surge — if HP < 50% and Cure Wounds is known + slot available
+  //   2. Default extra Attack — clone the main Attack action (original v1 behaviour)
   //
   // The engine's executeTurnPlan calls executePlannedAction again for
   // plan.extraAction and consumes one actionSurge use.
+  const surgeAction = planExtraAction(self, plan, target, battlefield);
+  if (surgeAction) {
+    plan.extraAction = surgeAction;
+  }
+
+  return plan;
+}
+
+// ── Session 45 Task #30-follow-up: maxAttackCount() helper ──────────────────
+//
+// Returns the highest applicable "attacks per Attack action" count from any
+// RAW source, or undefined if no source applies. This replaces the previous
+// order-dependent guard chain (Thirsting Blade check → Extra Attack check)
+// which silently under-modeled the Warlock 5 / Fighter 11 multiclass case
+// (a character with both Thirsting Blade [=2] and Extra Attack (2) [=3]
+// should attack 3 times, not 2).
+//
+// Sources (PHB 2014 + XGE):
+//   - Thirsting Blade (Warlock 5+, PHB p.111, Pact of the Blade):
+//       2 attacks — MELEE ONLY (pact weapon attacks). Skipped for ranged.
+//   - Extra Attack (Fighter/Barbarian/Monk/Paladin/Ranger 5+, PHB
+//       p.72/49/85/85/92; Bard Valor/Swords 6, PHB p.55 / XGE p.15):
+//       2 attacks — ANY Attack action (melee OR ranged).
+//   - Extra Attack (2) (Fighter 11, PHB p.72): 3 attacks.
+//   - Extra Attack (3) (Fighter 20, PHB p.72): 4 attacks.
+//
+// RAW non-stacking (Sage Advice Compendium v2.7): all these features set
+// the same "attack N times with the Attack action" property; they do NOT
+// add together. Only the HIGHEST applies. Hence the max() aggregation.
+//
+// Note: Thirsting Blade is melee-only ("you can attack with your pact
+// weapon twice" — PHB p.111), while Extra Attack applies to any Attack
+// action ("you can attack twice, instead of once, whenever you take the
+// Attack action on your turn" — PHB p.72). The action parameter lets us
+// distinguish: a ranged Attack action from a Thirsting Blade Warlock does
+// NOT get the +1 attack from Thirsting Blade, but DOES get the +1 from
+// Extra Attack if the character also has martial levels.
+//
+// Returns undefined if no source applies — caller should leave
+// action.attackCount unset (the engine defaults to 1 attack).
+function maxAttackCount(
+  self: Combatant,
+  action: PlannedAction | null | undefined,
+): number | undefined {
+  if (!action || action.type !== 'attack' || !action.action) {
+    return undefined;
+  }
+
+  const isMelee = action.action.attackType === 'melee';
+  const hasThirstingBlade =
+    isMelee &&
+    hasInvocation(self, 'Thirsting Blade') &&
+    self.pactBoon === 'blade';
+
+  let best = 0;
+  if (hasThirstingBlade) best = Math.max(best, 2);
+  if (hasFeature(self, 'Extra Attack (3)')) {
+    best = Math.max(best, 4);   // Fighter 20
+  } else if (hasFeature(self, 'Extra Attack (2)')) {
+    best = Math.max(best, 3);   // Fighter 11
+  } else if (hasFeature(self, 'Extra Attack')) {
+    best = Math.max(best, 2);   // martial 5+ / Bard Valor/Swords 6
+  }
+
+  return best > 0 ? best : undefined;
+}
+
+// ── Session 44 Task #27: planExtraAction — smarter Action Surge tactics ──
+// ── Session 45 Task #27-follow-up: added Dash + Disengage surge options ──
+// ── Session 46 Task #27-follow-up-2: added Mirror Image + Fireball surge options ──
+//
+// Evaluates multiple surge options in priority order and returns the best
+// PlannedAction to take as the Action Surge extra action, or null if no
+// surge is appropriate (no use available, no eligible option).
+//
+// Options evaluated (first match wins):
+//
+// 1. HEAL-SELF SURGE (highest priority):
+//    Triggers when self.currentHP < 50% of self.maxHP AND the combatant
+//    has a 'Cure Wounds' action AND has at least one L1+ spell slot.
+//    Returns a PlannedAction with type 'cureWounds' targeting self.
+//    This is most useful for Fighter/Cleric multiclass characters or
+//    Eldritch Knights with Magic Initiate (Cleric) — pure Fighters don't
+//    have Cure Wounds and fall through to the default surge option.
+//
+//    PHB p.72: "you can take one additional action on your turn" — this
+//    includes casting a spell. The spell's normal casting time applies
+//    (Cure Wounds is 1 action), and the spell slot is consumed by the
+//    engine's cureWounds case in executePlannedAction.
+//
+// 2. DASH SURGE (Session 45 Task #27-follow-up):
+//    Triggers when the planned main action is NOT an attack (e.g. it's a
+//    self-buff spell like Mage Armor) AND no living enemy is within the
+//    combatant's longest melee reach (5 ft default). The surge grants
+//    extra movement to close distance. This is tactically superior to
+//    the default "no surge" path — Dashing to close range means the
+//    combatant can attack NEXT turn instead of still being out of reach.
+//
+//    PHB p.192: Dash gives additional movement equal to your speed.
+//    PHB p.72: Action Surge grants "one additional action" — Dash is a
+//    valid action. The engine's 'dash' case adds effectiveSpeed(actor)
+//    to budget.movementFt.
+//
+//    Note: this option fires AFTER heal-self but BEFORE the default
+//    attack. It only triggers when the main action was NOT an attack —
+//    if the main action WAS an attack, the default extra Attack surge
+//    is more valuable (extra damage).
+//
+// 3. DISENGAGE SURGE (Session 45 Task #27-follow-up):
+//    Triggers when the combatant is surrounded (≥ 2 adjacent enemies)
+//    AND HP is below 50% AND the main action was NOT an attack (we
+//    already healed via Option 1 if we could; if we're here, we don't
+//    have Cure Wounds or slots). The surge Disengages so the combatant
+//    can move away without provoking opportunity attacks.
+//
+//    PHB p.192: Disengage prevents opportunity attacks for the rest of
+//    the turn. PHB p.72: Action Surge can grant this as an extra action.
+//
+//    This is a defensive option — when the fighter is low on HP, can't
+//    heal, and is surrounded, the best move is to retreat.
+//
+// 4. MIRROR IMAGE DEFENSIVE SURGE (Session 46 Task #27-follow-up-2):
+//    Triggers when HP < 50% AND the combatant knows Mirror Image AND has
+//    an L2 spell slot AND does not already have mirror-image duplicates
+//    active. Returns a PlannedAction with type 'mirrorImage' targeting self.
+//
+//    Mirror Image (PHB p.260) is a 1-action self spell (NO concentration)
+//    that creates 3 illusory duplicates — attackers must roll d20 to
+//    retarget. This is the best defensive spell for an Action Surge
+//    because: (a) casting time is 1 action (RAW-valid for Action Surge,
+//    which grants an extra ACTION not bonus action), (b) no concentration
+//    (can stack with an existing concentration spell), (c) long duration
+//    (v1: lasts until all duplicates destroyed).
+//
+//    NOTE: Shield of Faith (the other defensive spell mentioned in the
+//    Session 45 next-session list) is a BONUS ACTION spell (PHB p.275)
+//    and CANNOT be cast via Action Surge (which grants an extra ACTION,
+//    not a bonus action — PHB p.72 + p.202). Excluded by RAW. Only
+//    action-time defensive spells are valid surge candidates.
+//
+//    This option fires AFTER Disengage but BEFORE Fireball/offensive
+//    options. When HP < 50% and we can't heal (Option 1 didn't fire),
+//    survival is the next priority — a hurt fighter with 3 mirror-image
+//    duplicates is much harder to hit than one without.
+//
+// 5. FIREBALL OFFENSIVE SURGE (Session 46 Task #27-follow-up-2):
+//    Triggers when the main action WAS an Attack AND the combatant knows
+//    Fireball AND has an L3 spell slot AND shouldCastFireball returns
+//    targets (≥2 enemies clustered in a 20-ft radius, no allies in the
+//    blast). Returns a PlannedAction with type 'fireball' targeting the
+//    first clustered enemy.
+//
+//    Fireball (PHB p.241) is a 1-action spell (DEX save 8d6 fire, 20-ft
+//    radius AoE, NO concentration). When the main action was a weapon
+//    attack on a single target but 2+ other enemies are clustered nearby,
+//    surging to Fireball deals ~28 dmg to EACH (avg 8d6) — much more
+//    total damage than a single extra weapon attack.
+//
+//    RAW validity: Fireball casting time = 1 action (PHB p.241). Valid
+//    Action Surge action. ✅
+//
+//    This option fires AFTER Mirror Image (defensive) but BEFORE the
+//    default extra Attack. When HP ≥ 50% (or no Mirror Image available)
+//    and enemies are clustered, AoE damage is preferred over a single
+//    extra attack.
+//
+// 6. DEFAULT EXTRA ATTACK:
+//    Triggers when plan.action is an Attack and the target is alive.
+//    Clones the main Attack action with the same attackCount (re-applies
+//    Thirsting Blade / Extra Attack logic). This is the original v1
+//    behaviour from Session 43 Task #23.
+//
+// 7. Returns null if no option applies — no surge planned.
+function planExtraAction(
+  self: Combatant,
+  plan: TurnPlan,
+  target: Combatant | null,
+  battlefield: Battlefield,
+): PlannedAction | null {
+  if (!self.resources?.actionSurge || self.resources.actionSurge.remaining <= 0) {
+    return null;
+  }
+
+  // ── Option 1: Heal-self surge ──
+  // Triggers when HP is below 50% AND the combatant knows Cure Wounds
+  // AND has a spell slot available to cast it.
+  //
+  // We use self.actions to check if Cure Wounds is in the combatant's
+  // spell list. Pure Fighters won't have this action, so they skip
+  // straight to the default surge option.
+  //
+  // NOTE: This check runs AFTER planBonusAction, which may have triggered
+  // Second Wind (mutating self.currentHP). If Second Wind already healed
+  // the fighter above 50%, the heal-self surge won't fire — which is the
+  // correct behaviour (no need to waste a surge on healing if Second Wind
+  // already covered it). Tests that isolate the heal-self surge should
+  // drain Second Wind uses before calling planTurn.
+  const hpRatio = self.maxHP > 0 ? self.currentHP / self.maxHP : 1;
+  if (hpRatio < 0.5) {
+    const cureWoundsAction = self.actions.find(a => a.name === 'Cure Wounds');
+    if (cureWoundsAction && hasSpellSlot(self, 1)) {
+      return {
+        type: 'cureWounds',
+        action: cureWoundsAction,
+        targetId: self.id,   // self-heal
+        description: `${self.name} uses Action Surge — casts Cure Wounds on self`,
+      };
+    }
+  }
+
+  // ── Option 2: Dash surge — close distance when no enemy in reach ──
+  // Session 45 Task #27-follow-up. Triggers when the main action was NOT
+  // an Attack (e.g. a self-buff like Mage Armor was cast) AND no living
+  // enemy is within 5 ft (the standard melee reach). The surge grants
+  // extra movement to close distance for the next turn.
+  //
+  // This option does NOT trigger when the main action WAS an attack —
+  // in that case the default extra Attack (Option 4) is more valuable.
+  const mainWasAttack = plan.action?.type === 'attack';
+  if (!mainWasAttack) {
+    // Check if any living enemy is within 5 ft (melee reach).
+    const enemies = livingEnemiesOf(self, battlefield);
+    const enemyInReach = enemies.some(e => !e.isDead && !e.isUnconscious && distanceFt(self.pos, e.pos) <= 5);
+    if (!enemyInReach && enemies.length > 0) {
+      // No enemy in reach — Dash to close distance.
+      return {
+        type: 'dash',
+        action: null,
+        targetId: null,
+        description: `${self.name} uses Action Surge — Dash to close distance`,
+      };
+    }
+  }
+
+  // ── Option 3: Disengage surge — retreat when surrounded and low HP ──
+  // Session 45 Task #27-follow-up. Triggers when:
+  //   - HP < 50% (we're hurt)
+  //   - ≥ 2 adjacent enemies (we're surrounded)
+  //   - Main action was NOT an attack (we already tried to heal via
+  //     Option 1; if we're here, we don't have Cure Wounds or slots)
+  //   - Main action was NOT already Disengage (no point Disengaging twice)
+  //
+  // The Disengage action lets us move away without provoking opportunity
+  // attacks (PHB p.192). Combined with the moveAfter from planMovement,
+  // this lets the fighter retreat to a safer position.
+  const mainWasDisengage = plan.action?.type === 'disengage';
+  if (!mainWasAttack && !mainWasDisengage && hpRatio < 0.5) {
+    const adjEnemies = adjacentEnemyCount(self, battlefield);
+    if (adjEnemies >= 2) {
+      return {
+        type: 'disengage',
+        action: null,
+        targetId: null,
+        description: `${self.name} uses Action Surge — Disengage to retreat (surrounded, low HP)`,
+      };
+    }
+  }
+
+  // ── Option 4: Mirror Image defensive surge ──
+  // Session 46 Task #27-follow-up-2. Triggers when:
+  //   - HP < 50% (we're hurt — survival priority)
+  //   - Combatant knows Mirror Image (Eldritch Knight / Fighter-Wizard multi)
+  //   - Has an L2 spell slot available
+  //   - shouldCastMirrorImage returns true (not already active, expects to be
+  //     attacked — the spell's own shouldCast helper guards these conditions)
+  //
+  // Mirror Image (PHB p.260): 1-action self spell, NO concentration, 3
+  // illusory duplicates. Attackers must roll d20 to retarget (6+ with 3
+  // duplicates, 8+ with 2, 11+ with 1). Lasts until all duplicates destroyed.
+  //
+  // RAW validity: casting time = 1 action. Action Surge (PHB p.72) grants
+  // an extra ACTION, so Mirror Image is a valid surge target. ✅
+  //
+  // Priority: after Disengage (Option 3) but before Fireball (Option 5)
+  // and the default extra Attack (Option 6). When hurt and unable to heal,
+  // defensive Mirror Image is preferred over a redundant extra attack.
+  if (hpRatio < 0.5 && self.actions.some(a => a.name === 'Mirror Image') && hasSpellSlot(self, 2)) {
+    if (shouldCastMirrorImage(self, battlefield)) {
+      return {
+        type: 'mirrorImage',
+        action: null,
+        targetId: self.id,   // self-buff
+        description: `${self.name} uses Action Surge — casts Mirror Image (defensive, low HP)`,
+      };
+    }
+  }
+
+  // ── Option 5: Fireball offensive surge ──
+  // Session 46 Task #27-follow-up-2. Triggers when:
+  //   - Main action WAS an Attack (we already hit someone this turn)
+  //   - Combatant knows Fireball (Eldritch Knight / Fighter-Wizard multi)
+  //   - Has an L3 spell slot available
+  //   - shouldCastFireball returns ≥2 targets (enemies clustered in a 20-ft
+  //     radius — the spell's own shouldCast helper collects all enemies in
+  //     the blast radius around the highest-threat enemy within 150 ft)
+  //
+  // Fireball (PHB p.241): 1-action spell, DEX save 8d6 fire (half on save),
+  // 20-ft radius AoE, 150 ft range, NO concentration. Avg 28 dmg per target.
+  //
+  // RAW validity: casting time = 1 action. Valid Action Surge action. ✅
+  //
+  // Priority: after Mirror Image (defensive) but before the default extra
+  // Attack. When HP ≥ 50% (or no Mirror Image available) and 2+ enemies are
+  // clustered, AoE damage (28×2 = 56+ total) is clearly worth the L3 slot
+  // versus a single extra weapon attack (avg ~10 dmg for a greatsword).
+  //
+  // v1 simplification: shouldCastFireball does NOT check for allies in the
+  // blast radius (matches the base planner's Fireball planning at line ~2528).
+  // A future "smart cluster" check could exclude casts that would hit 1+
+  // allies — deferred to a future session.
+  //
+  // The ≥2 threshold (rather than ≥1) ensures the surge is clearly worth
+  // the spell slot — a single-target Fireball surge (8d6 avg 28) would
+  // compete with the free extra Attack (avg ~10), but the L3 slot is
+  // more valuable spent on a multi-target cluster.
+  if (mainWasAttack && self.actions.some(a => a.name === 'Fireball') && hasSpellSlot(self, 3)) {
+    const fbTargets = shouldCastFireball(self, battlefield);
+    if (fbTargets && fbTargets.length >= 2) {
+      return {
+        type: 'fireball',
+        action: null,
+        targetId: fbTargets[0].id,
+        description: `${self.name} uses Action Surge — casts Fireball on ${fbTargets.map(t => t.name).join(', ')} (${fbTargets.length} clustered)`,
+      };
+    }
+  }
+
+  // ── Option 6: Default extra Attack on the same target ──
+  // Original v1 behaviour — clone the main Attack action. The attackCount
+  // is re-applied via the same Thirsting Blade / Extra Attack logic as the
+  // main action (see "Session 44 Task #30" comment above for the non-stacking
+  // RAW ruling and known v1 simplification).
   if (
-    self.resources?.actionSurge &&
-    self.resources.actionSurge.remaining > 0 &&
     plan.action &&
     plan.action.type === 'attack' &&
     plan.action.action &&
     target && !target.isDead && !target.isUnconscious
   ) {
-    // Clone the main attack action for the surge. We reset attackCount to
-    // undefined here so the same Extra Attack / Thirsting Blade logic can
-    // re-apply (the planner's attackCount-setting block ran before this
-    // extraAction is created, so we manually re-apply below).
     const surgeAction: PlannedAction = {
       type: 'attack',
       action: plan.action.action,
       targetId: target.id,
       description: `${self.name} uses Action Surge — extra Attack`,
     };
-    // Re-apply the attackCount logic (mirrors the block above for plan.action).
-    // Thirsting Blade (melee + Pact of the Blade + invocation)
-    if (
-      surgeAction.action !== null &&
-      surgeAction.action.attackType === 'melee' &&
-      hasInvocation(self, 'Thirsting Blade') &&
-      self.pactBoon === 'blade'
-    ) {
-      surgeAction.attackCount = 2;
+    // Re-apply the attackCount logic via the shared maxAttackCount() helper.
+    // The surge Action is a fresh Attack that benefits from the same
+    // Thirsting Blade / Extra Attack features as the main Action (PHB p.72:
+    // Action Surge grants "one additional action" — the additional Attack
+    // action triggers Extra Attack again).
+    const surgeBest = maxAttackCount(self, surgeAction);
+    if (surgeBest !== undefined) {
+      surgeAction.attackCount = surgeBest;
     }
-    // Extra Attack features (Fighter/Barbarian/Monk/Paladin/Ranger 5+)
-    if (surgeAction.attackCount === undefined) {
-      if (hasFeature(self, 'Extra Attack (3)')) {
-        surgeAction.attackCount = 4;   // Fighter 20
-      } else if (hasFeature(self, 'Extra Attack (2)')) {
-        surgeAction.attackCount = 3;   // Fighter 11
-      } else if (hasFeature(self, 'Extra Attack')) {
-        surgeAction.attackCount = 2;   // martial 5+
-      }
-    }
-    plan.extraAction = surgeAction;
+    return surgeAction;
   }
 
-  return plan;
+  // No eligible surge option.
+  return null;
 }
 
 /**

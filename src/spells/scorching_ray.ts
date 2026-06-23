@@ -39,7 +39,7 @@
 
 import { Combatant, Battlefield } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
-import { rollDie, rollAttack, applyDamageWithTempHP, abilityMod } from '../engine/utils';
+import { rollDie, rollAttack, applyDamageWithTempHP, abilityMod, elementalAffinityBonus } from '../engine/utils';
 import { chebyshev3D } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 
@@ -219,7 +219,11 @@ export function execute(
     );
 
     // 2d6 fire damage. Crit does NOT double (canon spell-dice rule).
-    const dmg = rollDamage();
+    // Session 49 Task #29-follow-up-5c-2: Elemental Affinity (Draconic
+    // Sorcerer 6) adds +CHA mod per ray that hits — EA applies to each
+    // ray independently (each ray is a separate damage roll).
+    const eaBonus = elementalAffinityBonus(caster, metadata.damageType);
+    const dmg = rollDamage() + eaBonus;
     const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);
     emit(
       state, 'damage', caster.id,

@@ -379,6 +379,85 @@ export function buildCombatant(
     combatant.classFeatures = [...new Set(classFeatureNames)];
   }
 
+  // ── Session 46 Task #29-follow-up-2: Character level transfer ──
+  // Store the PC's total character level on the Combatant so engine features
+  // that depend on proficiency bonus (Remarkable Athlete, Jack of All Trades,
+  // etc.) can compute it without access to the CharacterSheet. The total
+  // level is the sum of all class levels (e.g. Fighter 7 / Wizard 3 = 10).
+  // Monsters leave this undefined (their proficiency is CR-based).
+  const totalLevel = sheet.classLevels.reduce((sum, cl) => sum + cl.level, 0);
+  if (totalLevel > 0) {
+    combatant.level = totalLevel;
+  }
+
+  // ── Session 47 Task #29-follow-up-4: Per-class levels transfer ──
+  // Store a map of class name → level (e.g. { Monk: 6, Fighter: 2 }). Used by
+  // features that depend on a specific class's level (e.g. Wholeness of Body
+  // heals 3 × monk level, not 3 × total level). Monsters leave this undefined.
+  if (sheet.classLevels.length > 0) {
+    const clMap: Record<string, number> = {};
+    for (const cl of sheet.classLevels) {
+      clMap[cl.className] = cl.level;
+    }
+    combatant.classLevels = clMap;
+  }
+
+  // ── Session 47 Task #29-follow-up-4: Wholeness of Body resource ──
+  // Open Hand Monk 6 (PHB p.79): self-heal 3 × monk level, once per long rest.
+  // The feature is tracked in classFeatures by the leveler. Here we set the
+  // resource (max 1, remaining 1) when the combatant has the feature. The
+  // engine consumes one use when the wholenessOfBody action executes.
+  if (combatant.classFeatures?.includes('Wholeness of Body')) {
+    if (!combatant.resources) combatant.resources = {} as any;
+    (combatant.resources as any).wholenessOfBody = { max: 1, remaining: 1 };
+  }
+
+  // ── Session 49 Task #29-follow-up-5d: Dragon Wings (Draconic Sorcerer 14) ──
+  // PHB p.102: "At 14th level, you gain the ability to sprout a pair of dragon
+  // wings from your back, obtaining a flying speed equal to your current speed."
+  // The feature is tracked in classFeatures by the leveler. Here we set the
+  // combatant's flySpeed to match their walking speed when the feature is
+  // present. This is a permanent passive — the wings are always available
+  // (PHB p.102: "You can create these wings at will"). No resource cost.
+  // If the character already has a racial fly speed (e.g. Aarakocra), keep the
+  // higher of the two.
+  if (combatant.classFeatures?.includes('Dragon Wings')) {
+    const wingsSpeed = combatant.speed;
+    if (!combatant.flySpeed || combatant.flySpeed < wingsSpeed) {
+      combatant.flySpeed = wingsSpeed;
+    }
+  }
+
+  // ── Session 49 Task #29-follow-up-5d: Draconic Presence (Draconic Sorcerer 18) ──
+  // PHB p.102: "Beginning at 18th level, you can channel the dread presence of
+  // your dragon ancestor, using Action + 5 sorcery points. Each creature of
+  // your choice within 60 feet of you must succeed on a Wisdom saving throw or
+  // become frightened of you until the end of your next turn."
+  //
+  // v1 simplification: instead of tracking the 5-sorcery-point cost (sorcery
+  // points are NOT yet transferred to the Combatant — deferred to a future
+  // session), we treat Draconic Presence as a 1/combat action (like Wholeness
+  // of Body). The frightened-aura effect is canon. Documented via the resource
+  // flag `draconicPresence: { max: 1, remaining: 1 }`. The engine's
+  // 'draconicPresence' action type consumes one use and applies frightened to
+  // all enemies within 60 ft who fail a WIS save.
+  if (combatant.classFeatures?.includes('Draconic Presence')) {
+    if (!combatant.resources) combatant.resources = {} as any;
+    (combatant.resources as any).draconicPresence = { max: 1, remaining: 1 };
+  }
+
+  // ── Session 49 Task #29-follow-up-3c: Natural Recovery (Land Druid 2) ──
+  // PHB p.68: "Starting at 2nd level, you can recover some of your expended
+  // spell slots after a short rest." The total slots recovered = half druid
+  // level (rounded up), max 5th level. Once used, must finish a long rest.
+  // Tracked as usesRemaining=1; consumed by shortRest() in engine/utils.ts;
+  // reset by longRest(). The feature is flag-only until the simulator's
+  // shortRest hook fires (which auto-recovers the lowest-level expended slots).
+  if (combatant.classFeatures?.includes('Natural Recovery')) {
+    if (!combatant.resources) combatant.resources = {} as any;
+    (combatant.resources as any).naturalRecovery = { usesRemaining: 1 };
+  }
+
   return combatant;
 }
 

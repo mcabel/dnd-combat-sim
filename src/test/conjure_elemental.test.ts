@@ -19,8 +19,14 @@ import {
   CONJURE_ELEMENTAL_OPTIONS,
   DEFAULT_CE_OPTION,
 } from '../summons/cr_picker';
+import { setBestiaryForTesting } from '../summons/summon_picker';
 import { removeEffectsFromCaster } from '../engine/spell_effects';
 import { Combatant, Action, PlayerResources, Vec3 } from '../types/core';
+
+// Session 43 Task #21: force empty bestiary so the v1 hardcoded fallback
+// (Fire Elemental) is exercised. The bestiary-driven path is tested
+// separately in bestiary_integration.test.ts.
+setBestiaryForTesting(new Map());
 
 let passed = 0, failed = 0;
 

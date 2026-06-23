@@ -22,6 +22,7 @@ import {
   effectiveSpeed, rollDie, abilityMod, proficiencyBonus,
   rollDiceString as rollBoomingBladeDice,
   rollAbilityCheck,  // Session 43 Task #26: for rollAbilityCheckReactable
+  elementalAffinityBonus,  // Session 47 Task #29-follow-up-5: Draconic Sorcerer
 } from './utils';
 import {
   chebyshev3D, distanceFt, euclideanDistFt, canReach, estimateMoveCostFt,
@@ -29,7 +30,9 @@ import {
   livingEnemiesOf, livingAlliesOf, posKey, pushAway
 } from './movement';
 import { planTurn, planLegendaryAction, shouldTakeOpportunityAttack } from '../ai/planner';
-import { shouldSmite, applyDivineSmite, tickRage, consumeSpellSlot, hasSpellSlot } from '../ai/resources';
+import { shouldSmite, applyDivineSmite, tickRage, consumeSpellSlot, hasSpellSlot, hasInnateSpellUse } from '../ai/resources';
+// ── Session 45 Task #29-follow-up: Champion Improved Critical / Superior Critical ──
+import { hasFeature } from '../characters/builder';
 // TG-008: Reaction spell subsystem
 import { REACTION_SPELLS, ReactionSpellDescriptor } from '../spells/_reaction_registry';
 import {
@@ -862,8 +865,12 @@ function triggerReactions(
     if (!spell.triggerKinds.includes(trigger.kind)) continue;
     // The reactor must have this spell in their actions list.
     if (!reactor.actions.some(a => a.name === spell.name)) continue;
-    // The reactor must have a spell slot of the required level.
-    if (!hasSpellSlot(reactor, spell.level)) continue;
+    // The reactor must have a spell slot of the required level OR an
+    // innate spell use available (Session 44 Task #20: Couatl's Shield
+    // is innate 3/day, not slot-based). The innate-use fallback mirrors
+    // the pattern in cure_wounds.ts execute() — consumeInnateSpellUse
+    // is called by the spell's executeReaction when no slot is available.
+    if (!hasSpellSlot(reactor, spell.level) && !hasInnateSpellUse(reactor, spell.name)) continue;
     // Tactical gating — the spell module decides if it's worth casting.
     if (!spell.shouldCast(reactor, state.battlefield, trigger)) continue;
     // Fire the reaction.
@@ -1250,6 +1257,42 @@ export function resolveAttack(
     return;
   }
 
+  // ── Session 49 Task #29-follow-up-3c: Nature's Sanctuary (Land Druid 14) ──
+  // PHB p.68: "When a beast or plant creature attacks you, that creature must
+  // make a Wisdom saving throw against your druid spell save DC. On a failed
+  // save, the creature must choose a different target or lose the attack."
+  //
+  // This fires PER ATTACK — each time a beast/plant targets the Land Druid 14+
+  // with an attack, the attacker must WIS save. On fail, the attack is lost
+  // (no damage, no resource consumption). The save DC = the druid's spell save
+  // DC, computed here from WIS + prof + 8 (druid casting, PHB p.66).
+  if (target.classFeatures?.includes("Nature's Sanctuary")
+      && (attacker.creatureType === 'beast' || attacker.creatureType === 'plant')
+      && !attacker.isDead && !attacker.isUnconscious) {
+    // Compute the druid's spell save DC. Prefer the target's spell action
+    // saveDC; fall back to 8 + prof + WIS mod (druid casting).
+    const targetSpellAction = target.actions.find(a => a.saveDC !== null && a.saveDC !== undefined);
+    const targetProf = target.level ? Math.ceil(target.level / 4) + 1
+                                    : proficiencyBonus(target.cr);
+    const sanctuaryDC = targetSpellAction?.saveDC
+      ?? (8 + targetProf + abilityMod(target.wis));
+
+    const sanctuarySave = rollSaveReactable(state, target, attacker, 'wis', sanctuaryDC);
+    if (sanctuarySave.success) {
+      log(state, 'save_success', target.id,
+        `${attacker.name} resists Nature's Sanctuary (WIS ${sanctuarySave.total} vs DC ${sanctuaryDC}) — attack proceeds!`,
+        attacker.id, sanctuarySave.roll);
+    } else {
+      log(state, 'save_fail', target.id,
+        `${attacker.name} succumbs to Nature's Sanctuary (WIS ${sanctuarySave.total} vs DC ${sanctuaryDC}) — loses attack against ${target.name}!`,
+        attacker.id, sanctuarySave.roll);
+      log(state, 'action', target.id,
+        `Nature's Sanctuary: ${attacker.name} cannot bring itself to attack ${target.name}.`,
+        attacker.id);
+      return;  // attack canceled — no damage, no resource consumed
+    }
+  }
+
   // Pack Tactics: advantage if ally adjacent to target (MM)
   const packTacticsAdvantage = hasPackTacticsAdvantage(attacker, target, bf);
 
@@ -1265,7 +1308,9 @@ export function resolveAttack(
       target.id, save.roll);
 
     if (action.damage) {
-      const dmg = rollDamage(action.damage, false);
+      // Session 47 Task #29-follow-up-5: Elemental Affinity (Draconic Sorcerer 6)
+      // adds CHA mod to damage of spells matching the sorcerer's ancestry type.
+      const dmg = rollDamage(action.damage, false) + elementalAffinityBonus(attacker, action.damageType);
       const actual = save.success ? Math.floor(dmg / 2) : dmg; // half on save success
       const dealt = applyDamageWithTempHP(target, actual, action.damageType);
       // TG-008: Absorb Elements / Hellish Rebuke reaction trigger (XGE p.150 / PHB p.249)
@@ -1311,7 +1356,8 @@ export function resolveAttack(
   // Auto-hit (no hitBonus — e.g. Reaping Scythe, Magic Missile)
   if (action.hitBonus === null) {
     if (action.damage) {
-      const dmg = rollDamage(action.damage, false);
+      // Session 47: Elemental Affinity bonus for auto-hit spells.
+      const dmg = rollDamage(action.damage, false) + elementalAffinityBonus(attacker, action.damageType);
       const dealt = applyDamageWithTempHP(target, dmg, action.damageType);
       // TG-008: Absorb Elements / Hellish Rebuke reaction trigger.
       // (Shield's "blocks Magic Missile" is NOT modelled in v1 — the auto-hit
@@ -1510,7 +1556,22 @@ export function resolveAttack(
       target.id, mirrorRoll);
   }
 
-  const result = rollAttack(shillelaghHitBonus, advantage, disadvantage);
+  // ── Session 45 Task #29-follow-up: Champion crit range expansion ──
+  // PHB p.72: Fighter Champion "Improved Critical" → crit on 19-20 (level 3+).
+  // PHB p.72: Fighter Champion "Superior Critical" → crit on 18-20 (level 15+).
+  // These apply ONLY to weapon attacks (melee/ranged), NOT spell attacks
+  // (Improved Critical specifies "weapon attacks"). The caller of rollAttack
+  // for spell attacks leaves critRange at its default (20).
+  let critRange = 20;
+  if (action.attackType === 'melee' || action.attackType === 'ranged') {
+    if (hasFeature(attacker, 'Superior Critical')) {
+      critRange = 18;
+    } else if (hasFeature(attacker, 'Improved Critical')) {
+      critRange = 19;
+    }
+  }
+
+  const result = rollAttack(shillelaghHitBonus, advantage, disadvantage, critRange);
 
   // Vicious Mockery one-shot consume: the debuff applies to exactly one attack
   // roll (PHB p.285). Consume it now — whether the attack hit or missed — so
@@ -1593,7 +1654,15 @@ export function resolveAttack(
     const naturalAC = acFloor > 0 ? Math.max(target.ac, acFloor) : target.ac;
     effectiveAC = naturalAC + (target.wardingBond ? 1 : 0) + (los?.coverACBonus ?? 0) + getActiveAcBonus(target);
   }
-  let hits = isCritOverride ?? attackHits(result.roll, result.total, effectiveAC);
+  // ── Session 45 Task #29-follow-up: a critical hit is ALWAYS a hit ──
+  // PHB p.194: "If the d20 roll for an attack is a 20, the attack hits
+  // regardless of any modifiers or the target's AC." Expanded crit ranges
+  // (Champion Improved Critical = 19-20, Superior Critical = 18-20) extend
+  // this auto-hit property to the expanded crit range — a critical hit is
+  // by definition a hit. The attackHits() helper only knows about nat 20,
+  // so we short-circuit here when result.isCrit is true (set by rollAttack
+  // using the attacker's critRange).
+  let hits = isCritOverride ?? (result.isCrit || attackHits(result.roll, result.total, effectiveAC));
 
   // ── TG-008: Shield / Silvery Barbs reaction trigger (PHB p.275 / SCC p.38) ──
   // When the attack HITS, the target may react with Shield (+5 AC, can flip
@@ -1699,6 +1768,18 @@ export function resolveAttack(
 
   if (action.damage) {
     let dmg = rollDamage(action.damage, isCrit);
+
+    // ── Session 47 Task #29-follow-up-5: Elemental Affinity (Draconic Sorcerer 6) ──
+    // PHB p.102: add CHA mod to damage of spells matching draconic ancestry.
+    // Applies to spell attacks (this path). Also wired in the save-spell and
+    // auto-hit paths above. The bonus is flat (NOT dice, so NOT doubled on crit).
+    const eaBonus = elementalAffinityBonus(attacker, action.damageType);
+    if (eaBonus > 0) {
+      dmg += eaBonus;
+      log(state, 'action', attacker.id,
+        `${attacker.name} adds Elemental Affinity bonus (+${eaBonus} ${action.damageType}) to ${target.name}!`,
+        target.id, eaBonus);
+    }
 
     // ── Session 39: Eldritch Invocation — Agonizing Blast ──
     // PHB p.110: "When you cast Eldritch Blast, add your Charisma modifier
@@ -2344,11 +2425,27 @@ export function executeMove(
 
   if (posKey(mover.pos) === posKey(dest)) return; // already there
 
+  // ── Session 48 Task #29-follow-up-3b: Land's Stride (Land Druid 6) ──
+  // PHB p.68: "moving through nonmagical difficult terrain costs you no
+  // extra movement." When the mover has Land's Stride, wrap the terrainFn
+  // to treat 'difficult' as 'normal' (no extra cost). 'water' terrain is
+  // NOT affected (Land's Stride is about difficult terrain and plants,
+  // not swimming). v1 simplification: all difficult terrain is treated
+  // as nonmagical (no magical-difficult-terrain tracking).
+  const baseTerrainFn = makeTerrainFn(bf);
+  const hasLandsStride = hasFeature(mover, "Land's Stride");
+  const effectiveTerrainFn = hasLandsStride
+    ? (pos: Vec3) => {
+        const t = baseTerrainFn(pos);
+        return t === 'difficult' ? 'normal' : t;  // ignore difficult terrain
+      }
+    : baseTerrainFn;
+
   const cost = estimateMoveCostFt(
     mover.pos, dest,
     mover.burrowSpeed !== null,
     mover.swimSpeed !== null,
-    makeTerrainFn(bf)
+    effectiveTerrainFn
   );
 
   if (!spendMovement(mover, cost)) {
@@ -2912,6 +3009,116 @@ export function executePlannedAction(
           lohTarget.id, healed);
       } else {
         log(state, 'action', actor.id, plan.description);
+      }
+      break;
+    }
+    case 'wholenessOfBody': {
+      // ── Session 47 Task #29-follow-up-4: Open Hand Monk 6 (PHB p.79) ──
+      // Self-heal action: restore 3 × monk level HP. Once per long rest
+      // (v1: once per combat — tracked via resources.wholenessOfBody).
+      //
+      // The target is always self (plan.targetId = actor.id from the planner).
+      // The heal amount = 3 × monk level (from combatant.classLevels['Monk']).
+      // The resource is consumed here (remaining 1 → 0).
+      if (actor.resources?.wholenessOfBody && actor.resources.wholenessOfBody.remaining > 0) {
+        const monkLevel = actor.classLevels?.['Monk'] ?? actor.level ?? 1;
+        const healAmount = 3 * monkLevel;
+        const wasUnconscious = actor.isUnconscious;
+        const healed = applyHeal(actor, healAmount);
+        if (wasUnconscious && healed > 0) {
+          log(state, 'condition_remove', actor.id,
+            `${actor.name} regains consciousness!`, actor.id);
+        }
+        // Consume the resource
+        actor.resources.wholenessOfBody.remaining -= 1;
+        log(state, 'action', actor.id, plan.description);
+        log(state, 'heal', actor.id,
+          `${actor.name} restores ${healed} HP from Wholeness of Body (3 × monk lv ${monkLevel})`,
+          actor.id, healed);
+      } else {
+        // No uses remaining — shouldn't happen (planner guards this), but
+        // log a no-op to avoid silent failure.
+        log(state, 'action', actor.id, `${plan.description} (no uses remaining — no-op)`);
+      }
+      break;
+    }
+    case 'draconicPresence': {
+      // ── Session 49 Task #29-follow-up-5d: Draconic Sorcerer 18 (PHB p.102) ──
+      // Action + 5 sorcery points: each enemy within 60 ft must succeed on a
+      // WIS save or become frightened of the caster until the end of the
+      // caster's next turn.
+      //
+      // v1 simplification: 1/combat (sorcery points not yet on Combatant).
+      // The frightened condition is applied via applySpellEffect so the
+      // standard frightened mechanics (disadvantage on ability checks + attack
+      // rolls while the source is in sight, can't move closer) are inherited.
+      // v1 does NOT model "until the end of your next turn" — frightened
+      // persists for the v1 combat (matches Cause Fear / Fear spell pattern).
+      if (actor.resources?.draconicPresence && actor.resources.draconicPresence.remaining > 0) {
+        // Consume the resource first.
+        actor.resources.draconicPresence.remaining -= 1;
+
+        // Compute WIS save DC from the actor's spellcasting save DC.
+        // Fall back to 8 + prof + CHA mod (Sorcerer casting) if not set.
+        const spellAction = actor.actions.find(a => a.saveDC !== null && a.saveDC !== undefined);
+        const saveDC = spellAction?.saveDC
+          ?? (8 + (actor.level ? Math.ceil(actor.level / 4) + 1 : 2) + abilityMod(actor.cha));
+
+        log(state, 'action', actor.id, plan.description);
+
+        // Collect all living enemies within 60 ft of the caster.
+        const enemies: Combatant[] = [];
+        for (const c of state.battlefield.combatants.values()) {
+          if (c.id === actor.id) continue;
+          if (c.faction === actor.faction) continue;
+          if (c.isDead || c.isUnconscious) continue;
+          const distFt = chebyshev3D(actor.pos, c.pos) * 5;
+          if (distFt <= 60) enemies.push(c);
+        }
+
+        if (enemies.length === 0) {
+          log(state, 'action', actor.id,
+            `${actor.name} channels Draconic Presence, but no enemies are within 60 ft.`);
+          break;
+        }
+
+        log(state, 'action', actor.id,
+          `${actor.name} channels Draconic Presence! ${enemies.length} enem${enemies.length === 1 ? 'y' : 'ies'} within 60 ft must make a DC ${saveDC} WIS save or be frightened.`);
+
+        for (const enemy of enemies) {
+          if (enemy.isDead || enemy.isUnconscious) continue;
+          // Skip enemies already frightened (by this caster or another source).
+          if (enemy.conditions.has('frightened')) {
+            log(state, 'action', actor.id,
+              `${enemy.name} is already frightened — unaffected by Draconic Presence.`,
+              enemy.id);
+            continue;
+          }
+          const save = rollSaveReactable(state, actor, enemy, 'wis', saveDC);
+          if (save.success) {
+            log(state, 'save_success', actor.id,
+              `${enemy.name} resists Draconic Presence (WIS ${save.total} vs DC ${saveDC}) — not frightened!`,
+              enemy.id, save.roll);
+          } else {
+            applySpellEffect(enemy, {
+              casterId: actor.id,
+              spellName: 'Draconic Presence',
+              effectType: 'condition_apply',
+              payload: { condition: 'frightened' },
+              sourceIsConcentration: false,
+            });
+            log(state, 'save_fail', actor.id,
+              `${enemy.name} succumbs to Draconic Presence (WIS ${save.total} vs DC ${saveDC}) — FRIGHTENED!`,
+              enemy.id, save.roll);
+            log(state, 'condition_add', actor.id,
+              `${enemy.name} is frightened of ${actor.name}!`,
+              enemy.id);
+          }
+        }
+      } else {
+        // No uses remaining — shouldn't happen (planner guards this), but
+        // log a no-op to avoid silent failure.
+        log(state, 'action', actor.id, `${plan.description} (no uses remaining — no-op)`);
       }
       break;
     }
@@ -4946,6 +5153,35 @@ export function runCombat(
 
       // Reset budget (movement, action, bonus, reaction)
       resetBudget(actor);
+
+      // ── Session 46 Task #29-follow-up-2: Survivor (Champion 18) regen ──
+      // PHB p.73: "At 18th level, you attain the pinnacle of resilience in
+      // battle. At the start of each of your turns, you regain hit points
+      // equal to 5 + your Constitution modifier, provided you have at least
+      // 1 hit point and are below half your hit point maximum."
+      //
+      // This fires at the very start of the actor's turn, right after
+      // resetBudget and BEFORE damage-zone ticks (so a Champion at 1 HP
+      // can survive a Cloud of Daggers tick if the regen brings them
+      // above 0 — though the zone damage applies after, so they might
+      // still go down). The regen does NOT fire if the actor is at 0 HP
+      // (dead or unconscious) or at/above half HP.
+      if (!actor.isDead && !actor.isUnconscious && actor.currentHP > 0
+          && actor.currentHP < Math.floor(actor.maxHP / 2)
+          && hasFeature(actor, 'Survivor')) {
+        const conMod = abilityMod(actor.con);
+        const regenAmount = 5 + conMod;
+        if (regenAmount > 0) {
+          const before = actor.currentHP;
+          actor.currentHP = Math.min(actor.maxHP, actor.currentHP + regenAmount);
+          const healed = actor.currentHP - before;
+          if (healed > 0) {
+            log(state, 'heal', actor.id,
+              `${actor.name} regains ${healed} HP from Survivor (Champion 18) — ${before} → ${actor.currentHP}`,
+              actor.id, healed);
+          }
+        }
+      }
 
       // ── Cloud of Daggers / damage_zone start-of-turn tick (PHB p.222) ────
       // PHB p.222: "A creature takes 4d4 slashing damage when it enters the

@@ -252,12 +252,18 @@ console.log('\n=== 3. createCouatl — combatant creation ===\n');
   //   - Bless (innate 3/day, concentration buff)
   //   - Cure Wounds (innate 3/day, heal)
   //   - Sanctuary (innate 3/day, bonus-action ward)
-  eq('Couatl has 5 actions (2 attacks + 3 innate spells)', couatl.actions.length, 5);
+  //   - Shield (innate 3/day, reaction +5 AC — Session 44 Task #20)
+  //   - Lesser Restoration (innate 3/day — Session 45 Task #20-follow-up)
+  //   - Protection from Poison (innate 3/day — Session 45 Task #20-follow-up)
+  eq('Couatl has 8 actions (2 attacks + 6 innate spells)', couatl.actions.length, 8);
   eq('Couatl first action is Bite (primary)', couatl.actions[0].name, 'Bite');
   eq('Couatl second action is Constrict', couatl.actions[1].name, 'Constrict');
   eq('Couatl third action is Bless (innate)', couatl.actions[2].name, 'Bless');
   eq('Couatl fourth action is Cure Wounds (innate)', couatl.actions[3].name, 'Cure Wounds');
   eq('Couatl fifth action is Sanctuary (innate)', couatl.actions[4].name, 'Sanctuary');
+  eq('Couatl sixth action is Shield (innate reaction)', couatl.actions[5].name, 'Shield');
+  eq('Couatl seventh action is Lesser Restoration (innate)', couatl.actions[6].name, 'Lesser Restoration');
+  eq('Couatl eighth action is Protection from Poison (innate)', couatl.actions[7].name, 'Protection from Poison');
 
   // Bite (primary, melee)
   const bite = couatl.actions[0];

@@ -527,6 +527,16 @@ button.full { width: 100%; padding: 11px; font-size: 13px; }
       <strong>🎭 Subclass selection required!</strong>
       Choose your subclass below.
     </div>
+    <!-- Pending Eldritch Invocations alert -->
+    <div class="alert info hidden" id="invocations-alert">
+      <strong>✦ Eldritch Invocations selection required!</strong>
+      Choose your invocations below.
+    </div>
+    <!-- Pending Pact Boon alert -->
+    <div class="alert info hidden" id="pactboon-alert">
+      <strong>⛓ Pact Boon selection required!</strong>
+      Choose your Pact Boon below (Warlock 3).
+    </div>
 
     <!-- Short Rest Panel (inline, no prompt) -->
     <div id="short-rest-panel" class="hidden" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px 14px;margin-bottom:10px">
@@ -699,6 +709,32 @@ button.full { width: 100%; padding: 11px; font-size: 13px; }
           <select id="subclass-select"></select>
         </div>
         <button onclick="doChooseSubclass()" class="primary" style="margin-top:17px">Confirm</button>
+      </div>
+    </div>
+
+    <!-- Eldritch Invocations Selection -->
+    <div class="card hidden" id="invocations-form-card" style="margin-top:10px;background:var(--bg);">
+      <div class="card-title" style="color:var(--accent2)">Choose Eldritch Invocations</div>
+      <div id="invocations-body" style="font-size:12px;color:var(--muted);margin-bottom:10px"></div>
+      <button onclick="doChooseInvocations()" class="primary" id="invocations-confirm-btn" style="margin-top:6px">Confirm Invocations</button>
+    </div>
+
+    <!-- Pact Boon Selection -->
+    <div class="card hidden" id="pactboon-form-card" style="margin-top:10px;background:var(--bg);">
+      <div class="card-title" style="color:var(--accent2)">Choose Pact Boon (Warlock 3)</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:10px">
+        Your pact with your patron grants you a special boon. Once chosen, this cannot be changed.
+      </div>
+      <div class="inline-row">
+        <div>
+          <label>Pact Boon</label>
+          <select id="pactboon-select">
+            <option value="blade">Pact of the Blade — summon or bond a weapon as a magic weapon</option>
+            <option value="chain">Pact of the Chain — gain a familiar of an unusual type</option>
+            <option value="tome">Pact of the Tome — receive a Book of Shadows with three cantrips</option>
+          </select>
+        </div>
+        <button onclick="doChoosePactBoon()" class="primary" style="margin-top:17px">Confirm</button>
       </div>
     </div>
 
@@ -897,6 +933,21 @@ const CLASS_RESOURCES_L1 = {
   Cleric: {}, Druid:{}, Monk:{}, Ranger:{}, Sorcerer:{}, Warlock:{}, Artificer:{},
 };
 
+// Warlock Eldritch Invocation slot count by Warlock level (PHB p.107 table).
+// Index 0 = level 1, index 19 = level 20.
+const WARLOCK_INVOCATION_SLOTS = [0,2,2,2,3,3,4,4,5,5,5,6,6,6,7,7,7,8,8,8];
+function warlockInvocationSlots(warlockLevel) {
+  const idx = Math.max(1, Math.min(20, warlockLevel)) - 1;
+  return WARLOCK_INVOCATION_SLOTS[idx] ?? 0;
+}
+// Invocations currently implemented in the engine (v1).
+const AVAILABLE_INVOCATIONS = [
+  'Agonizing Blast',
+  'Grasp of Hadar',
+  'Lance of Lethargy',
+  'Repelling Blast',
+];
+
 const SUBCLASSES = {
   Fighter:    ['Champion','Battle Master','Eldritch Knight'],
   Rogue:      ['Thief','Assassin','Arcane Trickster'],
@@ -922,6 +973,8 @@ const S = {
   charDetail: null,  // full sheet
   editingId: null,   // null = new
   pendingSubclass: null,  // className string pending subclass
+  pendingInvocations: false,  // Warlock invocation count mismatch
+  pendingPactBoon: false,     // Warlock lv3+ without pact boon
   parties: [],
   selectedParty: null,
   partyEnemies: [{ name:'Goblin', count:1, ai:'attackNearest' }],
@@ -1037,8 +1090,23 @@ function renderCharDetail() {
 
   // Alerts
   const hasPendingASI = (c.pendingAbilityScoreImprovements || 0) > 0 || (c.pendingASIHalfPoints || 0) > 0;
+
+  // Detect Warlock-specific pending decisions from character data
+  const warlockEntry = (c.classLevels || []).find(cl => cl.className === 'Warlock');
+  const warlockLevel = warlockEntry ? warlockEntry.level : 0;
+  if (warlockLevel >= 2) {
+    const required = warlockInvocationSlots(warlockLevel);
+    const current  = (c.eldritchInvocations || []).length;
+    // Only flag as pending when we have enough registered invocations to fulfil the requirement
+    S.pendingInvocations = current !== required && required <= AVAILABLE_INVOCATIONS.length;
+  } else {
+    S.pendingInvocations = false;
+  }
+  S.pendingPactBoon = warlockLevel >= 3 && !c.pactBoon;
   document.getElementById('asi-alert').classList.toggle('hidden', !hasPendingASI);
   document.getElementById('subclass-alert').classList.toggle('hidden', !S.pendingSubclass);
+  document.getElementById('invocations-alert').classList.toggle('hidden', !S.pendingInvocations);
+  document.getElementById('pactboon-alert').classList.toggle('hidden', !S.pendingPactBoon);
 
   // Stats row
   const thp = c.temporaryHP || 0;
@@ -1071,6 +1139,9 @@ function renderCharDetail() {
     <div class="stat-box"><div class="val">${c.armorClass}</div><div class="lbl">AC</div></div>
     <div class="stat-box"><div class="val">${initSign}${initMod}</div><div class="lbl">Initiative</div></div>
     <div class="stat-box"><div class="val">${c.speed}</div><div class="lbl">Speed ft</div></div>
+    ${c.flySpeed ? `<div class="stat-box"><div class="val">${c.flySpeed}</div><div class="lbl">Fly ft</div></div>` : ''}
+    ${c.swimSpeed ? `<div class="stat-box"><div class="val">${c.swimSpeed}</div><div class="lbl">Swim ft</div></div>` : ''}
+    ${c.burrowSpeed ? `<div class="stat-box"><div class="val">${c.burrowSpeed}</div><div class="lbl">Burrow ft</div></div>` : ''}
     <div class="stat-box">
       <div class="val" id="thp-display" style="color:${thp>0?'var(--accent)':'var(--muted)'}">${thp}</div>
       <div class="lbl">Temp HP</div>
@@ -1188,6 +1259,7 @@ function renderCharDetail() {
   document.getElementById('char-class-info').innerHTML =
     `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
       <span><strong>${classInfo}</strong> · Prof +${profBonus} · XP ${c.experiencePoints}</span>
+      <button class="sm" onclick="showAddXPPanel()" style="padding:2px 8px;font-size:10px;opacity:0.6" title="Award XP to this character">+ XP</button>
       <button class="sm ${inspActive ? 'secondary' : ''}" onclick="toggleInspiration()" style="padding:2px 8px;font-size:10px;${inspActive ? 'border-color:var(--accent);color:var(--accent)' : 'opacity:0.5'}" title="Toggle Inspiration">★ Inspiration</button>
     </div>` +
     (resLines ? resLines : '');
@@ -1353,6 +1425,23 @@ function renderCharDetail() {
     document.getElementById('subclass-select').innerHTML = subs.map(s => `<option>${esc(s)}</option>`).join('');
   } else {
     subCard.classList.add('hidden');
+  }
+
+  // Eldritch Invocations form
+  const invCard = document.getElementById('invocations-form-card');
+  if (S.pendingInvocations) {
+    invCard.classList.remove('hidden');
+    renderInvocationsPanel(c);
+  } else {
+    invCard.classList.add('hidden');
+  }
+
+  // Pact Boon form
+  const pbCard = document.getElementById('pactboon-form-card');
+  if (S.pendingPactBoon) {
+    pbCard.classList.remove('hidden');
+  } else {
+    pbCard.classList.add('hidden');
   }
 
   // Features
@@ -2912,6 +3001,118 @@ async function doChooseSubclass() {
   } catch(e) { showErr(e.message); }
 }
 
+// ── Eldritch Invocations ──────────────────────────────────────
+
+// Render checkboxes for eldritch invocation selection.
+// Called from renderCharDetail() when S.pendingInvocations is true.
+function renderInvocationsPanel(c) {
+  const warlockLevel = (c.classLevels || []).find(cl => cl.className === 'Warlock')?.level || 0;
+  const required = warlockInvocationSlots(warlockLevel);
+  const current  = c.eldritchInvocations || [];
+  const body = document.getElementById('invocations-body');
+  if (!body) return;
+  let html = `<div style="margin-bottom:8px;color:var(--muted)">Warlock ${warlockLevel} · Choose <strong style="color:var(--text)">${required}</strong> of ${AVAILABLE_INVOCATIONS.length} available invocations (v1 registry).</div>`;
+  html += `<div style="display:flex;flex-direction:column;gap:6px">`;
+  for (const inv of AVAILABLE_INVOCATIONS) {
+    const checked = current.includes(inv) ? 'checked' : '';
+    html += `<label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:12px">
+      <input type="checkbox" name="inv-pick" value="${esc(inv)}" ${checked} style="margin-top:2px" onchange="updateInvocationsConfirmBtn(${required})"/>
+      <span><strong>${esc(inv)}</strong></span>
+    </label>`;
+  }
+  html += `</div>`;
+  html += `<div id="inv-pick-count" style="font-size:11px;color:var(--muted);margin-top:8px"></div>`;
+  body.innerHTML = html;
+  updateInvocationsConfirmBtn(required);
+}
+
+function updateInvocationsConfirmBtn(required) {
+  const checked = [...document.querySelectorAll('input[name="inv-pick"]:checked')].length;
+  const btn = document.getElementById('invocations-confirm-btn');
+  const counter = document.getElementById('inv-pick-count');
+  if (btn) btn.disabled = checked !== required;
+  if (counter) counter.textContent = `${checked}/${required} selected`;
+}
+
+async function doChooseInvocations() {
+  if (!S.charDetail) return;
+  showErr('');
+  const checked = [...document.querySelectorAll('input[name="inv-pick"]:checked')].map(el => el.value);
+  try {
+    const data = await api(`/api/characters/${S.charDetail.id}/chooseinvocations`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ invocations: checked }),
+    });
+    S.charDetail = data.character;
+    renderCharDetail();
+    showBanner(`Invocations set: ${checked.join(', ')}`, 'ok');
+  } catch(e) { showErr(e.message); }
+}
+
+// ── Pact Boon ─────────────────────────────────────────────────
+
+async function doChoosePactBoon() {
+  if (!S.charDetail) return;
+  showErr('');
+  const boon = document.getElementById('pactboon-select').value;
+  try {
+    const data = await api(`/api/characters/${S.charDetail.id}/choosepactboon`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ boon }),
+    });
+    S.charDetail = data.character;
+    renderCharDetail();
+    const label = { blade: 'Pact of the Blade', chain: 'Pact of the Chain', tome: 'Pact of the Tome' }[boon] || boon;
+    showBanner(`Pact Boon set: ${label}`, 'ok');
+  } catch(e) { showErr(e.message); }
+}
+
+// ── Individual XP Award ───────────────────────────────────────
+
+function showAddXPPanel() {
+  if (!S.charDetail) return;
+  const existing = document.getElementById('add-xp-panel');
+  if (existing) { existing.remove(); return; } // toggle
+  const classInfoEl = document.getElementById('char-class-info');
+  if (!classInfoEl) return;
+  const panel = document.createElement('div');
+  panel.id = 'add-xp-panel';
+  panel.style.cssText = 'display:flex;gap:6px;align-items:center;margin-top:6px;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px';
+  panel.innerHTML = `
+    <span style="font-size:11px;color:var(--muted)">Award XP:</span>
+    <input type="number" id="add-xp-amt" value="" placeholder="amount" min="1"
+      style="width:80px;font-size:11px;padding:2px 6px;border-radius:4px;background:var(--bg);border:1px solid var(--border);color:var(--text);-moz-appearance:textfield"
+      onkeydown="if(event.key==='Enter')doAddXP()" />
+    <button class="sm primary" onclick="doAddXP()" style="padding:2px 8px;font-size:10px">+ Add</button>
+    <button class="sm" onclick="document.getElementById('add-xp-panel')?.remove()" style="padding:2px 6px;font-size:10px">✕</button>
+  `;
+  classInfoEl.appendChild(panel);
+  panel.querySelector('#add-xp-amt').focus();
+}
+
+async function doAddXP() {
+  if (!S.charDetail) return;
+  const amtEl = document.getElementById('add-xp-amt');
+  const amount = parseInt(amtEl?.value || '', 10);
+  if (isNaN(amount) || amount <= 0) { showErr('Enter a positive XP amount.'); return; }
+  try {
+    const data = await api(`/api/characters/${S.charDetail.id}/addxp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ amount }),
+    });
+    S.charDetail = data.character;
+    document.getElementById('add-xp-panel')?.remove();
+    refreshChars();
+    renderCharDetail();
+    showBanner(`+${amount} XP awarded. Total: ${data.newTotal}`, 'ok');
+  } catch(e) { showErr(e.message); }
+}
+
+
+
 function showBanner(msg, type) {
   // Brief success flash via err-banner (green tint override)
   const el = document.getElementById('err-banner');
@@ -2976,6 +3177,8 @@ async function deleteChar() {
     await api(`/api/characters/${S.charDetail.id}`, { method:'DELETE' });
     S.charDetail = null;
     S.pendingSubclass = null;
+    S.pendingInvocations = false;
+    S.pendingPactBoon = false;
     document.getElementById('char-detail-card').classList.add('hidden');
     refreshChars();
     showBanner('Character deleted.', 'ok');

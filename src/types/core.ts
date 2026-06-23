@@ -383,6 +383,13 @@ export interface PlayerResources {
   // Wizard
   arcaneRecovery?:     { usesRemaining: number };             // 1/day, short rest
 
+  // ── Session 49 Task #29-follow-up-3c: Land Druid Natural Recovery ──
+  // Land Druid 2 (PHB p.68): recover spell slots equal to half druid level
+  // (rounded up) on a short rest, once per long rest. Slots must be 5th level
+  // or lower. Tracked as usesRemaining=1; consumed on short-rest use; reset on
+  // long rest.
+  naturalRecovery?:    { usesRemaining: number };             // 1/day, short rest
+
   // Warlock Dark One's Blessing temp HP on kill
   darkOnesBlessing?:   { amount: number };
 
@@ -402,6 +409,17 @@ export interface PlayerResources {
   // Recovered on long rest: up to half max (round up), per PHB p.186.
   // Optional — absent for monsters and legacy test combatants.
   hitDice?: { max: number; remaining: number; dieSides: number };
+
+  // ── Session 47 Task #29-follow-up-4: Monk Wholeness of Body ──
+  // Open Hand Monk 6 (PHB p.79): self-heal action, 3 × monk level HP,
+  // once per long rest. Tracked as max=1/remaining=1; consumed when used.
+  wholenessOfBody?: { max: number; remaining: number };
+
+  // ── Session 49 Task #29-follow-up-5d: Draconic Presence ──
+  // Draconic Sorcerer 18 (PHB p.102): action + 5 sorcery points, frighten
+  // all enemies within 60 ft (WIS save). v1 simplification: 1/combat (sorcery
+  // points not yet transferred to Combatant — deferred to a future session).
+  draconicPresence?: { max: number; remaining: number };
 
   // Innate Spellcasting (MM p.10–11; e.g. Couatl, Drow, Druidic casters).
   // Per-spell uses-per-day tracker. Used by monsters with at-will or
@@ -458,6 +476,29 @@ export interface Combatant {
   str: number; dex: number; con: number;
   int: number; wis: number; cha: number;
   cr: number | null;                      // null for PCs
+
+  // ── Session 46 Task #29-follow-up-2: Character level for PCs ──
+  // Optional. Set by buildCombatant from the sheet's total class level.
+  // Used by features that depend on proficiency bonus (Remarkable Athlete,
+  // Jack of All Trades, etc.). Monsters leave this undefined — their
+  // proficiency is derived from CR via proficiencyBonus(cr).
+  level?: number;
+
+  // ── Session 47 Task #29-follow-up-4: Per-class levels for PCs ──
+  // Optional. Set by buildCombatant from the sheet's classLevels array.
+  // Maps class name → level (e.g. { Monk: 6, Fighter: 2 }). Used by
+  // features that depend on a specific class's level (e.g. Wholeness of
+  // Body heals 3 × monk level, not 3 × total level). Monsters leave this
+  // undefined.
+  classLevels?: Record<string, number>;
+
+  // ── Session 47 Task #29-follow-up-5: Draconic ancestry for Sorcerers ──
+  // Optional. Stores the damage type associated with the Draconic Bloodline
+  // ancestry (e.g. 'fire', 'cold', 'lightning', 'acid', 'poison'). Used by
+  // Elemental Affinity (Draconic Sorcerer 6, PHB p.102) to add CHA mod to
+  // damage of spells matching the ancestry type. Set manually in tests or
+  // by the character builder (future: UI for choosing ancestry at creation).
+  draconicAncestry?: string;
 
   // Position (grid squares; 1 square = 5ft)
   pos: Vec3;
@@ -1560,6 +1601,8 @@ export interface PlannedAction {
     | 'attack' | 'cast' | 'dash' | 'disengage' | 'dodge'
     | 'help' | 'hide' | 'ready' | 'shove' | 'grapple' | 'escapeGrapple'
     | 'secondWind' | 'rage' | 'layOnHands' | 'bardicInspiration'
+    | 'wholenessOfBody'  // Open Hand Monk 6 — self-heal 3×monk level, 1/long rest (PHB p.79)
+    | 'draconicPresence' // Draconic Sorcerer 18 — frighten aura, WIS save, 1/combat (PHB p.102)
     | 'spellHeal'    // legacy — no longer dispatched; retained for test compatibility
     | 'cureWounds'  // Cure Wounds — action, 1d8+mod heal per slot level, touch range (PHB p.230)
     | 'faerieFire'     // Faerie Fire AoE control (concentration)

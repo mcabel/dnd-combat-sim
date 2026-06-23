@@ -84,6 +84,8 @@ import { removeEffectsFromCaster } from '../engine/spell_effects';
 import { startConcentration } from '../engine/utils';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 import { CONJURE_ELEMENTAL_OPTIONS, DEFAULT_CE_OPTION } from '../summons/cr_picker';
+// Session 43 Task #21: bestiary-driven summon selection.
+import { pickConjureElementalSummon, buildSummonCombatant } from '../summons/summon_picker';
 
 // ---- Metadata -----------------------------------------------
 
@@ -309,12 +311,22 @@ export function execute(
   }
   startConcentration(caster, 'Conjure Elemental');
 
-  // v1 simplification: always spawn a Fire Elemental (CR 5). The Fire
-  // Elemental stat block is valid for any L5+ slot per the spell's
-  // CR-scaling rule. A future v2 should pick higher-CR elementals
-  // (e.g. Salamander CR 5 at L5, Invisible Stalker CR 6 at L6, etc.)
-  // when bestiary loading is standardised.
-  const summon = createFireElemental(caster, slotLevel);
+  // Session 43 Task #21: bestiary-driven summon selection.
+  // Tries to pick the appropriate elemental from the bestiary based on
+  // slot level (L5 → CR 5, L6 → CR 6, L7-L9 → highest available CR ≤ 9).
+  // Falls back to the hardcoded createFireElemental() if the bestiary
+  // is not loaded or no matching creature is found.
+  const pick = pickConjureElementalSummon(slotLevel);
+  let summon: Combatant;
+  let summonName: string;
+  if (pick) {
+    summon = buildSummonCombatant(pick, caster, 'Conjure Elemental');
+    summonName = pick.name;
+  } else {
+    // Fallback: hardcoded Fire Elemental stat block (v1 behavior).
+    summon = createFireElemental(caster, slotLevel);
+    summonName = 'Fire Elemental';
+  }
 
   // Add to battlefield
   state.battlefield.combatants.set(summon.id, summon);
@@ -330,7 +342,7 @@ export function execute(
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Conjure Elemental (slot L${slotLevel})! Fire Elemental appears with ${summon.maxHP} HP, AC ${summon.ac}.`,
+    `${caster.name} casts Conjure Elemental (slot L${slotLevel})! ${summonName} appears with ${summon.maxHP} HP, AC ${summon.ac}.`,
     summon.id,
   );
 }

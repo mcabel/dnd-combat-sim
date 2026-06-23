@@ -47,7 +47,7 @@
 import { Combatant, Battlefield, ReactionTrigger, ReactionOutcome } from '../types/core';
 import { EngineState } from '../engine/combat';
 import { applySpellEffect } from '../engine/spell_effects';
-import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
+import { consumeSpellSlot, hasSpellSlot, consumeInnateSpellUse } from '../ai/resources';
 
 // ---- Metadata -----------------------------------------------
 
@@ -127,7 +127,12 @@ export function executeReaction(
   trigger: ReactionTrigger,
 ): ReactionOutcome {
   if (trigger.kind === 'incoming_attack_hit') {
-    consumeSpellSlot(caster, 1);
+    // Session 44 Task #20: consume a spell slot OR an innate spell use.
+    // The Couatl (and similar monsters) cast Shield via innate spellcasting
+    // (3/day), not spell slots. Mirrors the pattern in cure_wounds.ts.
+    if (consumeSpellSlot(caster, 1) === null) {
+      consumeInnateSpellUse(caster, 'Shield');
+    }
     caster.budget.reactionUsed = true;
 
     applySpellEffect(caster, {
@@ -156,7 +161,10 @@ export function executeReaction(
 
   if (trigger.kind === 'targeted_by_magic_missile') {
     // Session 37: Shield blocks ALL Magic Missile damage.
-    consumeSpellSlot(caster, 1);
+    // Session 44 Task #20: innate-use fallback for monsters (Couatl).
+    if (consumeSpellSlot(caster, 1) === null) {
+      consumeInnateSpellUse(caster, 'Shield');
+    }
     caster.budget.reactionUsed = true;
 
     applySpellEffect(caster, {

@@ -34,7 +34,7 @@
 
 import { Combatant, Battlefield } from '../types/core';
 import { CombatEvent, EngineState, rollSaveReactable } from '../engine/combat';
-import { rollDie, applyDamage } from '../engine/utils';
+import { rollDie, applyDamage, elementalAffinityBonus } from '../engine/utils';
 import { inConeFt, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 
@@ -174,7 +174,9 @@ export function execute(
     const save = rollSaveReactable(state, caster, target, 'dex', saveDC);
 
     // Roll 3d6 fire damage
-    const dmgRoll = rollDie(6) + rollDie(6) + rollDie(6);
+    // Session 48 Task #29-follow-up-5c: Elemental Affinity (Draconic Sorcerer 6)
+    const eaBonus = elementalAffinityBonus(caster, 'fire');
+    const dmgRoll = rollDie(6) + rollDie(6) + rollDie(6) + eaBonus;
     const dmgFinal = save.success ? Math.floor(dmgRoll / 2) : dmgRoll;
 
     emit(

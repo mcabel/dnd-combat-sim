@@ -56,11 +56,21 @@ export function rollWithDisadvantage(sides = 20): number {
 /**
  * Roll a d20 attack roll, applying advantage/disadvantage.
  * Returns { roll, total, isCrit, isFumble }.
+ *
+ * ── Session 45 Task #29-follow-up: critRange parameter ──
+ * PHB default: crit on a natural 20. Some features expand this:
+ *   - Fighter Champion "Improved Critical" (PHB p.72) → crit on 19-20
+ *   - Fighter Champion "Superior Critical" (PHB p.72) → crit on 18-20
+ * The caller passes the LOWEST natural roll that still crits (default 20).
+ * Spell attacks don't benefit from these features (Improved Critical
+ * specifies "weapon attacks"), so spell attack callers should leave
+ * critRange at its default (20).
  */
 export function rollAttack(
   hitBonus: number,
   hasAdvantage: boolean,
-  hasDisadvantage: boolean
+  hasDisadvantage: boolean,
+  critRange: number = 20,
 ): { roll: number; total: number; isCrit: boolean; isFumble: boolean } {
   // Advantage and disadvantage cancel out (PHB p.173)
   let roll: number;
@@ -74,7 +84,7 @@ export function rollAttack(
   return {
     roll,
     total: roll + hitBonus,
-    isCrit: roll === 20,
+    isCrit: roll >= critRange,
     isFumble: roll === 1,
   };
 }
@@ -119,7 +129,17 @@ export function rollSave(
 ): { roll: number; total: number; success: boolean } {
   const score = combatant[ability];
   const mod = abilityMod(score);
-  const prof = isProficient ? profBonusByCR(combatant.cr) : 0;
+
+  // ── Session 48 Task #29-follow-up-4b: Diamond Soul (Open Hand Monk 13) ──
+  // PHB p.79: "the purity of your ki suffuses your entire being, granting
+  // you proficiency in all saving throws."
+  // When the combatant has Diamond Soul, treat ALL saves as proficient.
+  // Use combatantProfBonus() for the correct proficiency (level-based for
+  // PCs, CR-based for monsters) — profBonusByCR returns 2 for all PCs
+  // (cr=null) which is wrong for level 5+ monks.
+  const diamondSoulActive = combatant.classFeatures?.includes('Diamond Soul') === true;
+  const effectiveProficient = isProficient || diamondSoulActive;
+  const prof = effectiveProficient ? combatantProfBonus(combatant) : 0;
 
   // Conditions and advantage-system entries that affect saving throws
   const selfSave = querySelf(combatant, `save:${ability}` as import('../types/core').D20TestScope);
@@ -468,6 +488,18 @@ export function effectiveMaxHP(c: Combatant): number {
 // ---- Conditions ---------------------------------------------
 
 export function addCondition(target: Combatant, condition: Condition): void {
+  // ── Session 47 Task #29-follow-up-3: Nature's Ward (Land Druid 10) ──
+  // PHB p.68: "Starting at 10th level, you can't be charmed or frightened by
+  // fey or elementals. You are also immune to poison and disease."
+  //
+  // v1 wiring: blanket immunity to the 'poisoned' condition. The fey/elemental
+  // charm/frighten immunity requires source-creature-type tracking (not
+  // available in addCondition's signature) — documented as a v1 simplification.
+  // Disease immunity is a no-op (diseases are not tracked in v1 — see Lesser
+  // Restoration v1 simplification).
+  if (condition === 'poisoned' && target.classFeatures?.includes("Nature's Ward")) {
+    return; // immune — do not apply the condition
+  }
   target.conditions.add(condition);
   // Cascade: incapacitated implies can't take actions
   if (condition === 'paralyzed' || condition === 'stunned' || condition === 'petrified') {
@@ -659,19 +691,91 @@ export function effectiveSpeed(c: Combatant): number {
   return speed;
 }
 
+// ---- Elemental Affinity (Draconic Sorcerer 6) ----------------
+
+/**
+ * Returns the CHA modifier bonus for Elemental Affinity (Draconic Sorcerer 6,
+ * PHB p.102): "when you cast a spell that deals damage of the type associated
+ * with your draconic ancestry, you can add your Charisma modifier to that
+ * damage."
+ *
+ * Returns 0 if:
+ *   - The caster doesn't have the 'Elemental Affinity' classFeature
+ *   - The damage type doesn't match the caster's draconicAncestry
+ *   - The caster's CHA mod is ≤ 0 (no bonus to add)
+ *
+ * @param caster      The spellcasting combatant
+ * @param damageType  The spell's damage type (e.g. 'fire', 'cold')
+ * @returns           CHA modifier (≥ 0) to add to the spell's damage roll
+ *
+ * Session 47 Task #29-follow-up-2: wired in the generic 'cast' case and
+ * Fireball's execute function. Future: wire in all bespoke spell execute
+ * functions (Lightning Bolt, Cone of Cold, etc.).
+ */
+export function elementalAffinityBonus(caster: Combatant, damageType: string | null | undefined): number {
+  if (!damageType) return 0;
+  if (!caster.classFeatures?.includes('Elemental Affinity')) return 0;
+  if (!caster.draconicAncestry) return 0;
+  if (caster.draconicAncestry.toLowerCase() !== damageType.toLowerCase()) return 0;
+  const chaMod = abilityMod(caster.cha);
+  return chaMod > 0 ? chaMod : 0;
+}
+
 // ---- Initiative --------------------------------------------
+
+/**
+ * Compute the proficiency bonus for a Combatant.
+ *
+ * For PCs (cr=null with the `level` field set by buildCombatant), uses the
+ * character-level table (PHB p.15): level 1-4 → +2, 5-8 → +3, 9-12 → +4,
+ * 13-16 → +5, 17-20 → +6.
+ *
+ * For monsters (cr set) or legacy PCs without the `level` field, falls back
+ * to the CR-based `proficiencyBonus(cr)` table.
+ *
+ * Session 46 Task #29-follow-up-2: needed for Remarkable Athlete (Champion 7)
+ * which adds half proficiency (rounded up) to STR/DEX/CON ability checks
+ * including initiative.
+ */
+export function combatantProfBonus(c: Combatant): number {
+  // PC: use character level if available (set by buildCombatant)
+  if (c.cr === null && c.level !== undefined && c.level > 0) {
+    const lvl = c.level;
+    if (lvl <= 4) return 2;
+    if (lvl <= 8) return 3;
+    if (lvl <= 12) return 4;
+    if (lvl <= 16) return 5;
+    return 6;
+  }
+  // Monster or legacy: use CR-based table
+  return proficiencyBonus(c.cr);
+}
 
 /**
  * Roll initiative for all combatants and return an ordered array of IDs.
  * Ties between combatants of different factions: monsters go last (SAC/DM convention).
  * Ties within same faction: random.
+ *
+ * Session 46 Task #29-follow-up-2: Remarkable Athlete (Champion 7) adds
+ * half proficiency bonus (rounded up) to initiative (a DEX ability check
+ * that doesn't normally add proficiency). PHB p.72: "you can add half your
+ * proficiency bonus (rounded up) to any Strength, Dexterity, or Constitution
+ * check you make that doesn't already use your proficiency bonus."
  */
 export function rollInitiative(battlefield: Battlefield): string[] {
   const entries: { id: string; init: number; tieBreaker: number }[] = [];
 
   for (const [id, c] of battlefield.combatants) {
     const dexMod = abilityMod(c.dex);
-    const roll = rollDie(20) + dexMod;
+    // Remarkable Athlete (Champion 7): +ceil(prof/2) to DEX checks w/o prof.
+    // Initiative is a DEX check that doesn't use proficiency by default.
+    // Inlined hasFeature check to avoid circular dependency with builder.ts.
+    let initBonus = dexMod;
+    if (c.classFeatures?.includes('Remarkable Athlete')) {
+      const prof = combatantProfBonus(c);
+      initBonus += Math.ceil(prof / 2);
+    }
+    const roll = rollDie(20) + initBonus;
     entries.push({ id, init: roll, tieBreaker: Math.random() });
   }
 
@@ -1211,6 +1315,31 @@ export function shortRest(c: Combatant): void {
   if (r.secondWind) r.secondWind.remaining = r.secondWind.max;
   // Arcane Recovery: can be used once per day during a short rest
   // (wizard player decision — mark available, actual use is separate)
+
+  // ── Session 49 Task #29-follow-up-3c: Natural Recovery (Land Druid 2) ──
+  // PHB p.68: recover spell slots equal to half druid level (rounded up),
+  // max 5th level, once per long rest. v1 simplification: auto-recover the
+  // lowest-level expended slots first (maximizes number of slots regained).
+  // The druid's classLevels['Druid'] gives the druid level; falls back to
+  // total level for monoclass. Slots above 5th level are NOT recoverable.
+  if (r.naturalRecovery && r.naturalRecovery.usesRemaining > 0
+      && c.classFeatures?.includes('Natural Recovery')
+      && r.spellSlots) {
+    const druidLevel = c.classLevels?.['Druid'] ?? c.level ?? 1;
+    let budget = Math.ceil(druidLevel / 2);  // PHB p.68: rounded up
+    // Iterate slots from 1st to 5th level; recover expended slots until budget
+    // is exhausted. Each slot costs its level in budget (e.g. recovering a 3rd-
+    // level slot costs 3 from the budget).
+    for (let lvl = 1; lvl <= 5 && budget > 0; lvl++) {
+      const slot = r.spellSlots[lvl];
+      if (!slot) continue;
+      while (slot.remaining < slot.max && budget >= lvl) {
+        slot.remaining++;
+        budget -= lvl;
+      }
+    }
+    r.naturalRecovery.usesRemaining = 0;  // consume the use
+  }
 }
 
 /**
@@ -1270,6 +1399,8 @@ export function longRest(c: Combatant): void {
   if (r.bardicInspiration) r.bardicInspiration.remaining = r.bardicInspiration.max;
   if (r.layOnHands)        r.layOnHands.remaining        = r.layOnHands.pool;
   if (r.arcaneRecovery)    r.arcaneRecovery.usesRemaining = 1;
+  // Session 49 Task #29-follow-up-3c: Land Druid Natural Recovery resets on long rest.
+  if (r.naturalRecovery)   r.naturalRecovery.usesRemaining = 1;
   // Hit dice: recover up to half max (round up). PHB p.186.
   if (r.hitDice) {
     const toRecover = Math.ceil(r.hitDice.max / 2);

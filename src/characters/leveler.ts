@@ -294,6 +294,305 @@ const CASTING_ABILITY: Partial<Record<ClassName, AbilityScore>> = {
 type RawFeature = { name: string; description: string; source: 'class' | 'subclass' };
 type FeatureTable = Partial<Record<ClassName, Record<number, RawFeature[]>>>;
 
+// ── Session 44 Task #29: Subclass-specific feature table ──
+// ── Session 45 Task #29-follow-up: expanded with 4 more subclasses ──
+//
+// The CLASS_FEATURES table above only models BASE class features
+// (e.g. Bard 6 → Countercharm). Some subclass features are mechanically
+// significant enough that the engine needs to know about them — the
+// clearest case is Bard College of Valor / College of Swords both
+// granting Extra Attack at Bard 6 (PHB p.55). Without this table, a
+// Valor Bard 6 has no `Extra Attack` in their feature list, so the
+// planner's `hasFeature(self, 'Extra Attack')` check fails and they
+// only make 1 attack per Attack action.
+//
+// Format: SUBCLASS_FEATURES[className][subclassName][level] = RawFeature[]
+//
+// Lookup is case-sensitive on subclass name — callers must use the
+// canonical PHB/XGE names ("College of Valor", "College of Swords").
+// We accept the common shorthand "Valor" / "Swords" as aliases too
+// (see resolveSubclassFeatures below).
+//
+// v1.5 scope (Session 45 Task #29-follow-up): the following subclasses
+// are now modelled:
+//   - Bard College of Valor / Swords (Extra Attack at 6) — Session 44
+//   - Fighter Champion (Improved Critical at 3, Remarkable Athlete at 7,
+//     Additional Fighting Style at 10, Superior Critical at 15, Survivor
+//     at 18) — Session 45
+//   - Druid Circle of the Land (Natural Recovery at 2, Land's Stride at
+//     6, Nature's Ward at 10, Nature's Sanctuary at 14) — Session 45
+//   - Monk Way of the Open Hand (Open Hand Technique at 3, Flurry of
+//     Blows at 5, Tranquility at 11, Diamond Soul at 13, Quivering Palm
+//     at 17) — Session 45
+//   - Sorcerer Draconic Bloodline (Draconic Resilience at 1, Elemental
+//     Affinity at 6, Dragon Wings at 14, Draconic Presence at 18) —
+//     Session 45
+//
+// Of these, mechanically-consumed features in the engine (Session 45):
+//   - Fighter Champion "Improved Critical" → rollAttack critRange=19
+//   - Fighter Champion "Superior Critical" → rollAttack critRange=18
+// Other features are flag-only — the engine records them on
+// combatant.classFeatures so downstream systems can check hasFeature(),
+// but no engine behaviour is wired yet. Future sessions can wire them.
+type SubclassFeatureTable = Partial<
+  Record<ClassName, Partial<Record<string, Record<number, RawFeature[]>>>>
+>;
+
+const SUBCLASS_FEATURES: SubclassFeatureTable = {
+  Bard: {
+    'College of Valor': {
+      // PHB p.55 — "Extra Attack: Starting at 6th level, you can attack
+      // twice, instead of once, whenever you take the Attack action on
+      // your turn."
+      6: [{ name: 'Extra Attack', source: 'subclass',
+            description: 'Attack twice when you take the Attack action (College of Valor 6).' }],
+    },
+    'College of Swords': {
+      // XGE p.15 — same text as Valor: Extra Attack at Bard 6.
+      6: [{ name: 'Extra Attack', source: 'subclass',
+            description: 'Attack twice when you take the Attack action (College of Swords 6).' }],
+    },
+  },
+
+  // ── Session 45 Task #29-follow-up: Fighter Champion ──
+  // PHB p.72-73. Champion is the simplest Fighter subclass — focused on
+  // passive combat boosts (crit range, ability checks, regeneration).
+  Fighter: {
+    Champion: {
+      // PHB p.72 — "Improved Critical: Beginning when you choose this
+      // archetype at 3rd level, your weapon attacks score a critical hit
+      // on a roll of 19 or 20."
+      //
+      // Engine wiring (Session 45): combat.ts reads this feature and
+      // passes critRange=19 to rollAttack for weapon attacks.
+      3: [{ name: 'Improved Critical', source: 'subclass',
+            description: 'Your weapon attacks score a critical hit on a roll of 19 or 20 (Champion 3).' }],
+      // PHB p.72 — "Remarkable Athlete: Starting at 7th level, you can
+      // add half your proficiency bonus (rounded up) to any Strength,
+      // Dexterity, or Constitution check you make that doesn't already
+      // use your proficiency bonus."
+      //
+      // Engine wiring: flag-only (ability check expansion not modelled).
+      7: [{ name: 'Remarkable Athlete', source: 'subclass',
+            description: 'Add half proficiency to STR/DEX/CON ability checks (Champion 7).' }],
+      // PHB p.72 — "Additional Fighting Style: At 10th level, you can
+      // choose a second option from the Fighting Style class feature."
+      //
+      // Engine wiring: flag-only (second Fighting Style choice not modelled).
+      10: [{ name: 'Additional Fighting Style', source: 'subclass',
+              description: 'Choose a second Fighting Style (Champion 10).' }],
+      // PHB p.72 — "Superior Critical: Starting at 15th level, your
+      // weapon attacks score a critical hit on a roll of 18 or 20."
+      //
+      // Engine wiring (Session 45): combat.ts reads this feature and
+      // passes critRange=18 to rollAttack for weapon attacks.
+      15: [{ name: 'Superior Critical', source: 'subclass',
+             description: 'Your weapon attacks score a critical hit on a roll of 18, 19, or 20 (Champion 15).' }],
+      // PHB p.73 — "Survivor: At 18th level, you attain the pinnacle of
+      // resilience in battle. At the start of each of your turns, you
+      // regain hit points equal to 5 + your Constitution modifier..."
+      //
+      // Engine wiring: flag-only (regen at start of turn not modelled).
+      18: [{ name: 'Survivor', source: 'subclass',
+             description: 'Regain 5 + CON mod HP at the start of each turn if below half HP (Champion 18).' }],
+    },
+  },
+
+  // ── Session 45 Task #29-follow-up: Druid Circle of the Land ──
+  // PHB p.68. Land Druids are guardians of nature who gain terrain-based
+  // benefits. Most features are flag-only — mechanically meaningful but
+  // complex enough to defer engine wiring.
+  Druid: {
+    'Circle of the Land': {
+      // PHB p.68 — "Bonus Cantrip: When you choose this circle at 2nd
+      // level, you learn one additional druid cantrip of your choice."
+      // Engine wiring: flag-only (cantrip selection not auto-applied).
+      2: [
+        { name: 'Bonus Cantrip', source: 'subclass',
+          description: 'Learn one additional druid cantrip (Land 2).' },
+        // PHB p.68 — "Natural Recovery: Starting at 2nd level, you can
+        // recover some of your expended spell slots after a short rest."
+        // Engine wiring: flag-only (short-rest slot recovery not modelled).
+        { name: 'Natural Recovery', source: 'subclass',
+          description: 'Recover spell slots equal to half druid level on a short rest, once per long rest (Land 2).' },
+      ],
+      // PHB p.68 — "Land's Stride: Starting at 6th level, moving through
+      // nonmagical difficult terrain costs you no extra movement. You can
+      // also pass through nonmagical plants without being slowed..."
+      // Engine wiring: flag-only (difficult-terrain movement not modelled).
+      6: [{ name: "Land's Stride", source: 'subclass',
+            description: 'Move through nonmagical difficult terrain without penalty; advantage vs plant entangle (Land 6).' }],
+      // PHB p.68 — "Nature's Ward: Starting at 10th level, you can't be
+      // charmed or frightened by elementals or fey, and you are immune
+      // to poison and disease."
+      // Engine wiring: flag-only (immunity not modelled).
+      10: [{ name: "Nature's Ward", source: 'subclass',
+             description: 'Immune to poison and disease; immune to fey/elemental charm and frighten (Land 10).' }],
+      // PHB p.68 — "Nature's Sanctuary: At 14th level, creatures of the
+      // natural world sense your connection to nature and become hesitant
+      // to attack you..."
+      // Engine wiring: flag-only (creature-attack-save not modelled).
+      14: [{ name: "Nature's Sanctuary", source: 'subclass',
+             description: 'Beasts and plants must pass WIS save or be unable to attack you (Land 14).' }],
+    },
+  },
+
+  // ── Session 45 Task #29-follow-up: Monk Way of the Open Hand ──
+  // PHB p.79. Open Hand Monk is the simplest Monk tradition — focuses on
+  // enhancing Flurry of Blows. All features are flag-only in v1.
+  Monk: {
+    'Way of the Open Hand': {
+      // PHB p.79 — "Open Hand Technique: Starting when you choose this
+      // tradition at 3rd level, you can manipulate your enemy's ki when
+      // you harness your own. Whenever you hit a creature with one of the
+      // attacks granted by your Flurry of Blows, you can impose one of
+      // the following effects..."
+      // Engine wiring: flag-only (Flurry of Blows not modelled).
+      3: [{ name: 'Open Hand Technique', source: 'subclass',
+            description: 'Impose effect (no reaction, prone, or push 15ft) on Flurry of Blows hit (Open Hand 3).' }],
+      // PHB p.79 — "Wholeness of Body: At 6th level, you gain the ability
+      // to heal yourself. As an action, you can regain hit points equal
+      // to three times your monk level."
+      // Engine wiring: flag-only (self-heal action not auto-added).
+      6: [{ name: 'Wholeness of Body', source: 'subclass',
+            description: 'Action: heal 3× monk level HP, once per long rest (Open Hand 6).' }],
+      // PHB p.79 — "Tranquility: Beginning at 11th level, you can enter
+      // a special meditation that surrounds you with an aura of peace."
+      // Engine wiring: flag-only (out-of-combat buff not modelled).
+      11: [{ name: 'Tranquility', source: 'subclass',
+             description: 'After short rest, gain Sanctuary effect (WIS save DC = 8 + WIS + prof) (Open Hand 11).' }],
+      // PHB p.79 — "Diamond Soul: Beginning at 13th level, the purity
+      // of your ki suffuses your entire being, granting you proficiency
+      // in all saving throws."
+      // Engine wiring: flag-only (save proficiency not auto-applied).
+      13: [{ name: 'Diamond Soul', source: 'subclass',
+             description: 'Proficiency in all saving throws; spend 1 ki to reroll a failed save (Open Hand 13).' }],
+      // PHB p.79 — "Quivering Palm: At 17th level, you gain the ability
+      // to set up vibrations in someone's body..."
+      // Engine wiring: flag-only (touch-attack instakill not modelled).
+      17: [{ name: 'Quivering Palm', source: 'subclass',
+             description: 'Touch attack: target takes 10d12 necrotic, or half on CON save; die in 1d20 days if reduced to 0 HP (Open Hand 17).' }],
+    },
+  },
+
+  // ── Session 45 Task #29-follow-up: Sorcerer Draconic Bloodline ──
+  // PHB p.102. Draconic Sorcerers gain durability and elemental affinity.
+  // Most features are flag-only; Draconic Resilience is the most impactful
+  // (HP + AC boost) but is applied at level 1 (already granted via
+  // chooseSubclass), so it's not in this table.
+  Sorcerer: {
+    'Draconic Bloodline': {
+      // PHB p.102 — "Elemental Affinity: Starting at 6th level, when you
+      // cast a spell that deals damage of the type associated with your
+      // draconic ancestry, you can add your Charisma modifier to one
+      // damage roll of that spell."
+      // Engine wiring: flag-only (per-spell damage bonus not modelled).
+      6: [{ name: 'Elemental Affinity', source: 'subclass',
+            description: 'Add CHA mod to damage of spells matching your draconic ancestry element (Draconic 6).' }],
+      // PHB p.102 — "Dragon Wings: At 14th level, you gain the ability to
+      // sprout a pair of dragon wings from your back..."
+      // Engine wiring: flag-only (fly speed not auto-applied).
+      14: [{ name: 'Dragon Wings', source: 'subclass',
+             description: 'Sprout wings; gain fly speed equal to current speed (Draconic 14).' }],
+      // PHB p.102 — "Draconic Presence: Beginning at 18th level, you can
+      // channel the dread presence of your dragon ancestor..."
+      // Engine wiring: flag-only (frighten aura not modelled).
+      18: [{ name: 'Draconic Presence', source: 'subclass',
+             description: 'Action + 5 sorcery points: aura frightens enemies within 60ft (CON save) (Draconic 18).' }],
+    },
+  },
+};
+
+/**
+ * Resolve subclass-specific features for the given class + subclass + level.
+ *
+ * Handles alias normalisation:
+ *   - "Valor" / "Valor Bard" → "College of Valor"
+ *   - "Swords" / "Swords Bard" → "College of Swords"
+ *
+ * Returns an empty array if the subclass is unknown, the class has no
+ * subclass feature table, or no features are defined for this level.
+ */
+function resolveSubclassFeatures(
+  className: ClassName,
+  subclass: string | undefined,
+  level: number,
+): RawFeature[] {
+  if (!subclass) return [];
+  const classTable = SUBCLASS_FEATURES[className];
+  if (!classTable) return [];
+
+  // Try exact match first
+  let entry = classTable[subclass];
+
+  // Alias normalisation — accept common shorthand forms for each subclass.
+  // ── Session 45 Task #29-follow-up: extended to Fighter/Druid/Monk/Sorcerer ──
+  if (!entry) {
+    const lower = subclass.toLowerCase();
+    if (className === 'Bard') {
+      if (lower === 'valor' || lower.includes('valor')) {
+        entry = classTable['College of Valor'];
+      } else if (lower === 'swords' || lower.includes('swords')) {
+        entry = classTable['College of Swords'];
+      }
+    } else if (className === 'Fighter') {
+      if (lower === 'champion' || lower.includes('champion')) {
+        entry = classTable.Champion;
+      }
+    } else if (className === 'Druid') {
+      if (lower === 'land' || lower.includes('land')) {
+        entry = classTable['Circle of the Land'];
+      }
+    } else if (className === 'Monk') {
+      if (lower === 'open hand' || lower.includes('open hand') || lower.includes('openhand')) {
+        entry = classTable['Way of the Open Hand'];
+      }
+    } else if (className === 'Sorcerer') {
+      if (lower === 'draconic' || lower.includes('draconic') || lower.includes('dragon')) {
+        entry = classTable['Draconic Bloodline'];
+      }
+    }
+  }
+
+  if (!entry) return [];
+  return entry[level] ?? [];
+}
+
+/**
+ * Return all subclass-specific features the character SHOULD have for the
+ * given class at all levels from 1 up to (and including) `currentLevel`.
+ *
+ * Used by chooseSubclass() in improvements.ts to retroactively grant
+ * subclass features when the player picks a subclass AFTER reaching a
+ * level that grants a subclass feature (e.g. choosing College of Valor
+ * at Bard 7 should still grant Extra Attack for Bard 6).
+ *
+ * Returns CharacterFeature[] (already typed for storage on the sheet).
+ * Returns [] if the subclass is unknown or has no features at any level
+ * up to currentLevel.
+ *
+ * Accepts `className` as a plain string (not the strict ClassName union)
+ * because chooseSubclass's public API takes string. Unknown class names
+ * resolve to an empty list (no subclass features to grant).
+ */
+export function getSubclassFeaturesForLevels(
+  className: string,
+  subclass: string,
+  currentLevel: number,
+): CharacterFeature[] {
+  // Validate className is a known class; if not, no subclass features.
+  if (!VALID_CLASSES.has(className as ClassName)) return [];
+
+  const out: CharacterFeature[] = [];
+  for (let lvl = 1; lvl <= currentLevel; lvl++) {
+    const raws = resolveSubclassFeatures(className as ClassName, subclass, lvl);
+    for (const r of raws) {
+      out.push({ name: r.name, description: r.description, source: r.source });
+    }
+  }
+  return out;
+}
+
 const CLASS_FEATURES: FeatureTable = {
   Artificer: {
     1:  [{ name: 'Magical Tinkering', source: 'class',    description: 'Imbue a Tiny nonmagical object you touch with one of several minor magical properties (light, message recording, sensory illusion, or odor/sound).' },
@@ -947,7 +1246,25 @@ export function applyLevelUp(
   // ---- Collect new features --------------------------------
 
   const rawFeatures = CLASS_FEATURES[cn]?.[newClassLevel] ?? [];
-  const newFeatures: CharacterFeature[] = rawFeatures.map(f => ({
+
+  // ── Session 44 Task #29: subclass-specific features ──
+  // Some subclass features are mechanically significant (e.g. Bard
+  // College of Valor/Swords → Extra Attack at Bard 6). The base
+  // CLASS_FEATURES table only summarises the subclass prompt at the
+  // subclass-selection level (e.g. "Bard College" at Bard 3) — it
+  // doesn't model the features each subclass grants at later levels.
+  // We consult the SUBCLASS_FEATURES table here using the character's
+  // already-chosen subclass (subclassChoices[cn]) to fill that gap.
+  //
+  // If the subclass hasn't been chosen yet (subclassPrompt is set this
+  // level), resolveSubclassFeatures returns [] — the features will be
+  // granted on a future applySubclassFeatures() call after the player
+  // picks a subclass.
+  const chosenSubclass = updated.subclassChoices[cn];
+  const rawSubclassFeatures = resolveSubclassFeatures(cn, chosenSubclass, newClassLevel);
+
+  const allRawFeatures = [...rawFeatures, ...rawSubclassFeatures];
+  const newFeatures: CharacterFeature[] = allRawFeatures.map(f => ({
     name:        f.name,
     description: f.description,
     source:      f.source,

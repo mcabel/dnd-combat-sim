@@ -65,7 +65,7 @@
 
 import { Combatant, Battlefield } from '../types/core';
 import { rollSaveReactable, CombatEvent, EngineState } from '../engine/combat';
-import { rollAttack, rollDie, applyDamageWithTempHP, abilityMod } from '../engine/utils';
+import { rollAttack, rollDie, applyDamageWithTempHP, abilityMod, elementalAffinityBonus } from '../engine/utils';
 import { chebyshev3D, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 
@@ -319,7 +319,10 @@ export function execute(
     if (target.isDead || target.isUnconscious) continue;
 
     const save = rollSaveReactable(state, caster, target, 'dex', saveDC);
-    const fullDmg = rollColdDamage();
+    // Session 49 Task #29-follow-up-5c-2: Elemental Affinity (Draconic Sorcerer 6)
+    // applies to the cold AoE only — piercing is NOT a draconic ancestry type.
+    const eaBonus = elementalAffinityBonus(caster, metadata.coldDamageType);
+    const fullDmg = rollColdDamage() + eaBonus;
     const dmg = save.success ? Math.floor(fullDmg / 2) : fullDmg;
     const dealt = applyDamageWithTempHP(target, dmg, metadata.coldDamageType);
 
