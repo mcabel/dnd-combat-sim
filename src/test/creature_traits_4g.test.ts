@@ -161,35 +161,31 @@ console.log('\n=== 5. Engine — _turnStartPos tracked by resetBudget ===\n');
 // ============================================================
 console.log('\n=== 6. Engine — Charge fires after moving toward target ===\n');
 {
-  // Spawn a Boar at (0,0) with a Goblin target at (5,0).
-  // resetBudget captures _turnStartPos = (0,0).
-  // Move Boar to (4,0) — 4 squares = 20 ft closer to Goblin.
-  // Boar's charge minMoveFt = 20. Distance before = 25, distance after = 5.
-  // movedToward = 25 - 5 = 20 ≥ 20 → Charge fires!
-  const boar = spawn('Boar', { x: 0, y: 0, z: 0 });
-  boar.faction = 'party';
-  resetBudget(boar); // _turnStartPos = (0,0)
+  // De-flake (Session 53): nat 1 is an automatic miss (PHB p.194) — 5% chance.
+  // Retry until the attack hits (up to 20 tries → P(all miss) = 0.05^20 ≈ 0).
+  let chargeFired = false;
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const boar = spawn('Boar', { x: 0, y: 0, z: 0 });
+    boar.faction = 'party';
+    resetBudget(boar);
 
-  const goblin = spawn('Goblin', { x: 5, y: 0, z: 0 });
-  goblin.faction = 'enemy';
-  goblin.currentHP = 1000;
-  goblin.maxHP = 1000;
-  goblin.ac = 5; // easy to hit
+    const goblin = spawn('Goblin', { x: 5, y: 0, z: 0 });
+    goblin.faction = 'enemy';
+    goblin.currentHP = 1000;
+    goblin.maxHP = 1000;
+    goblin.ac = 5;
 
-  // Simulate movement: move Boar to (4,0)
-  boar.pos = { x: 4, y: 0, z: 0 };
+    boar.pos = { x: 4, y: 0, z: 0 };
 
-  const bf = makeBF([boar, goblin]);
-  const state = makeState(bf);
+    const bf = makeBF([boar, goblin]);
+    const state = makeState(bf);
+    resolveAttack(boar, goblin, boar.actions[0], state);
 
-  // Attack the goblin
-  const attack = boar.actions[0];
-  resolveAttack(boar, goblin, attack, state);
-
-  // Log should mention "Charge"
-  const chargeLog = (state.log.events as any[]).find(e =>
-    e.description && e.description.includes('Charge'));
-  assert('Charge rider fired (log mentions Charge)', chargeLog !== undefined);
+    const chargeLog = (state.log.events as any[]).find(e =>
+      e.description && e.description.includes('Charge'));
+    if (chargeLog) { chargeFired = true; break; }
+  }
+  assert('Charge rider fired (log mentions Charge, within 20 attempts)', chargeFired);
 }
 
 // ============================================================
@@ -221,27 +217,31 @@ console.log('\n=== 7. Engine — Charge does NOT fire without enough movement ==
 // ============================================================
 console.log('\n=== 8. Engine — Pounce fires after moving toward target ===\n');
 {
-  const allo = spawn('Allosaurus', { x: 0, y: 0, z: 0 });
-  allo.faction = 'party';
-  resetBudget(allo);
+  // De-flake (Session 53): nat 1 is an automatic miss — 5% chance.
+  // Retry until the attack hits.
+  let pounceFired = false;
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const allo = spawn('Allosaurus', { x: 0, y: 0, z: 0 });
+    allo.faction = 'party';
+    resetBudget(allo);
 
-  const goblin = spawn('Goblin', { x: 7, y: 0, z: 0 });
-  goblin.faction = 'enemy';
-  goblin.currentHP = 1000;
-  goblin.maxHP = 1000;
-  goblin.ac = 5;
+    const goblin = spawn('Goblin', { x: 7, y: 0, z: 0 });
+    goblin.faction = 'enemy';
+    goblin.currentHP = 1000;
+    goblin.maxHP = 1000;
+    goblin.ac = 5;
 
-  // Move Allosaurus 6 squares (30 ft) toward goblin
-  allo.pos = { x: 6, y: 0, z: 0 };
+    allo.pos = { x: 6, y: 0, z: 0 };
 
-  const bf = makeBF([allo, goblin]);
-  const state = makeState(bf);
-  resolveAttack(allo, goblin, allo.actions[0], state);
+    const bf = makeBF([allo, goblin]);
+    const state = makeState(bf);
+    resolveAttack(allo, goblin, allo.actions[0], state);
 
-  // Log should mention "Pounce"
-  const pounceLog = (state.log.events as any[]).find(e =>
-    e.description && e.description.includes('Pounce'));
-  assert('Pounce rider fired (log mentions Pounce)', pounceLog !== undefined);
+    const pounceLog = (state.log.events as any[]).find(e =>
+      e.description && e.description.includes('Pounce'));
+    if (pounceLog) { pounceFired = true; break; }
+  }
+  assert('Pounce rider fired (log mentions Pounce, within 20 attempts)', pounceFired);
 }
 
 // ============================================================
