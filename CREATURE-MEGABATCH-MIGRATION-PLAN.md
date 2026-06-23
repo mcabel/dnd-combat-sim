@@ -407,6 +407,7 @@ Documented for future sessions. NOT in scope for the immediate megabatch.
 | 4d | ✅ DONE | 53 | 23ff730 | Death Burst (14 creatures parsed across 7 pre-2024 sources); checkDeath hook + chain reactions; 63 test assertions |
 | 4e (Session 52) | ✅ DONE | 52 | cfb8a11 | Blood Frenzy (7) + Swarm/cannotRegainHP (10) + Siege Monster metadata (5) |
 | 4e-remaining | ✅ PARTIAL | 53 | 2850c18 | Sunlight Sensitivity (120) + Avoidance (8) wired into engine. 6 more metadata flags parsed (Ambusher 10, Brute 14, False Appearance 100, Siege Monster 71, Water Breathing 33, Hold Breath 57). Remaining: Charge (49), Pounce (24), Incorporeal Movement (54), Superior Invisibility (15), Rejuvenation (33) — need movement/AI/death-respawn hooks. |
+| 4f | ✅ DONE | 53 | cdc68c4 | Superior Invisibility (15 creatures) wired into AI planner + engine. Incorporeal Movement (51 creatures) parsed as metadata-only (v1 movement has no collision detection). |
 | 5 | DEFERRED | — | — | lair + spellcasting + shapechanger |
 
 **Session 53 note:** User uploaded ~99 bestiary sourcebooks mid-session (was 2 in Session 52). All counts above reflect the expanded dataset. Parser robustness fixes (rawCreatureType handling for `{type: {choose: [...]}}` shape) + 4 stale test files updated to be source-aware (no longer pin MM-only creature names). See zHANDOVER-SESSION-53.md for full details.
