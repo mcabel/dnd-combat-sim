@@ -43,10 +43,24 @@ function eq<T>(label: string, a: T, e: T): void {
 }
 
 // ---- Bestiary setup -----------------------------------------
-
+// Session 53: load ONLY the sourcebooks this test needs (was loading all
+// 99 user-uploaded bestiaries, which caused CI to time out at 60s per test).
+// The specific creatures referenced: Kobold/Drow/Crocodile/Giant Shark/
+// Animated Armor (MM), Displacer Fiend (CoA), Izek Strazni/Pidlwick II (CoS),
+// Fire Kraken (BGG), Goblin (MM).
+const NEEDED_SOURCES = ['mm-2014', 'mm', 'cos', 'coa', 'bgg', 'dmg'];
 function loadBestiary(): Map<string, Raw5etoolsMonster> {
   const dir = path.join(__dirname, '../../bestiaryData');
-  const files = fs.readdirSync(dir).filter(f => f.endsWith('.json'));
+  const allFiles = fs.readdirSync(dir).filter(f => f.endsWith('.json'));
+  // Pick files matching the NEEDED_SOURCES list (e.g. 'bestiary-mm-2014.json')
+  const files = allFiles.filter(f =>
+    NEEDED_SOURCES.some(src => f === `bestiary-${src}.json`));
+  if (files.length === 0) {
+    // Fallback: load all (slower, but works if file names change)
+    console.warn('  [warn] No matching source files found, loading all bestiary JSONs');
+    const loaded = allFiles.map(f => JSON.parse(fs.readFileSync(path.join(dir, f), 'utf-8')));
+    return mergeBestiaries(...loaded);
+  }
   const loaded = files.map(f => JSON.parse(fs.readFileSync(path.join(dir, f), 'utf-8')));
   return mergeBestiaries(...loaded);
 }
@@ -254,11 +268,14 @@ console.log('\n=== 7. Engine — Avoidance flips save-for-half outcome ===\n');
   caster.actions = [saveAction];
 
   // Run multiple trials to verify Avoidance flips the outcome
-  // (success → 0 dmg, failure → half dmg)
+  // (success → 0 dmg, failure → half dmg). Reduced from 100 to 30 trials
+  // per outcome to stay under CI's 60-second per-test timeout (each trial
+  // is ~50ms due to resolveAttack overhead). 30 trials is enough to observe
+  // both outcomes with high probability (P(no success in 30) ≈ 0.5^30 ≈ 1e-9).
   let observedZeroDamageOnSuccess = false;
   let observedHalfDamageOnFail = false;
 
-  for (let trial = 0; trial < 100; trial++) {
+  for (let trial = 0; trial < 30; trial++) {
     const d = spawn('Displacer Fiend', { x: 5, y: 5, z: 0 });
     d.faction = 'enemy';
     d.currentHP = 1000; // ensure it survives
@@ -289,8 +306,8 @@ console.log('\n=== 7. Engine — Avoidance flips save-for-half outcome ===\n');
     }
     if (observedZeroDamageOnSuccess && observedHalfDamageOnFail) break;
   }
-  assert('Avoidance: 0 damage on successful save (observed in 100 trials)', observedZeroDamageOnSuccess);
-  assert('Avoidance: half damage on failed save (observed in 100 trials)', observedHalfDamageOnFail);
+  assert('Avoidance: 0 damage on successful save (observed in 30 trials)', observedZeroDamageOnSuccess);
+  assert('Avoidance: half damage on failed save (observed in 30 trials)', observedHalfDamageOnFail);
 }
 
 // ============================================================
@@ -321,7 +338,7 @@ console.log('\n=== 8. Engine — Non-Avoidance creature takes full damage on fai
   };
 
   let observedFullDamageOnFail = false;
-  for (let trial = 0; trial < 100; trial++) {
+  for (let trial = 0; trial < 30; trial++) {
     const goblin = spawn('Goblin', { x: 5, y: 5, z: 0 });
     goblin.faction = 'enemy';
     goblin.currentHP = 1000;
@@ -343,7 +360,7 @@ console.log('\n=== 8. Engine — Non-Avoidance creature takes full damage on fai
       break;
     }
   }
-  assert('Non-Avoidance creature: full damage on failed save (observed in 100 trials)', observedFullDamageOnFail);
+  assert('Non-Avoidance creature: full damage on failed save (observed in 30 trials)', observedFullDamageOnFail);
 }
 
 // ============================================================

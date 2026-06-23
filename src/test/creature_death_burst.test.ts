@@ -46,10 +46,23 @@ function eq<T>(label: string, a: T, e: T): void {
 }
 
 // ---- Bestiary setup -----------------------------------------
-
+// Session 53: load ONLY the sourcebooks this test needs (was loading all
+// 99 user-uploaded bestiaries, which caused CI to time out at 60s per test).
+// The specific creatures referenced: Magmin/Mud Mephit/Dust Mephit/Ice
+// Mephit/Smoke Mephit/Gas Spore/Goblin (MM), Frost Worm (EGW), Galvanice
+// Weird (GGR), Cinder/Dust/Mist/Rime Hulk (BGG), Ice Mephit (MM),
+// Tarrasque (MM).
+const NEEDED_SOURCES = ['mm-2014', 'mm', 'egw', 'ggr', 'bgg', 'dmg'];
 function loadBestiary(): Map<string, Raw5etoolsMonster> {
   const dir = path.join(__dirname, '../../bestiaryData');
-  const files = fs.readdirSync(dir).filter(f => f.endsWith('.json'));
+  const allFiles = fs.readdirSync(dir).filter(f => f.endsWith('.json'));
+  const files = allFiles.filter(f =>
+    NEEDED_SOURCES.some(src => f === `bestiary-${src}.json`));
+  if (files.length === 0) {
+    console.warn('  [warn] No matching source files found, loading all bestiary JSONs');
+    const loaded = allFiles.map(f => JSON.parse(fs.readFileSync(path.join(dir, f), 'utf-8')));
+    return mergeBestiaries(...loaded);
+  }
   const loaded = files.map(f => JSON.parse(fs.readFileSync(path.join(dir, f), 'utf-8')));
   return mergeBestiaries(...loaded);
 }
