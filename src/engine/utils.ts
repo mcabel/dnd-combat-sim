@@ -224,7 +224,21 @@ export function rollSave(
   }
 
   const total = roll + mod + prof + biBonus + blessBonus - banePenalty + wbBonus - mindSliverPenalty + resistanceBonus;
-  return { roll, total, success: total >= dc };
+  // ── Session 52 Creature Megabatch Batch 2: monster save proficiencies ──
+  // 5etools `save` field lists the FULL save bonus (ability mod + proficiency
+  // already folded in, e.g. Adult Red Dragon CON save "+13"). When present
+  // for this ability, use that bonus INSTEAD of the derived (mod + prof) —
+  // otherwise we'd double-count proficiency. The listed bonus already
+  // accounts for the creature's actual CR-based proficiency, so it's more
+  // accurate than the derived value for creatures with non-standard prof.
+  // (e.g. a CR 17 dragon's CON prof is +7, but its listed +13 = CON +6 mod
+  //  + +7 prof — matches. For creatures whose listed bonus differs from the
+  //  derived one, trust the stat block.)
+  const listedSaveBonus = combatant.saveProficiencies?.[ability];
+  const effectiveTotal = listedSaveBonus !== undefined
+    ? roll + listedSaveBonus + biBonus + blessBonus - banePenalty + wbBonus - mindSliverPenalty + resistanceBonus
+    : total;
+  return { roll, total: effectiveTotal, success: effectiveTotal >= dc };
 }
 
 /**

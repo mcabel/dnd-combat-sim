@@ -705,6 +705,35 @@ export interface Combatant {
   // need updates.
   conditionImmunities?: string[];
 
+  // ── Session 52 Creature Megabatch Batch 2: save/skill/senses proficiencies ──
+  // Parsed from 5etools `save` / `skill` / `senses` / `passive` fields. These
+  // let monsters use their listed save bonuses (e.g. Adult Red Dragon CON save
+  // +13) instead of the default abilityMod + profBonus(CR) derivation, and
+  // record vision modes + passive perception for future LOS work (TG-007).
+
+  /** Save bonuses per ability (e.g. { con: 13, dex: 6 }). When set for an
+   *  ability, rollSave() uses this TOTAL bonus instead of abilityMod + prof.
+   *  The 5etools `save` field value is the full listed bonus (ability mod +
+   *  proficiency already folded in) — do NOT double-add proficiency. */
+  saveProficiencies?: Partial<Record<AbilityScore, number>>;
+
+  /** Skill bonuses per skill name (e.g. { perception: 13, stealth: 6 }).
+   *  Not yet consumed by the engine (no skill-check subsystem in v1 combat);
+   *  recorded as metadata for future work. */
+  skillProficiencies?: Record<string, number>;
+
+  /** Vision modes + passive perception, parsed from 5etools `senses` +
+   *  `passive`. Range in feet (e.g. { darkvision: 120, blindsight: 60,
+   *  passivePerception: 23 }). Not yet consumed by the LOS engine (TG-007);
+   *  recorded as metadata so adding more bestiary sources auto-populates it. */
+  senses?: {
+    darkvision?: number;
+    blindsight?: number;
+    truesight?: number;
+    tremorsense?: number;
+    passivePerception?: number;
+  };
+
   // Bardic Inspiration die granted by a Bard (PHB p.54).
   // Die size (e.g. 6 for d6). Consumed on the next attack roll or saving throw.
   // null = no inspiration die held.

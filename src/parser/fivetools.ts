@@ -72,6 +72,14 @@ export interface Raw5etoolsMonster {
   // creatures by creature_analysis.ts), but we accept the same permissive
   // shape for forward-compat with future sourcebooks.
   conditionImmune?: Array<string | { [k: string]: unknown }>;
+  // ── Session 52 Creature Megabatch Batch 2: saves/skills/senses ──
+  // save/skill: { ability: "+N" } maps (e.g. { "con":"+13", "dex":"+6" }).
+  // senses: string array like ["blindsight 60 ft.", "darkvision 120 ft."].
+  // passive: integer passive perception score.
+  save?: Record<string, string>;
+  skill?: Record<string, string>;
+  senses?: string[];
+  passive?: number;
 }
 
 // ---- Dice parsing -------------------------------------------
@@ -414,6 +422,96 @@ function parseConditionImmune(
   return Array.from(new Set(out));
 }
 
+// ---- Save / skill / senses parsers (Session 52 Batch 2) ----
+
+/** Map 5etools ability keys to our AbilityScore union. */
+const ABILITY_KEY_MAP: Record<string, import('../types/core').AbilityScore> = {
+  str: 'str', strength: 'str',
+  dex: 'dex', dexterity: 'dex',
+  con: 'con', constitution: 'con',
+  int: 'int', intelligence: 'int',
+  wis: 'wis', wisdom: 'wis',
+  cha: 'cha', charisma: 'cha',
+};
+
+/**
+ * Parse a 5etools `save` field (`{ "dex":"+6", "con":"+13", ... }`) into a
+ * per-ability bonus map. The values are the FULL listed save bonus (ability
+ * mod + proficiency already folded in) — rollSave() uses this total directly
+ * instead of recomputing abilityMod + profBonus(CR).
+ *
+ * Keys may be full ability names ("dexterity") or 3-letter codes ("dex");
+ * both appear in 5etools data. Values are signed-int strings ("+6", "-1").
+ */
+function parseSaves(
+  rawField: Raw5etoolsMonster['save'],
+): Partial<Record<import('../types/core').AbilityScore, number>> {
+  if (!rawField || typeof rawField !== 'object') return {};
+  const out: Partial<Record<import('../types/core').AbilityScore, number>> = {};
+  for (const [key, val] of Object.entries(rawField)) {
+    const ability = ABILITY_KEY_MAP[key.toLowerCase()];
+    if (!ability) continue;            // unknown key — skip
+    const n = parseInt(String(val), 10);
+    if (!isNaN(n)) out[ability] = n;
+  }
+  return out;
+}
+
+/**
+ * Parse a 5etools `skill` field (`{ "perception":"+13", "stealth":"+6" }`)
+ * into a skill-name → bonus map. Skill names are lowercased. Not consumed by
+ * the engine in v1 (no skill-check subsystem); recorded as metadata.
+ */
+function parseSkills(
+  rawField: Raw5etoolsMonster['skill'],
+): Record<string, number> {
+  if (!rawField || typeof rawField !== 'object') return {};
+  const out: Record<string, number> = {};
+  for (const [key, val] of Object.entries(rawField)) {
+    const n = parseInt(String(val), 10);
+    if (!isNaN(n)) out[key.toLowerCase()] = n;
+  }
+  return out;
+}
+
+/**
+ * Parse a 5etools `senses` string array (e.g.
+ * `["blindsight 60 ft.", "darkvision 120 ft."]`) into a structured object.
+ * Also folds in `passive` (integer passive perception) if provided.
+ *
+ * Each sense string is matched for a vision-mode keyword + a number (the
+ * range in feet). Parenthetical qualifiers like "(blind beyond this radius)"
+ * are ignored. Unknown sense types are silently dropped.
+ */
+function parseSenses(
+  rawSenses: Raw5etoolsMonster['senses'],
+  rawPassive: Raw5etoolsMonster['passive'],
+): Combatant['senses'] {
+  const out: NonNullable<Combatant['senses']> = {};
+  if (rawSenses && Array.isArray(rawSenses)) {
+    for (const s of rawSenses) {
+      if (typeof s !== 'string') continue;
+      const lower = s.toLowerCase();
+      // Match "<mode> <number> ft." — capture mode + number.
+      const m = lower.match(/(darkvision|blindsight|truesight|tremorsense)\s+(\d+)\s*ft/);
+      if (m) {
+        const key = m[1] as 'darkvision' | 'blindsight' | 'truesight' | 'tremorsense';
+        out[key] = parseInt(m[2], 10);
+      }
+      // "passive perception N" — rare in the string form (usually the separate
+      // `passive` integer field), but handle it for robustness.
+      const ppm = lower.match(/passive\s+perception\s+(\d+)/);
+      if (ppm) out.passivePerception = parseInt(ppm[1], 10);
+    }
+  }
+  if (rawPassive !== undefined && typeof rawPassive === 'number') {
+    out.passivePerception = rawPassive;
+  }
+  // Return undefined if nothing was parsed (keeps Combatant clean for
+  // creatures with no senses, e.g. Cat).
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 // ---- Legendary action cost detection -----------------------
 
 /**
@@ -728,6 +826,10 @@ export function monsterToCombatant(
     immunities:             parseDamageDefenseList(raw.immune,    'immune'),
     damageVulnerabilities:  parseDamageDefenseList(raw.vulnerable,'vulnerable'),
     conditionImmunities:    parseConditionImmune(raw.conditionImmune),
+    // ── Session 52 Creature Megabatch Batch 2: saves/skills/senses ──
+    saveProficiencies:      parseSaves(raw.save),
+    skillProficiencies:     parseSkills(raw.skill),
+    senses:                 parseSenses(raw.senses, raw.passive),
     bardicInspirationDie: null,
     wardingBond: null,
     activeEffects:   [],
