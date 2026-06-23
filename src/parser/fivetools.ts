@@ -1004,6 +1004,9 @@ export function monsterToCombatant(
   const falseAppearance = traits.some(t => /^False\s+Appearance$/i.test(t.trim()));
   const siegeMonster = traits.some(t => /^Siege\s+Monster$/i.test(t.trim()));
   const waterBreathing = traits.some(t => /^Water\s+Breathing$/i.test(t.trim()));
+  // Session 53 Batch 4f: Superior Invisibility + Incorporeal Movement
+  const superiorInvisibility = traits.some(t => /^Superior\s+Invisibility$/i.test(t.trim()));
+  const incorporealMovement = traits.some(t => /^Incorporeal\s+Movement$/i.test(t.trim()));
   // Hold Breath: extract the minutes count from the entry text
   // ("can hold its breath for 1 hour" → 60 minutes; "for 30 minutes" → 30)
   let holdBreathMinutes: number | undefined;
@@ -1056,6 +1059,8 @@ export function monsterToCombatant(
     siegeMonster,          // Session 53 Batch 4e: true for Siege Monster trait
     waterBreathing,        // Session 53 Batch 4e: true for Water Breathing trait
     holdBreathMinutes,     // Session 53 Batch 4e: N minutes (undefined if no Hold Breath trait)
+    superiorInvisibility,  // Session 53 Batch 4f: true for Superior Invisibility trait
+    incorporealMovement,   // Session 53 Batch 4f: true for Incorporeal Movement trait
     budget: freshBudget(speeds.ground),
     conditions: new Set(),
     aiProfile: resolvedProfile,

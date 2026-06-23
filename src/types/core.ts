@@ -710,6 +710,37 @@ export interface Combatant {
    */
   siegeMonster?: boolean;
 
+  /**
+   * ── Session 53 Creature Megabatch Batch 4f: Superior Invisibility ──
+   * MM p.321 (Faerie Dragons); also MM Ghost, Specter, Will-o'-Wisp, etc.
+   * "As a bonus action, the [creature] can magically turn invisible until
+   * its concentration ends (as if concentrating on a spell)."
+   *
+   * 15 pre-2024 creatures. When true, the AI planner self-casts invisibility
+   * as a bonus action at the start of combat (or when not already invisible
+   * + not concentrating). The effect: adds `invisible` condition (advantage
+   * on attacks, disadvantage on attacks vs creature) + starts concentration.
+   * Consumes the bonus action for that turn.
+   */
+  superiorInvisibility?: boolean;
+
+  /**
+   * ── Session 53 Creature Megabatch Batch 4f: Incorporeal Movement ──
+   * MM p.11 / various: "The [creature] can move through other creatures and
+   * objects as if they were difficult terrain. It takes 5 (1d10) force
+   * damage if it ends its turn inside an object."
+   *
+   * 51 pre-2024 creatures (Ghosts, Specters, Shadow Demons, etc.).
+   * v1 simplification: METADATA-ONLY. v1's movement engine doesn't do
+   * per-step collision detection (creatures can already move through each
+   * other's squares — the engine just calculates terrain cost). So this
+   * flag documents RAW compliance without changing behavior. Future: when
+   * collision detection is added (TG-007 LOS/wall subsystem), this flag
+   * bypasses creature/object blocking. The 1d10 force damage for ending
+   * inside an object is also skipped (no object subsystem in v1).
+   */
+  incorporealMovement?: boolean;
+
   // Turn resources
   budget: ActionBudget;
 
@@ -1889,6 +1920,7 @@ export interface PlannedAction {
     | 'shadowOfMoil'     // Shadow of Moil — self, disadv on attacks vs caster + 2d8 necrotic rider, concentration 1 min (Warlock)
     | 'blindnessDeafness'// Blindness/Deafness — CON save or blinded, 1 min, NO concentration (Cleric/Sorcerer/Wizard)
     | 'brandingSmite'    // Branding Smite — bonus action, next weapon hit +2d6 radiant, concentration 1 min (Paladin/Ranger)
+    | 'superiorInvisibility' // Session 53 Batch 4f: creature trait (Faerie Dragon, etc.) — bonus action self-cast invisibility, concentration
     | 'calmEmotions'     // Calm Emotions — 60 ft, removes charmed/frightened from allies, concentration 1 min (Bard/Cleric/Druid/Paladin)
     | 'cloudOfDaggers'   // Cloud of Daggers — 60 ft, 4d4 slashing + persistent damage_zone, concentration 1 min (Bard/Sorcerer/Warlock/Wizard)
     | 'crownOfMadness'   // Crown of Madness — 120 ft, WIS save or charmed, concentration 1 min (Bard/Sorcerer/Warlock/Wizard)

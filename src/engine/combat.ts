@@ -14,6 +14,7 @@ import {
   resetBudget, spendMovement, attackHits, attackAdvantageState, resolveAttackAdvantage,
   isBloodied, addCondition, removeCondition,
   rollConcentrationSave, rollDeathSave,
+  startConcentration,
   applyDamageWithTempHP, hasPackTacticsAdvantage,
   canSneakAttack, sneakAttackDice,
   addResistance, removeResistance,
@@ -3384,6 +3385,36 @@ export function executePlannedAction(
       // (`_brandingSmiteActive`), consumed by resolveAttack on the next weapon
       // hit OR cleared by cleanup() at start of next turn.
       if (shouldCastBrandingSmite(actor, bf)) executeBrandingSmite(actor, state);
+      break;
+    }
+
+    case 'superiorInvisibility': {
+      // Session 53 Batch 4f: Superior Invisibility creature trait.
+      // MM p.321 (Faerie Dragons) / various: "As a bonus action, the
+      // [creature] can magically turn invisible until its concentration ends
+      // (as if concentrating on a spell)."
+      // Self-cast invisibility — no spell slot, no action (bonus action only).
+      // Mirrors Greater Invisibility (L4 spell) but as a racial trait.
+      // 1. Break existing concentration (safety net).
+      // 2. Start concentration on 'Superior Invisibility'.
+      // 3. Apply invisible effect (advantage on attacks, disadv on attacks
+      //    vs the creature). The effect does NOT end on attack/cast (same as
+      //    Greater Invisibility — the trait says "until concentration ends").
+      if (actor.concentration?.active) {
+        removeEffectsFromCaster(actor.id, bf);
+      }
+      startConcentration(actor, 'Superior Invisibility');
+      log(state, 'action', actor.id,
+        `${actor.name} uses Superior Invisibility! The creature turns invisible (concentration).`,
+        actor.id);
+      applySpellEffect(actor, {
+        casterId: actor.id,
+        spellName: 'Superior Invisibility',
+        effectType: 'invisible',
+        payload: {},
+        sourceIsConcentration: true,
+        // No breaksOnAttackOrCast — the trait persists until concentration ends.
+      });
       break;
     }
 
