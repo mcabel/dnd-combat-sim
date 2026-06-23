@@ -403,9 +403,9 @@ Documented for future sessions. NOT in scope for the immediate megabatch.
 | 3 | ✅ DONE | 52 | 3fb8be8 | recharge + leg-resist; 52 new test assertions; 84 recharge + 28 LR creatures |
 | 4a | ✅ DONE | 52 | 2f7ced4 | Magic Resistance (65 creatures); rollSave grants advantage |
 | 4b | ✅ DONE | 52 | 2f7ced4 | Regeneration (13 creatures); start-of-turn heal + stop-clause suppression |
-| 4c | ✅ DONE | 52 | (pending) | Magic Weapons flag (19 creatures); full nonmagical-bypass deferred |
+| 4c | ✅ DONE | 52 | cfb8a11 | Magic Weapons flag (19 creatures); full nonmagical-bypass deferred |
 | 4d | DEFERRED | — | — | Death Burst (needs on-death hook in combat.ts — future session) |
-| 4e | ✅ PARTIAL | 52 | (pending) | Blood Frenzy (7) + Swarm/cannotRegainHP (10) + Siege Monster metadata (5). Remaining: Charge/Pounce/Incorporeal/Avoidance/etc. deferred |
+| 4e | ✅ PARTIAL | 52 | cfb8a11 | Blood Frenzy (7) + Swarm/cannotRegainHP (10) + Siege Monster metadata (5). Remaining: Charge/Pounce/Incorporeal/Avoidance/etc. deferred |
 | 5 | DEFERRED | — | — | lair + spellcasting + shapechanger |
 
 ---
