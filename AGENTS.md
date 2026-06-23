@@ -55,7 +55,8 @@ another stream's files.
 
 Each agent writes the next numbered handover for its own stream only.
 
-Old handovers are archived in subfolders to keep the repo root tidy:
-- `zHandoversOld/` — zHANDOVER-SESSION-1 through 14 (cantrip-z workstream archive)
-- `HandoverOldDocs/` — older HANDOVER-SESSION and SHEET-HANDOVER files
-- `handover old/` — older HANDOVER-SESSION and SHEET-HANDOVER files
+Old handovers are archived in a single subfolder to keep the repo root tidy:
+- `HandoverOld/` — all archived handovers (HANDOVER-SESSION, zHANDOVER-SESSION,
+  SHEET-HANDOVER, and the legacy `branchHandover-*` files). Only the latest 2
+  of each handover type are kept in the repo root; everything else is moved
+  into `HandoverOld/`.

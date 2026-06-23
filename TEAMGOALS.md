@@ -47,7 +47,7 @@ completed by a single agent without coordination.
 - **Owners:** Cantrip-z (driving) + Core Engine (must review `Combatant` type
   change + `resetBudget` impact)
 - **Source:** `zHANDOVER-SESSION-15.md` Option B; originally proposed in
-  `zHandoversOld/zHANDOVER-SESSION-14.md`.
+  `HandoverOld/zHANDOVER-SESSION-14.md`.
 - **Summary:** 5 cantrips have "up to N effects active" caps that v1 ignores:
   Prestidigitation (3), Thaumaturgy (3), Control Flames (3), Mold Earth (2),
   Shape Water (2). Each `applySelfEffect` currently emits a flavor log only.
