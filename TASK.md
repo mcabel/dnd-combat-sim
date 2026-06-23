@@ -1,50 +1,37 @@
 # TASK.md
 
-> **MULTI-AGENT PROJECT** — See `AGENTS.md` for workstream boundaries and startup rules.
-> If the user uploads a handover at session start, that handover takes priority over this file.
+## Active Objective
 
-## ACTIVE WORKSTREAM
+**TG-001: Persistent-buff subsystem** — concentration-tracked per-turn riders
+(Green-Flame Blade lingering fire, Booming Blade thunder rider, Sapping Sting
+prone-on-move, etc.) currently fire via one-shot logic in individual spell
+modules. A unified `applyOngoingEffect` hook called from `resetBudget` /
+`beginTurn` is needed so these riders persist correctly across rounds.
 
-Core Engine
+## Current Phase
 
----
+Not started. Prerequisite groundwork is complete:
+- Concentration enforcement (TG-002) ✅
+- Parser fields incl. `isUndead`/`isConstruct`/`hasMetalArmor` (TG-004) ✅
+- Cantrip planner branches 13A-13N (TG-003) ✅
+- Reaction registry / TG-008 partial (Shield, Hellish Rebuke, Absorb Elements,
+  Feather Fall, Silvery Barbs, Counterspell, Dispel Magic, Prot. from Energy) ✅
 
-## ACTIVE OBJECTIVE
+## Acceptance Criteria
 
-Implement Cure Wounds as a dedicated spell module, migrating it away from the legacy `'spellHeal'` / `spellHealPlan` path.
+- `Combatant` has a typed `ongoingEffects` collection (or reuses `activeEffects`)
+- At least Booming Blade thunder rider and GFB lingering fire use it
+- Per-turn damage triggers correctly on move / start-of-turn
+- Existing tests do not regress
 
----
+## Immediate Priority
 
-## CURRENT PHASE
+1. Read ROADMAP.md for subsystem boundary guidance
+2. Audit `activeEffects` on `Combatant` — determine if it can be extended or
+   a new `ongoingEffects` array is needed
+3. Design minimal hook; RFC to TEAMGOALS.md before touching `combat.ts`
 
-Tier 1 PHB combat spell coverage — 1st-level spells.
+## Notes
 
----
-
-## ACCEPTANCE CRITERIA
-
-Objective is complete when:
-
-* [ ] `src/spells/cure_wounds.ts` exists with `shouldCast` / `execute` / `metadata` pattern
-* [ ] `'cureWounds'` added to `PlannedAction` type union in `src/types/core.ts`
-* [ ] `case 'cureWounds':` wired in `src/engine/combat.ts`
-* [ ] `src/ai/planner.ts` uses `shouldCast` from `cure_wounds.ts` (replaces `spellHealPlan` call for Cure Wounds)
-* [ ] `src/test/cure_wounds.test.ts` passes 0 failures
-* [ ] `healing_spells.test.ts` updated for any changed assertion types, passes 0 failures
-* [ ] Full baseline maintained (combat, engine, ai, resources, scenario — 0 persistent failures)
-
----
-
-## ACTIVE CONSTRAINTS
-
-* Use `testDataSpells/spells-phb.json` as authoritative data (Cure Wounds, PHB p.230).
-* Follow `healing_word.ts` as the implementation template.
-* `spellHealPlan` in `resources.ts` is retained but will no longer be called for Cure Wounds after this task.
-* Do NOT touch sheet routes, leveler.ts, or builder.ts.
-* PAT provided verbally at session start — do not paste in files.
-
----
-
-## KNOWN BLOCKERS
-
-None.
+- Sheet agent owns `leveler.ts` / `builder.ts` — do not touch
+- Cantrip-z's summon Phase 1 is live; RFC required before Phase 2 (`combat.ts`)

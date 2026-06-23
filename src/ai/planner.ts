@@ -4637,6 +4637,142 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
     }
   }
 
+  // --- 13J. GREEN-FLAME BLADE (melee spell attack + fire splash to second target) ---
+  // TCE p.107: Self (5 ft), melee spell attack + 1d8 fire on hit (v1 simplification),
+  // plus spellcastingMod (min 1) fire splash to a second target within 5 ft of primary.
+  // Planner: prefer when there are 2+ enemies adjacent (splash maximises value).
+  // Falls through to selectAction() if only 1 adjacent enemy (still casts, just no splash).
+  if (!plan.action && self.actions.some(a => a.name === 'Green-Flame Blade')) {
+    const gfbAction = self.actions.find(a => a.name === 'Green-Flame Blade')!;
+    const adjEnemies = [...battlefield.combatants.values()].filter(c =>
+      !c.isDead && !c.isUnconscious && c.faction !== self.faction &&
+      chebyshev3D(self.pos, c.pos) <= 1
+    );
+    // Prefer when there are 2+ adjacent targets (splash fires)
+    const primary = adjEnemies[0];
+    if (primary && adjEnemies.length >= 2) {
+      plan.action = {
+        type: 'cast',
+        action: gfbAction,
+        targetId: primary.id,
+        description: `${self.name} casts Green-Flame Blade at ${primary.name} (${adjEnemies.length} adj — splash fires)`,
+      };
+      plan.targetId = primary.id;
+      plan.bonusAction = planBonusAction(self, primary, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 13K. LIGHTNING LURE (STR save, pull 10 ft, 1d8 lightning if ends within 5 ft) ---
+  // TCE p.107: Self (15 ft radius), STR save → pull 10 ft toward caster on save-FAIL;
+  // if target ends within 5 ft, takes 1d8 lightning damage.
+  // Planner: prefer when target is 6-15 ft away (pulling into melee + damage).
+  if (!plan.action && self.actions.some(a => a.name === 'Lightning Lure')) {
+    const llAction = self.actions.find(a => a.name === 'Lightning Lure')!;
+    const enemies = livingEnemiesOf(self, battlefield);
+    // Target 6-15 ft away — close enough to pull into melee range (5 ft = 1 square)
+    const llTarget = enemies.find(e => {
+      const dist = chebyshev3D(self.pos, e.pos);
+      return dist >= 2 && dist <= 3;  // 2-3 squares = 10-15 ft
+    });
+    if (llTarget) {
+      plan.action = {
+        type: 'cast',
+        action: llAction,
+        targetId: llTarget.id,
+        description: `${self.name} casts Lightning Lure at ${llTarget.name} (pull into melee)`,
+      };
+      plan.targetId = llTarget.id;
+      plan.bonusAction = planBonusAction(self, llTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 13L. SAPPING STING (CON save, 1d4 necrotic + prone on save-FAIL) ---
+  // EGW p.189: 30 ft, CON save 1d4 necrotic; on save-FAIL target is knocked prone.
+  // Prone: melee attacks against it have advantage, it has disadv on its own attacks.
+  // Planner: prefer against melee enemies (prone punishes their attack rolls and
+  // makes them vulnerable); prioritize damaged targets for reliability (lower max HP
+  // correlates with lower CON).
+  if (!plan.action && self.actions.some(a => a.name === 'Sapping Sting')) {
+    const ssAction = self.actions.find(a => a.name === 'Sapping Sting')!;
+    const enemies = livingEnemiesOf(self, battlefield);
+    const ssTarget = enemies.find(e =>
+      !e.conditions?.has('prone') &&         // not already prone
+      canReach(self, e, ssAction) &&
+      e.actions.some(a => a.attackType === 'melee')  // melee attacker (prone is punishing)
+    );
+    if (ssTarget) {
+      plan.action = {
+        type: 'cast',
+        action: ssAction,
+        targetId: ssTarget.id,
+        description: `${self.name} casts Sapping Sting at ${ssTarget.name} (prone debuff)`,
+      };
+      plan.targetId = ssTarget.id;
+      plan.bonusAction = planBonusAction(self, ssTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 13M. INFESTATION (CON save, 1d6 poison + forced random 5 ft move) ---
+  // XGE p.158: 30 ft, CON save 1d6 poison on save-FAIL; target also moves 5 ft
+  // in a random direction (does not provoke OA). Pure damage + disruption.
+  // Planner: use when in range and target isn't immune to poison.
+  if (!plan.action && self.actions.some(a => a.name === 'Infestation')) {
+    const infAction = self.actions.find(a => a.name === 'Infestation')!;
+    const enemies = livingEnemiesOf(self, battlefield);
+    const infTarget = enemies.find(e =>
+      canReach(self, e, infAction) &&
+      !(e.immunities?.includes('poison'))
+    );
+    if (infTarget) {
+      plan.action = {
+        type: 'cast',
+        action: infAction,
+        targetId: infTarget.id,
+        description: `${self.name} casts Infestation at ${infTarget.name}`,
+      };
+      plan.targetId = infTarget.id;
+      plan.bonusAction = planBonusAction(self, infTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 13N. GUST (STR save, push 5 ft on save-FAIL, no damage) ---
+  // XGE p.157: 30 ft, STR save; on save-FAIL the target (Medium or smaller) is
+  // pushed 5 ft directly away. No damage. Pure positioning.
+  // Planner: use only when it can push a melee attacker away from a critically
+  // wounded ally (currentHP <= 25% of maxHP). Otherwise skip — no damage makes
+  // it the weakest offensive cantrip.
+  if (!plan.action && self.actions.some(a => a.name === 'Gust')) {
+    const gustAction = self.actions.find(a => a.name === 'Gust')!;
+    const allies = [...battlefield.combatants.values()].filter(c =>
+      !c.isDead && !c.isUnconscious && c.faction === self.faction && c.id !== self.id &&
+      c.currentHP <= Math.floor(c.maxHP * 0.25)  // critically wounded ally
+    );
+    if (allies.length > 0) {
+      const enemies = livingEnemiesOf(self, battlefield);
+      // Find a melee enemy adjacent to any critically wounded ally
+      const gustTarget = enemies.find(e =>
+        allies.some(a => chebyshev3D(e.pos, a.pos) <= 1) &&
+        canReach(self, e, gustAction) &&
+        (e.size === 'Small' || e.size === 'Medium' || !e.size)
+      );
+      if (gustTarget) {
+        plan.action = {
+          type: 'cast',
+          action: gustAction,
+          targetId: gustTarget.id,
+          description: `${self.name} casts Gust at ${gustTarget.name} (push from wounded ally)`,
+        };
+        plan.targetId = gustTarget.id;
+        plan.bonusAction = planBonusAction(self, gustTarget, battlefield);
+        return plan;
+      }
+    }
+  }
+
   // === SESSION 19 — GENERIC SPELL LOOP (262 bulk-implemented spells) ===
   // Iterate the GENERIC_SPELL_LIST (ordered by level, then name) and pick
   // the first spell whose shouldCast returns true. Each spell module's

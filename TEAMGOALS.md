@@ -43,7 +43,7 @@ completed by a single agent without coordination.
 
 ### TG-001: Persistent-buff subsystem for multi-effect cantrips (Option B)
 
-- **Status:** OPEN
+- **Status:** DONE — session 46 (13A-13I by Cantrip-z), session 47 (13J-13N by Core Engine: GFB, Lightning Lure, Sapping Sting, Infestation, Gust)
 - **Owners:** Cantrip-z (driving) + Core Engine (must review `Combatant` type
   change + `resetBudget` impact)
 - **Source:** `zHANDOVER-SESSION-15.md` Option B; originally proposed in
@@ -147,7 +147,7 @@ completed by a single agent without coordination.
 
 ### TG-004: Parser tech debt (Option E)
 
-- **Status:** IN PROGRESS — session 46: `isUndead`, `isConstruct`, `hasMetalArmor`, `spellcastingMod`, `casterLevel` all populated by `monsterToCombatant`. `isConstruct` added to `Combatant` type. 14/14 bestiary smoke-tests pass.
+- **Status:** DONE — session 46: all five fields (`isUndead`, `isConstruct`, `hasMetalArmor`, `spellcastingMod`, `casterLevel`) populated by `monsterToCombatant`. 14/14 bestiary smoke-tests. `isConstruct` added to `Combatant` type.
 - **Owners:** Core Engine (driving — owns `src/parser/*`)
 - **Source:** `zHANDOVER-SESSION-15.md` Option E; documented in
   zHANDOVER-3/4/5/6/7/8/9/10/11/12/13/14/15.
