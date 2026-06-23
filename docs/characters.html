@@ -1196,15 +1196,21 @@ function renderCharDetail() {
   // Death saves
   renderDeathSaves(c);
 
-  // Ability scores
+  // Ability scores (with temp override display)
   const STATS = ['str','dex','con','int','wis','cha'];
+  const overrides = c.tempStatOverrides || {};
   document.getElementById('char-ability-grid').innerHTML = STATS.map(s => {
-    const val = c.stats[s];
-    const mod = Math.floor((val-10)/2);
+    const base = c.stats[s];
+    const hasOverride = s in overrides;
+    const val  = hasOverride ? overrides[s] : base;
+    const mod  = Math.floor((val-10)/2);
     const sign = mod >= 0 ? '+' : '';
+    const overrideStyle = hasOverride ? 'border-color:var(--accent2,#7b68ee);color:var(--accent2,#7b68ee)' : 'color:var(--accent)';
+    const overrideTip  = hasOverride ? ` title="Temp override (base: ${base})"` : '';
     return `<div class="stat-cell">
       <label>${s.toUpperCase()}</label>
-      <div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 4px;font-size:14px;text-align:center;color:var(--accent)">${val}</div>
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 4px;font-size:14px;text-align:center;${overrideStyle};cursor:pointer"
+           onclick="openTempStatPanel('${c.id}', '${s}', ${base}, ${val})"${overrideTip}>${val}${hasOverride ? '★' : ''}</div>
       <div class="mod">${sign}${mod}</div>
     </div>`;
   }).join('');
@@ -3100,6 +3106,58 @@ async function doChoosePactBoon() {
 }
 
 // ── Individual XP Award ───────────────────────────────────────
+
+// ── Temporary stat overrides ──────────────────────────────────
+// Opens a small inline panel on the clicked ability cell for the user
+// to enter a temporary score override (e.g. Headband of Intellect → 19)
+// or clear an existing one.
+function openTempStatPanel(charId, ability, baseVal, currentVal) {
+  const existingId = 'temp-stat-panel';
+  document.getElementById(existingId)?.remove();
+  if (!S.charDetail || S.charDetail.id !== charId) return;
+
+  const panel = document.createElement('div');
+  panel.id = existingId;
+  panel.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9999;background:var(--card-bg,#1e1e2e);border:1px solid var(--border);border-radius:10px;padding:18px 20px;min-width:240px;box-shadow:0 4px 20px rgba(0,0,0,0.5)';
+  const hasOverride = ability in (S.charDetail.tempStatOverrides || {});
+  panel.innerHTML = `
+    <div style="font-size:13px;font-weight:700;margin-bottom:10px;color:var(--text)">${ability.toUpperCase()} — Temp Override</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Base score: <strong style="color:var(--text)">${baseVal}</strong>${hasOverride ? ` → Temp: <strong style="color:var(--accent2,#7b68ee)">${currentVal}</strong>` : ''}</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:12px">Override replaces the score for all modifier calculations (PHB p.173).</div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <input type="number" id="temp-stat-input" value="${hasOverride ? currentVal : ''}" min="1" max="30" placeholder="1–30"
+        style="width:70px;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:13px;padding:4px 8px;outline:none"
+        onkeydown="if(event.key==='Enter')doSetTempStat('${charId}','${ability}',false)" />
+      <button class="sm primary" onclick="doSetTempStat('${charId}','${ability}',false)" style="padding:4px 10px;font-size:11px">Set</button>
+      ${hasOverride ? `<button class="sm" onclick="doSetTempStat('${charId}','${ability}',true)" style="padding:4px 10px;font-size:11px;color:var(--danger,#e05252)">Clear</button>` : ''}
+      <button class="sm" onclick="document.getElementById('temp-stat-panel')?.remove()" style="padding:4px 10px;font-size:11px">✕</button>
+    </div>`;
+  document.body.appendChild(panel);
+  panel.querySelector('#temp-stat-input')?.focus();
+}
+
+async function doSetTempStat(charId, ability, clear) {
+  showErr('');
+  let override;
+  if (clear) {
+    override = null;
+  } else {
+    const v = parseInt(document.getElementById('temp-stat-input')?.value || '', 10);
+    if (isNaN(v) || v < 1 || v > 30) { showErr('Override must be an integer from 1 to 30.'); return; }
+    override = v;
+  }
+  try {
+    const data = await api(`/api/characters/${charId}/settempstats`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ overrides: { [ability]: override } }),
+    });
+    S.charDetail = data.character;
+    document.getElementById('temp-stat-panel')?.remove();
+    renderCharDetail();
+    showBanner(clear ? `${ability.toUpperCase()} temp override cleared.` : `${ability.toUpperCase()} temporarily set to ${override}.`, 'ok');
+  } catch(e) { showErr(e.message); }
+}
 
 function showAddXPPanel() {
   if (!S.charDetail) return;

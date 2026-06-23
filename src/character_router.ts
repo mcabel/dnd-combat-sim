@@ -26,6 +26,7 @@
 //   POST   /api/characters/:id/chooseinvocations   set Warlock Eldritch Invocations
 //   POST   /api/characters/:id/choosepactboon       set Warlock Pact Boon
 //   POST   /api/characters/:id/addxp                award XP to a single character
+//   POST   /api/characters/:id/settempstats         set/clear temporary stat overrides
 // ============================================================
 
 import { Router, Request, Response } from 'express';
@@ -801,6 +802,61 @@ router.post('/characters/:id/addxp', async (req: Request, res: Response) => {
     await saveCharacter(updated);
 
     return res.json({ character: updated, newTotal: updated.experiencePoints });
+  } catch (err) {
+    return handleError(res, err);
+  }
+});
+
+// ============================================================
+// POST /api/characters/:id/settempstats
+// Set or clear temporary ability score overrides (PHB p.173).
+// Body: { overrides: Partial<Record<AbilityScore, number | null>> }
+//   - Setting a key to a number sets the override for that ability.
+//   - Setting a key to null clears the override for that ability.
+//   - Omitting a key leaves the existing override unchanged.
+// Response: { character: CharacterSheet; tempStatOverrides: Record }
+// ============================================================
+router.post('/characters/:id/settempstats', async (req: Request, res: Response) => {
+  try {
+    const id   = String(req.params.id);
+    const body = req.body ?? {};
+
+    const { overrides } = body;
+    if (!overrides || typeof overrides !== 'object' || Array.isArray(overrides)) {
+      return res.status(400).json({ error: 'overrides (object) is required.' });
+    }
+
+    const VALID_ABILITIES = new Set(['str', 'dex', 'con', 'int', 'wis', 'cha']);
+    for (const [key, val] of Object.entries(overrides)) {
+      if (!VALID_ABILITIES.has(key)) {
+        return res.status(400).json({ error: `Invalid ability score key: "${key}". Must be one of str, dex, con, int, wis, cha.` });
+      }
+      if (val !== null && (typeof val !== 'number' || !Number.isInteger(val) || val < 1 || val > 30)) {
+        return res.status(400).json({ error: `Override for "${key}" must be an integer 1–30 or null to clear.` });
+      }
+    }
+
+    const sheet = loadCharacter(id);
+    if (!sheet) return res.status(404).json({ error: `Character not found: ${id}` });
+
+    // Merge into existing overrides; null entries remove the key
+    const existing = { ...(sheet.tempStatOverrides ?? {}) };
+    for (const [key, val] of Object.entries(overrides)) {
+      if (val === null) {
+        delete existing[key as keyof typeof existing];
+      } else {
+        (existing as Record<string, number>)[key] = val as number;
+      }
+    }
+
+    const updated = {
+      ...sheet,
+      tempStatOverrides: Object.keys(existing).length > 0 ? existing : undefined,
+      updatedAt: new Date().toISOString(),
+    };
+    await saveCharacter(updated);
+
+    return res.json({ character: updated, tempStatOverrides: updated.tempStatOverrides ?? {} });
   } catch (err) {
     return handleError(res, err);
   }

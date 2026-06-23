@@ -388,6 +388,10 @@ export interface CharacterSheet {
   // Ability Scores
   baseStats: CharacterAbilityScores;   // Raw scores BEFORE racial bonuses
   stats: CharacterAbilityScores;       // Final scores (racial bonuses applied)
+  /** Temporary ability score overrides (e.g. Headband of Intellect, Polymorph).
+   *  When set, the override VALUE replaces the base score for all modifier
+   *  calculations. Clear by deleting the key. PHB p.173. */
+  tempStatOverrides?: Partial<Record<import('../types/core').AbilityScore, number>>;
 
   // Combat Stats (computed from class + equipment + features, stored for speed)
   maxHP: number;

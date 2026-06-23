@@ -2478,6 +2478,86 @@ async function run() {
     });
   }
 
+  // ── POST /api/characters/:id/settempstats ───────────────────
+  {
+    let tsCharId = '';
+    await test('setup: create character for settempstats tests', async () => {
+      const created = await request(BASE, '/api/characters', 'POST', {
+        name: 'TempStatTestChar', race: 'Human', background: 'Sage', alignment: 'True Neutral',
+        firstClass: 'Wizard',
+        classLevels: [{ className: 'Wizard', level: 1 }],
+        subclassChoices: {},
+        experiencePoints: 0,
+        baseStats: { str: 8, dex: 12, con: 10, int: 16, wis: 14, cha: 10 },
+        stats:     { str: 8, dex: 12, con: 10, int: 16, wis: 14, cha: 10 },
+        maxHP: 8, currentHP: 8, temporaryHP: 0,
+        armorClass: 11, acFormula: 'Unarmored', speed: 30,
+        hitDice: [{ className: 'Wizard', dieSides: 6, total: 1, remaining: 1 }],
+        proficiencies: { armor: [], weapons: ['simple-melee','simple-ranged'], tools: [], savingThrows: ['int','wis'], skills: ['Arcana','History'], expertise: [] },
+        languages: ['Common'],
+        resources: {}, equipment: [], gold: 5,
+        level1Features: [], allFeatures: [], feats: [],
+        backgroundFeature: 'Researcher', exhaustionLevel: 0,
+      });
+      assert(created.status === 201, `Expected 201, got ${created.status}: ${JSON.stringify(created.json)}`);
+      tsCharId = created.json.character.id;
+    });
+
+    await test('POST /settempstats 400 when overrides is not an object', async () => {
+      const { status } = await request(BASE, `/api/characters/${tsCharId}/settempstats`, 'POST', { overrides: 'int=19' });
+      assert(status === 400, `Expected 400, got ${status}`);
+    });
+
+    await test('POST /settempstats 400 for invalid ability key', async () => {
+      const { status, json } = await request(BASE, `/api/characters/${tsCharId}/settempstats`, 'POST', { overrides: { luck: 20 } });
+      assert(status === 400, `Expected 400, got ${status}: ${JSON.stringify(json)}`);
+    });
+
+    await test('POST /settempstats 400 for out-of-range override value', async () => {
+      const { status } = await request(BASE, `/api/characters/${tsCharId}/settempstats`, 'POST', { overrides: { int: 31 } });
+      assert(status === 400, `Expected 400, got ${status}`);
+    });
+
+    await test('POST /settempstats 400 for non-integer override value', async () => {
+      const { status } = await request(BASE, `/api/characters/${tsCharId}/settempstats`, 'POST', { overrides: { int: 19.5 } });
+      assert(status === 400, `Expected 400, got ${status}`);
+    });
+
+    await test('POST /settempstats 200 sets a single override', async () => {
+      const { status, json } = await request(BASE, `/api/characters/${tsCharId}/settempstats`, 'POST', { overrides: { int: 19 } });
+      assert(status === 200, `Expected 200, got ${status}: ${JSON.stringify(json)}`);
+      assert(json.tempStatOverrides?.int === 19, `Expected int override=19, got ${json.tempStatOverrides?.int}`);
+      assert(json.character.tempStatOverrides?.int === 19, 'Override on character sheet');
+    });
+
+    await test('POST /settempstats 200 can set multiple overrides at once', async () => {
+      const { status, json } = await request(BASE, `/api/characters/${tsCharId}/settempstats`, 'POST', { overrides: { str: 19, dex: 19 } });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(json.tempStatOverrides?.str === 19, 'str override set');
+      assert(json.tempStatOverrides?.dex === 19, 'dex override set');
+      assert(json.tempStatOverrides?.int === 19, 'int override from previous call preserved');
+    });
+
+    await test('POST /settempstats 200 clears a single override with null', async () => {
+      const { status, json } = await request(BASE, `/api/characters/${tsCharId}/settempstats`, 'POST', { overrides: { int: null } });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(json.tempStatOverrides?.int === undefined, 'int override cleared');
+      assert(json.tempStatOverrides?.str === 19, 'str override preserved');
+    });
+
+    await test('POST /settempstats 200 clearing all overrides removes the field', async () => {
+      await request(BASE, `/api/characters/${tsCharId}/settempstats`, 'POST', { overrides: { str: null, dex: null } });
+      const { status, json } = await request(BASE, `/api/characters/${tsCharId}/settempstats`, 'POST', { overrides: {} });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(!json.character.tempStatOverrides || Object.keys(json.character.tempStatOverrides).length === 0, 'tempStatOverrides absent or empty');
+    });
+
+    await test('cleanup: delete settempstats test character', async () => {
+      const { deleteCharacter } = require('../characters/storage');
+      try { deleteCharacter(tsCharId); } catch {}
+    });
+  }
+
   // ── Tear down ─────────────────────────────────────────────
 
   // Clean up test parties created during this run
