@@ -1840,6 +1840,10 @@ async function toggleEquip(charId, itemIndex, equipped) {
       if (el)    el.style.display  = 'block';
       if (arrow) arrow.textContent = '▾';
     }
+    // If AC was recomputed by the server, refresh the stats row so AC box updates
+    if (data.acUpdated) {
+      renderCharDetail();
+    }
   } catch (e) {
     showBanner('Network error updating equipment', 'error');
   }

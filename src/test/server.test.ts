@@ -2558,6 +2558,90 @@ async function run() {
     });
   }
 
+  // ── POST /api/characters/:id/equip — AC auto-update ────────
+  {
+    let acCharId = '';
+
+    await test('setup: create character for equip-AC tests', async () => {
+      const created = await request(BASE, '/api/characters', 'POST', {
+        name: 'EquipACTestChar', race: 'Human', background: 'Soldier', alignment: 'True Neutral',
+        firstClass: 'Fighter',
+        classLevels: [{ className: 'Fighter', level: 1 }],
+        subclassChoices: {},
+        experiencePoints: 0,
+        // DEX 14 → mod +2
+        baseStats: { str: 16, dex: 14, con: 14, int: 10, wis: 10, cha: 10 },
+        stats:     { str: 16, dex: 14, con: 14, int: 10, wis: 10, cha: 10 },
+        maxHP: 12, currentHP: 12, temporaryHP: 0,
+        armorClass: 10, acFormula: 'Unarmored',
+        speed: 30,
+        hitDice: [{ className: 'Fighter', dieSides: 10, total: 1, remaining: 1 }],
+        proficiencies: { armor: ['light','medium','heavy','shields'], weapons: ['simple-melee','martial-melee'], tools: [], savingThrows: ['str','con'], skills: ['Athletics','Perception'], expertise: [] },
+        languages: ['Common'],
+        resources: {},
+        equipment: [
+          { name: 'Chain Mail', quantity: 1, equipped: false, category: 'armor' },
+          { name: 'Shield',     quantity: 1, equipped: false, category: 'shield' },
+          { name: 'Longsword',  quantity: 1, equipped: false, category: 'weapon' },
+          { name: 'Leather Armor', quantity: 1, equipped: false, category: 'armor' },
+          { name: 'Splint Armor',  quantity: 1, equipped: false, category: 'armor' },
+        ],
+        gold: 0,
+        level1Features: [], allFeatures: [], feats: [],
+        backgroundFeature: 'Military Rank', exhaustionLevel: 0,
+      });
+      assert(created.status === 201, `Expected 201, got ${created.status}: ${JSON.stringify(created.json)}`);
+      acCharId = created.json.character.id;
+    });
+
+    await test('equip Chain Mail → AC 16 (heavy, no DEX)', async () => {
+      const { status, json } = await request(BASE, `/api/characters/${acCharId}/equip`, 'POST', { itemIndex: 0, equipped: true });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(json.acUpdated === true, 'acUpdated should be true');
+      assert(json.character.armorClass === 16, `Expected AC 16, got ${json.character.armorClass}`);
+    });
+
+    await test('equip Shield alongside Chain Mail → AC 18', async () => {
+      const { status, json } = await request(BASE, `/api/characters/${acCharId}/equip`, 'POST', { itemIndex: 1, equipped: true });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(json.character.armorClass === 18, `Expected AC 18 (16+2), got ${json.character.armorClass}`);
+    });
+
+    await test('unequip Shield → AC returns to 16', async () => {
+      const { status, json } = await request(BASE, `/api/characters/${acCharId}/equip`, 'POST', { itemIndex: 1, equipped: false });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(json.character.armorClass === 16, `Expected AC 16, got ${json.character.armorClass}`);
+    });
+
+    await test('equip weapon does not set acUpdated', async () => {
+      const { status, json } = await request(BASE, `/api/characters/${acCharId}/equip`, 'POST', { itemIndex: 2, equipped: true });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(json.acUpdated === false, 'acUpdated should be false for weapon');
+      assert(json.character.armorClass === 16, 'AC unchanged for weapon equip');
+    });
+
+    await test('equip Leather Armor (light) → AC 11 + full DEX mod (+2) = 13', async () => {
+      // First unequip Chain Mail
+      await request(BASE, `/api/characters/${acCharId}/equip`, 'POST', { itemIndex: 0, equipped: false });
+      const { status, json } = await request(BASE, `/api/characters/${acCharId}/equip`, 'POST', { itemIndex: 3, equipped: true });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(json.character.armorClass === 13, `Expected AC 13 (11+2DEX), got ${json.character.armorClass}`);
+    });
+
+    await test('equip Splint Armor (heavy) → AC 17, acFormula mentions armor name', async () => {
+      await request(BASE, `/api/characters/${acCharId}/equip`, 'POST', { itemIndex: 3, equipped: false });
+      const { status, json } = await request(BASE, `/api/characters/${acCharId}/equip`, 'POST', { itemIndex: 4, equipped: true });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(json.character.armorClass === 17, `Expected AC 17, got ${json.character.armorClass}`);
+      assert(json.character.acFormula.toLowerCase().includes('splint'), `acFormula should mention Splint, got: ${json.character.acFormula}`);
+    });
+
+    await test('cleanup: delete equip-AC test character', async () => {
+      const { deleteCharacter } = require('../characters/storage');
+      try { deleteCharacter(acCharId); } catch {}
+    });
+  }
+
   // ── Tear down ─────────────────────────────────────────────
 
   // Clean up test parties created during this run

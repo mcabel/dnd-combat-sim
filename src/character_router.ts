@@ -92,6 +92,78 @@ function handleError(res: Response, err: unknown): void {
   }
 }
 
+// ---- Armor AC table (PHB p.144-145) -------------------------
+// Maps lowercase armor name → { baseAC, dexBonus: 'full' | 'max2' | 'none' }
+const PHB_ARMOR_AC: Record<string, { base: number; dex: 'full' | 'max2' | 'none' }> = {
+  // Light armor (full DEX)
+  'padded':           { base: 11, dex: 'full' },
+  'leather':          { base: 11, dex: 'full' },
+  'leather armor':    { base: 11, dex: 'full' },
+  'studded leather':  { base: 12, dex: 'full' },
+  // Medium armor (DEX max +2)
+  'hide':             { base: 12, dex: 'max2' },
+  'hide armor':       { base: 12, dex: 'max2' },
+  'chain shirt':      { base: 13, dex: 'max2' },
+  'scale mail':       { base: 14, dex: 'max2' },
+  'breastplate':      { base: 14, dex: 'max2' },
+  'half plate':       { base: 15, dex: 'max2' },
+  // Heavy armor (no DEX)
+  'ring mail':        { base: 14, dex: 'none' },
+  'chain mail':       { base: 16, dex: 'none' },
+  'splint':           { base: 17, dex: 'none' },
+  'splint armor':     { base: 17, dex: 'none' },
+  'plate':            { base: 18, dex: 'none' },
+  'plate armor':      { base: 18, dex: 'none' },
+};
+
+/**
+ * Recompute armorClass and acFormula from the character's equipped items.
+ * Returns null when no recognized armor is equipped (preserves existing AC).
+ */
+function computeArmorAC(
+  sheet: import('./characters/types').CharacterSheet,
+  newEquipment: import('./characters/types').EquipmentItem[],
+): { armorClass: number; acFormula: string } | null {
+  const dexScore = sheet.stats?.dex ?? 10;
+  const dexMod   = Math.floor((dexScore - 10) / 2);
+
+  const equippedArmor  = newEquipment.find(e => e.equipped && e.category === 'armor');
+  const equippedShield = newEquipment.find(e => e.equipped && e.category === 'shield');
+
+  if (!equippedArmor) {
+    // Unarmored — only update if a shield was toggled (add/remove +2)
+    if (equippedShield !== undefined) {
+      // Use existing acFormula base and recompute shield component
+      const baseAC = sheet.armorClass - (equippedShield ? 0 : 2); // approximate
+      // Better: detect from existing formula — unarmored = 10 + DEX
+      const unarmoredBase = 10 + dexMod;
+      const total = unarmoredBase + (equippedShield ? 2 : 0);
+      const formula = `Unarmored: ${unarmoredBase}${equippedShield ? ' + Shield: +2' : ''}`;
+      return { armorClass: total, acFormula: formula };
+    }
+    // No armor and shield state unchanged — let existing AC stand
+    return null;
+  }
+
+  const entry = PHB_ARMOR_AC[equippedArmor.name.toLowerCase()];
+  if (!entry) return null; // Unknown armor — don't override manually set AC
+
+  let ac = entry.base;
+  if (entry.dex === 'full')  ac += dexMod;
+  if (entry.dex === 'max2')  ac += Math.min(dexMod, 2);
+  // heavy: no DEX
+
+  const shieldBonus = equippedShield ? 2 : 0;
+  ac += shieldBonus;
+
+  const formula = `${equippedArmor.name}: ${entry.base}${
+    entry.dex === 'full'  ? ` + DEX ${dexMod >= 0 ? '+' : ''}${dexMod}` :
+    entry.dex === 'max2'  ? ` + DEX ${Math.min(dexMod, 2) >= 0 ? '+' : ''}${Math.min(dexMod, 2)} (max 2)` : ''
+  }${shieldBonus ? ' + Shield: +2' : ''}`;
+
+  return { armorClass: ac, acFormula: formula };
+}
+
 // ---- Character Endpoints ------------------------------------
 
 // GET /api/characters — list all characters (summary only)
@@ -1276,8 +1348,10 @@ router.post('/characters/:id/leveldown', async (req: Request, res: Response) => 
 // ============================================================
 // POST /api/characters/:id/equip
 // Toggle equipped status for a single item by index.
+// When the toggled item is armor or a shield, recomputes armorClass/acFormula
+// from the PHB armor table (PHB p.144-145) if the armor name is recognized.
 // Body: { itemIndex: number, equipped: boolean }
-// Response: { character: CharacterSheet }
+// Response: { character: CharacterSheet; acUpdated?: boolean }
 // ============================================================
 router.post('/characters/:id/equip', async (req: Request, res: Response) => {
   try {
@@ -1300,10 +1374,23 @@ router.post('/characters/:id/equip', async (req: Request, res: Response) => {
     }
 
     const newItems = items.map((item, i) => i === itemIndex ? { ...item, equipped } : item);
-    const updated  = { ...sheet, equipment: newItems, updatedAt: new Date().toISOString() };
+
+    // Recompute AC when the toggled item is armor or a shield
+    const toggledItem = items[itemIndex];
+    let acPatch: { armorClass: number; acFormula: string } | null = null;
+    if (toggledItem.category === 'armor' || toggledItem.category === 'shield') {
+      acPatch = computeArmorAC(sheet, newItems);
+    }
+
+    const updated = {
+      ...sheet,
+      equipment: newItems,
+      ...(acPatch ?? {}),
+      updatedAt: new Date().toISOString(),
+    };
     await saveCharacter(updated);
 
-    return res.json({ character: updated });
+    return res.json({ character: updated, acUpdated: acPatch !== null });
   } catch (err) {
     return handleError(res, err);
   }
