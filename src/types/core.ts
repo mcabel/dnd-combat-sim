@@ -465,6 +465,16 @@ export interface Combatant {
   isPlayer: boolean;
   faction: 'party' | 'enemy' | 'neutral';
 
+  // ── Session 52 Creature Megabatch Batch 0: sourcebook provenance ──
+  // The 5etools sourcebook code this creature was loaded from (e.g. 'MM',
+  // 'DMG', 'VGM', 'MTF'). Always populated for monsters by
+  // monsterToCombatant(); undefined for PCs. When the same creature name
+  // appears in multiple sourcebooks (a genuine reprint), monsterToCombatant
+  // ALSO appends the source as a subname suffix to `name` above
+  // (e.g. "Goblin (VGM)") so callers can visually differentiate them.
+  // See CREATURE-MEGABATCH-MIGRATION-PLAN.md Batch 0.
+  source?: string;
+
   // Stats
   maxHP: number;
   currentHP: number;

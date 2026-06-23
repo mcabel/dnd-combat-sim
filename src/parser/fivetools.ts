@@ -489,7 +489,15 @@ export function monsterToCombatant(
   pos: Vec3 = { x: 0, y: 0, z: 0 },
   profile?: AIProfile,  // if omitted, auto-detected from creature type
   faction: 'enemy' | 'neutral' = 'enemy',
-  hpOverride?: number
+  hpOverride?: number,
+  /**
+   * Session 52 Creature Megabatch Batch 0: optional sourcebook code to append
+   * as a subname suffix (e.g. "VGM") when this creature is a genuine reprint
+   * (same name exists in 2+ sourcebooks). Computed by spawnMonster() from the
+   * bestiary's reprintNames index; undefined for unique-name creatures → no
+   * suffix. Direct monsterToCombatant() callers can pass it explicitly.
+   */
+  subname?: string
 ): Combatant {
   // Auto-detect profile from creature type if not explicitly provided
   const resolvedProfile: AIProfile = profile ?? defaultProfileForType(raw.type);
@@ -516,9 +524,10 @@ export function monsterToCombatant(
 
   return {
     id: nextId(raw.name),
-    name: raw.name,
+    name: subname ? `${raw.name} (${subname})` : raw.name,
     isPlayer: false,
     faction,
+    source: raw.source,                       // Session 52 Batch 0: sourcebook provenance
     maxHP: hp,
     currentHP: hp,
     ac,
@@ -578,8 +587,41 @@ export function monsterToCombatant(
 }
 
 /**
+ * Session 52 Creature Megabatch Batch 0: a bestiary map with reprint awareness.
+ *
+ * The map is DUAL-KEYED for backward compatibility + disambiguation:
+ *   - Bare lowercased name (`'goblin'`) → first entry encountered for that name
+ *     across all loaded files. Backward compatible with `map.get(name)`.
+ *   - `name|source` lowercased (`'goblin|vgm'`) → the specific source's entry.
+ *     Used by spawnMonster() when disambiguating reprints.
+ *
+ * `reprintNames` lists bare names that appear in 2+ DIFFERENT sourcebooks
+ * (genuine reprints). For those names, spawnMonster() appends the source as a
+ * subname suffix (e.g. "Goblin (VGM)") so callers can visually differentiate.
+ *
+ * Two entries with the SAME source (e.g. a duplicated file) are NOT reprints —
+ * the second is silently dropped (first-wins) to avoid false-reprint artifacts.
+ */
+export type BestiaryMap = Map<string, Raw5etoolsMonster> & {
+  reprintNames: Set<string>;
+};
+
+/** Create an empty BestiaryMap with the reprintNames side-index initialized. */
+function newBestiaryMap(): BestiaryMap {
+  const map = new Map<string, Raw5etoolsMonster>() as BestiaryMap;
+  map.reprintNames = new Set<string>();
+  return map;
+}
+
+/** Build the `name|source` lookup key (both lowercased). */
+function bestiaryKey(name: string, source: string): string {
+  return `${name.toLowerCase()}|${source.toLowerCase()}`;
+}
+
+/**
  * Load all monsters from a 5etools bestiary JSON into a lookup map.
- * Key is lowercased monster name.
+ * Single-file load: no reprints possible (one source), but the map is still
+ * dual-keyed (bare name + name|source) for consistency with mergeBestiaries().
  *
  * Usage:
  *   import data from './bestiary-dmg.json';
@@ -587,26 +629,44 @@ export function monsterToCombatant(
  */
 export function loadBestiaryJson(
   fileData: { monster: Raw5etoolsMonster[] }
-): Map<string, Raw5etoolsMonster> {
-  const map = new Map<string, Raw5etoolsMonster>();
+): BestiaryMap {
+  const map = newBestiaryMap();
   for (const m of fileData.monster) {
-    map.set(m.name.toLowerCase(), m);
+    const bareKey = m.name.toLowerCase();
+    if (!map.has(bareKey)) map.set(bareKey, m);            // first-wins (backward compat)
+    map.set(bestiaryKey(m.name, m.source ?? ''), m);       // explicit source key
   }
   return map;
 }
 
 /**
  * Merge multiple bestiary files into one lookup map.
- * Later files win on name collision (allows overrides).
+ * Dual-keyed (bare name + name|source). First file wins on the bare-name key
+ * (stable ordering). `reprintNames` is populated with any name appearing in
+ * 2+ DIFFERENT sourcebooks.
  */
 export function mergeBestiaries(
   ...files: { monster: Raw5etoolsMonster[] }[]
-): Map<string, Raw5etoolsMonster> {
-  const map = new Map<string, Raw5etoolsMonster>();
+): BestiaryMap {
+  const map = newBestiaryMap();
+  // Track which sources each name appeared in (to detect genuine reprints).
+  const nameSources = new Map<string, Set<string>>();
   for (const file of files) {
     for (const m of file.monster) {
-      map.set(m.name.toLowerCase(), m);
+      const bareKey = m.name.toLowerCase();
+      const src = (m.source ?? '').toLowerCase();
+      // Record source provenance
+      if (!nameSources.has(bareKey)) nameSources.set(bareKey, new Set());
+      nameSources.get(bareKey)!.add(src);
+      // Bare-name key: first-wins (stable, backward compat for map.get(name))
+      if (!map.has(bareKey)) map.set(bareKey, m);
+      // name|source key: always set (last-wins within same source is harmless)
+      map.set(bestiaryKey(m.name, m.source ?? ''), m);
     }
+  }
+  // Genuine reprint = name in 2+ distinct sources
+  for (const [name, srcs] of nameSources) {
+    if (srcs.size > 1) map.reprintNames.add(name);
   }
   return map;
 }
@@ -614,6 +674,15 @@ export function mergeBestiaries(
 /**
  * Instantiate a named monster from a loaded bestiary map.
  * Returns null if the name is not found — never throws.
+ *
+ * Session 52 Batch 0: if the name is a genuine reprint (in bestiary.reprintNames)
+ * OR `sourceOverride` is provided, the spawned Combatant's `name` gets a
+ * `(SOURCE)` subname suffix and `source` is set to the sourcebook code.
+ * Unique-name creatures get no suffix (backward compatible).
+ *
+ * @param sourceOverride Optional sourcebook code (e.g. 'VGM') to disambiguate
+ *                       a reprint. When omitted, the first entry for the name
+ *                       is used (backward compat).
  */
 export function spawnMonster(
   bestiaryMap: Map<string, Raw5etoolsMonster>,
@@ -621,14 +690,58 @@ export function spawnMonster(
   pos: Vec3,
   profile: AIProfile = 'smart',
   faction: 'enemy' | 'neutral' = 'enemy',
-  hpOverride?: number
+  hpOverride?: number,
+  sourceOverride?: string
 ): Combatant | null {
-  const raw = bestiaryMap.get(name.toLowerCase());
+  const nameKey = name.toLowerCase();
+  let raw: Raw5etoolsMonster | undefined;
+  if (sourceOverride) {
+    raw = bestiaryMap.get(bestiaryKey(name, sourceOverride));
+  } else {
+    raw = bestiaryMap.get(nameKey);
+  }
   if (!raw) return null;
-  return monsterToCombatant(raw, pos, profile, faction, hpOverride);
+  // Subname suffix when this is a reprint (auto-detected) or explicitly disambiguated
+  const isReprint = (bestiaryMap as BestiaryMap).reprintNames?.has(nameKey) ?? false;
+  const subname = (isReprint || sourceOverride) ? raw.source : undefined;
+  return monsterToCombatant(raw, pos, profile, faction, hpOverride, subname);
 }
 
-/** List all monster names in a bestiary map (sorted). */
+/**
+ * List all monster names in a bestiary map (sorted).
+ * Returns the bare display names (excludes the `name|source` disambiguation
+ * keys). For reprinted names, returns the bare name — callers who need the
+ * disambiguated form should use listMonstersDetailed().
+ */
 export function listMonsters(bestiaryMap: Map<string, Raw5etoolsMonster>): string[] {
-  return [...bestiaryMap.keys()].sort();
+  const names: string[] = [];
+  for (const key of bestiaryMap.keys()) {
+    if (!key.includes('|')) names.push(key);   // exclude name|source keys
+  }
+  return names.sort();
+}
+
+/**
+ * Session 52 Batch 0: list all monsters with source provenance + reprint flag.
+ * Each entry is `{ name, source, isReprint }`. Reprinted names appear once per
+ * source. Useful for UI dropdowns that need to show "Goblin (MM)" vs "Goblin (VGM)".
+ */
+export function listMonstersDetailed(
+  bestiaryMap: Map<string, Raw5etoolsMonster>
+): { name: string; source: string; isReprint: boolean }[] {
+  const out: { name: string; source: string; isReprint: boolean }[] = [];
+  const reprintNames = (bestiaryMap as BestiaryMap).reprintNames ?? new Set<string>();
+  const seen = new Set<string>();
+  for (const [key, m] of bestiaryMap) {
+    if (!key.includes('|')) continue;   // skip bare-name keys; iterate name|source keys
+    const composite = `${m.name.toLowerCase()}|${(m.source ?? '').toLowerCase()}`;
+    if (seen.has(composite)) continue;
+    seen.add(composite);
+    out.push({
+      name: m.name,
+      source: m.source ?? '',
+      isReprint: reprintNames.has(m.name.toLowerCase()),
+    });
+  }
+  return out.sort((a, b) => a.name.localeCompare(b.name) || a.source.localeCompare(b.source));
 }

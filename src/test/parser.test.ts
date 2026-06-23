@@ -5,6 +5,7 @@
 
 import { loadBestiaryJson, spawnMonster } from '../parser/fivetools';
 import { parseDice } from '../parser/fivetools';
+import { listMonsters } from '../parser/fivetools';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -101,7 +102,10 @@ assert('Map not empty', bestiary.size > 0);
 assert('Avatar of Death present', bestiary.has('avatar of death'));
 assert('Giant Fly present', bestiary.has('giant fly'));
 assert('Larva present', bestiary.has('larva'));
-eq('Exactly 3 monsters', bestiary.size, 3);
+// Session 52 Batch 0: bestiary is dual-keyed (bare name + name|source), so
+// bestiary.size counts 6 keys for 3 monsters. listMonsters() returns the
+// 3 unique bare names. Assert via listMonsters for the correct unique count.
+eq('Exactly 3 unique monsters', listMonsters(bestiary).length, 3);
 
 // ============================================================
 // 3. Avatar of Death
