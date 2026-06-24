@@ -208,8 +208,20 @@ export function isVisuallyDetected(
 
   // ---- Normal vision + darkvision (subject to light + obscurement) ----
 
-  // Invisible target → can't see (truesight handled above; see_invisibility = Phase 3).
-  if (target.conditions.has('invisible')) return false;
+  // Invisible target → can't see with normal vision.
+  // Exception: See Invisibility spell (PHB p.274) lets the caster see
+  // invisible creatures + objects within 60 ft. The spell sets the
+  // `_seeInvisibilityActive` scratch flag (Phase 3 — RFC-VISION-AUDIO §4.3).
+  // Truesight (handled above) also sees invisible; See Invisibility is the
+  // non-truesight path (wizards/sorcerers/etc. who cast the L2 spell).
+  if (target.conditions.has('invisible')) {
+    if (observer._seeInvisibilityActive
+        && distFt <= 60   // metadata.seeInvisibilityRangeFt (PHB p.274)
+        && hasLineOfSight(observer, target, bf)) {
+      return true;
+    }
+    return false;
+  }
 
   // LOS check (vision-blocking obstacles block normal + darkvision).
   if (!hasLineOfSight(observer, target, bf)) return false;
@@ -596,6 +608,46 @@ export function countTargetableEnemies(
     }
   }
   return count;
+}
+
+/**
+ * Return the list of living enemies the observer can target — i.e. those
+ * whose detection state is 'visible' or 'position-known'. Enemies that are
+ * 'hidden' (took Hide action, position unknown) or 'unknown' (lost track)
+ * are excluded — you can't attack or cast at a creature whose position you
+ * don't know.
+ *
+ * This is the list-returning companion to countTargetableEnemies(). Used by
+ * the planner's target-selection functions (targeting.ts) to enforce
+ * RFC-VISION-AUDIO Phase 3: don't target enemies you can't perceive.
+ *
+ * Requires the detection map to be populated (refreshDetectionForObserver).
+ * If the map is absent (legacy combatant / test factory), falls back to:
+ * all living enemies without the 'hidden' condition (backward-compatible).
+ *
+ * Note: 'position-known' targets (heard but not seen) ARE included — attacks
+ * against them are valid (with disadvantage, handled by attackAdvantageState).
+ * "Creature you can see" spell enforcement is a separate concern (Phase 3 Q5).
+ */
+export function targetableEnemiesOf(
+  self: Combatant,
+  bf: Battlefield,
+): Combatant[] {
+  const detection = self.perception.detection;
+  const result: Combatant[] = [];
+  for (const c of bf.combatants.values()) {
+    if (c.id === self.id) continue;
+    if (c.faction === self.faction) continue;
+    if (c.isDead || c.isUnconscious) continue;
+    if (detection) {
+      const state = detection.get(c.id) ?? 'unknown';
+      if (state === 'visible' || state === 'position-known') result.push(c);
+    } else {
+      // Legacy fallback: hidden = untargetable; everything else = targetable.
+      if (!c.conditions.has('hidden')) result.push(c);
+    }
+  }
+  return result;
 }
 
 /**

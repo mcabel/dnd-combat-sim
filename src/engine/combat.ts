@@ -2745,7 +2745,7 @@ export function executeMove(
     for (const [, watcher] of bf.combatants) {
       if (watcher.id === mover.id || watcher.isDead || watcher.isUnconscious) continue;
       if (watcher.faction === mover.faction) continue;
-      if (!opportunityAttackTriggered(watcher, mover, fromPos, dest)) continue;
+      if (!opportunityAttackTriggered(watcher, mover, fromPos, dest, bf)) continue;
       if (!shouldTakeOpportunityAttack(watcher, mover, bf)) continue;
 
       // Execute OA

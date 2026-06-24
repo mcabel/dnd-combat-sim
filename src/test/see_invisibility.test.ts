@@ -137,8 +137,8 @@ eq('range is 0 ft (self)', metadata.rangeFt, 0);
 eq('seeInvisibilityRangeFt is 60', (metadata as any).seeInvisibilityRangeFt, 60);
 eq('NOT concentration', metadata.concentration, false);
 eq('casting time is action', metadata.castingTime, 'action');
-eq('v1: vision integration NOT implemented',
-  (metadata as any).seeInvisibilityVisionIntegrationV1Implemented, false);
+eq('Session 63 Phase 3: vision integration NOW implemented',
+  (metadata as any).seeInvisibilityVisionIntegrationV1Implemented, true);
 eq('v1: duration simplified (persists for combat)',
   (metadata as any).seeInvisibilityDurationV1Simplified, true);
 eq('v1: upcast NOT implemented',

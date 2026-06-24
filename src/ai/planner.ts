@@ -1209,8 +1209,37 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
 
   // === SELECT TARGET ===
   const target = selectTarget(self, battlefield);
-  if (!target) return plan; // No enemies left
+  if (!target) {
+    // No targetable enemy. If there are truly no living enemies, combat is
+    // ending — return an empty plan.
+    if (livingEnemiesOf(self, battlefield).length === 0) return plan;
 
+    // Living enemies exist but none are targetable (all 'hidden' or 'unknown'
+    // per the perception detection map — RFC-VISION-AUDIO Phase 3). The
+    // planner can't pick an attack target, but the creature can still take
+    // utility actions: Hide (Cunning Action / generalized), Search (active
+    // Perception), or move toward the last known position.
+    //
+    // The Active Perception branch above (line ~1185) already handles the
+    // case where hidden enemies exist + no targetable enemies. If we reach
+    // here, either there are no hidden enemies (just 'unknown' ones), or
+    // the Search branch didn't fire. Fall through to bonus action planning
+    // so Cunning Action Hide / other bonus actions can still fire.
+    plan.bonusAction = planBonusAction(self, null, battlefield);
+    // ── Cunning Action Hide (Rogue Level 2+) ──
+    // A Rogue behind fog/obstacles with no targetable enemy should still
+    // Hide as a bonus action (the classic "break LOS + hide" tactic).
+    if (!plan.bonusAction && self.resources?.cunningAction) {
+      const ca = planCunningAction(self, null, null, self.pos, battlefield);
+      if (ca.bonusAction) {
+        plan.bonusAction = ca.bonusAction;
+        if (ca.moveAfter && !plan.moveAfter) {
+          plan.moveAfter = ca.moveAfter;
+        }
+      }
+    }
+    return plan;
+  }
   plan.targetId = target.id;
 
   // === CURE WOUNDS (action heal) — checked before attack ===

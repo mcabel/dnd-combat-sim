@@ -47,7 +47,7 @@ export const metadata = {
   seeInvisibilityRangeFt: 60,
   concentration: false,
   castingTime: 'action',
-  seeInvisibilityVisionIntegrationV1Implemented: false,    // vision subsystem not implemented
+  seeInvisibilityVisionIntegrationV1Implemented: true,     // Session 63 Phase 3: consumed by isVisuallyDetected
   seeInvisibilityDurationV1Simplified: true,               // 1-hr duration not tracked (persists for combat)
   seeInvisibilityUpcastV1Implemented: false,               // upcast NOT modelled (no At Higher Levels)
 } as const;
@@ -89,10 +89,10 @@ function emit(
  * Note: See Invisibility is NOT concentration — it can be cast while
  * concentrating on another spell. The planner should NOT gate on concentration.
  *
- * Note: v1's planner still casts See Invisibility even though the vision
- * subsystem is not implemented — the flag is set for forward-compat. A future
- * planner improvement could skip See Invisibility in v1 unless the caster
- * knows an enemy is invisible (no perception subsystem in v1 either), but v1
+ * Session 63 Phase 3: the vision subsystem now consumes `_seeInvisibilityActive`
+ * — isVisuallyDetected() returns true for invisible targets within 60 ft when
+ * the flag is set. A future planner improvement could skip See Invisibility
+ * unless the caster knows an enemy is invisible (via the detection map), but v1
  * casts it for realism and to exercise the spell module.
  */
 export function shouldCast(caster: Combatant, bf: Battlefield): boolean {
@@ -114,9 +114,10 @@ export function shouldCast(caster: Combatant, bf: Battlefield): boolean {
  *  2. Set `_seeInvisibilityActive = true` on the caster (forward-compat flag).
  *  3. Log the cast.
  *
- * v1 simplifications: vision subsystem NOT implemented (flag is forward-
- * compat only); 1-hr duration not tracked (persists for combat); Ethereal
- * Plane NOT modelled; upcast NOT modelled; NOT concentration.
+ * Session 63 Phase 3: the vision subsystem now consumes `_seeInvisibilityActive`
+ * in isVisuallyDetected() — invisible targets within 60 ft are visible to the
+ * caster. v1 simplifications remaining: 1-hr duration not tracked (persists for
+ * combat); Ethereal Plane NOT modelled; upcast NOT modelled; NOT concentration.
  */
 export function execute(
   caster: Combatant,
@@ -128,12 +129,12 @@ export function execute(
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts See Invisibility! (see invisible creatures/objects out to ${metadata.seeInvisibilityRangeFt} ft — v1: forward-compat flag; vision subsystem not yet implemented)`,
+    `${caster.name} casts See Invisibility! (see invisible creatures/objects out to ${metadata.seeInvisibilityRangeFt} ft — invisible targets within range are now visible to this caster)`,
     caster.id,
   );
   emit(
     state, 'condition_add', caster.id,
-    `${caster.name} can now see invisible creatures! (v1: forward-compat flag set; no mechanical effect until vision subsystem is implemented)`,
+    `${caster.name} can now see invisible creatures within ${metadata.seeInvisibilityRangeFt} ft! (isVisuallyDetected now returns true for invisible targets in range)`,
     caster.id,
   );
 }

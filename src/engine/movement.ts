@@ -283,7 +283,8 @@ export function opportunityAttackTriggered(
   watcher: Combatant,
   mover: Combatant,
   fromPos: Vec3,   // mover's position BEFORE the move step
-  toPos: Vec3      // mover's position AFTER the move step
+  toPos: Vec3,     // mover's position AFTER the move step
+  bf?: Battlefield, // RFC-VISION-AUDIO Phase 3: detection-map visibility check
 ): boolean {
   if (watcher.budget.reactionUsed) return false;
   if (watcher.isDead || watcher.isUnconscious) return false;
@@ -305,7 +306,33 @@ export function opportunityAttackTriggered(
   if (!wasInReach) return false;           // Was never in reach — no trigger
   if (isStillInReach) return false;        // Still in reach — not leaving
 
-  // Watcher must be able to see the mover (simplified: both not blinded)
+  // ── RFC-VISION-AUDIO Phase 3: visibility check via detection map ──
+  // A watcher can only make an opportunity attack against a creature they
+  // can SEE. Per the 4-state detection model:
+  //   'visible'        → OA fires (can see the mover leaving reach)
+  //   'position-known' → NO OA (heard but can't see — can't react with a strike)
+  //   'hidden'         → NO OA (can't perceive the mover at all)
+  //   'unknown'        → NO OA (lost track of the mover)
+  //
+  // The detection map is refreshed at the start of each combatant's turn by
+  // updateDetectionStates(), so it reflects the watcher's perception at the
+  // start of the mover's turn. If the mover was visible then, the watcher
+  // can react to them leaving reach.
+  //
+  // Override senses (truesight/blindsight) that detect invisible creatures
+  // are already factored into the detection state by getDetectionState().
+  // See Invisibility (_seeInvisibilityActive) is also factored in.
+  //
+  // Legacy fallback: if the detection map is absent (old test factory), fall
+  // back to the pre-Phase-3 condition-based check (blinded watcher / invisible
+  // mover).
+  const detection = watcher.perception?.detection;
+  if (detection) {
+    const state = detection.get(mover.id) ?? 'unknown';
+    return state === 'visible';
+  }
+
+  // Legacy fallback (no detection map).
   if (watcher.conditions.has('blinded')) return false;
   if (mover.conditions.has('invisible')) return false;
 

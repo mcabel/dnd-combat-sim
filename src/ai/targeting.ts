@@ -7,6 +7,11 @@
 import { Combatant, Battlefield } from '../types/core';
 import { chebyshev3D, livingEnemiesOf } from '../engine/movement';
 import { isBloodied, abilityMod } from '../engine/utils';
+// ── Session 63 RFC-VISION-AUDIO Phase 3: perception-based target filtering ──
+// selectTarget now excludes enemies the observer can't perceive ('hidden' /
+// 'unknown' detection states). Falls back to livingEnemiesOf (legacy) when the
+// detection map is absent (backward-compatible with test factories).
+import { targetableEnemiesOf } from '../engine/perception';
 
 // ---- Estimated AC from observed armor -----------------------
 
@@ -35,7 +40,7 @@ export function estimatedAC(armorType: 'none' | 'light' | 'medium' | 'heavy' | '
  * Ties broken by lower index in combatant map (stable).
  */
 export function selectNearest(self: Combatant, battlefield: Battlefield): Combatant | null {
-  const enemies = livingEnemiesOf(self, battlefield);
+  const enemies = targetableEnemiesOf(self, battlefield);
   if (enemies.length === 0) return null;
 
   return enemies.reduce((best, e) => {
@@ -73,7 +78,7 @@ export function weakestScore(self: Combatant, enemy: Combatant): number {
 }
 
 export function selectWeakest(self: Combatant, battlefield: Battlefield): Combatant | null {
-  const enemies = livingEnemiesOf(self, battlefield);
+  const enemies = targetableEnemiesOf(self, battlefield);
   if (enemies.length === 0) return null;
 
   return enemies.reduce((best, e) =>
@@ -141,7 +146,7 @@ export function smartScore(self: Combatant, enemy: Combatant, battlefield: Battl
 }
 
 export function selectSmart(self: Combatant, battlefield: Battlefield): Combatant | null {
-  const enemies = livingEnemiesOf(self, battlefield);
+  const enemies = targetableEnemiesOf(self, battlefield);
   if (enemies.length === 0) return null;
 
   return enemies.reduce((best, e) =>
@@ -186,7 +191,7 @@ export function allyAdjacentToEnemy(
  * none are), preserving existing prioritisation logic.
  */
 export function selectRogueTarget(self: Combatant, battlefield: Battlefield): Combatant | null {
-  const enemies = livingEnemiesOf(self, battlefield);
+  const enemies = targetableEnemiesOf(self, battlefield);
   if (enemies.length === 0) return null;
 
   const SA_BONUS = 50;

@@ -32,10 +32,12 @@ import {
   chebyshevDistanceFt,
   countHiddenEnemies,
   countTargetableEnemies,
+  targetableEnemiesOf,
   nearestHiddenEnemy,
 } from '../engine/perception';
 import { runCombat, makeFlatBattlefield, CombatEvent, EngineState } from '../engine/combat';
 import { planTurn } from '../ai/planner';
+import { opportunityAttackTriggered } from '../engine/movement';
 import { Combatant, Battlefield, Obstacle, Action, Vec3, PlayerResources } from '../types/core';
 
 // ---- Harness ------------------------------------------------
@@ -945,6 +947,201 @@ console.log('\n=== 21. Phase 2: Backward-compat (no senses = normal vision) ===\
   bf.lightLevel = 'darkness';
   assert('21d: no-senses observer can NOT see in darkness',
     !isVisuallyDetected(observer, target, bf));
+}
+
+// ============================================================
+console.log('\n=== 22. Phase 3: See Invisibility spell consumption ===\n');
+// ============================================================
+
+{
+  // Observer with _seeInvisibilityActive = true (See Invisibility spell cast).
+  const observer = makeC({
+    id: 'wizard', pos: { x: 0, y: 0, z: 0 },
+    _seeInvisibilityActive: true,
+  });
+  const invisibleTarget = makeC({ id: 'inv', pos: { x: 4, y: 0, z: 0 } });  // 20 ft
+  invisibleTarget.conditions.add('invisible');
+  const bf = makeBF([observer, invisibleTarget]);
+
+  assert('22a: See Invisibility observer sees invisible target (within 60 ft)',
+    isVisuallyDetected(observer, invisibleTarget, bf));
+  eq('22b: detection state = visible', getDetectionState(observer, invisibleTarget, bf), 'visible');
+
+  // See Invisibility but target out of range (70 ft > 60 ft).
+  const farInv = makeC({ id: 'farinv', pos: { x: 14, y: 0, z: 0 } });  // 70 ft
+  farInv.conditions.add('invisible');
+  assert('22c: See Invisibility out of range (70 ft) can NOT see invisible',
+    !isVisuallyDetected(observer, farInv, bf));
+
+  // Observer WITHOUT See Invisibility can't see invisible target.
+  const normalObserver = makeC({ id: 'normal', pos: { x: 0, y: 0, z: 0 } });
+  assert('22d: normal observer (no See Invisibility) can NOT see invisible',
+    !isVisuallyDetected(normalObserver, invisibleTarget, bf));
+
+  // See Invisibility + fog wall (no LOS) → can't see.
+  // Place a fog wall clearly between observer (x=0) and target (x=8) that
+  // blocks all corner-to-corner sight lines.
+  const farInvForFog = makeC({ id: 'farinvfog', pos: { x: 8, y: 0, z: 0 } });  // 40 ft
+  farInvForFog.conditions.add('invisible');
+  const fog = fogCloud(3, -2, 3, 7);  // fog wall at x=3..5, y=-2..4 (blocks all corners)
+  const bfWithFog = makeBF([observer, farInvForFog], [fog]);
+  assert('22e: See Invisibility blocked by fog wall (no LOS)',
+    !isVisuallyDetected(observer, farInvForFog, bfWithFog));
+
+  // See Invisibility doesn't help against 'hidden' (Hide action beats it).
+  const hiddenTarget = makeC({ id: 'hidden', pos: { x: 4, y: 0, z: 0 } });
+  hiddenTarget.conditions.add('hidden');
+  assert('22f: See Invisibility does NOT reveal hidden target (Hide beats it)',
+    !isVisuallyDetected(observer, hiddenTarget, bf));
+
+  // Non-invisible target is still visible (See Invisibility is a buff, not a nerf).
+  const normalTarget = makeC({ id: 'normaltgt', pos: { x: 4, y: 0, z: 0 } });
+  assert('22g: See Invisibility observer sees normal (non-invisible) target',
+    isVisuallyDetected(observer, normalTarget, bf));
+}
+
+// ============================================================
+console.log('\n=== 23. Phase 3: See Invisibility vs truesight precedence ===\n');
+// ============================================================
+
+{
+  // Truesight already handles invisibility (Phase 2). See Invisibility is the
+  // non-truesight path. Both should work independently.
+  const truesightObserver = makeC({
+    id: 'couatl', senses: { truesight: 120 }, pos: { x: 0, y: 0, z: 0 },
+  });
+  const seeInvObserver = makeC({
+    id: 'wizard', pos: { x: 0, y: 0, z: 0 },
+    _seeInvisibilityActive: true,
+  });
+  const invisibleTarget = makeC({ id: 'inv', pos: { x: 5, y: 0, z: 0 } });  // 25 ft
+  invisibleTarget.conditions.add('invisible');
+  const bf = makeBF([truesightObserver, seeInvObserver, invisibleTarget]);
+
+  assert('23a: truesight sees invisible (Phase 2)', isVisuallyDetected(truesightObserver, invisibleTarget, bf));
+  assert('23b: See Invisibility sees invisible (Phase 3)', isVisuallyDetected(seeInvObserver, invisibleTarget, bf));
+
+  // Truesight range > See Invisibility range. At 80 ft, only truesight works.
+  const farInv = makeC({ id: 'farinv', pos: { x: 16, y: 0, z: 0 } });  // 80 ft
+  farInv.conditions.add('invisible');
+  assert('23c: at 80 ft, truesight (120 ft) still sees', isVisuallyDetected(truesightObserver, farInv, bf));
+  assert('23d: at 80 ft, See Invisibility (60 ft) can NOT see',
+    !isVisuallyDetected(seeInvObserver, farInv, bf));
+}
+
+// ============================================================
+console.log('\n=== 24. Phase 3: Planner target filtering (hidden/unknown excluded) ===\n');
+// ============================================================
+
+{
+  // Observer with a detection map marking one enemy 'visible' and one 'hidden'.
+  const self = makeC({
+    id: 'self', faction: 'party', pos: { x: 0, y: 0, z: 0 },
+    actions: [{
+      name: 'Longsword', isMultiattack: false,
+      attackType: 'melee', reach: 5, range: null,
+      hitBonus: 5, damage: { count: 1, sides: 8, bonus: 3, average: 7 },
+      damageType: 'slashing', saveDC: null, saveAbility: null,
+      isAoE: false, isControl: false, requiresConcentration: false,
+      costType: 'action', legendaryCost: 0, description: '',
+    }],
+  });
+  const visibleEnemy = makeC({
+    id: 'visibleE', faction: 'enemy', pos: { x: 1, y: 0, z: 0 },
+    maxHP: 20, currentHP: 20, ac: 12,
+  });
+  const hiddenEnemy = makeC({
+    id: 'hiddenE', faction: 'enemy', pos: { x: 2, y: 0, z: 0 },
+    maxHP: 20, currentHP: 20, ac: 12,
+  });
+  hiddenEnemy.conditions.add('hidden');
+
+  const bf = makeBF([self, visibleEnemy, hiddenEnemy]);
+  // Populate detection map: visible enemy = 'visible', hidden enemy = 'hidden'.
+  self.perception.detection = new Map([
+    ['visibleE', 'visible'],
+    ['hiddenE', 'hidden'],
+  ]);
+
+  const plan = planTurn(self, bf);
+  // The planner should target the VISIBLE enemy, not the hidden one.
+  eq('24a: planner targets visible enemy (not hidden)', plan.targetId, 'visibleE');
+
+  // Now make ONLY the hidden enemy visible (visible enemy removed).
+  const bf2 = makeBF([self, hiddenEnemy]);
+  self.perception.detection = new Map([['hiddenE', 'hidden']]);
+  const plan2 = planTurn(self, bf2);
+  // No targetable enemy → planner should NOT target the hidden one.
+  assert('24b: planner does NOT target hidden enemy (no targetable)',
+    plan2.targetId !== 'hiddenE');
+}
+
+// ============================================================
+console.log('\n=== 25. Phase 3: OA visibility gating ===\n');
+// ============================================================
+
+{
+  // Watcher with a detection map: mover is 'visible' → OA fires.
+  const watcher = makeC({
+    id: 'watcher', faction: 'party', pos: { x: 0, y: 0, z: 0 },
+    actions: [{
+      name: 'Longsword', isMultiattack: false,
+      attackType: 'melee', reach: 5, range: null,
+      hitBonus: 5, damage: { count: 1, sides: 8, bonus: 3, average: 7 },
+      damageType: 'slashing', saveDC: null, saveAbility: null,
+      isAoE: false, isControl: false, requiresConcentration: false,
+      costType: 'action', legendaryCost: 0, description: '',
+    }],
+  });
+  const mover = makeC({
+    id: 'mover', faction: 'enemy', pos: { x: 1, y: 0, z: 0 },  // adjacent
+  });
+  const fromPos = { x: 1, y: 0, z: 0 };  // within reach
+  const toPos = { x: 2, y: 0, z: 0 };    // leaving reach
+  const bf = makeBF([watcher, mover]);
+
+  // Detection map: mover is 'visible' → OA triggers.
+  watcher.perception.detection = new Map([['mover', 'visible']]);
+  assert('25a: OA triggers when mover is visible',
+    opportunityAttackTriggered(watcher, mover, fromPos, toPos, bf));
+
+  // Detection map: mover is 'hidden' → NO OA.
+  watcher.perception.detection = new Map([['mover', 'hidden']]);
+  assert('25b: NO OA when mover is hidden',
+    !opportunityAttackTriggered(watcher, mover, fromPos, toPos, bf));
+
+  // Detection map: mover is 'position-known' (heard, not seen) → NO OA.
+  watcher.perception.detection = new Map([['mover', 'position-known']]);
+  assert('25c: NO OA when mover is position-known (heard, not seen)',
+    !opportunityAttackTriggered(watcher, mover, fromPos, toPos, bf));
+
+  // Detection map: mover is 'unknown' → NO OA.
+  watcher.perception.detection = new Map([['mover', 'unknown']]);
+  assert('25d: NO OA when mover is unknown',
+    !opportunityAttackTriggered(watcher, mover, fromPos, toPos, bf));
+
+  // Legacy fallback: no detection map → use condition-based check.
+  watcher.perception.detection = undefined;
+  assert('25e: legacy (no detection map) — OA fires for normal mover',
+    opportunityAttackTriggered(watcher, mover, fromPos, toPos, bf));
+
+  // Legacy fallback: invisible mover → NO OA.
+  mover.conditions.add('invisible');
+  assert('25f: legacy (no detection map) — NO OA for invisible mover',
+    !opportunityAttackTriggered(watcher, mover, fromPos, toPos, bf));
+  mover.conditions.delete('invisible');
+
+  // See Invisibility: watcher can see invisible mover → OA fires.
+  watcher._seeInvisibilityActive = true;
+  mover.conditions.add('invisible');
+  // Need detection map to reflect See Invisibility — populate it.
+  // (In real combat, updateDetectionStates would set 'visible' because
+  //  isVisuallyDetected returns true with _seeInvisibilityActive.)
+  watcher.perception.detection = new Map([['mover', 'visible']]);
+  assert('25g: See Invisibility watcher — OA fires vs invisible mover',
+    opportunityAttackTriggered(watcher, mover, fromPos, toPos, bf));
+  watcher._seeInvisibilityActive = false;
+  mover.conditions.delete('invisible');
 }
 
 // ============================================================
