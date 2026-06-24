@@ -2278,6 +2278,9 @@ export interface PlannedAction {
     | 'command'           // Command — PHB p.223: 60 ft, WIS save or incapacitated, NO concentration (commands simplified; upcast not modelled)
     | 'animalFriendship'  // Animal Friendship — PHB p.212: 30 ft, WIS save or charmed, NO concentration (Session 27 TG-004: beast-only + INT<4 NOW enforced)
     | 'causeFear'         // Cause Fear — XGE p.151: 60 ft, WIS save or frightened, NO concentration
+    | 'blindnessDeafness' // Blindness/Deafness — PHB p.219: 30 ft, CON save or blinded, NO concentration (v1: always blinded)
+    | 'banishment'        // Banishment — PHB p.217: 60 ft, CHA save, concentration; fey/elemental/etc removed permanently, others incapacitated
+    | 'tashasHideousLaughter' // Tasha's Hideous Laughter — PHB p.282: 30 ft, WIS save or prone+incapacitated, concentration
     | 'charmPerson'       // Charm Person — PHB p.221: 30 ft, WIS save or charmed, NO concentration (Session 27 TG-004: humanoid-only NOW enforced)
     | 'compelledDuel'     // Compelled Duel — PHB p.224: 30 ft, WIS save or frightened (taunt), concentration (movement-restriction simplified)
     | 'grease'            // Grease — PHB p.245: 60 ft, 10-ft radius AoE, DEX save or prone, NO concentration (persistent-terrain simplified)

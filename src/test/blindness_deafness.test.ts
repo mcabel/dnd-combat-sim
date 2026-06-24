@@ -118,7 +118,7 @@ eq('range is 30 ft', metadata.rangeFt, 30);
 eq('NOT concentration (PHB p.219 — unusual!)', metadata.concentration, false);
 eq('save ability is con', metadata.saveAbility, 'con');
 eq('casting time is action', metadata.castingTime, 'action');
-eq('v1 always picks blinded', metadata.v1AlwaysPicks, 'blinded');
+eq('v1 always picks blinded (simplified flag)', (metadata as any).blindnessDeafnessAlwaysBlindV1Simplified, true);
 
 // ============================================================
 // 2. shouldCast — precondition gates

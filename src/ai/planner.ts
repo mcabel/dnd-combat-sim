@@ -191,6 +191,8 @@ import { shouldCast as shouldCastColorSpray } from '../spells/color_spray';
 import { shouldCast as shouldCastCommand } from '../spells/command';
 import { shouldCast as shouldCastAnimalFriendship } from '../spells/animal_friendship';
 import { shouldCast as shouldCastCauseFear } from '../spells/cause_fear';
+import { shouldCast as shouldCastBanishment } from '../spells/banishment';
+import { shouldCast as shouldCastTashasHideousLaughter } from '../spells/tashas_hideous_laughter';
 import { shouldCast as shouldCastCharmPerson } from '../spells/charm_person';
 import { shouldCast as shouldCastCompelledDuel } from '../spells/compelled_duel';
 import { shouldCast as shouldCastGrease } from '../spells/grease';
@@ -4377,6 +4379,33 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
       plan.action = { type: 'causeFear', action: null, targetId: cfTarget.id, description: `${self.name} casts Cause Fear at ${cfTarget.name}` };
       plan.targetId = cfTarget.id;
       plan.bonusAction = planBonusAction(self, cfTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- BLINDNESS/DEAFNESS (CON save or blinded, L2, NO conc) ---
+  // Already handled by existing planner branch (line ~36 import).
+
+  // --- BANISHMENT (CHA save, L4, conc; fey/elemental/etc removed) ---
+  // PHB p.217: 60 ft, CHA save, concentration. High-value vs non-native creatures.
+  if (!plan.action && self.actions.some(a => a.name === 'Banishment')) {
+    const banTarget = shouldCastBanishment(self, battlefield);
+    if (banTarget) {
+      plan.action = { type: 'banishment', action: null, targetId: banTarget.id, description: `${self.name} casts Banishment at ${banTarget.name}` };
+      plan.targetId = banTarget.id;
+      plan.bonusAction = planBonusAction(self, banTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- TASHA'S HIDEOUS LAUGHTER (WIS save or prone+incapacitated, L1, conc) ---
+  // PHB p.282: 30 ft, WIS save or prone+incapacitated, concentration.
+  if (!plan.action && self.actions.some(a => a.name === "Tasha's Hideous Laughter")) {
+    const thlTarget = shouldCastTashasHideousLaughter(self, battlefield);
+    if (thlTarget) {
+      plan.action = { type: 'tashasHideousLaughter', action: null, targetId: thlTarget.id, description: `${self.name} casts Tasha's Hideous Laughter at ${thlTarget.name}` };
+      plan.targetId = thlTarget.id;
+      plan.bonusAction = planBonusAction(self, thlTarget, battlefield);
       return plan;
     }
   }

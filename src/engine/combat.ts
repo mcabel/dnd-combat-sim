@@ -636,6 +636,14 @@ import {
   execute as executeCauseFear,
 } from '../spells/cause_fear';
 import {
+  shouldCast as shouldCastBanishment,
+  execute as executeBanishment,
+} from '../spells/banishment';
+import {
+  shouldCast as shouldCastTashasHideousLaughter,
+  execute as executeTashasHideousLaughter,
+} from '../spells/tashas_hideous_laughter';
+import {
   shouldCast as shouldCastCharmPerson,
   execute as executeCharmPerson,
 } from '../spells/charm_person';
@@ -5124,6 +5132,24 @@ export function executePlannedAction(
       const cfTarget = cfTargetId ? bf.combatants.get(cfTargetId) ?? null : null;
       const cfLive = cfTarget && !cfTarget.isDead && !cfTarget.isUnconscious ? cfTarget : shouldCastCauseFear(actor, bf);
       if (cfLive) executeCauseFear(actor, cfLive, state);
+      break;
+    }
+
+    case 'banishment': {
+      // Banishment — PHB p.217: 60 ft, CHA save, conc; fey/elemental/etc removed.
+      const banTargetId = plan.targetId;
+      const banTarget = banTargetId ? bf.combatants.get(banTargetId) ?? null : null;
+      const banLive = banTarget && !banTarget.isDead && !banTarget.isUnconscious ? banTarget : shouldCastBanishment(actor, bf);
+      if (banLive) executeBanishment(actor, banLive, state);
+      break;
+    }
+
+    case 'tashasHideousLaughter': {
+      // Tasha's Hideous Laughter — PHB p.282: 30 ft, WIS save or prone+incapacitated, conc.
+      const thlTargetId = plan.targetId;
+      const thlTarget = thlTargetId ? bf.combatants.get(thlTargetId) ?? null : null;
+      const thlLive = thlTarget && !thlTarget.isDead && !thlTarget.isUnconscious ? thlTarget : shouldCastTashasHideousLaughter(actor, bf);
+      if (thlLive) executeTashasHideousLaughter(actor, thlLive, state);
       break;
     }
 

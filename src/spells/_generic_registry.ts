@@ -1186,12 +1186,9 @@ export const GENERIC_SPELLS: Record<string, GenericSpellDescriptor> = {
     shouldCast: shouldCastTashasCausticBrew,
     execute: executeTashasCausticBrew,
   },
-  "Tasha's Hideous Laughter": {
-    name: "Tasha's Hideous Laughter",
-    level: metadataTashasHideousLaughter.level,
-    shouldCast: shouldCastTashasHideousLaughter,
-    execute: executeTashasHideousLaughter,
-  },
+  // "Tasha's Hideous Laughter" — migrated to bespoke module (Session 60).
+  // No longer in the generic registry; handled via case 'tashasHideousLaughter'
+  // in combat.ts + planner branch.
   "Tenser's Floating Disk": {
     name: "Tenser's Floating Disk",
     level: metadataTensersFloatingDisk.level,
