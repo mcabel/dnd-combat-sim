@@ -652,6 +652,10 @@ import {
   execute as executeFogCloud,
 } from '../spells/fog_cloud';
 import {
+  shouldCast as shouldCastDarkness,
+  execute as executeDarkness,
+} from '../spells/darkness';
+import {
   shouldShapechange,
   executeShapechange,
   revertOnDeath as revertShapechangeOnDeath,
@@ -5216,6 +5220,17 @@ export function executePlannedAction(
       // shouldCast returns the caster (self) or null.
       const fcTarget = shouldCastFogCloud(actor, bf);
       if (fcTarget) executeFogCloud(actor, fcTarget, state);
+      break;
+    }
+
+    case 'darkness': {
+      // Session 63: Darkness — PHB p.230: 60 ft, 15-ft radius magical
+      // darkness, concentration 10 min. Self-centered (v1). Blocks vision
+      // (adds a vision-blocking Obstacle to bf.obstacles) + enables Hide.
+      // "Blocks darkvision" is a Phase 2 vision feature (flagged in payload).
+      // shouldCast returns the caster (self) or null.
+      const darkTarget = shouldCastDarkness(actor, bf);
+      if (darkTarget) executeDarkness(actor, darkTarget, state);
       break;
     }
 

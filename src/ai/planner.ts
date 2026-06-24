@@ -195,6 +195,7 @@ import { shouldCast as shouldCastBanishment } from '../spells/banishment';
 import { shouldCast as shouldCastTashasHideousLaughter } from '../spells/tashas_hideous_laughter';
 import { shouldCast as shouldCastDimensionDoor } from '../spells/dimension_door';
 import { shouldCast as shouldCastFogCloud } from '../spells/fog_cloud';
+import { shouldCast as shouldCastDarkness } from '../spells/darkness';
 import { shouldShapechange } from '../engine/shapechange';
 // ── Session 62 RFC-VISION-AUDIO Phase 1: perception + detection helpers ──
 import {
@@ -4535,14 +4536,39 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
     }
   }
 
+  // --- 12CL2b. DARKNESS (15-ft radius magical darkness, L2, concentration) ---
+  // Session 63: PHB p.230. Self-centered defensive/control spell — blocks
+  // vision for everyone in the sphere (including the caster) + enables Hide.
+  // "Blocks darkvision" is a Phase 2 vision feature (flagged in payload).
+  // shouldCast returns the caster (self) or null.
+  // Priority: LOW (same as Fog Cloud) — but sits ABOVE Fog Cloud so Darkness
+  // is preferred when the caster has both (higher slot = stronger effect;
+  // blocks darkvision in Phase 2). Fires on low HP + near enemies, or
+  // outnumbered with allies who could hide.
+  if (!plan.action && self.actions.some(a => a.name === 'Darkness')) {
+    const darkTarget = shouldCastDarkness(self, battlefield);
+    if (darkTarget) {
+      plan.action = {
+        type: 'darkness',
+        action: null,
+        targetId: self.id,    // self-targeted
+        description: `${self.name} casts Darkness (15-ft sphere of magical darkness)`,
+      };
+      plan.targetId = self.id;
+      plan.bonusAction = planBonusAction(self, self, battlefield);
+      return plan;
+    }
+  }
+
   // --- 12CL2. FOG CLOUD (20-ft sphere heavy obscurement, L1, concentration) ---
   // Session 62: PHB p.243. Self-centered defensive spell — blocks vision
   // for everyone in the sphere (including the caster) + enables Hide.
   // shouldCast returns the caster (self) or null.
   // Priority: LOW — this is a defensive/positioning spell, not damage.
   // Fires when the caster is low HP + near enemies, or outnumbered with
-  // allies who could hide. Sits BELOW damage spells but ABOVE the generic
-  // spell loop so it wins over the L1 generic entry.
+  // allies who could hide. Sits BELOW Darkness (Darkness is preferred when
+  // both are available — L2 slot, blocks darkvision in Phase 2) but ABOVE
+  // the generic spell loop so it wins over the L1 generic entry.
   if (!plan.action && self.actions.some(a => a.name === 'Fog Cloud')) {
     const fcTarget = shouldCastFogCloud(self, battlefield);
     if (fcTarget) {
