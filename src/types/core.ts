@@ -872,6 +872,32 @@ export interface Combatant {
     conditionText?: string;  // e.g. "if its phylactery is intact"
   };
 
+  /**
+   * ── Session 60: Monster Spellcasting (Batch 5b step 1 — metadata-only) ──
+   * 945 pre-2024 creatures have spellcasting data in 5etools. This field
+   * stores the parsed spellcasting info for future engine integration
+   * (Batch 5b step 2: planner + engine consumption — HIGH-risk, deferred).
+   *
+   * The parser extracts:
+   *   - saveDC + spellAttackBonus + ability from the headerEntries text
+   *   - atWill: spell names from the `will` array (at-will spells)
+   *   - daily: spell name → uses/day from the `daily` object (1e/2e/3e keys)
+   *
+   * v1: metadata-only — NOT consumed by the engine. Future work: wire into
+   * the planner so monsters cast spells from their list (needs SPELL_DB
+   * lookup + spell-slot/daily-use tracking + AI spell selection).
+   */
+  monsterSpellcasting?: {
+    saveDC?: number;
+    spellAttackBonus?: number;
+    ability?: 'int' | 'wis' | 'cha';
+    atWill?: string[];                     // spell names (at-will)
+    daily?: { [spellName: string]: number }; // spell name → uses per day
+    // Slot-based spells (Lich, Mage, etc.): level → { slots, spellNames }
+    // 0 = cantrips (slots = undefined = at-will). 1-9 = spell levels.
+    slots?: { [level: number]: { max: number; spells: string[] } };
+  };
+
   // Turn resources
   budget: ActionBudget;
 

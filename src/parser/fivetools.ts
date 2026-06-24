@@ -567,6 +567,99 @@ function parseRejuvenation(
   return undefined;
 }
 
+/**
+ * Session 60 Batch 5b step 1: parse monster spellcasting data from the
+ * 5etools `spellcasting` field. 945 pre-2024 creatures have this.
+ *
+ * Extracts:
+ *   - saveDC: from "spell save {@dc N}" in headerEntries
+ *   - spellAttackBonus: from "{@hit +N}" in headerEntries
+ *   - ability: from "using [Ability] as the spellcasting ability"
+ *   - atWill: spell names from the `will` array (strip {@spell } tags)
+ *   - daily: spell name → uses/day from the `daily` object
+ *     (keys: "1e" = 1/day, "2e" = 2/day, "3e" = 3/day, etc.)
+ *
+ * v1: metadata-only — NOT consumed by the engine. Future Batch 5b step 2
+ * would wire this into the planner for monster spell casting.
+ */
+function parseMonsterSpellcasting(
+  raw: Raw5etoolsMonster,
+): Combatant['monsterSpellcasting'] {
+  const sc = raw.spellcasting;
+  if (!sc || !Array.isArray(sc) || sc.length === 0) return undefined;
+  const s = sc[0]; // first spellcasting entry (creatures rarely have 2)
+
+  // Flatten headerEntries for regex extraction
+  const headerText = flattenEntries(s.headerEntries ?? []);
+
+  // Save DC: search RAW text for {@dc N} tag (before stripping)
+  let saveDC: number | undefined;
+  const dcTagMatch = headerText.match(/\{@dc\s+(\d+)\}/i);
+  if (dcTagMatch) saveDC = parseInt(dcTagMatch[1], 10);
+
+  // Spell attack bonus: search RAW text for {@hit +N} or {@hit N} tag
+  let spellAttackBonus: number | undefined;
+  const hitTagMatch = headerText.match(/\{@hit\s+([+-]?\d+)\}/i);
+  if (hitTagMatch) spellAttackBonus = parseInt(hitTagMatch[1], 10);
+
+  // Ability: "using Intelligence as the spellcasting ability"
+  let ability: 'int' | 'wis' | 'cha' | undefined;
+  if (/\bintelligence\b/i.test(headerText)) ability = 'int';
+  else if (/\bwisdom\b/i.test(headerText)) ability = 'wis';
+  else if (/\bcharisma\b/i.test(headerText)) ability = 'cha';
+
+  // At-will spells: strip {@spell name} → name
+  const atWill: string[] | undefined = Array.isArray(s.will)
+    ? s.will.map((sp: string) => sp.replace(/\{@spell\s+([^}|]+)(?:\|[^}]*)?\}/i, '$1').trim()).filter(Boolean)
+    : undefined;
+
+  // Daily spells: { "1e": [...], "2e": [...] } → { spellName: usesPerDay }
+  let daily: { [spellName: string]: number } | undefined;
+  if (s.daily && typeof s.daily === 'object') {
+    daily = {};
+    for (const [key, spells] of Object.entries(s.daily)) {
+      // key format: "1e" = 1/day, "2e" = 2/day, "3e" = 3/day
+      const usesPerDay = parseInt(key, 10);
+      if (isNaN(usesPerDay) || !Array.isArray(spells)) continue;
+      for (const sp of spells) {
+        const spellName = String(sp)
+          .replace(/\{@spell\s+([^}|]+)(?:\|[^}]*)?\}/i, '$1')
+          .trim()
+          // Remove parenthetical notes like "(self only)" or "(as an action)"
+          .replace(/\s*\([^)]*\)\s*$/, '')
+          .trim();
+        if (spellName) daily[spellName] = usesPerDay;
+      }
+    }
+    if (Object.keys(daily).length === 0) daily = undefined;
+  }
+
+  // Slot-based spells (Lich, Mage, etc.): { "0": { spells: [...] }, "1": { slots: 4, spells: [...] }, ... }
+  // Level 0 = cantrips (at-will). Levels 1-9 = spell slots.
+  let slots: { [level: number]: { max: number; spells: string[] } } | undefined;
+  if (s.spells && typeof s.spells === 'object') {
+    slots = {};
+    for (const [levelStr, levelData] of Object.entries(s.spells)) {
+      const level = parseInt(levelStr, 10);
+      if (isNaN(level) || level < 0 || level > 9) continue;
+      const ld = levelData as any;
+      if (!ld || !Array.isArray(ld.spells)) continue;
+      const spellNames = ld.spells.map((sp: string) =>
+        String(sp).replace(/\{@spell\s+([^}|]+)(?:\|[^}]*)?\}/i, '$1').trim()
+      ).filter(Boolean);
+      const max = typeof ld.slots === 'number' ? ld.slots : 0;
+      slots[level] = { max, spells: spellNames };
+    }
+    if (Object.keys(slots).length === 0) slots = undefined;
+  }
+
+  // Return undefined if nothing was extracted
+  if (saveDC === undefined && spellAttackBonus === undefined &&
+      !atWill && !daily && !slots) return undefined;
+
+  return { saveDC, spellAttackBonus, ability, atWill, daily, slots };
+}
+
 export function parseAction(
   raw: RawAction,
   costType: Action['costType'] = 'action',
@@ -1183,6 +1276,8 @@ export function monsterToCombatant(
   const pounce = parsePounce(raw.trait ?? []);
   // Session 53 Batch 4h: Rejuvenation (metadata-only)
   const rejuvenation = parseRejuvenation(raw.trait ?? []);
+  // Session 60 Batch 5b step 1: parse monster spellcasting (metadata-only)
+  const monsterSpellcasting = parseMonsterSpellcasting(raw);
   // Hold Breath: extract the minutes count from the entry text
   // ("can hold its breath for 1 hour" → 60 minutes; "for 30 minutes" → 30)
   let holdBreathMinutes: number | undefined;
@@ -1241,6 +1336,7 @@ export function monsterToCombatant(
     charge,                // Session 53 Batch 4g: undefined for non-Charge creatures
     pounce,                // Session 53 Batch 4g: undefined for non-Pounce creatures
     rejuvenation,          // Session 53 Batch 4h: undefined for non-Rejuvenation creatures
+    monsterSpellcasting,   // Session 60 Batch 5b step 1: metadata-only (945 creatures)
     budget: freshBudget(speeds.ground),
     conditions: new Set(),
     aiProfile: resolvedProfile,
