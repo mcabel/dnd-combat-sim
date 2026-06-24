@@ -5547,6 +5547,26 @@ export function runCombat(
     // Reset disengage flags at start of round
     state.disengagedThisTurn.clear();
 
+    // ── Session 60 Batch 5a: Lair Actions (initiative count 20) ──
+    // PHB/MM: "On initiative count 20 (losing initiative ties), the [creature]
+    // takes a lair action to cause one of the following effects." Lair actions
+    // fire at the START of the round (before any creature's turn), simulating
+    // initiative count 20. v1: logs the lair action but does NOT apply
+    // mechanical effects (each lair action is a bespoke effect requiring
+    // individual implementation — HIGH-risk, deferred).
+    for (const c of battlefield.combatants.values()) {
+      if (c.isDead || c.isUnconscious) continue;
+      if (!c.lairActions) continue;
+      // Pick a random lair action option (PHB: "can't use the same effect
+      // two rounds in a row" — v1 simplification: random pick each round).
+      const actions = c.lairActions.actions;
+      if (actions.length === 0) continue;
+      const pick = actions[Math.floor(Math.random() * actions.length)];
+      log(state, 'action', c.id,
+        `${c.name} takes a lair action (initiative count ${c.lairActions.initiativeCount}): ${pick.substring(0, 100)}${pick.length > 100 ? '...' : ''}`,
+        undefined);
+    }
+
     for (const actorId of initiative) {
       const actor = battlefield.combatants.get(actorId);
       if (!actor || actor.isDead) continue;

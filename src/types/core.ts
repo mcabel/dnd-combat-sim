@@ -898,6 +898,30 @@ export interface Combatant {
     slots?: { [level: number]: { max: number; spells: string[] } };
   };
 
+  /**
+   * ── Session 60: Lair Actions (Batch 5a — metadata + basic engine hook) ──
+   * 137 pre-2024 creatures have lair actions (from legendarygroups.json).
+   * PHB/MM: "On initiative count 20 (losing initiative ties), the [creature]
+   * takes a lair action to cause one of the following effects."
+   *
+   * v1 implementation:
+   *   - Parser extracts the lair action entries from legendarygroups.json
+   *     (matched via the creature's `legendaryGroup` field).
+   *   - Engine hook in runCombat fires on initiative count 20: logs that the
+   *     creature "takes a lair action" (metadata-only — does NOT apply the
+   *     actual mechanical effects yet, since each lair action is a bespoke
+   *     effect requiring individual implementation).
+   *   - The parsed `actions` array stores the flattened text of each lair
+   *     action option for future mechanical implementation.
+   *
+   * Future work: implement per-action mechanical effects (damage, conditions,
+   * spell casting) — HIGH-risk, needs per-action bespoke code.
+   */
+  lairActions?: {
+    actions: string[];           // flattened text of each lair action option
+    initiativeCount: number;     // usually 20 (PHB default)
+  };
+
   // Turn resources
   budget: ActionBudget;
 

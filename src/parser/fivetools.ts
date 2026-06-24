@@ -80,6 +80,10 @@ export interface Raw5etoolsMonster {
   skill?: Record<string, string>;
   senses?: string[];
   passive?: number;
+  // ── Session 60 Batch 5a: lair actions ──
+  // legendaryGroup: { name, source } — references an entry in
+  // legendarygroups.json which contains lairActions + regionalEffects.
+  legendaryGroup?: { name: string; source: string };
 }
 
 // ---- Dice parsing -------------------------------------------
@@ -658,6 +662,94 @@ function parseMonsterSpellcasting(
       !atWill && !daily && !slots) return undefined;
 
   return { saveDC, spellAttackBonus, ability, atWill, daily, slots };
+}
+
+/**
+ * Session 60 Batch 5a: parse lair actions from legendarygroups.json.
+ * 137 pre-2024 creatures have lair actions. The data is in a separate file
+ * (not in the bestiary), matched via the creature's `legendaryGroup` field
+ * ({ name, source }) → legendarygroups.json `legendaryGroup` array entry.
+ *
+ * Extracts:
+ *   - actions: flattened text of each lair action option (from the
+ *     `lairActions` array — strings + {type:'list', items:[...]} objects)
+ *   - initiativeCount: usually 20 (PHB default — "On initiative count 20")
+ *
+ * v1: the engine logs lair actions on initiative count 20 but does NOT apply
+ * mechanical effects (each lair action is a bespoke effect requiring individual
+ * implementation — HIGH-risk, deferred).
+ */
+let _legendaryGroupsCache: Map<string, any> | null = null;
+
+function loadLegendaryGroups(): Map<string, any> {
+  if (_legendaryGroupsCache) return _legendaryGroupsCache;
+  _legendaryGroupsCache = new Map();
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const lgPath = path.join(__dirname, '../../bestiaryData/legendarygroups.json');
+    if (fs.existsSync(lgPath)) {
+      const data = JSON.parse(fs.readFileSync(lgPath, 'utf8'));
+      if (data.legendaryGroup && Array.isArray(data.legendaryGroup)) {
+        for (const g of data.legendaryGroup) {
+          _legendaryGroupsCache.set(g.name + '|' + g.source, g);
+        }
+      }
+    }
+  } catch {
+    // File not found or parse error — return empty map (no lair actions)
+  }
+  return _legendaryGroupsCache;
+}
+
+function parseLairActions(
+  raw: Raw5etoolsMonster,
+): Combatant['lairActions'] {
+  if (!raw.legendaryGroup) return undefined;
+  const lgMap = loadLegendaryGroups();
+  const lg = lgMap.get(raw.legendaryGroup.name + '|' + raw.legendaryGroup.source);
+  if (!lg || !lg.lairActions) return undefined;
+
+  // Flatten the lairActions array: strings stay as-is, {type:'list', items:[...]}
+  // objects get their items extracted, {type:'entries', entries:[...]} get flattened.
+  const flat = (e: any): string => {
+    if (typeof e === 'string') return e;
+    if (Array.isArray(e)) return e.map(flat).join(' ');
+    if (e.items) return e.items.map(flat).join(' ');
+    if (e.entries) return e.entries.map(flat).join(' ');
+    return '';
+  };
+
+  // The lairActions array is: [intro text, {type:'list', items:[action1, action2, ...]}, ...]
+  // Extract the individual action options (the items in the list).
+  const actions: string[] = [];
+  for (const entry of lg.lairActions) {
+    if (typeof entry === 'string') {
+      // Intro text — skip (not an action option)
+      continue;
+    }
+    if (entry.items && Array.isArray(entry.items)) {
+      // List of action options
+      for (const item of entry.items) {
+        const text = flat(item).trim();
+        if (text) actions.push(text);
+      }
+    } else if (entry.entries) {
+      // Nested entries — flatten
+      const text = flat(entry).trim();
+      if (text) actions.push(text);
+    }
+  }
+
+  if (actions.length === 0) return undefined;
+
+  // Extract initiative count from the intro text (usually "On initiative count 20")
+  let initiativeCount = 20; // PHB default
+  const introText = lg.lairActions.find((e: any) => typeof e === 'string') as string || '';
+  const initMatch = introText.match(/initiative\s+count\s+(\d+)/i);
+  if (initMatch) initiativeCount = parseInt(initMatch[1], 10);
+
+  return { actions, initiativeCount };
 }
 
 export function parseAction(
@@ -1278,6 +1370,8 @@ export function monsterToCombatant(
   const rejuvenation = parseRejuvenation(raw.trait ?? []);
   // Session 60 Batch 5b step 1: parse monster spellcasting (metadata-only)
   const monsterSpellcasting = parseMonsterSpellcasting(raw);
+  // Session 60 Batch 5a: parse lair actions (metadata + basic engine hook)
+  const lairActions = parseLairActions(raw);
   // Hold Breath: extract the minutes count from the entry text
   // ("can hold its breath for 1 hour" → 60 minutes; "for 30 minutes" → 30)
   let holdBreathMinutes: number | undefined;
@@ -1337,6 +1431,7 @@ export function monsterToCombatant(
     pounce,                // Session 53 Batch 4g: undefined for non-Pounce creatures
     rejuvenation,          // Session 53 Batch 4h: undefined for non-Rejuvenation creatures
     monsterSpellcasting,   // Session 60 Batch 5b step 1: metadata-only (945 creatures)
+    lairActions,           // Session 60 Batch 5a: metadata + engine hook (137 creatures)
     budget: freshBudget(speeds.ground),
     conditions: new Set(),
     aiProfile: resolvedProfile,
