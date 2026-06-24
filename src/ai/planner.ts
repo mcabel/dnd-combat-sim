@@ -194,6 +194,7 @@ import { shouldCast as shouldCastCauseFear } from '../spells/cause_fear';
 import { shouldCast as shouldCastBanishment } from '../spells/banishment';
 import { shouldCast as shouldCastTashasHideousLaughter } from '../spells/tashas_hideous_laughter';
 import { shouldCast as shouldCastDimensionDoor } from '../spells/dimension_door';
+import { shouldCast as shouldCastFogCloud } from '../spells/fog_cloud';
 import { shouldShapechange } from '../engine/shapechange';
 // ── Session 62 RFC-VISION-AUDIO Phase 1: perception + detection helpers ──
 import {
@@ -4525,6 +4526,29 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
         action: null,
         targetId: self.id,    // self-targeted; destination is recomputed in execute
         description: `${self.name} casts Dimension Door (teleport up to 500 ft)`,
+      };
+      plan.targetId = self.id;
+      plan.bonusAction = planBonusAction(self, self, battlefield);
+      return plan;
+    }
+  }
+
+  // --- 12CL2. FOG CLOUD (20-ft sphere heavy obscurement, L1, concentration) ---
+  // Session 62: PHB p.243. Self-centered defensive spell — blocks vision
+  // for everyone in the sphere (including the caster) + enables Hide.
+  // shouldCast returns the caster (self) or null.
+  // Priority: LOW — this is a defensive/positioning spell, not damage.
+  // Fires when the caster is low HP + near enemies, or outnumbered with
+  // allies who could hide. Sits BELOW damage spells but ABOVE the generic
+  // spell loop so it wins over the L1 generic entry.
+  if (!plan.action && self.actions.some(a => a.name === 'Fog Cloud')) {
+    const fcTarget = shouldCastFogCloud(self, battlefield);
+    if (fcTarget) {
+      plan.action = {
+        type: 'fogCloud',
+        action: null,
+        targetId: self.id,    // self-targeted
+        description: `${self.name} casts Fog Cloud (20-ft sphere of obscurement)`,
       };
       plan.targetId = self.id;
       plan.bonusAction = planBonusAction(self, self, battlefield);

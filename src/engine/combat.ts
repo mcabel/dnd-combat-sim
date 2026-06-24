@@ -648,6 +648,10 @@ import {
   execute as executeDimensionDoor,
 } from '../spells/dimension_door';
 import {
+  shouldCast as shouldCastFogCloud,
+  execute as executeFogCloud,
+} from '../spells/fog_cloud';
+import {
   shouldShapechange,
   executeShapechange,
   revertOnDeath as revertShapechangeOnDeath,
@@ -5202,6 +5206,16 @@ export function executePlannedAction(
       // shouldShapechange returns { formName } | null.
       const sc = shouldShapechange(actor, bf);
       if (sc) executeShapechange(actor, sc.formName, state);
+      break;
+    }
+
+    case 'fogCloud': {
+      // Session 62: Fog Cloud — PHB p.243: 120 ft, 20-ft sphere heavy
+      // obscurement, concentration 1 min. Self-centered (v1). Blocks vision
+      // (adds a vision-blocking Obstacle to bf.obstacles) + enables Hide.
+      // shouldCast returns the caster (self) or null.
+      const fcTarget = shouldCastFogCloud(actor, bf);
+      if (fcTarget) executeFogCloud(actor, fcTarget, state);
       break;
     }
 

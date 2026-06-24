@@ -139,6 +139,13 @@ export type SpellEffectType =
   | 'suggestion'            // charmed + disadv on own attacks (Mass Suggestion PHB p.258 — follow-a-suggestion behaviour)
   | 'terrain_zone'          // persistent terrain effect on the battlefield (Grease/Sleet Storm/Watery Sphere)
   | 'exhaustion_level'      // increment exhaustion level (Sickening Radiance XGE p.164, future spells)
+  // ── Session 62 RFC-VISION-AUDIO: battlefield obstacle effect ──
+  // Used by Fog Cloud (PHB p.243) and future obscurement spells (Darkness,
+  // Wall of Fog, etc.). The spell module's execute() adds a vision-blocking
+  // Obstacle to bf.obstacles + applies this effect to the CASTER (self-targeted,
+  // sourceIsConcentration: true). When concentration breaks, _undoEffect
+  // removes the obstacle from bf.obstacles by ID.
+  | 'battlefield_obstacle'
   | 'invisible'             // true invisibility: attacks vs creature have disadv + own attacks have adv (PHB p.194)
   // ── Session 48 — movement_rider typed effect (replaces BB scratch fields) ──
   | 'movement_rider'        // fires when bearer willingly moves 5+ ft; cleared at bearer's next turn start
@@ -277,6 +284,15 @@ export interface ActiveEffect {
     terrainCenterY?: number;                              // center position Y (grid squares)
     terrainCenterZ?: number;                              // center position Z (grid squares)
     terrainDifficulty?: boolean;                          // if true, this terrain_zone marks cells as difficult terrain (PHB p.182)
+    // ── battlefield_obstacle (Session 62 — Fog Cloud / obscurement spells) ──
+    // The ID of the Obstacle added to bf.obstacles by the spell's execute().
+    // When the effect is removed (concentration break, dispel, caster death),
+    // _undoEffect removes the obstacle with this ID from bf.obstacles.
+    obstacleId?: string;
+    obstacleCenterX?: number;   // grid squares (for logging / debugging)
+    obstacleCenterY?: number;
+    obstacleCenterZ?: number;
+    obstacleRadiusFt?: number;  // e.g. 20 for Fog Cloud's 20-ft sphere
     // ── movement_rider (Session 48 — replaces _boomingBladePendingDamageDice) ─
     // Fires in executeMove when the bearer willingly moves 5+ ft. Cleared
     // at the start of the bearer's next turn by the spell module's cleanup()
@@ -2394,6 +2410,7 @@ export interface PlannedAction {
     | 'tashasHideousLaughter' // Tasha's Hideous Laughter — PHB p.282: 30 ft, WIS save or prone+incapacitated, concentration
     | 'dimensionDoor'     // Dimension Door — PHB p.233: self, ACTION teleport up to 500 ft, NO concentration (v1: caster-only, no willing-creature rider, no occupied-dest damage)
     | 'shapechange'       // Session 61 RFC-SHAPECHANGER Phase 1: monster trait — swap size/speed/AC per form (53+ creatures)
+    | 'fogCloud'          // Session 62: Fog Cloud — PHB p.243: 120 ft, 20-ft sphere heavy obscurement, concentration 1 min (blocks vision; enables Hide)
     | 'charmPerson'       // Charm Person — PHB p.221: 30 ft, WIS save or charmed, NO concentration (Session 27 TG-004: humanoid-only NOW enforced)
     | 'compelledDuel'     // Compelled Duel — PHB p.224: 30 ft, WIS save or frightened (taunt), concentration (movement-restriction simplified)
     | 'grease'            // Grease — PHB p.245: 60 ft, 10-ft radius AoE, DEX save or prone, NO concentration (persistent-terrain simplified)

@@ -183,6 +183,10 @@ export function removeEffectsFromCaster(casterId: string, bf: Battlefield): void
       if (e.effectType === 'terrain_zone' && e.payload.terrainDifficulty) {
         removeTerrainDifficulty(bf, e);
       }
+      // ── Session 62: remove battlefield obstacle (Fog Cloud, etc.) ──
+      if (e.effectType === 'battlefield_obstacle') {
+        removeBattlefieldObstacle(bf, e);
+      }
       _undoEffect(combatant, e);
     }
 
@@ -240,6 +244,10 @@ export function removeEffectById(
   // Remove difficult terrain cells BEFORE undoing the effect
   if (effect.effectType === 'terrain_zone' && effect.payload.terrainDifficulty) {
     removeTerrainDifficulty(bf, effect);
+  }
+  // ── Session 62: remove battlefield obstacle (Fog Cloud, etc.) ──
+  if (effect.effectType === 'battlefield_obstacle') {
+    removeBattlefieldObstacle(bf, effect);
   }
   _undoEffect(target, effect);
   target.activeEffects = target.activeEffects.filter(e => e.id !== effectId);
@@ -738,6 +746,27 @@ export function removeTerrainDifficulty(bf: Battlefield, effect: ActiveEffect): 
       const key = `${cx + dx},${cy + dy},${cz}`;
       bf.difficultTerrainCells.delete(key);
     }
+  }
+}
+
+/**
+ * ── Session 62 RFC-VISION-AUDIO: remove a battlefield obstacle ──
+ *
+ * Called when a 'battlefield_obstacle' effect is removed (concentration
+ * break, dispel, caster death). Removes the obstacle with the stored ID
+ * from bf.obstacles. Used by Fog Cloud and future obscurement spells.
+ *
+ * Safe if the obstacle was already removed (e.g. manual cleanup).
+ */
+export function removeBattlefieldObstacle(bf: Battlefield, effect: ActiveEffect): void {
+  if (effect.effectType !== 'battlefield_obstacle') return;
+  const obstacleId = effect.payload.obstacleId;
+  if (!obstacleId) return;
+  if (!bf.obstacles) return;
+
+  const idx = bf.obstacles.findIndex(o => o.id === obstacleId);
+  if (idx >= 0) {
+    bf.obstacles.splice(idx, 1);
   }
 }
 
