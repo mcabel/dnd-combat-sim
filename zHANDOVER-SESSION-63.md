@@ -2,17 +2,17 @@
 
 **Date:** 2026-06-24
 **Agent:** Z.ai (autonomous — resumed from Session 62 handover; Core + Sheet offline)
-**Focus:** (1) Resolve the 6 RFC-MONSTER-SPELLCASTING doubts autonomously + implement Phase 1 (monster cantrip casting); (2) Implement Darkness spell (L2, 81 monsters); (3) Implement Vision/Audio Phase 2 (vision modes); (4) Final verification + push.
+**Focus:** (1) Resolve the 6 RFC-MONSTER-SPELLCASTING doubts autonomously + implement Phase 1 (monster cantrip casting); (2) Implement Darkness spell (L2, 81 monsters); (3) Implement Vision/Audio Phase 2 (vision modes); (4) **Vision/Audio Phase 3 (targeting enforcement)** — continued autonomously while user prepares doubt answers; (5) Extend cantrip templates; (6) Final verification + push.
 
 ---
 
 ## Session Summary
 
-This session resumed from the Session 62 handover. The previous agent had completed Vision/Audio Phase 1, the Monster Spellcasting RFC (with 6 doubts for the user), and Fog Cloud. I picked up the 3 remaining workstreams and completed all of them:
+This session resumed from the Session 62 handover. The previous agent had completed Vision/Audio Phase 1, the Monster Spellcasting RFC (with 6 doubts for the user), and Fog Cloud. I picked up the remaining workstreams and completed **5 workstreams** (3 from the handover + 2 continued autonomously):
 
 ### Workstream 1: Monster Spellcasting Phase 1 (commit `e56d660`)
-- **New module `src/ai/monster_spellcasting.ts`** (580 lines): full Phase 1 at-will/cantrip dispatch.
-  - `CANTRIP_TEMPLATES`: 13 combat cantrips (Fire Bolt, Ray of Frost, Sacred Flame, Toll the Dead, Acid Splash, Poison Spray, Chill Touch, Shocking Grasp, Eldritch Blast, Vicious Mockery, Mind Sliver, Thorn Whip, Produce Flame) with damage dice, type, range, attack-roll vs save, and tags.
+- **New module `src/ai/monster_spellcasting.ts`** (620 lines): full Phase 1 at-will/cantrip dispatch.
+  - `CANTRIP_TEMPLATES`: **17 combat cantrips** (Fire Bolt, Ray of Frost, Sacred Flame, Toll the Dead, Acid Splash, Poison Spray, Chill Touch, Shocking Grasp, Eldritch Blast, Vicious Mockery, Mind Sliver, Thorn Whip, Produce Flame + Frostbite, Primal Savagery, Infestation, Lightning Lure) with damage dice, type, range, attack-roll vs save, and tags.
   - `lookupCantripTemplate()`: case-insensitive lookup (monster spell names are lowercase; templates use canonical capitalization).
   - `cantripDiceCount()` + `cantripAverageDamage()`: PHB scaling at caster level 5/11/17 (1/2/3/4 dice). Average = N×(S+1)/2.
   - `buildCantripAction()`: builds a synthetic spell-attack Action (attackType='spell' for attack-roll cantrips, attackType='save' for save-based) using the monster's `spellAttackBonus`/`saveDC` from `monsterSpellcasting`.
@@ -50,6 +50,31 @@ This session resumed from the Session 62 handover. The previous agent had comple
 - **`canTakeHideAction()` updated**: now allows hiding in `'darkness'` (heavy obscurement) in addition to `'dim'` (light obscurement).
 - **Tests**: 25 new Phase 2 assertions appended to `vision_audio.test.ts` (sections 16–21). All 96 vision_audio tests pass.
 
+### Workstream 4: Vision/Audio Phase 3 — Targeting Enforcement (commit `c5e57a1`)
+*Continued autonomously while user prepares doubt answers — Phase 3 is independent of the monster spellcasting doubts.*
+
+Phase 3 enforces "creature you can see" rules via the detection map. Three subsystems now consume `perception.detection` (RFC-VISION-AUDIO §5):
+
+- **Q3 — See Invisibility spell consumption** (`src/engine/perception.ts` + `src/spells/see_invisibility.ts`):
+  - `isVisuallyDetected()` now checks `observer._seeInvisibilityActive`. When active + target invisible + within 60 ft + LOS exists → returns true. The spell's `_seeInvisibilityActive` flag (set since Session 48) is now consumed — was previously write-only. Metadata flag flipped to `implemented=true`.
+- **Q1 — Planner target filtering** (`src/ai/targeting.ts` + `src/ai/planner.ts`):
+  - New `targetableEnemiesOf()` helper in `perception.ts`: returns only enemies with detection state `'visible'` or `'position-known'` (skips `'hidden'`/`'unknown'`). All 4 `selectTarget` profiles (nearest/weakest/smart/rogue) now use it. The planner no longer targets enemies it can't perceive.
+  - Fixed the early-return guard in `planTurn`: when enemies exist but none are targetable (all hidden/unknown), the planner falls through to bonus action planning (Cunning Action Hide, etc.) instead of returning empty. Preserves the Rogue-behind-fog Hide tactic.
+- **Q2 — Opportunity attack visibility gating** (`src/engine/movement.ts`):
+  - `opportunityAttackTriggered()` now accepts optional `bf` parameter. When `watcher.perception.detection` is populated, OA only fires if the mover's detection state is `'visible'`. `'position-known'` (heard, not seen), `'hidden'`, and `'unknown'` all suppress OA. Legacy fallback (no detection map) preserves the old blinded/invisible condition checks.
+- **Tests**: 16 new Phase 3 assertions appended to `vision_audio.test.ts` (sections 22–25: See Invisibility consumption, See Invisibility vs truesight precedence, planner target filtering, OA visibility gating). `see_invisibility.test.ts` updated (metadata flag assertion flipped). All 116 vision_audio + 34 see_invisibility tests pass.
+- **Phase 3 remaining (DEFERRED)**: Q4 (`attackAdvantageState` consults detection map — signature change, higher risk) and Q5 (per-spell `requiresVisibleTarget` metadata flag for "creature you can see" spell enforcement — invasive, 250+ spell modules).
+
+### Workstream 5: Cantrip Template Expansion (commit `29f9688`)
+*Continued autonomously — safe additive win that expands monster cantrip coverage.*
+
+- **Extended `CANTRIP_TEMPLATES`** from 13 to **17 combat cantrips**:
+  - **Frostbite** (XGE p.158): 60 ft, CON save, 1d6 cold + disadv on next weapon attack (rider not applied in v1). Tags: `[damage, cc]`.
+  - **Primal Savagery** (XGE p.163): 5 ft (touch), melee spell attack, 1d10 acid. Tags: `[damage]`.
+  - **Infestation** (XGE p.158): 30 ft, CON save, 1d6 poison + forced movement (rider not applied in v1). Tags: `[damage, cc]`.
+  - **Lightning Lure** (SCAG p.143): 15 ft, STR save, 1d8 lightning + pull 10 ft (rider not applied in v1). Tags: `[damage, cc]`.
+- **Tests**: 14 new assertions appended to `monster_spellcasting.test.ts` §1. All 108 monster_spellcasting tests pass.
+
 ---
 
 ## Current State
@@ -58,27 +83,31 @@ This session resumed from the Session 62 handover. The previous agent had comple
 | Check | Status |
 |-------|--------|
 | `tsc --noEmit` (excluding TS7006) | ✅ 0 errors |
-| All 94 monster_spellcasting tests | ✅ All pass |
+| All 108 monster_spellcasting tests | ✅ All pass |
 | All 59 darkness tests | ✅ All pass |
-| All 96 vision_audio tests (71 Phase 1 + 25 Phase 2) | ✅ All pass |
+| All 116 vision_audio tests (71 Phase 1 + 25 Phase 2 + 16 Phase 3 + 4 See Inv) | ✅ All pass |
+| All 34 see_invisibility tests | ✅ All pass |
 | All 43 fog_cloud tests | ✅ All pass |
 | combat / ai / scenario / integration / engine | ✅ All pass |
-| darkvision (41) / invisible_effect (21) / cunning_action | ✅ All pass |
-| Bespoke spells: fireball, bless, entangle, sleep, hold_person, bane, hex, web, moonbeam, shatter, shield_of_faith, banishment_tashas | ✅ All pass |
+| arms_of_hadar / darkvision (41) / invisible_effect (21) / cunning_action | ✅ All pass |
+| resources / Bespoke spells (fireball, bless, entangle, sleep, etc.) | ✅ All pass |
 
-### Commits this session (3 total, all pushed):
+### Commits this session (6 total, all pushed):
 1. `e56d660` — Session 63: Implement Monster Spellcasting Phase 1 (RFC-MONSTER-SPELLCASTING)
 2. `ef95ed3` — Session 63: Implement Darkness spell (PHB p.230) — magical darkness obscurement
 3. `ab7d666` — Session 63: Implement Vision/Audio Phase 2 — vision modes consumed
+4. `ca5275e` — Session 63 handover + archive zHANDOVER-SESSION-60 (AGENTS.md max-2 rule)
+5. `c5e57a1` — Session 63: Implement Vision/Audio Phase 3 — targeting enforcement
+6. `29f9688` — Session 63: Extend CANTRIP_TEMPLATES with 4 more combat cantrips
 
 ### Total new code this session:
-- `src/ai/monster_spellcasting.ts` — 580 lines (new module)
+- `src/ai/monster_spellcasting.ts` — 620 lines (new module)
 - `src/spells/darkness.ts` — 295 lines (new spell)
-- `src/test/monster_spellcasting.test.ts` — 590 lines, 94 assertions (new tests)
+- `src/test/monster_spellcasting.test.ts` — 600+ lines, 108 assertions (new tests)
 - `src/test/darkness.test.ts` — 420 lines, 59 assertions (new tests)
-- `src/test/vision_audio.test.ts` — +200 lines, +25 assertions (Phase 2 additions)
+- `src/test/vision_audio.test.ts` — +330 lines, +45 assertions (Phase 2 + Phase 3 additions: 116 total)
 - Type changes in `core.ts` (monsterSpellSlots, monsterDailyUses, 'darkness' lightLevel, 'darkness' plan type, blocksDarkvision payload)
-- Wiring in `perception.ts` (isVisuallyDetected Phase 2), `planner.ts` (monster spellcasting + Darkness branches), `combat.ts` (Darkness case branch)
+- Wiring in `perception.ts` (isVisuallyDetected Phase 2 + Phase 3 See Invisibility, targetableEnemiesOf), `planner.ts` (monster spellcasting + Darkness branches + target filtering guard), `combat.ts` (Darkness case branch + OA bf param), `movement.ts` (OA visibility gating), `targeting.ts` (targetableEnemiesOf), `see_invisibility.ts` (metadata flag + log messages)
 - RFC §9.1 autonomous decisions documented in `docs/RFC-MONSTER-SPELLCASTING.md`
 
 ---
@@ -116,12 +145,14 @@ These are conservative + reversible. The user can override any of them.
 - Round-1 opener logic (Doubt #2 = weighted: concentration buffs get ×1.2-1.8 boost on round 1).
 - **Covers**: ~145 creatures with daily-use spells (Lich 3/day, Drow 1/day, etc.).
 
-### 3. Vision/Audio Phase 3 (MEDIUM risk — targeting enforcement)
-- "Creature you can see" spell targeting enforcement in `executePlannedAction`.
-- Opportunity-attack visibility gating.
-- Planner target filtering by visibility (use `perception.detection` map).
-- See Invisibility spell consumption (grant visibility of invisible targets).
-- Files: `src/engine/combat.ts`, `src/ai/planner.ts`.
+### 3. Vision/Audio Phase 3 (PARTIALLY DONE — Q3+Q1+Q2 complete, Q4+Q5 deferred)
+Phase 3 targeting enforcement is partially implemented this session:
+- ✅ Q3: See Invisibility spell consumed by `isVisuallyDetected()`.
+- ✅ Q1: Planner target filtering — `targetableEnemiesOf()` excludes hidden/unknown enemies.
+- ✅ Q2: OA visibility gating — `opportunityAttackTriggered()` checks detection state.
+- ❌ Q4 (DEFERRED): `attackAdvantageState()` consults detection map — needs signature change (higher risk, touches every resolveAttack caller). The 4-state model would map: 'visible' = no disadv; 'position-known' = disadv; 'hidden'/'unknown' = disadv.
+- ❌ Q5 (DEFERRED): Per-spell `requiresVisibleTarget` metadata flag for "creature you can see" spell enforcement in `executePlannedAction` — invasive (250+ spell modules). v1 simplification: hardcode a Set of well-known "creature you can see" spells (Hold Person, Charm Person, Command, etc.).
+- Files: `src/engine/utils.ts` (Q4), `src/engine/combat.ts` (Q5).
 
 ### 4. Vision/Audio Phase 4 (HIGH risk — terrain + obscurement)
 - Per-cell light sources (torches, Light spell, magical darkness).
@@ -141,23 +172,24 @@ These are conservative + reversible. The user can override any of them.
 
 ## Next Agent Priorities
 
-1. **Get user review of the 6 autonomous doubt decisions** (RFC §9.1) — these gate Phase 2/3 implementation. If the user disagrees with any, adjust before starting Phase 2.
+1. **Get user review of the 6 autonomous doubt decisions** (RFC §9.1) — these gate Monster Spellcasting Phase 2 implementation. If the user disagrees with any, adjust before starting Phase 2.
 2. **Implement Monster Spellcasting Phase 2** (slot-based spells) — MEDIUM-HIGH risk. Start by wiring `initMonsterSpellSlots()` at combat start, then extend `selectMonsterSpell()` to iterate `slots[1-9]` + dispatch via GENERIC_SPELLS. ~600 creatures.
-3. **Implement Vision/Audio Phase 3** (targeting enforcement) — MEDIUM risk. Add visibility checks to spell targeting + OA gating + planner target filtering.
-4. **Implement Wall of Fire** (L4, 29 monsters) — needs a line/ring zone subsystem (new effectType or extend `damage_zone`).
-5. **Implement more spells** per `docs/SPELL-DELEGATION-SPEC.md`.
+3. **Implement Vision/Audio Phase 3 Q4** (`attackAdvantageState` detection-map consult) — MEDIUM risk. Extend `attackAdvantageState` in `src/engine/utils.ts` to derive disadv from detection state + cancel invisible-disadv when `_seeInvisibilityActive`.
+4. **Implement Vision/Audio Phase 3 Q5** ("creature you can see" spell enforcement) — LOW-MEDIUM risk. Add a centralized guard in `executePlannedAction` using a hardcoded Set of well-known sight-required spells.
+5. **Implement Wall of Fire** (L4, 29 monsters) — needs a line/ring zone subsystem (new effectType or extend `damage_zone`).
+6. **Implement more spells** per `docs/SPELL-DELEGATION-SPEC.md`.
 
 ---
 
 ## Key Files for Next Agent to Read
 
 - **`docs/RFC-MONSTER-SPELLCASTING.md`** — full RFC + §9.1 autonomous decisions (start here for Phase 2)
-- **`docs/RFC-VISION-AUDIO.md`** — vision/audio subsystem design (Phase 1-2 done, Phase 3-4 pending)
+- **`docs/RFC-VISION-AUDIO.md`** — vision/audio subsystem design (Phase 1-3 mostly done, Phase 3 Q4/Q5 + Phase 4 pending)
 - **`docs/SPELL-DELEGATION-SPEC.md`** — spell implementation tasks + pattern
-- **`src/ai/monster_spellcasting.ts`** — the new monster spellcasting module (extend for Phase 2/3)
-- **`src/engine/perception.ts`** — the perception subsystem (Phase 1-2 done; extend for Phase 3)
+- **`src/ai/monster_spellcasting.ts`** — the monster spellcasting module (Phase 1 done with 17 cantrips; extend for Phase 2/3)
+- **`src/engine/perception.ts`** — the perception subsystem (Phase 1-2 done, Phase 3 Q3 done; Q4/Q5 + Phase 4 pending)
 - **`src/spells/darkness.ts`** — canonical example of a `battlefield_obstacle` spell with `blocksDarkvision` flag
 - **`src/spells/fog_cloud.ts`** — canonical example of a `battlefield_obstacle` spell (normal obscurement)
-- **`src/test/monster_spellcasting.test.ts`** — test patterns for monster spellcasting
-- **`src/test/vision_audio.test.ts`** — test patterns for perception (sections 1-15 = Phase 1, 16-21 = Phase 2)
+- **`src/test/monster_spellcasting.test.ts`** — test patterns for monster spellcasting (108 assertions)
+- **`src/test/vision_audio.test.ts`** — test patterns for perception (sections 1-15 = Phase 1, 16-21 = Phase 2, 22-25 = Phase 3)
 - **`src/test/darkness.test.ts`** — test patterns for battlefield_obstacle spells
