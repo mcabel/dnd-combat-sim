@@ -415,8 +415,36 @@ export interface TargetKnowledge {
   // spellSlotsRemaining: always -1 (unknowable)
 }
 
+/**
+ * ── Session 62 RFC-VISION-AUDIO Phase 1: Detection State ──
+ *
+ * Per-observer, per-target detection classification. Stored on
+ * `PerceptionMemory.detection` keyed by target id. Updated at the start of
+ * each combatant's turn by `updateDetectionStates()` in perception.ts.
+ *
+ *   'visible'        — observer can see + hear the target. Normal targeting.
+ *   'hidden'         — target has the 'hidden' condition (took Hide action).
+ *                      Observer doesn't know their position. Can't target
+ *                      directly (must guess a location).
+ *   'position-known' — observer can't SEE the target (invisible, in darkness,
+ *                      behind total cover) but heard them. Can target attacks
+ *                      at disadvantage; CAN'T target "a creature you can see"
+ *                      spells.
+ *   'unknown'        — observer lost track of the target (no sound, no sight).
+ *
+ * v1 simplification: the detection map is OPTIONAL. Combatants created
+ * without it (legacy tests, factories) skip detection-state checks and fall
+ * back to the existing condition-based adv/disadv logic in attackAdvantageState.
+ */
+export type DetectionState = 'visible' | 'hidden' | 'position-known' | 'unknown';
+
 export interface PerceptionMemory {
   targets: Map<string, TargetKnowledge>;
+  // ── Session 62 RFC-VISION-AUDIO Phase 1 ──
+  // Optional: per-target detection state from the perception subsystem.
+  // Populated by updateDetectionStates() at the start of each observer's
+  // turn. Absent on legacy combatants (backward-compatible).
+  detection?: Map<string, DetectionState>;
 }
 
 
@@ -1817,6 +1845,16 @@ export interface Combatant {
   // combatants have _hasTakenTurn = true.
   _hasTakenTurn?: boolean;
 
+  // ---- Session 62 RFC-VISION-AUDIO Phase 1: Stealth roll scratch field ----
+  // Set by tryHide() in perception.ts when a combatant successfully Hides.
+  // Stores the Dexterity (Stealth) check total so that active Perception
+  // actions (tryActivePerception) can contest it. Cleared when 'hidden' is
+  // removed (attack, cast with verbal component, active Perception success).
+  // v1 simplification: a single value (no per-enemy tracking); 5e RAW is
+  // that one Stealth check contests all enemies' passive Perception, and
+  // an active Perception check is a direct contest vs the same Stealth total.
+  _stealthRoll?: number;
+
   // ---- Eyebite (PHB p.238) scratch field ----
   // Set on the CASTER when Eyebite is cast. Stores the save DC so that the
   // per-turn re-target can roll saves against the correct DC. While set and
@@ -2419,7 +2457,10 @@ export interface PlannedAction {
     // own module at src/spells/<snake>.ts that exports shouldCast + execute.
     | 'summonSpell'       // Summon/Conjure spell — spawns a combatant mid-combat (TG-006)
     | 'genericSpell'
-    | 'legendary';
+    | 'legendary'
+    | 'perceive';         // Session 62 RFC-VISION-AUDIO Phase 1: active Perception action —
+                          // contests hidden enemies' Stealth rolls (PHB p.177). Spends the
+                          // ACTION; on success, removes 'hidden' from one hidden enemy.
   action: Action | null;
   targetId: string | null;
   description: string;

@@ -652,6 +652,13 @@ import {
   executeShapechange,
   revertOnDeath as revertShapechangeOnDeath,
 } from './shapechange';
+// ── Session 62 RFC-VISION-AUDIO Phase 1: perception + detection subsystem ──
+import {
+  tryHide,
+  tryActivePerception,
+  updateDetectionStates,
+  revealOnCast,
+} from './perception';
 import {
   shouldCast as shouldCastCharmPerson,
   execute as executeCharmPerson,
@@ -1198,6 +1205,7 @@ const NON_SPELL_PLAN_TYPES = new Set<string>([
   'layOnHands',      // Paladin class feature
   'bardicInspiration', // Bard class feature
   'legendary',       // legendary action (not a spell cast)
+  'perceive',        // Session 62: active Perception action (Search)
 ]);
 
 /**
@@ -2842,6 +2850,16 @@ export function executePlannedAction(
     }
   }
 
+  // ── Session 62 RFC-VISION-AUDIO Phase 1: stealth-break on cast ──
+  // Per user answer #3: a hidden creature that casts a spell WITH a verbal
+  // component is revealed. This fires AFTER the Counterspell check (a
+  // Counterspelled spell doesn't reveal the caster — they never actually
+  // cast). The revealOnCast() helper is a no-op if the actor isn't hidden
+  // or the spell is silent (e.g. Counterspell itself, Message cantrip).
+  if (spellInfo && !actor.isDead && !actor.isUnconscious) {
+    revealOnCast(actor, spellInfo.name, state);
+  }
+
   switch (plan.type) {
     case 'attack':
     case 'cast': {
@@ -3646,29 +3664,28 @@ export function executePlannedAction(
       break;
     }
     case 'hide': {
-      // Cunning Action: Hide (PHB p.96)
-      // Rogue makes a DEX (Stealth) check. Proficiency always applies (Rogues have Stealth prof).
-      // Compare to each enemy's Passive Perception (10 + WIS mod).
-      // If the roll exceeds the highest passive perception among living enemies, Rogue is Hidden.
-      // 'hidden' condition grants advantage on the Rogue's next attack and disadvantage on attacks
-      // against them. Condition is removed immediately when the Rogue attacks (PHB p.177/194).
-      const stealthRoll = rollDie(20) + abilityMod(actor.dex) + proficiencyBonus(actor.cr);
-      const enemies = [...bf.combatants.values()].filter(
-        c => c.faction !== actor.faction && !c.isDead && !c.isUnconscious
-      );
-      const maxPassivePerception = enemies.length > 0
-        ? Math.max(...enemies.map(e => 10 + abilityMod(e.wis)))
-        : 0;
-      if (enemies.length === 0 || stealthRoll > maxPassivePerception) {
-        addCondition(actor, 'hidden');
-        log(state, 'condition_add', actor.id,
-          `${actor.name} Hides! (Stealth ${stealthRoll} > Passive Perception ${maxPassivePerception})`,
-          actor.id);
-      } else {
-        log(state, 'action', actor.id,
-          `${actor.name} tries to Hide but is Detected! (Stealth ${stealthRoll} ≤ Passive Perception ${maxPassivePerception})`,
-          actor.id);
-      }
+      // Session 62 RFC-VISION-AUDIO Phase 1: generalized Hide action.
+      // Originally Cunning Action: Hide (PHB p.96) — Rogue-only bonus action.
+      // Now any creature can take the Hide ACTION (Rogues still get it as a
+      // bonus action via Cunning Action). The tryHide() helper enforces the
+      // obscurement/cover/invisible requirement (user answer #2), rolls
+      // Stealth vs highest enemy passive Perception, and grants 'hidden'.
+      //
+      // Backward-compat: the log message text ("Hides!"/"Detected!") matches
+      // the Cunning Action Hide tests (cunning_action.test.ts §7g/7h).
+      tryHide(actor, state);
+      break;
+    }
+
+    case 'perceive': {
+      // Session 62 RFC-VISION-AUDIO Phase 1: active Perception (Search action).
+      // Per user answer #6: a creature can spend its ACTION to make a
+      // Perception check contesting a hidden enemy's Stealth roll. On
+      // success, that enemy loses 'hidden' (revealed globally — simpler
+      // than per-observer tracking). On failure, the action is wasted.
+      // PHB p.177: "When you take the Search action, you devote your
+      // attention to finding something."
+      tryActivePerception(actor, state);
       break;
     }
     case 'ready':
@@ -5738,6 +5755,13 @@ export function runCombat(
 
       // Reset budget (movement, action, bonus, reaction)
       resetBudget(actor);
+
+      // ── Session 62 RFC-VISION-AUDIO Phase 1: refresh detection states ──
+      // At the start of each combatant's turn, refresh the detection maps
+      // for ALL living observers (perception is symmetric + continuous).
+      // O(n²) per turn — fine for v1 small combats. Idempotent; lazy-inits
+      // the detection Map on combatants that don't have one yet.
+      updateDetectionStates(battlefield);
 
       // ── Session 46 Task #29-follow-up-2: Survivor (Champion 18) regen ──
       // PHB p.73: "At 18th level, you attain the pinnacle of resilience in

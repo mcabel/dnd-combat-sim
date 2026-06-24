@@ -195,6 +195,12 @@ import { shouldCast as shouldCastBanishment } from '../spells/banishment';
 import { shouldCast as shouldCastTashasHideousLaughter } from '../spells/tashas_hideous_laughter';
 import { shouldCast as shouldCastDimensionDoor } from '../spells/dimension_door';
 import { shouldShapechange } from '../engine/shapechange';
+// ── Session 62 RFC-VISION-AUDIO Phase 1: perception + detection helpers ──
+import {
+  canTakeHideAction,
+  countHiddenEnemies,
+  countTargetableEnemies,
+} from '../engine/perception';
 import { shouldCast as shouldCastCharmPerson } from '../spells/charm_person';
 import { shouldCast as shouldCastCompelledDuel } from '../spells/compelled_duel';
 import { shouldCast as shouldCastGrease } from '../spells/grease';
@@ -1008,6 +1014,47 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
     }
   }
 
+  // === HIDE ACTION (RFC-VISION-AUDIO Phase 1) — generalized for non-Rogues ===
+  // Any creature can take the Hide ACTION (PHB p.192) if they have obscurement
+  // / cover / invisibility (user answer #2). Rogues with Cunning Action get
+  // Hide as a BONUS action via planCunningAction (they keep attacking + hide).
+  //
+  // v1 strategy for Hide-as-ACTION (non-Rogues):
+  //   - The creature is at low HP (< 30%) AND can take the Hide action AND
+  //     is NOT already hidden. The creature hides to gain advantage on their
+  //     next attack + disadvantage on enemy attacks vs them (escape tactic).
+  //   - This competes with attacking, so it only fires when the creature is
+  //     fleeing/defensive (low HP). Full-HP creatures always attack instead.
+  //   - Skipped for Rogues (cunningAction resource) — they use bonus-action
+  //     Hide via planCunningAction and attack with their main action.
+  //   - Priority: BEFORE self-preserve (retreat/dodge) — hiding is a strictly
+  //     better form of self-preservation when obscurement is available (you
+  //     stay in position + gain advantage on next attack + enemies can't
+  //     target you). Retreat moves you away and wastes the action.
+  //   - GUARD: skip Hide if there's a downed ally in Cure Wounds range —
+  //     urgent healing takes priority over self-preservation via stealth.
+  if (!self.resources?.cunningAction
+      && !self.conditions.has('hidden')
+      && self.currentHP / self.maxHP < 0.30
+      && canTakeHideAction(self, battlefield)) {
+    // Check for downed ally in Cure Wounds range (same guard as BLESS).
+    const hasDownedAllyInReach = self.actions.some(a => a.name === 'Cure Wounds')
+      && [...battlefield.combatants.values()].some(
+        c => c.faction === self.faction && c.isUnconscious && !c.isDead
+          && chebyshev3D(self.pos, c.pos) * 5 <= 5
+      );
+    if (!hasDownedAllyInReach) {
+      plan.action = {
+        type: 'hide',
+        action: null,
+        targetId: self.id,
+        description: `${self.name} takes the Hide action (low HP — break line of sight)`,
+      };
+      plan.bonusAction = planBonusAction(self, null, battlefield);
+      return plan;
+    }
+  }
+
   // === SELF-PRESERVE CHECK (Smart only) ===
   if (self.aiProfile === 'smart') {
     const preserve = selfPreserveDecision(self, battlefield);
@@ -1131,6 +1178,31 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
     }
   }
 
+  // === ACTIVE PERCEPTION (RFC-VISION-AUDIO Phase 1) ===
+  // Per user answer #6: a creature can spend its ACTION to make a Perception
+  // check contesting hidden enemies' Stealth rolls. The planner fires this
+  // when ALL enemies are hidden (no targetable enemies) — otherwise the
+  // creature should attack/cast instead. The Search action reveals ONE
+  // hidden enemy on success.
+  //
+  // Priority: AFTER Bless (blessing is always worth it round 1) but BEFORE
+  // SELECT TARGET — if all enemies are hidden, selectTarget would return
+  // null and we'd waste the turn. Searching first gives a chance to reveal
+  // an enemy for next round.
+  if (countHiddenEnemies(self, battlefield) > 0) {
+    const targetable = countTargetableEnemies(self, battlefield);
+    if (targetable === 0) {
+      plan.action = {
+        type: 'perceive',
+        action: null,
+        targetId: null,
+        description: `${self.name} takes the Search action to find hidden enemies`,
+      };
+      plan.bonusAction = planBonusAction(self, null, battlefield);
+      return plan;
+    }
+  }
+
   // === SELECT TARGET ===
   const target = selectTarget(self, battlefield);
   if (!target) return plan; // No enemies left
@@ -1160,6 +1232,9 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
       return plan;
     }
   }
+
+  // === HIDE ACTION (RFC-VISION-AUDIO Phase 1) — generalized for non-Rogues ===
+  // (Moved to BEFORE self-preserve — see below.)
 
   // ── Session 47 Task #29-follow-up-4: Wholeness of Body moved to BEFORE
   // self-preserve check (see above, ~line 820). This ensures the monk uses
