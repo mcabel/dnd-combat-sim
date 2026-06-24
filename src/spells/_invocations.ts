@@ -249,8 +249,30 @@ export const ELDRITCH_INVOCATIONS: Record<string, EldritchInvocation> = {
     // plan.attackCount (see src/ai/planner.ts + src/engine/combat.ts).
   },
 
+  // ── Session 63: Devil's Sight (PHB p.110) ──
+  // "You can see normally in darkness, both magical and nonmagical, out to a
+  //  range of 120 feet."
+  //
+  // This is distinct from the monster trait of the same name (MM: Imp, Barbed
+  // Devil, etc.) which says "Magical darkness doesn't impede the devil's
+  // darkvision" — the invocation is STRONGER: it grants sight in ALL darkness
+  // (magical + nonmagical) out to 120 ft, regardless of whether the Warlock
+  // has darkvision.
+  //
+  // Implementation: the character builder (src/characters/builder.ts) sets
+  // `combatant.senses.devilsSight = true` when the Warlock has this invocation.
+  // The LOS engine (isVisionBlocked in los.ts) skips magical-darkness obstacles
+  // for observers with devilsSight. The perception subsystem (isVisuallyDetected
+  // in perception.ts) treats devilsSight as effective 120-ft darkvision in
+  // natural darkness (lightLevel: 'darkness').
+  //
+  // No Eldritch Blast hooks — this is a passive vision ability.
+  'Devil\'s Sight': {
+    name: 'Devil\'s Sight',
+    description: 'You can see normally in darkness, both magical and nonmagical, out to a range of 120 feet.',
+  },
+
   // Future invocations can be added here:
-  //   'Devil's Sight' — see in magical darkness 120 ft (needs LOS engine changes)
   //   'Mask of Many Faces' — cast Disguise Self at will (out-of-combat)
   //   'Misty Visions' — cast Silent Image at will (out-of-combat)
   //   etc.

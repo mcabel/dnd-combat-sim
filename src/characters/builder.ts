@@ -361,6 +361,27 @@ export function buildCombatant(
         ebAction.range = { normal: 300, long: 300 };
       }
     }
+
+    // ── Session 63: Devil's Sight invocation (PHB p.110) ──
+    // "You can see normally in darkness, both magical and nonmagical, out to
+    //  a range of 120 feet."
+    //
+    // Stronger than the monster trait of the same name (which only extends
+    // existing darkvision to magical darkness). The invocation grants sight
+    // in ALL darkness (magical + natural) out to 120 ft, regardless of
+    // whether the Warlock has darkvision.
+    //
+    // Wiring: set senses.devilsSight = true (consumed by isVisionBlocked in
+    // los.ts to skip magical-darkness obstacles) + ensure darkvision ≥ 120 ft
+    // (consumed by isVisuallyDetected in perception.ts to see in natural
+    // darkness). If the Warlock already has darkvision > 120 ft (e.g. from
+    // race), keep the higher range.
+    if (combatant.eldritchInvocations.includes("Devil's Sight")) {
+      if (!combatant.senses) combatant.senses = {};
+      combatant.senses.devilsSight = true;
+      const existingDV = combatant.senses.darkvision ?? 0;
+      if (existingDV < 120) combatant.senses.darkvision = 120;
+    }
   }
 
   // ── Session 42 Task #18: Pact Boon transfer ──

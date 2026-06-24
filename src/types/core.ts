@@ -1284,16 +1284,23 @@ export interface Combatant {
     /**
      * ── Session 63 RFC-COMBINING-EFFECTS: Devil's Sight ──
      * Parsed from the "Devil's Sight" monster trait (MM: Imp, Barbed Devil,
-     * Horned Devil, etc.) + the Warlock Eldritch Invocation (PHB p.110).
-     * Description: "Magical darkness doesn't impede the devil's darkvision."
+     * Horned Devil, etc.) — "Magical darkness doesn't impede the devil's
+     * darkvision" — OR granted by the Warlock Eldritch Invocation of the same
+     * name (PHB p.110) — "You can see normally in darkness, both magical and
+     * nonmagical, out to a range of 120 feet."
+     *
+     * The INVOCATION is STRONGER: it grants sight in ALL darkness (magical +
+     * natural) out to 120 ft, regardless of whether the Warlock has darkvision.
+     * The MONSTER TRAIT only extends existing darkvision to magical darkness.
+     * Both set devilsSight = true; the builder bumps darkvision to ≥ 120 for
+     * the invocation (see src/characters/builder.ts).
      *
      * Distinct from darkvision: Devil's Sight lets the creature see through
      * MAGICAL darkness (obstacles where isMagicalDarkness === true), which
-     * normal darkvision cannot. Requires darkvision to also be set — Devil's
-     * Sight extends darkvision, it doesn't grant sight on its own.
+     * normal darkvision cannot. Consumed by isVisionBlocked() in los.ts.
      *
-     * Stored as boolean (not a range) — the trait doesn't specify a range,
-     * so it applies to the creature's full darkvision range.
+     * Stored as boolean (not a range) — the range is the creature's darkvision
+     * range (monster trait) or 120 ft (invocation, builder-enforced).
      */
     devilsSight?: boolean;
   };

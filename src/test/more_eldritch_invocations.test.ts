@@ -354,13 +354,13 @@ console.log('\n--- 10. End-to-end Eldritch Mind concentration save ---');
 }
 
 // ============================================================
-// 11. Registry count: 7 invocations total
+// 11. Registry count: 8 invocations total (Session 63 added Devil's Sight)
 // ============================================================
 console.log('\n--- 11. Registry count ---');
 {
   const names = Object.keys(ELDRITCH_INVOCATIONS).sort();
-  eq('11a. registry has 7 entries', names.length, 7);
-  // Verify all 7 names
+  eq('11a. registry has 8 entries', names.length, 8);
+  // Verify all 8 names
   assert('11b. Agonizing Blast', names.includes('Agonizing Blast'));
   assert('11c. Eldritch Mind', names.includes('Eldritch Mind'));
   assert('11d. Eldritch Spear', names.includes('Eldritch Spear'));
@@ -368,6 +368,7 @@ console.log('\n--- 11. Registry count ---');
   assert('11f. Lance of Lethargy', names.includes('Lance of Lethargy'));
   assert('11g. Repelling Blast', names.includes('Repelling Blast'));
   assert('11h. Thirsting Blade', names.includes('Thirsting Blade'));
+  assert('11i. Devil\'s Sight (Session 63)', names.includes("Devil's Sight"));
 }
 
 // ============================================================
@@ -403,6 +404,33 @@ console.log('\n--- 13. hasInvocation helper ---');
     hasInvocation(combatant, 'Eldritch Mind'));
   assert('13c. hasInvocation(Thirsting Blade) = false (not chosen)',
     !hasInvocation(combatant, 'Thirsting Blade'));
+}
+
+// ============================================================
+// 14. Devil's Sight invocation (Session 63) — builder wiring
+// ============================================================
+console.log('\n--- 14. Devil\'s Sight invocation ---');
+{
+  const warlock2 = levelWarlockTo(makeWarlock1(), 2);
+  const sheet = chooseEldritchInvocations(warlock2, ["Devil's Sight", 'Eldritch Spear']);
+  const combatant = buildCombatant(sheet);
+
+  assert('14a. hasInvocation(Devil\'s Sight) = true',
+    hasInvocation(combatant, "Devil's Sight"));
+  assert('14b. senses.devilsSight = true (builder wired)',
+    combatant.senses?.devilsSight === true);
+  // The invocation grants 120-ft sight in all darkness. If the Warlock had no
+  // darkvision, the builder sets it to 120. If they had < 120, it's bumped.
+  // If they had > 120 (e.g. 150 from a race), the higher value is kept.
+  eq('14c. senses.darkvision ≥ 120 (invocation grants 120-ft sight)',
+    combatant.senses?.darkvision ?? 0 >= 120 ? true : false, true);
+
+  // Warlock WITHOUT Devil's Sight should NOT get the flag.
+  const warlock2b = levelWarlockTo(makeWarlock1(), 2);
+  const sheetNoDevils = chooseEldritchInvocations(warlock2b, ['Eldritch Spear', 'Eldritch Mind']);
+  const combatantNoDevils = buildCombatant(sheetNoDevils);
+  assert('14d. no Devil\'s Sight → senses.devilsSight undefined',
+    combatantNoDevils.senses?.devilsSight === undefined);
 }
 
 // ============================================================
