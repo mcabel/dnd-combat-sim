@@ -705,6 +705,13 @@ export interface Combatant {
    * and stored for future engine integration.
    */
   ambusher?: boolean;
+  // ── Session 60: Ambusher wired into engine ──
+  // PHB/MM: "In the first round of combat, the [creature] has advantage on
+  // attack rolls against any creature that hasn't taken a turn yet."
+  // The engine checks this in resolveAttack when battlefield.round === 1 AND
+  // the target hasn't completed a turn yet (tracked via _hasTakenTurn).
+  // v1 simplification: advantage applies on ALL attack rolls in round 1 vs
+  // targets that haven't gone yet, regardless of hidden/surprised status.
 
   /**
    * ── Session 53 Creature Megabatch Batch 4e: Brute ──
@@ -729,6 +736,13 @@ export interface Combatant {
    * effect is not yet wired (would need a hook in rollInitiative).
    */
   falseAppearance?: boolean;
+  // ── Session 60: False Appearance initiative-advantage variant ──
+  // 27 of 83 False Appearance creatures have the variant: "If the [creature]
+  // is motionless at the start of combat, it has advantage on its initiative
+  // roll." The other 56 have the disguise-only variant (no initiative effect).
+  // The parser sets this flag ONLY when the trait text mentions "initiative".
+  // The engine grants advantage in rollInitiative when this flag is true.
+  falseAppearanceInitAdv?: boolean;
 
   /**
    * ── Session 53 Creature Megabatch Batch 4e: Hold Breath ──
@@ -1669,6 +1683,16 @@ export interface Combatant {
   // Concentration spell — removed by removeEffectsFromCaster when concentration
   // breaks. v1 simplification documented via `flameBladeAsWeaponRiderV1Simplified: true`.
   _flameBladeActive?: boolean;
+
+  // ---- Session 60: Ambusher turn tracking ----
+  // Set to true at the END of this combatant's first turn (in runCombat, after
+  // executeTurnPlan completes). Used by the Ambusher trait: "In the first round
+  // of combat, advantage on attack rolls against any creature that hasn't taken
+  // a turn yet." The check in resolveAttack: `attacker.ambusher && round === 1
+  // && !target._hasTakenTurn`. Persists for the entire combat (never reset) —
+  // correct because Ambusher only fires in round 1, and by round 2 all
+  // combatants have _hasTakenTurn = true.
+  _hasTakenTurn?: boolean;
 
   // ---- Eyebite (PHB p.238) scratch field ----
   // Set on the CASTER when Eyebite is cast. Stores the save DC so that the

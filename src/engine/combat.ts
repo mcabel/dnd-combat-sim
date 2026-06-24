@@ -1524,7 +1524,19 @@ export function resolveAttack(
   }
   const disadvantage = baseDisadv || !!protectionRider || losDisadvantage || chillTouchDisadv || viciousMockeryDisadv || frostbiteDisadv || tauntDisadvantage || curseAttackDisadv || sunlightDisadv
     || attacker.exhaustionLevel >= 3;  // Exhaustion level 3: disadvantage on attack rolls (PHB p.291)
-  const advantage = baseAdv || packTacticsAdvantage || attacker.helpedThisTurn || cantripAdv || trueStrikeAdv;
+  // ── Session 60: Ambusher trait (MM p.11) ──
+  // "In the first round of combat, the [creature] has advantage on attack rolls
+  // against any creature that hasn't taken a turn yet." The _hasTakenTurn flag
+  // is set at the end of each creature's turn in runCombat. In round 1, any
+  // creature that hasn't gone yet has _hasTakenTurn = false (undefined).
+  const ambusherAdv = attacker.ambusher === true
+    && state.battlefield.round === 1
+    && !target._hasTakenTurn;
+  if (ambusherAdv) {
+    log(state, 'action', attacker.id,
+      `${attacker.name} attacks with Advantage (Ambusher — ${target.name} hasn't taken a turn yet).`, target.id);
+  }
+  const advantage = baseAdv || packTacticsAdvantage || attacker.helpedThisTurn || cantripAdv || trueStrikeAdv || ambusherAdv;
 
   // Shillelagh (PHB p.275): while the self-buff is active, MELEE attacks use
   // WIS mod instead of STR mod for the attack roll. The substitution delta is
@@ -6224,6 +6236,15 @@ export function runCombat(
 
       // Execute the plan
       executeTurnPlan(actor, plan, state);
+
+      // ── Session 60: Ambusher turn tracking ──
+      // Mark this combatant as having completed their turn. Used by the
+      // Ambusher trait: advantage on attack rolls vs creatures that haven't
+      // taken a turn yet (round 1 only). Set AFTER executeTurnPlan so the
+      // actor's own attacks during their turn still see targets that haven't
+      // gone yet as "not taken turn" (correct — the actor is the one attacking,
+      // not the target's turn status changing mid-attack).
+      actor._hasTakenTurn = true;
 
       // Tick Rage at end of actor's turn (PHB p.48: rage ends if the barbarian didn't
       // attack or take damage since their last turn). Also removes B/P/S resistance

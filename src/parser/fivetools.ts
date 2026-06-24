@@ -1165,6 +1165,14 @@ export function monsterToCombatant(
   const ambusher = traits.some(t => /^Ambusher$/i.test(t.trim()));
   const brute = traits.some(t => /^Brute$/i.test(t.trim()));
   const falseAppearance = traits.some(t => /^False\s+Appearance$/i.test(t.trim()));
+  // Session 60: False Appearance initiative-advantage variant — 27 of 83
+  // False Appearance creatures have "advantage on its initiative roll" in the
+  // trait text. The other 56 have the disguise-only variant (no init effect).
+  // Check the trait TEXT (not just the name) for the "initiative" keyword.
+  const falseAppearanceInitAdv = (raw.trait ?? []).some(t =>
+    /^False\s+Appearance$/i.test((t.name || '').trim()) &&
+    /initiative/i.test(flattenEntries(t.entries ?? []))
+  );
   const siegeMonster = traits.some(t => /^Siege\s+Monster$/i.test(t.trim()));
   const waterBreathing = traits.some(t => /^Water\s+Breathing$/i.test(t.trim()));
   // Session 53 Batch 4f: Superior Invisibility + Incorporeal Movement
@@ -1224,6 +1232,7 @@ export function monsterToCombatant(
     ambusher,              // Session 53 Batch 4e: true for Ambusher trait
     brute,                 // Session 53 Batch 4e: true for Brute trait
     falseAppearance,       // Session 53 Batch 4e: true for False Appearance trait
+    falseAppearanceInitAdv, // Session 60: true only for the init-advantage variant
     siegeMonster,          // Session 53 Batch 4e: true for Siege Monster trait
     waterBreathing,        // Session 53 Batch 4e: true for Water Breathing trait
     holdBreathMinutes,     // Session 53 Batch 4e: N minutes (undefined if no Hold Breath trait)

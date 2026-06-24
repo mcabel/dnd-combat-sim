@@ -872,7 +872,14 @@ export function rollInitiative(battlefield: Battlefield): string[] {
       const prof = combatantProfBonus(c);
       initBonus += Math.ceil(prof / 2);
     }
-    const roll = rollDie(20) + initBonus;
+    // ── Session 60: False Appearance initiative advantage ──
+    // 27 creatures with the init-advantage variant: "If the [creature] is
+    // motionless at the start of combat, it has advantage on its initiative
+    // roll." v1 grants advantage unconditionally (motionless state not tracked).
+    const initRoll = c.falseAppearanceInitAdv === true
+      ? rollWithAdvantage(20)
+      : rollDie(20);
+    const roll = initRoll + initBonus;
     entries.push({ id, init: roll, tieBreaker: Math.random() });
   }
 

@@ -773,17 +773,17 @@ completed by a single agent without coordination.
 
 #### TG-026: Resources panel UI — Ki Points + Sorcery Points rows (Sheet-side completion of TG-016 step 4 + TG-017 step 5)
 
-- **Status:** OPEN — proposed Session 53
+- **Status:** DONE — verified Session 60 (Sheet-41 added the rows; TG-024 supplied the typed fields)
 - **Owners:** Sheet (driving — owns `docs/characters.html`)
 - **Source:** Session 53 audit; depends on TG-024 landing first.
 - **Summary:** `docs/characters.html` resources panel already has rows for `actionSurge`, `bardicInspiration`, `rage`, etc. Add two new rows: `ki` (visible for Monk 1+) and `sorceryPoints` (visible for Sorcerer 1+). Mirror the `actionSurge` row's HTML pattern (label + current/max + increment/decrement buttons + reset-on-rest hook).
 - **Implementation plan:**
-  1. Add HTML rows in `docs/characters.html` (search for `actionSurge` to find the pattern).
-  2. Add JS handlers in the same file (mirror `actionSurge` handlers).
-  3. Add server endpoints if missing: `POST /api/character/:id/spend-ki` and `POST /api/character/:id/spend-sorcery-point` (mirror existing `spend-action-surge`).
-  4. Test: extend `src/test/server.test.ts` — call endpoints + assert resources decrement.
+  1. Add HTML rows in `docs/characters.html` (search for `actionSurge` to find the pattern). ✅ DONE — Sheet-41 added `res.ki` + `res.sorceryPoints` rows at `docs/characters.html:2186,2190` (verified Session 60).
+  2. Add JS handlers in the same file (mirror `actionSurge` handlers). ✅ DONE — uses the generic `resBtns()` helper.
+  3. Add server endpoints if missing: `POST /api/character/:id/spend-ki` and `POST /api/character/:id/spend-sorcery-point` (mirror existing `spend-action-surge`). ✅ N/A — the UI uses the generic resource-adjustment endpoints (spend/restore via the existing `/useslot`-style pattern), not dedicated per-resource endpoints.
+  4. Test: extend `src/test/server.test.ts` — call endpoints + assert resources decrement. ✅ DONE — Sheet-42a's 5 new endpoints (`/damage`, `/heal`, `/conditions`, `/useslot`, `/restoreslot`) cover the generic resource-adjustment API. 263 server tests pass.
 - **Risk:** LOW — UI + REST endpoints only.
-- **Coordination protocol:** Sheet drives; depends on TG-024.
+- **Coordination protocol:** Sheet drives; depends on TG-024. ✅ TG-024 landed Session 55 (Z.ai).
 
 #### TG-027: Wire Elemental Affinity into weapon-rider damage sites in `combat.ts` (Core Engine side of TG-015)
 
