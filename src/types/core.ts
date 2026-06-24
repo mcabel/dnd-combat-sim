@@ -2189,7 +2189,12 @@ export interface Battlefield {
   // creatures with `sunlightSensitivity: true` have disadvantage on attack
   // rolls + sight-based Perception checks. Default (absent) is treated as
   // 'indoors' (no sunlight) for v1 simplicity. Scenarios can override.
-  lightLevel?: 'indoors' | 'daylight' | 'dim';
+  //
+  // Session 63 RFC-VISION-AUDIO Phase 2: added 'darkness' option for
+  // night/underground combats. In 'darkness', normal vision CANNOT see
+  // (creatures without darkvision are effectively blinded); darkvision sees
+  // (as dim light); blindsight/truesight/tremorsense see normally.
+  lightLevel?: 'indoors' | 'daylight' | 'dim' | 'darkness';
   // LOS/Cover: static obstacles on the map (walls, pillars, doors, fog, etc.)
   // Optional — absent means open terrain (no cover calculations).
   obstacles?: Obstacle[];

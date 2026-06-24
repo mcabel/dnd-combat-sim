@@ -754,6 +754,200 @@ console.log('\n=== 15. Backward-compat: legacy combatants (no detection map) ===
 }
 
 // ============================================================
+console.log('\n=== 16. Phase 2: Darkvision in darkness ===\n');
+// ============================================================
+
+{
+  // Observer with darkvision 60 ft in a dark battlefield.
+  // Target at 20 ft (within darkvision range).
+  const observer = makeC({
+    id: 'dwarf', senses: { darkvision: 60, passivePerception: 12 },
+    pos: { x: 0, y: 0, z: 0 },
+  });
+  const target = makeC({ id: 'goblin', pos: { x: 4, y: 0, z: 0 } });  // 20 ft
+  const bf = makeBF([observer, target]);
+  bf.lightLevel = 'darkness';
+
+  assert('16a: darkvision observer sees target in darkness (within range)',
+    isVisuallyDetected(observer, target, bf));
+  eq('16b: detection state = visible', getDetectionState(observer, target, bf), 'visible');
+
+  // Observer WITHOUT darkvision in darkness → can't see.
+  const human = makeC({ id: 'human', pos: { x: 0, y: 0, z: 0 } });  // no senses
+  assert('16c: no-darkvision observer can NOT see in darkness',
+    !isVisuallyDetected(human, target, bf));
+  // Detection state falls back to sound (position-known) or unknown.
+  const humanState = getDetectionState(human, target, bf);
+  assert('16d: detection state = position-known or unknown (not visible)',
+    humanState === 'position-known' || humanState === 'unknown',
+    `got ${humanState}`);
+
+  // Darkvision but target out of range (70 ft > 60 ft).
+  const farTarget = makeC({ id: 'far', pos: { x: 14, y: 0, z: 0 } });  // 70 ft
+  assert('16e: darkvision observer can NOT see target at 70 ft (> 60 ft range)',
+    !isVisuallyDetected(observer, farTarget, bf));
+}
+
+// ============================================================
+console.log('\n=== 17. Phase 2: Blindsight bypasses light + invisibility ===\n');
+// ============================================================
+
+{
+  // Bat with blindsight 60 ft in darkness — can detect an invisible target.
+  const bat = makeC({
+    id: 'bat', senses: { blindsight: 60, passivePerception: 11 },
+    pos: { x: 0, y: 0, z: 0 },
+  });
+  const invisibleTarget = makeC({
+    id: 'inv', pos: { x: 3, y: 0, z: 0 },  // 15 ft (within blindsight)
+  });
+  invisibleTarget.conditions.add('invisible');
+  const bf = makeBF([bat, invisibleTarget]);
+  bf.lightLevel = 'darkness';
+
+  assert('17a: blindsight detects invisible target in darkness',
+    isVisuallyDetected(bat, invisibleTarget, bf));
+  eq('17b: detection state = visible', getDetectionState(bat, invisibleTarget, bf), 'visible');
+
+  // Blindsight out of range (70 ft > 60 ft) → can't see invisible in darkness.
+  const farInv = makeC({ id: 'farinv', pos: { x: 14, y: 0, z: 0 } });  // 70 ft
+  farInv.conditions.add('invisible');
+  assert('17c: blindsight out of range can NOT detect invisible',
+    !isVisuallyDetected(bat, farInv, bf));
+
+  // Blindsight still respects the 'hidden' condition (Hide action beats all senses
+  // except active Perception — RFC §4.4).
+  const hiddenTarget = makeC({ id: 'hidden', pos: { x: 3, y: 0, z: 0 } });  // 15 ft
+  hiddenTarget.conditions.add('hidden');
+  assert('17d: blindsight does NOT detect hidden target (Hide beats all senses)',
+    !isVisuallyDetected(bat, hiddenTarget, bf));
+  eq('17e: hidden target detection state = hidden', getDetectionState(bat, hiddenTarget, bf), 'hidden');
+}
+
+// ============================================================
+console.log('\n=== 18. Phase 2: Truesight sees through invisibility ===\n');
+// ============================================================
+
+{
+  // Couatl with truesight 120 ft — sees invisible targets.
+  const couatl = makeC({
+    id: 'couatl', senses: { truesight: 120, passivePerception: 15 },
+    pos: { x: 0, y: 0, z: 0 },
+  });
+  const invisibleTarget = makeC({
+    id: 'inv', pos: { x: 5, y: 0, z: 0 },  // 25 ft
+  });
+  invisibleTarget.conditions.add('invisible');
+  const bf = makeBF([couatl, invisibleTarget]);
+
+  assert('18a: truesight sees invisible target', isVisuallyDetected(couatl, invisibleTarget, bf));
+  eq('18b: detection state = visible', getDetectionState(couatl, invisibleTarget, bf), 'visible');
+
+  // Truesight in darkness too.
+  bf.lightLevel = 'darkness';
+  assert('18c: truesight sees in darkness', isVisuallyDetected(couatl, invisibleTarget, bf));
+
+  // Truesight out of range (130 ft > 120 ft).
+  const farInv = makeC({ id: 'farinv', pos: { x: 26, y: 0, z: 0 } });  // 130 ft
+  farInv.conditions.add('invisible');
+  assert('18d: truesight out of range can NOT detect invisible',
+    !isVisuallyDetected(couatl, farInv, bf));
+}
+
+// ============================================================
+console.log('\n=== 19. Phase 2: Tremorsense detects non-flying targets ===\n');
+// ============================================================
+
+{
+  // Earth elemental with tremorsense 60 ft.
+  const elem = makeC({
+    id: 'elem', senses: { tremorsense: 60, passivePerception: 13 },
+    pos: { x: 0, y: 0, z: 0 },
+  });
+
+  // Ground target within range.
+  const groundTarget = makeC({ id: 'ground', pos: { x: 5, y: 0, z: 0 } });  // 25 ft
+  groundTarget.conditions.add('invisible');  // tremorsense bypasses invisibility
+  const bf = makeBF([elem, groundTarget]);
+  bf.lightLevel = 'darkness';
+
+  assert('19a: tremorsense detects invisible ground target in darkness',
+    isVisuallyDetected(elem, groundTarget, bf));
+
+  // Flying target — tremorsense doesn't work.
+  const flyTarget = makeC({
+    id: 'flyer', pos: { x: 5, y: 0, z: 0 },
+    flySpeed: 60,  // flying
+  });
+  flyTarget.conditions.add('invisible');
+  assert('19b: tremorsense can NOT detect flying target',
+    !isVisuallyDetected(elem, flyTarget, bf));
+
+  // Tremorsense out of range.
+  const farGround = makeC({ id: 'farground', pos: { x: 14, y: 0, z: 0 } });  // 70 ft
+  farGround.conditions.add('invisible');
+  assert('19c: tremorsense out of range can NOT detect',
+    !isVisuallyDetected(elem, farGround, bf));
+}
+
+// ============================================================
+console.log('\n=== 20. Phase 2: canTakeHideAction in darkness ===\n');
+// ============================================================
+
+{
+  const c = makeC({ id: 'hider', pos: { x: 0, y: 0, z: 0 } });
+  const enemy = makeC({ id: 'enemy', faction: 'party', pos: { x: 10, y: 0, z: 0 } });
+
+  // 'darkness' lightLevel → can hide (heavy obscurement).
+  const bfDark = makeBF([c, enemy]);
+  bfDark.lightLevel = 'darkness';
+  assert('20a: canTakeHideAction in darkness', canTakeHideAction(c, bfDark));
+
+  // 'dim' lightLevel → can hide (light obscurement).
+  const bfDim = makeBF([c, enemy]);
+  bfDim.lightLevel = 'dim';
+  assert('20b: canTakeHideAction in dim light', canTakeHideAction(c, bfDim));
+
+  // 'indoors' (bright) → can NOT hide without obscurement/obstacle.
+  const bfBright = makeBF([c, enemy]);
+  bfBright.lightLevel = 'indoors';
+  assert('20c: can NOT take Hide in bright light (no obscurement)',
+    !canTakeHideAction(c, bfBright));
+
+  // 'daylight' (bright) → can NOT hide without obscurement.
+  const bfDay = makeBF([c, enemy]);
+  bfDay.lightLevel = 'daylight';
+  assert('20d: can NOT take Hide in daylight (no obscurement)',
+    !canTakeHideAction(c, bfDay));
+}
+
+// ============================================================
+console.log('\n=== 21. Phase 2: Backward-compat (no senses = normal vision) ===\n');
+// ============================================================
+
+{
+  // Legacy combatant with no senses field — behaves as Phase 1 (normal vision).
+  const observer = makeC({ id: 'obs', pos: { x: 0, y: 0, z: 0 } });
+  const target = makeC({ id: 'tgt', pos: { x: 2, y: 0, z: 0 } });  // 10 ft
+  const bf = makeBF([observer, target]);  // no lightLevel → defaults to 'indoors'
+
+  assert('21a: no-senses observer sees target in default (indoors) light',
+    isVisuallyDetected(observer, target, bf));
+  eq('21b: detection state = visible', getDetectionState(observer, target, bf), 'visible');
+
+  // Invisible target → can't see (no truesight).
+  target.conditions.add('invisible');
+  assert('21c: no-senses observer can NOT see invisible target',
+    !isVisuallyDetected(observer, target, bf));
+
+  // In darkness without darkvision → can't see.
+  target.conditions.delete('invisible');
+  bf.lightLevel = 'darkness';
+  assert('21d: no-senses observer can NOT see in darkness',
+    !isVisuallyDetected(observer, target, bf));
+}
+
+// ============================================================
 
 console.log('\n─────────────────────────────────────────────');
 console.log(`Results: ${passed} passed, ${failed} failed`);

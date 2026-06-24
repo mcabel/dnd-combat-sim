@@ -16,7 +16,7 @@
 //   5. Light level:     use existing `battlefield.lightLevel` field
 //   6. Active perception: allowed (spends ACTION) — contests Stealth
 //
-// v1 scope (Phase 1):
+// v1 scope (Phase 1 — DONE):
 //   - Generalized Hide action (any creature, not just Rogues with Cunning
 //     Action). Requires obscurement/cover/invisible.
 //   - Sound detection: isAudiblyDetected() = pp × 5ft, suppressed if the
@@ -28,10 +28,21 @@
 //     enemies' Stealth rolls.
 //   - Stealth-break on cast: breaksStealthOnCast() + revealOnCast().
 //
-// Phase 2 (DEFERRED): vision modes (darkvision/blindsight/truesight/
-// tremorsense consumption), darkness/dim-light effect on sight, "creature
-// you can see" spell targeting enforcement, opportunity-attack visibility
-// gating.
+// Phase 2 (DONE — Session 63): vision modes consumed.
+//   - isVisuallyDetected() now checks observer.senses.darkvision/blindsight/
+//     truesight/tremorsense per RFC-VISION-AUDIO §4.3.
+//   - lightLevel 'darkness' added: normal vision can't see; darkvision sees.
+//   - canTakeHideAction() allows hiding in 'darkness' (heavy obscurement).
+//   - Override senses (truesight/blindsight/tremorsense) bypass light +
+//     invisibility but still require a physical path (hasLineOfSight).
+//
+// Phase 3 (DEFERRED): "creature you can see" spell targeting enforcement,
+// opportunity-attack visibility gating, planner target filtering by
+// visibility, See Invisibility spell consumption.
+//
+// Phase 4 (DEFERRED): per-cell light sources, fog cloud / Darkness spell as
+// mobile obscurement zones, line-of-effect check for blindsight (penetrate
+// fog walls without total cover).
 // ============================================================
 
 import { Combatant, Battlefield, DetectionState, Condition } from '../types/core';
@@ -123,19 +134,41 @@ export function isAudiblyDetected(
   return distFt <= soundRangeFt;
 }
 
-// ---- Visual Detection (Phase 1 simplification) --------------
+// ---- Visual Detection (Phase 2 — vision modes consumed) ------
 
 /**
- * Phase 1 visual detection — MINIMAL implementation.
+ * Phase 2 visual detection — consumes the observer's vision modes
+ * (darkvision / blindsight / truesight / tremorsense) per RFC-VISION-AUDIO §4.3.
  *
- * A creature is visually detected if:
- *   1. Line of sight exists (not blocked by vision-blocking obstacles), AND
- *   2. The target is NOT invisible (truesight/see_invisibility = Phase 2), AND
- *   3. The target is NOT hidden (hidden = can't be seen, even if invisible).
+ * A creature is visually detected if ALL of these are true:
+ *   1. The target is not dead/unconscious/hidden.
+ *   2. The observer is not blinded.
+ *   3. An override sense detects the target (bypasses light + invisibility):
+ *        a. Truesight (within range) → sees through darkness, invisibility, fog.
+ *        b. Blindsight (within range) → detects regardless of light/invisibility.
+ *        c. Tremorsense (within range + target not flying) → detects on same surface.
+ *      All overrides still require a physical path (hasLineOfSight — they don't
+ *      penetrate total cover; penetrating fog walls is a Phase 4 concern).
+ *   4. OR normal vision + darkvision applies:
+ *        a. The target is not invisible (see_invisibility = Phase 3).
+ *        b. Line of sight exists (not blocked by vision-blocking obstacles).
+ *        c. The observer can see in the target's light level:
+ *             - 'indoors' / 'daylight' (bright): normal vision sees.
+ *             - 'dim': normal vision sees (disadv on Perception — not modeled here);
+ *               darkvision sees normally.
+ *             - 'darkness': normal vision CANNOT see; darkvision sees (as dim).
+ *               (Darkvision range check: distFt ≤ senses.darkvision.)
  *
- * Phase 2 will add: darkvision/blindsight/truesight/tremorsense, lightLevel
- * effect on sight (dim → disadv on sight-Perception; darkness → can't see
- * without darkvision), and magical darkness.
+ * v1 simplifications:
+ *   - "Disadvantage on sight-Perception in dim light" is NOT modeled here (no
+ *     Perception-check subsystem in combat; passive perception is unaffected).
+ *   - The Darkness SPELL's "blocks darkvision" rule is handled by the obstacle's
+ *     blocksVision: true flag (hasLineOfSight returns false for everyone). The
+ *     payload's blocksDarkvision flag is metadata for Phase 4 (per-cell light).
+ *   - See Invisibility (the spell) is Phase 3 — not consumed here.
+ *   - Override senses still use hasLineOfSight as the path check (they won't
+ *     penetrate fog walls — Phase 4 will add a line-of-effect check that only
+ *     blocks on total cover, not vision-blocking obstacles).
  */
 export function isVisuallyDetected(
   observer: Combatant,
@@ -144,12 +177,55 @@ export function isVisuallyDetected(
 ): boolean {
   if (target.isDead || target.isUnconscious) return false;
   if (target.conditions.has('hidden')) return false;
-  // Invisible target → can't be seen (truesight/see_invisibility = Phase 2).
-  if (target.conditions.has('invisible')) return false;
-  // Blinded observer → can't see.
   if (observer.conditions.has('blinded')) return false;
 
-  return hasLineOfSight(observer, target, bf);
+  const distFt = chebyshevDistanceFt(observer, target);
+  const senses = observer.senses;
+
+  // ---- Override senses (bypass light + invisibility) ----
+
+  // Truesight: sees through darkness, invisibility, fog, illusions.
+  // Still needs a physical path (no total cover).
+  if (senses?.truesight !== undefined && distFt <= senses.truesight) {
+    return hasLineOfSight(observer, target, bf);
+  }
+
+  // Blindsight: detects regardless of light or invisibility.
+  // Still needs a physical path.
+  if (senses?.blindsight !== undefined && distFt <= senses.blindsight) {
+    return hasLineOfSight(observer, target, bf);
+  }
+
+  // Tremorsense: detects creatures on the same surface (not flying).
+  // v1 simplification: "same surface" = target is not flying (flySpeed is null/0).
+  // Still needs a physical path.
+  if (senses?.tremorsense !== undefined && distFt <= senses.tremorsense) {
+    const targetFlying = (target.flySpeed ?? 0) > 0;
+    if (!targetFlying) {
+      return hasLineOfSight(observer, target, bf);
+    }
+  }
+
+  // ---- Normal vision + darkvision (subject to light + obscurement) ----
+
+  // Invisible target → can't see (truesight handled above; see_invisibility = Phase 3).
+  if (target.conditions.has('invisible')) return false;
+
+  // LOS check (vision-blocking obstacles block normal + darkvision).
+  if (!hasLineOfSight(observer, target, bf)) return false;
+
+  // Light level check.
+  const light = bf.lightLevel ?? 'indoors';
+  if (light === 'darkness') {
+    // Normal vision can't see in darkness; darkvision sees (as dim).
+    if (senses?.darkvision === undefined || distFt > senses.darkvision) {
+      return false;
+    }
+  }
+  // 'dim' and 'indoors'/'daylight': normal vision sees. Darkvision helps in dim
+  // (removes disadv on Perception — not modeled here). All can see.
+
+  return true;
 }
 
 // ---- Detection State Classifier (RFC §4.1) ------------------
@@ -233,20 +309,24 @@ export function updateDetectionStates(bf: Battlefield): void {
  * v1 checks (any one is sufficient):
  *   1. The creature is invisible (Invisibility spell, Greater Invisibility,
  *      Superior Invisibility) — can hide anywhere.
- *   2. The battlefield lightLevel is 'dim' (light obscurement — dusk/dawn).
+ *   2. The battlefield lightLevel is 'dim' (light obscurement — dusk/dawn) OR
+ *      'darkness' (heavy obscurement — night/underground). Phase 2 added
+ *      'darkness' per RFC-VISION-AUDIO §4.3.
  *   3. At least one vision-blocking obstacle exists on the battlefield AND
  *      no living enemy has line of sight to the hider (the Cunning Action
  *      Hide planner's existing check, generalized to all creatures).
  *
- * Phase 2 will add: per-cell darkness tracking, fog cloud as a mobile
- * obscurement zone, and the 'darkness' lightLevel option.
+ * Phase 4 will add: per-cell darkness tracking, fog cloud as a mobile
+ * obscurement zone, and the Darkness spell as a magical-darkness zone.
  */
 export function canTakeHideAction(self: Combatant, bf: Battlefield): boolean {
   // (1) Invisible creatures can always hide.
   if (self.conditions.has('invisible')) return true;
 
-  // (2) Dim light = light obscurement (PHB p.183).
-  if (bf.lightLevel === 'dim') return true;
+  // (2) Dim light (light obscurement) or darkness (heavy obscurement) —
+  // PHB p.183: "dim light... makes Perception checks that rely on sight
+  // have disadvantage"; "darkness... creates a heavily obscured area."
+  if (bf.lightLevel === 'dim' || bf.lightLevel === 'darkness') return true;
 
   // (3) Vision-blocking obstacle present AND no living enemy has LOS to self.
   const obstacles = bf.obstacles ?? [];
