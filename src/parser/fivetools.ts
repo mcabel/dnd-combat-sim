@@ -14,6 +14,7 @@ import {
   AIProfile,
   ActionBudget,
   CreatureSize,
+  ShapechangerForm,
 } from '../types/core';
 
 // ---- 5etools raw shapes (minimal — only what we need) -------
@@ -752,6 +753,276 @@ function parseLairActions(
   return { actions, initiativeCount };
 }
 
+/**
+ * Session 61 RFC-SHAPECHANGER Phase 1: parse the "Shapechanger" trait.
+ *
+ * 76 pre-2024 creatures have this trait. The trait text follows a few patterns:
+ *
+ * Pattern A (most common — single form, no speed change):
+ *   "The X can use its action to polymorph into a Y or back into its true form.
+ *    Its statistics, other than its size, are the same in each form."
+ *
+ * Pattern B (multi-form with per-form speed):
+ *   "Strahd ... can use his action to polymorph into a Tiny bat, a Medium wolf,
+ *    or a Medium cloud of mist, or back into his true form. ... In bat form,
+ *    his walking speed is 5 feet, and he has a flying speed of 30 feet. In wolf
+ *    form, his walking speed is 40 feet. ... In mist form, ... can't take any
+ *    actions ... immune to all nonmagical damage ..."
+ *
+ * Pattern C (inline speed in parentheses):
+ *   "The imp can use its action to polymorph into a beast form that resembles
+ *    a rat (speed 20 ft.), a raven (20 ft., fly 60 ft.), or a spider
+ *    (20 ft., climb 20 ft.), or back into its true form."
+ *
+ * Pattern D (AC change):
+ *   "The werebear can use its action to polymorph into a Large bear-humanoid
+ *    hybrid or into a Large polar bear, or back into its goliath form. Its
+ *    statistics, other than its size and AC, are the same in each form."
+ *
+ * v1 parser strategy:
+ *   1. Strip {@tag arg} 5etools tags → plain text.
+ *   2. Find the "polymorph into X, Y, or back into its true form" clause.
+ *      Split on commas + "or" to extract form names.
+ *   3. For each form name, parse leading size word (Tiny/Small/Medium/etc.).
+ *   4. Parse inline "(speed N ft., fly N ft.)" parenthetical speeds.
+ *   5. Parse "In <form> form, ..." clauses for per-form speed + special flags.
+ *   6. Detect "other than ... size and AC" → flag AC changes apply (metadata-only).
+ *
+ * v1 simplifications:
+ *   - Only ONE form per "polymorph into" clause variant is kept per name
+ *     (e.g., Usagt's "Small, Medium, or Large humanoid" → 1 "humanoid" form,
+ *     size = first encountered = 'Small').
+ *   - AC change is flagged but not extracted (text doesn't say what the new AC
+ *     is — it's in a different field of the stat block). v1 engine hook does
+ *     NOT apply AC change.
+ *   - "Reverts to true form if it dies" — handled in engine's death hook
+ *     (reset _currentForm to 'true' for logging; no mechanical effect).
+ *   - Forms with no mechanical differences from the base form are still
+ *     recorded (for planner consideration), but transforming into them is
+ *     a no-op.
+ *
+ * Returns undefined if no Shapechanger trait is present.
+ */
+const SIZE_WORD_MAP: { [word: string]: CreatureSize } = {
+  'tiny': 'Tiny',
+  'small': 'Small',
+  'medium': 'Medium',
+  'large': 'Large',
+  'huge': 'Huge',
+  'gargantuan': 'Gargantuan',
+};
+
+function parseShapechanger(
+  traits: { name: string; entries: (string | object)[] }[],
+): Combatant['shapechangerForms'] {
+  let scTrait: { name: string; entries: (string | object)[] } | undefined;
+  for (const t of traits) {
+    if (/^Shapechanger$/i.test(t.name.trim())) {
+      scTrait = t;
+      break;
+    }
+  }
+  if (!scTrait) return undefined;
+
+  // Flatten entries → plain text, stripping {@tag arg|...} tags.
+  const rawText = flattenEntries(scTrait.entries);
+  const text = rawText.replace(/\{@(\w+)\s+([^}]+)\}/g, (_m, _tag, args) => {
+    return String(args).split('|')[0].trim();
+  });
+
+  // Step 1: Find the "polymorph into ... or back into its true form" clause.
+  // Capture the text between "polymorph into" and "or back into" (or end of sentence).
+  const polyMatch = text.match(/polymorph\s+into\s+(.+?)(?:\s+or\s+back\s+into\s+(?:its|her|his)\s+true\s+form|\.)/i);
+  if (!polyMatch) return undefined;
+  let polyClause = polyMatch[1];
+
+  // Step 1b: Truncate polyClause at "or back into" / "or into" to avoid the
+  // "...or back into its goliath form" trailing form (which is the implicit true form).
+  const backMatch = polyClause.match(/\s+or\s+back\s+into\s+/i);
+  if (backMatch) polyClause = polyClause.slice(0, backMatch.index);
+
+  // Step 2: Split the polyClause into individual form descriptions.
+  // Strategy: replace "or" with a comma ONLY when followed by an article (a/an/the),
+  // size word, or "into a/an/the" — this avoids splitting "in person or telepathically"
+  // (Usagt) or "speak or manipulate objects" (Strahd mist form) which aren't form lists.
+  const sizeWordAlt = Object.keys(SIZE_WORD_MAP).join('|');
+  const orAsCommaRegex = new RegExp(
+    `,?\\s+or\\s+(?=(?:a|an|the)\\s+|(?:${sizeWordAlt})\\s+|into\\s+(?:a|an|the)\\s+)`,
+    'gi',
+  );
+  const normalized = polyClause.replace(orAsCommaRegex, ', ');
+  // Now split on commas — but watch for commas inside parentheses.
+  const rawForms: string[] = [];
+  let depth = 0;
+  let current = '';
+  for (const ch of normalized) {
+    if (ch === '(') { depth++; current += ch; }
+    else if (ch === ')') { depth--; current += ch; }
+    else if (ch === ',' && depth === 0) {
+      if (current.trim()) rawForms.push(current.trim());
+      current = '';
+    }
+    else current += ch;
+  }
+  if (current.trim()) rawForms.push(current.trim());
+
+  // Step 3: For each raw form, extract size + name + inline speeds.
+  const forms: ShapechangerForm[] = [];
+  const seenNames = new Set<string>();  // dedupe by canonical name
+
+  for (let rawForm of rawForms) {
+    // Strip leading "a", "an", "the"
+    rawForm = rawForm.replace(/^(?:a|an|the)\s+/i, '').trim();
+    if (!rawForm) continue;
+    // Skip "true form" / "true, amorphous form" / "back into" patterns —
+    // those are the implicit default form.
+    if (/true\s+form/i.test(rawForm)) continue;
+    if (/^(?:back\s+into\s+|into\s+(?:a|an|the)\s+)/i.test(rawForm)) {
+      // e.g., "into a Large polar bear" → strip "into a" and keep parsing
+      rawForm = rawForm.replace(/^(?:back\s+into\s+|into\s+)/i, '').trim();
+      rawForm = rawForm.replace(/^(?:a|an|the)\s+/i, '').trim();
+    }
+    // Skip bare "amorphous form" / "goliath form" / "<X> form" — those are
+    // the implicit true form, not a separate alternate form.
+    if (/^(?:amorphous|goliath|true|natural|human(?:oid)?)\s+form$/i.test(rawForm)) continue;
+    if (!rawForm || /^form$/i.test(rawForm)) continue;
+
+    // Parse leading size word: "Tiny bat", "Medium wolf", etc.
+    let size: CreatureSize | undefined;
+    const firstWord = rawForm.split(/\s+/)[0] || '';
+    if (SIZE_WORD_MAP[firstWord.toLowerCase()]) {
+      size = SIZE_WORD_MAP[firstWord.toLowerCase()];
+      rawForm = rawForm.slice(firstWord.length).trim();
+    }
+
+    // Extract inline parenthetical: "rat (speed 20 ft., fly 60 ft.)"
+    let speedWalk: number | undefined;
+    let speedFly: number | undefined;
+    let speedClimb: number | undefined;
+    let speedSwim: number | undefined;
+    const parenMatch = rawForm.match(/\(([^)]+)\)\s*$/);
+    if (parenMatch) {
+      const paren = parenMatch[1];
+      // Strip the parenthetical from the form name.
+      rawForm = rawForm.slice(0, parenMatch.index).trim();
+      // Parse speed expressions: "speed 20 ft.", "fly 60 ft.", "climb 20 ft.", "20 ft., fly 60 ft."
+      const speedMatches = paren.matchAll(/(?:(\w+)\s+)?(\d+)\s*(?:feet|ft\.?)\b/gi);
+      for (const m of speedMatches) {
+        const kind = (m[1] || '').toLowerCase();
+        const value = parseInt(m[2], 10);
+        if (kind === 'fly') speedFly = value;
+        else if (kind === 'climb') speedClimb = value;
+        else if (kind === 'swim') speedSwim = value;
+        else if (kind === 'walk' || kind === 'speed' || kind === '') speedWalk = value;
+      }
+    }
+
+    // Canonical name: strip "beast form that resembles a/an" prefix.
+    let name = rawForm
+      .replace(/^beast\s+form\s+that\s+resembles\s+(?:a|an)\s+/i, '')
+      .replace(/^form\s+that\s+resembles\s+(?:a|an)\s+/i, '')
+      .replace(/^form\s+resembling\s+(?:a|an)\s+/i, '')
+      .trim();
+    if (!name) continue;
+    // Strip trailing "it has seen in person or telepathically" style rider.
+    name = name.replace(/\s+it\s+has\s+seen.*$/i, '').trim();
+    if (!name) continue;
+
+    // Dedupe by canonical name (Usagt's "Small, Medium, or Large humanoid" → 1 form).
+    if (seenNames.has(name.toLowerCase())) continue;
+    seenNames.add(name.toLowerCase());
+
+    forms.push({
+      name,
+      size,
+      speedWalk,
+      speedFly,
+      speedClimb,
+      speedSwim,
+      description: name,  // will be enriched below if "In <form> form" clause exists
+    });
+  }
+
+  // Step 4: Parse "In <form> form, ..." clauses for per-form speed + special flags.
+  // Strategy: split text into sentences; for each sentence starting with "In "
+  // or "While in ", extract the form names mentioned + the clause text.
+  // ALSO: scan the NEXT 2 sentences after a form clause for additional flags
+  // (Strahd's mist form has "immune to all nonmagical damage" 2 sentences later).
+  const sentences = text.split(/(?<=\.)\s+/);
+  const formClauses: { formNames: string[]; text: string }[] = [];
+  for (let i = 0; i < sentences.length; i++) {
+    const s = sentences[i];
+    const m = s.match(/^(?:while\s+)?in\s+([^,]+?(?:\s+or\s+[^,]+?)?)\s+form\s*,?\s*(.+)$/i);
+    if (m) {
+      const formsList = m[1].trim();
+      const clause = m[2].trim();
+      // Split the forms list on "or" to get individual form names.
+      const individualForms = formsList.split(/\s+or\s+/i).map(f => f.trim().toLowerCase());
+      // Combine with the next 1-3 sentences for additional flag capture
+      // (e.g., Strahd mist form: "He has advantage on ... immune to all
+      // nonmagical damage" is 3 sentences after the "While in mist form" intro).
+      const followup = [
+        sentences[i + 1] || '',
+        sentences[i + 2] || '',
+        sentences[i + 3] || '',
+      ].filter(s => s && !/^(?:while\s+)?in\s+/i.test(s))  // stop at next form clause
+        .join(' ');
+      formClauses.push({ formNames: individualForms, text: followup ? `${clause} ${followup}` : clause });
+    }
+  }
+
+  // For each form, scan ALL matching clauses and aggregate the speed/flag info.
+  for (const form of forms) {
+    const formNameLower = form.name.toLowerCase();
+    const matchingClauses: string[] = [];
+    for (const fc of formClauses) {
+      // Check if any of the clause's form names match our form (whole-word match).
+      const matches = fc.formNames.some(fn =>
+        fn === formNameLower ||
+        fn.includes(formNameLower) ||
+        formNameLower.includes(fn),
+      );
+      if (matches) matchingClauses.push(fc.text);
+    }
+    if (matchingClauses.length === 0) continue;
+
+    const allClauseText = matchingClauses.join(' ');
+    form.description = `${form.name}: ${allClauseText.slice(0, 200)}`;
+
+    // Walking speed: "walking speed is 5 feet" or "walk speed of 5 feet"
+    const walkMatch = allClauseText.match(/walk(?:ing)?\s+speed\s+(?:is\s+)?(\d+)\s*(?:feet|ft\.?)/i);
+    if (walkMatch) form.speedWalk = parseInt(walkMatch[1], 10);
+
+    // Flying speed: "flying speed of 30 feet" or "fly speed of 30 feet" or "has a flying speed of 30 feet"
+    const flyMatch = allClauseText.match(/fly(?:ing)?\s+speed\s+(?:of\s+|is\s+)?(\d+)\s*(?:feet|ft\.?)/i);
+    if (flyMatch) form.speedFly = parseInt(flyMatch[1], 10);
+
+    // Climbing speed
+    const climbMatch = allClauseText.match(/climb(?:ing)?\s+speed\s+(?:of\s+|is\s+)?(\d+)\s*(?:feet|ft\.?)/i);
+    if (climbMatch) form.speedClimb = parseInt(climbMatch[1], 10);
+
+    // Swimming speed
+    const swimMatch = allClauseText.match(/swim(?:ming)?\s+speed\s+(?:of\s+|is\s+)?(\d+)\s*(?:feet|ft\.?)/i);
+    if (swimMatch) form.speedSwim = parseInt(swimMatch[1], 10);
+
+    // Special flags
+    if (/can'?t\s+take\s+any\s+actions/i.test(allClauseText)) form.cantTakeActions = true;
+    if (/immune\s+to\s+all\s+nonmagical\s+damage/i.test(allClauseText)) form.immuneNonmagical = true;
+    if (/advantage\s+on\s+strength,?\s+dexterity,?\s+and\s+constitution\s+saving\s+throws/i.test(allClauseText)) {
+      form.advantageOnStrDexConSaves = true;
+    }
+  }
+
+  // Step 5: Detect "other than ... AC" → flag that AC changes apply (metadata-only).
+  // We don't extract the actual AC value because it's typically in a separate
+  // stat block field, not in the trait text. v1 engine hook does NOT apply AC
+  // change — this is recorded for future Phase 4 work.
+  // (No-op for now; the form.ac field stays undefined for all parsed forms.)
+
+  if (forms.length === 0) return undefined;
+  return forms;
+}
+
 export function parseAction(
   raw: RawAction,
   costType: Action['costType'] = 'action',
@@ -1372,6 +1643,8 @@ export function monsterToCombatant(
   const monsterSpellcasting = parseMonsterSpellcasting(raw);
   // Session 60 Batch 5a: parse lair actions (metadata + basic engine hook)
   const lairActions = parseLairActions(raw);
+  // Session 61 RFC-SHAPECHANGER Phase 1: parse Shapechanger trait
+  const shapechangerForms = parseShapechanger(raw.trait ?? []);
   // Hold Breath: extract the minutes count from the entry text
   // ("can hold its breath for 1 hour" → 60 minutes; "for 30 minutes" → 30)
   let holdBreathMinutes: number | undefined;
@@ -1432,6 +1705,8 @@ export function monsterToCombatant(
     rejuvenation,          // Session 53 Batch 4h: undefined for non-Rejuvenation creatures
     monsterSpellcasting,   // Session 60 Batch 5b step 1: metadata-only (945 creatures)
     lairActions,           // Session 60 Batch 5a: metadata + engine hook (137 creatures)
+    shapechangerForms,     // Session 61 RFC-SHAPECHANGER Phase 1: 76 creatures
+    _currentForm: shapechangerForms ? 'true' : undefined,  // scratch: starts in true form
     budget: freshBudget(speeds.ground),
     conditions: new Set(),
     aiProfile: resolvedProfile,

@@ -648,6 +648,11 @@ import {
   execute as executeDimensionDoor,
 } from '../spells/dimension_door';
 import {
+  shouldShapechange,
+  executeShapechange,
+  revertOnDeath as revertShapechangeOnDeath,
+} from './shapechange';
+import {
   shouldCast as shouldCastCharmPerson,
   execute as executeCharmPerson,
 } from '../spells/charm_person';
@@ -2431,6 +2436,14 @@ function checkDeath(target: Combatant, state: EngineState, attacker?: Combatant)
   // conditions to all combatants in radius (including allies).
   if (target.deathBurst) {
     triggerDeathBurst(target, state);
+  }
+
+  // ── Session 61 RFC-SHAPECHANGER Phase 1: revert to true form on death ──
+  // Per the trait text: "It reverts to its true form if it dies." The
+  // mechanical effect is negligible (creature is dead), but we log it for
+  // clarity + reset _currentForm for any post-combat inspection.
+  if (target.shapechangerForms) {
+    revertShapechangeOnDeath(target, state);
   }
 }
 
@@ -5163,6 +5176,15 @@ export function executePlannedAction(
       // creature rider), no occupied-destination damage.
       const dd = shouldCastDimensionDoor(actor, bf);
       if (dd) executeDimensionDoor(actor, dd.destination, state);
+      break;
+    }
+
+    case 'shapechange': {
+      // Session 61 RFC-SHAPECHANGER Phase 1: monster Shapechanger trait.
+      // Action to polymorph into an alternate form (size/speed/AC + flags).
+      // shouldShapechange returns { formName } | null.
+      const sc = shouldShapechange(actor, bf);
+      if (sc) executeShapechange(actor, sc.formName, state);
       break;
     }
 

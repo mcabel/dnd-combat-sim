@@ -26,6 +26,38 @@ export type Condition =
 // Used for grapple/shove size enforcement (PHB p.195)
 export type CreatureSize = 'Tiny' | 'Small' | 'Medium' | 'Large' | 'Huge' | 'Gargantuan';
 
+/**
+ * ── Session 61: Shapechanger form (RFC-SHAPECHANGER Phase 1) ──
+ * Represents ONE alternate form a shapechanger creature can take.
+ *
+ * Most shapechanger forms only modify size + speed (and rarely AC) — the
+ * creature's other stats (HP, ability scores, actions, conditions) stay
+ * the same per the trait text: "Its statistics, other than its size and
+ * speed, are the same in each form."
+ *
+ * Form name is the human-readable identifier (e.g., 'bat', 'wolf', 'mist',
+ * 'humanoid'). The form 'true' is reserved for the creature's original
+ * form (not stored in `shapechangerForms` — it's the implicit default).
+ *
+ * Special flags (e.g., mist form's `cantTakeActions` + `immuneNonmagical`)
+ * are captured but selectively applied by the engine (Phase 1 only applies
+ * size/speed/AC + cantTakeActions; full bespoke per-form handling is
+ * deferred to RFC Phase 4).
+ */
+export interface ShapechangerForm {
+  name: string;                              // 'bat', 'wolf', 'mist', etc.
+  size?: CreatureSize;                       // if different from base
+  speedWalk?: number;                        // ft — if mentioned
+  speedFly?: number;                         // ft — if mentioned
+  speedClimb?: number;                       // ft — if mentioned
+  speedSwim?: number;                        // ft — if mentioned
+  ac?: number;                               // if form has different AC
+  cantTakeActions?: boolean;                 // e.g., mist form (Strahd)
+  immuneNonmagical?: boolean;                // e.g., mist form (Strahd)
+  advantageOnStrDexConSaves?: boolean;       // e.g., mist form (Strahd)
+  description: string;                       // form's mechanic text for logging
+}
+
 export type AbilityScore = 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha';
 
 export type AttackType = 'melee' | 'ranged' | 'spell' | 'save' | 'special';
@@ -920,6 +952,47 @@ export interface Combatant {
   lairActions?: {
     actions: string[];           // flattened text of each lair action option
     initiativeCount: number;     // usually 20 (PHB default)
+  };
+
+  /**
+   * ── Session 61: Shapechanger (monster trait, Phase 1) ──
+   * 76 pre-2024 creatures have a "Shapechanger" trait. Per the RFC
+   * (docs/RFC-SHAPECHANGER.md), Phase 1 covers only the monster trait
+   * (Type A — most keep their stats; only size/speed/AC change per form).
+   *
+   * Phase 1 design (RFC §3 Phase 1):
+   *   - Parser extracts form names + size/speed/AC changes from trait text.
+   *   - Engine `case 'shapechange':` swaps the listed fields, saving the
+   *     original values to `_originalStatsForShapechange` on first transform
+   *     so the creature can revert to its true form later.
+   *   - Planner: if the creature has shapechanger forms and is in true form,
+   *     consider transforming on turn 1 if beneficial (e.g., needs fly speed
+   *     to reach a far enemy).
+   *
+   * v1 simplifications:
+   *   - "Statistics, other than size and speed, are the same" → only size +
+   *     speed (walk/fly/climb/swim) + AC are tracked per form. Other form
+   *     text (e.g., mist form's "immune to nonmagical damage") is captured
+   *     as flags but NOT all are mechanically applied (per-form bespoke
+   *     implementation would be HIGH-risk; deferred to Phase 4).
+   *   - "Reverts to true form if it dies" — handled in the engine's death
+   *     hook (reset form for logging purposes; no mechanical effect since
+   *     the creature is dead).
+   *   - Druid Wild Shape (Phase 2) + Polymorph (Phase 3) NOT covered — they
+   *     require full stat replacement, deferred.
+   *
+   * The `_currentForm` scratch field tracks which form is active. 'true'
+   * means the creature is in its original (un-transformed) form.
+   */
+  shapechangerForms?: ShapechangerForm[];
+  _currentForm?: string;                    // scratch: name of the active form ('true' = original)
+  _originalStatsForShapechange?: {          // scratch: original stats for revert
+    size?: CreatureSize;
+    speed: number;
+    flySpeed: number | null;
+    swimSpeed: number | null;
+    burrowSpeed: number | null;
+    ac: number;
   };
 
   // Turn resources
@@ -2282,6 +2355,7 @@ export interface PlannedAction {
     | 'banishment'        // Banishment — PHB p.217: 60 ft, CHA save, concentration; fey/elemental/etc removed permanently, others incapacitated
     | 'tashasHideousLaughter' // Tasha's Hideous Laughter — PHB p.282: 30 ft, WIS save or prone+incapacitated, concentration
     | 'dimensionDoor'     // Dimension Door — PHB p.233: self, ACTION teleport up to 500 ft, NO concentration (v1: caster-only, no willing-creature rider, no occupied-dest damage)
+    | 'shapechange'       // Session 61 RFC-SHAPECHANGER Phase 1: monster trait — swap size/speed/AC per form (53+ creatures)
     | 'charmPerson'       // Charm Person — PHB p.221: 30 ft, WIS save or charmed, NO concentration (Session 27 TG-004: humanoid-only NOW enforced)
     | 'compelledDuel'     // Compelled Duel — PHB p.224: 30 ft, WIS save or frightened (taunt), concentration (movement-restriction simplified)
     | 'grease'            // Grease — PHB p.245: 60 ft, 10-ft radius AoE, DEX save or prone, NO concentration (persistent-terrain simplified)

@@ -194,6 +194,7 @@ import { shouldCast as shouldCastCauseFear } from '../spells/cause_fear';
 import { shouldCast as shouldCastBanishment } from '../spells/banishment';
 import { shouldCast as shouldCastTashasHideousLaughter } from '../spells/tashas_hideous_laughter';
 import { shouldCast as shouldCastDimensionDoor } from '../spells/dimension_door';
+import { shouldShapechange } from '../engine/shapechange';
 import { shouldCast as shouldCastCharmPerson } from '../spells/charm_person';
 import { shouldCast as shouldCastCompelledDuel } from '../spells/compelled_duel';
 import { shouldCast as shouldCastGrease } from '../spells/grease';
@@ -1076,6 +1077,29 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
       plan.action = selectAction(self, adjEnemy, battlefield);
     }
     return plan;  // nothing adjacent: stand still
+  }
+
+  // === SHAPECHANGER (RFC-SHAPECHANGER Phase 1) ===
+  // Monster trait: ACTION to polymorph into an alternate form (size/speed/AC
+  // + flags). v1 transforms on turn 1 if beneficial — closing distance with
+  // a faster fly form, or escaping to a defensive mist form when low HP.
+  // Priority: before BLESS + spell selection — shapechange is the whole action
+  // and other action branches should not fire if we're transforming.
+  if (self.shapechangerForms && self.shapechangerForms.length > 0) {
+    const sc = shouldShapechange(self, battlefield);
+    if (sc) {
+      plan.action = {
+        type: 'shapechange',
+        action: null,
+        targetId: self.id,    // self-targeted; form name is recomputed in execute
+        description: `${self.name} uses Shapechanger to polymorph into ${sc.formName}`,
+      };
+      plan.targetId = self.id;
+      // After transforming, plan a bonus action (movement-only — can't attack
+      // the same turn since shapechange consumed the action).
+      plan.bonusAction = null;
+      return plan;
+    }
   }
 
   // === BLESS (buff allies) — cast before target selection ===
