@@ -25,6 +25,7 @@
 // Character management extras:
 //   POST   /api/characters/:id/chooseinvocations   set Warlock Eldritch Invocations
 //   POST   /api/characters/:id/choosepactboon       set Warlock Pact Boon
+//   POST   /api/characters/:id/choosesecondstyle    set Champion 10 second Fighting Style
 //   POST   /api/characters/:id/addxp                award XP to a single character
 //   POST   /api/characters/:id/settempstats         set/clear temporary stat overrides
 // ============================================================
@@ -862,6 +863,52 @@ router.post('/characters/:id/choosepactboon', async (req: Request, res: Response
   } catch (err) {
     // choosePactBoon throws plain Error for all validation failures
     if (err instanceof Error) return res.status(400).json({ error: err.message });
+    return handleError(res, err);
+  }
+});
+
+// ============================================================
+// POST /api/characters/:id/choosesecondstyle
+// Set the second Fighting Style for a Champion 10+ character.
+// Body:     { style: string }
+// Response: { character: CharacterSheet; secondFightingStyle: string }
+// Errors:   400 if style is not one of the 6 PHB Fighting Styles,
+//           400 if character does not have the "Additional Fighting Style"
+//           feature (not a Champion 10+).
+// ============================================================
+const FIGHTING_STYLES = [
+  'Archery', 'Defense', 'Dueling',
+  'Great Weapon Fighting', 'Protection', 'Two-Weapon Fighting',
+] as const;
+
+router.post('/characters/:id/choosesecondstyle', async (req: Request, res: Response) => {
+  try {
+    const id    = String(req.params.id);
+    const style = req.body?.style;
+
+    if (!style || !FIGHTING_STYLES.includes(style as typeof FIGHTING_STYLES[number])) {
+      return res.status(400).json({
+        error: `style must be one of: ${FIGHTING_STYLES.join(', ')}.`,
+      });
+    }
+
+    const sheet = loadCharacter(id);
+    if (!sheet) return res.status(404).json({ error: `Character not found: ${id}` });
+
+    const hasFeature = sheet.allFeatures.some(
+      f => f.name === 'Additional Fighting Style',
+    );
+    if (!hasFeature) {
+      return res.status(400).json({
+        error: 'Character does not have the Additional Fighting Style feature (requires Champion 10).',
+      });
+    }
+
+    const updated: typeof sheet = { ...sheet, secondFightingStyle: style };
+    await saveCharacter(updated);
+
+    return res.json({ character: updated, secondFightingStyle: style });
+  } catch (err) {
     return handleError(res, err);
   }
 });

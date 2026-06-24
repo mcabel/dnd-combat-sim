@@ -2414,6 +2414,92 @@ async function run() {
     });
   }
 
+  // ── POST /api/characters/:id/choosesecondstyle ──────────────
+  {
+    let champId = '';
+
+    const champBase = {
+      name: 'ChampTG029', race: 'Human', background: 'Soldier', alignment: 'Lawful Good',
+      firstClass: 'Fighter',
+      classLevels: [{ className: 'Fighter', level: 10 }],
+      subclassChoices: { Fighter: 'Champion' }, experiencePoints: 64000,
+      baseStats: { str: 16, dex: 12, con: 14, int: 10, wis: 10, cha: 10 },
+      stats:     { str: 16, dex: 12, con: 14, int: 10, wis: 10, cha: 10 },
+      maxHP: 94, currentHP: 94, temporaryHP: 0,
+      armorClass: 15, acFormula: 'Chain Shirt: 13+DEX2+Defense1', speed: 30,
+      hitDice: [{ className: 'Fighter', dieSides: 10, total: 10, remaining: 10 }],
+      proficiencies: { armor: [], weapons: [], tools: [], savingThrows: ['str','con'], skills: [], expertise: [] },
+      languages: ['Common'], resources: {}, gold: 100, exhaustionLevel: 0,
+      equipment: [],
+      level1Features: [],
+      allFeatures: [
+        { name: 'Fighting Style', source: 'class', description: 'Defense' },
+        { name: 'Second Wind', source: 'class', description: 'Heal 1d10+level (bonus action).' },
+        { name: 'Action Surge', source: 'class', description: 'Take one additional action.' },
+        { name: 'Extra Attack', source: 'class', description: 'Attack twice.' },
+        { name: 'Improved Critical', source: 'subclass', description: 'Crit on 19-20.' },
+        { name: 'Remarkable Athlete', source: 'subclass', description: 'Half prof to STR/DEX/CON checks.' },
+        { name: 'Additional Fighting Style', source: 'subclass', description: 'Choose a second Fighting Style (Champion 10).' },
+      ],
+      feats: [], backgroundFeature: 'Military Rank',
+    };
+
+    await test('setup: create Champion 10 for choosesecondstyle tests', async () => {
+      const { status, json } = await request(BASE, '/api/characters', 'POST', champBase);
+      assert(status === 201, `Expected 201, got ${status}: ${JSON.stringify(json)}`);
+      champId = json.character.id;
+    });
+
+    await test('POST /choosesecondstyle 400 for invalid style', async () => {
+      const { status } = await request(BASE, `/api/characters/${champId}/choosesecondstyle`, 'POST', { style: 'Blind Fighting' });
+      assert(status === 400, `Expected 400, got ${status}`);
+    });
+
+    await test('POST /choosesecondstyle 400 for missing style', async () => {
+      const { status } = await request(BASE, `/api/characters/${champId}/choosesecondstyle`, 'POST', {});
+      assert(status === 400, `Expected 400, got ${status}`);
+    });
+
+    await test('POST /choosesecondstyle 404 for unknown character', async () => {
+      const { status } = await request(BASE, '/api/characters/no-such-id/choosesecondstyle', 'POST', { style: 'Defense' });
+      assert(status === 404, `Expected 404, got ${status}`);
+    });
+
+    await test('POST /choosesecondstyle 400 when character lacks Additional Fighting Style feature', async () => {
+      // Fighter 1 — no Additional Fighting Style
+      const created = await request(BASE, '/api/characters', 'POST', {
+        ...champBase, name: 'F1NoChamp',
+        classLevels: [{ className: 'Fighter', level: 1 }],
+        allFeatures: [{ name: 'Fighting Style', source: 'class', description: 'Defense' }],
+      });
+      const f1Id = created.json.character?.id;
+      if (f1Id) {
+        const { status } = await request(BASE, `/api/characters/${f1Id}/choosesecondstyle`, 'POST', { style: 'Defense' });
+        assert(status === 400, `Expected 400, got ${status}`);
+        const { deleteCharacter } = require('../characters/storage');
+        try { deleteCharacter(f1Id); } catch {}
+      }
+    });
+
+    await test('POST /choosesecondstyle 200 sets Defense style', async () => {
+      const { status, json } = await request(BASE, `/api/characters/${champId}/choosesecondstyle`, 'POST', { style: 'Defense' });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(json.character.secondFightingStyle === 'Defense', `Expected 'Defense', got ${json.character.secondFightingStyle}`);
+      assert(json.secondFightingStyle === 'Defense', 'secondFightingStyle missing from response');
+    });
+
+    await test('POST /choosesecondstyle 200 can update to different style', async () => {
+      const { status, json } = await request(BASE, `/api/characters/${champId}/choosesecondstyle`, 'POST', { style: 'Archery' });
+      assert(status === 200, `Expected 200, got ${status}`);
+      assert(json.character.secondFightingStyle === 'Archery', `Expected 'Archery', got ${json.character.secondFightingStyle}`);
+    });
+
+    await test('cleanup: delete Champion 10 test character', async () => {
+      const { deleteCharacter } = require('../characters/storage');
+      try { deleteCharacter(champId); } catch {}
+    });
+  }
+
   // ── POST /api/characters/:id/addxp ──────────────────────────
   {
     let xpCharId = '';

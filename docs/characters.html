@@ -553,6 +553,11 @@ button.full { width: 100%; padding: 11px; font-size: 13px; }
       <strong>⛓ Pact Boon selection required!</strong>
       Choose your Pact Boon below (Warlock 3).
     </div>
+    <!-- Pending Second Fighting Style alert -->
+    <div class="alert info hidden" id="secondstyle-alert">
+      <strong>⚔ Second Fighting Style required!</strong>
+      Choose your additional Fighting Style below (Champion 10).
+    </div>
 
     <!-- Short Rest Panel (inline, no prompt) -->
     <div id="short-rest-panel" class="hidden" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px 14px;margin-bottom:10px">
@@ -751,6 +756,29 @@ button.full { width: 100%; padding: 11px; font-size: 13px; }
           </select>
         </div>
         <button onclick="doChoosePactBoon()" class="primary" style="margin-top:17px">Confirm</button>
+      </div>
+    </div>
+
+    <!-- Second Fighting Style Selection (Champion 10) -->
+    <div class="card hidden" id="secondstyle-form-card" style="margin-top:10px;background:var(--bg);">
+      <div class="card-title" style="color:var(--accent2)">Choose Second Fighting Style (Champion 10)</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:10px">
+        At 10th level, Champions may choose an additional Fighting Style (PHB p.72).
+        You cannot choose one you already have. Defense grants +1 AC.
+      </div>
+      <div class="inline-row">
+        <div>
+          <label>Fighting Style</label>
+          <select id="secondstyle-select">
+            <option value="Archery">Archery — +2 bonus to ranged attack rolls</option>
+            <option value="Defense">Defense — +1 AC while wearing armor</option>
+            <option value="Dueling">Dueling — +2 damage with one-handed weapon (no other weapon)</option>
+            <option value="Great Weapon Fighting">Great Weapon Fighting — reroll 1s and 2s on damage with two-handed weapon</option>
+            <option value="Protection">Protection — impose disadvantage on attacks vs adjacent ally (reaction)</option>
+            <option value="Two-Weapon Fighting">Two-Weapon Fighting — add ability modifier to off-hand attack damage</option>
+          </select>
+        </div>
+        <button onclick="doChooseSecondStyle()" class="primary" style="margin-top:17px">Confirm</button>
       </div>
     </div>
 
@@ -991,6 +1019,7 @@ const S = {
   pendingSubclass: null,  // className string pending subclass
   pendingInvocations: false,  // Warlock invocation count mismatch
   pendingPactBoon: false,     // Warlock lv3+ without pact boon
+  pendingSecondStyle: false,  // Champion 10+ without second Fighting Style
   parties: [],
   selectedParty: null,
   partyEnemies: [{ name:'Goblin', count:1, ai:'attackNearest' }],
@@ -1119,10 +1148,12 @@ function renderCharDetail() {
     S.pendingInvocations = false;
   }
   S.pendingPactBoon = warlockLevel >= 3 && !c.pactBoon;
+  S.pendingSecondStyle = (c.allFeatures || []).some(f => f.name === 'Additional Fighting Style') && !c.secondFightingStyle;
   document.getElementById('asi-alert').classList.toggle('hidden', !hasPendingASI);
   document.getElementById('subclass-alert').classList.toggle('hidden', !S.pendingSubclass);
   document.getElementById('invocations-alert').classList.toggle('hidden', !S.pendingInvocations);
   document.getElementById('pactboon-alert').classList.toggle('hidden', !S.pendingPactBoon);
+  document.getElementById('secondstyle-alert').classList.toggle('hidden', !S.pendingSecondStyle);
 
   // Stats row
   const thp = c.temporaryHP || 0;
@@ -1276,11 +1307,15 @@ function renderCharDetail() {
     const sub = c.subclassChoices && c.subclassChoices[cl.className] ? ` (${c.subclassChoices[cl.className]})` : '';
     return `${cl.className} ${cl.level}${sub}`;
   }).join(', ');
+  const secondStyleBadge = c.secondFightingStyle
+    ? `<span style="font-size:10px;color:var(--accent2);border:1px solid var(--accent2);border-radius:8px;padding:1px 6px" title="Champion 10 Additional Fighting Style">⚔ ${c.secondFightingStyle}</span>`
+    : '';
   const resLines = buildResourceLines(c.resources);
   const inspActive = !!c.inspiration;
   document.getElementById('char-class-info').innerHTML =
     `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
       <span><strong>${classInfo}</strong> · Prof +${profBonus} · XP ${c.experiencePoints}</span>
+      ${secondStyleBadge}
       <button class="sm" onclick="showAddXPPanel()" style="padding:2px 8px;font-size:10px;opacity:0.6" title="Award XP to this character">+ XP</button>
       <button class="sm ${inspActive ? 'secondary' : ''}" onclick="toggleInspiration()" style="padding:2px 8px;font-size:10px;${inspActive ? 'border-color:var(--accent);color:var(--accent)' : 'opacity:0.5'}" title="Toggle Inspiration">★ Inspiration</button>
     </div>` +
@@ -1464,6 +1499,14 @@ function renderCharDetail() {
     pbCard.classList.remove('hidden');
   } else {
     pbCard.classList.add('hidden');
+  }
+
+  // Second Fighting Style form (Champion 10)
+  const ssCard = document.getElementById('secondstyle-form-card');
+  if (S.pendingSecondStyle) {
+    ssCard.classList.remove('hidden');
+  } else {
+    ssCard.classList.add('hidden');
   }
 
   // Features
@@ -3106,6 +3149,24 @@ async function doChoosePactBoon() {
     renderCharDetail();
     const label = { blade: 'Pact of the Blade', chain: 'Pact of the Chain', tome: 'Pact of the Tome' }[boon] || boon;
     showBanner(`Pact Boon set: ${label}`, 'ok');
+  } catch(e) { showErr(e.message); }
+}
+
+// ── Second Fighting Style (Champion 10) ───────────────────────
+
+async function doChooseSecondStyle() {
+  if (!S.charDetail) return;
+  showErr('');
+  const style = document.getElementById('secondstyle-select').value;
+  try {
+    const data = await api(`/api/characters/${S.charDetail.id}/choosesecondstyle`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ style }),
+    });
+    S.charDetail = data.character;
+    renderCharDetail();
+    showBanner(`Second Fighting Style set: ${style}`, 'ok');
   } catch(e) { showErr(e.message); }
 }
 

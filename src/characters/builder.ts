@@ -371,6 +371,16 @@ export function buildCombatant(
     combatant.pactBoon = sheet.pactBoon;
   }
 
+  // ── TG-029: Champion 10 second Fighting Style ──
+  // The first Fighting Style's bonuses are baked into sheet.armorClass.
+  // For the second, Defense is the only option with a retroactive AC effect
+  // in our model (+1 AC, PHB p.72). Other styles (Archery, Dueling, GWF,
+  // Protection, Two-Weapon) are captured by weapon actions or need stacking
+  // hooks not yet modelled — Defense is the safe mechanical win.
+  if (sheet.secondFightingStyle === 'Defense') {
+    combatant.ac += 1;
+  }
+
   // ── Session 43 Task #24: Class features transfer ──
   // Transfer the names of all class/subclass features the character has
   // gained via leveling (e.g. 'Extra Attack', 'Action Surge (1/rest)',

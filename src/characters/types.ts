@@ -486,6 +486,14 @@ export interface CharacterSheet {
   // 'tome'  = Pact of the Tome (3 cantrips from any class list)
   // The builder transfers this to Combatant.pactBoon at runtime.
   pactBoon?: 'chain' | 'blade' | 'tome';
+
+  // Fighter Champion 10 "Additional Fighting Style" (PHB p.72).
+  // Valid values mirror the PHB Fighting Style list:
+  // 'Archery' | 'Defense' | 'Dueling' | 'Great Weapon Fighting' | 'Protection' | 'Two-Weapon Fighting'
+  // Only Defense grants a mechanical AC bonus (+1); others are already modelled by
+  // the character's existing build (e.g. Archery's +2 ranged attack bonus is baked
+  // into the weapon action at creation). The builder applies the +1 AC for Defense.
+  secondFightingStyle?: string;
 }
 
 // ---- Party --------------------------------------------------

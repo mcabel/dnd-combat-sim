@@ -321,6 +321,24 @@ console.log('\n--- 3. Fighter Champion 10 has Additional Fighting Style ---');
   const f = levelTo(makeFighter1(), 'Fighter', 10, 'Champion');
   const allFeatNames = f.allFeatures.map(ft => ft.name);
   assert('3a. Additional Fighting Style present', allFeatNames.includes('Additional Fighting Style'));
+
+  // TG-029: second Defense style → +1 AC on combatant
+  const baseAC = f.armorClass;
+  const cBase = buildCombatant(f, { x: 0, y: 0, z: 0 });
+  assert('3b. Champion 10 no second style → combatant.ac unchanged',
+    cBase.ac === baseAC);
+
+  const fWithDefense = { ...f, secondFightingStyle: 'Defense' };
+  const cDefense = buildCombatant(fWithDefense, { x: 0, y: 0, z: 0 });
+  assert('3c. Champion 10 + second Defense style → combatant.ac = baseAC + 1',
+    cDefense.ac === baseAC + 1,
+    `got ${cDefense.ac}, want ${baseAC + 1}`);
+
+  const fWithArchery = { ...f, secondFightingStyle: 'Archery' };
+  const cArchery = buildCombatant(fWithArchery, { x: 0, y: 0, z: 0 });
+  assert('3d. Champion 10 + second Archery style → combatant.ac unchanged (Archery has no AC bonus)',
+    cArchery.ac === baseAC,
+    `got ${cArchery.ac}, want ${baseAC}`);
 }
 console.log('\n--- 4. Fighter Champion 15 has Superior Critical ---');
 {

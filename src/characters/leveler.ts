@@ -378,9 +378,12 @@ const SUBCLASS_FEATURES: SubclassFeatureTable = {
       // PHB p.72 — "Additional Fighting Style: At 10th level, you can
       // choose a second option from the Fighting Style class feature."
       //
-      // Engine wiring: flag-only (second Fighting Style choice not modelled).
+      // Engine wiring: choice stored in sheet.secondFightingStyle via
+      // POST /choosesecondstyle. Defense is the only stackable style
+      // (+1 AC); the builder applies it. Other choices are cosmetic at
+      // this level (their bonuses are already modelled in the base build).
       10: [{ name: 'Additional Fighting Style', source: 'subclass',
-              description: 'Choose a second Fighting Style (Champion 10).' }],
+              description: 'Choose a second Fighting Style (Champion 10). Options: Archery, Defense, Dueling, Great Weapon Fighting, Protection, Two-Weapon Fighting (PHB p.72).' }],
       // PHB p.72 — "Superior Critical: Starting at 15th level, your
       // weapon attacks score a critical hit on a roll of 18 or 20."
       //
