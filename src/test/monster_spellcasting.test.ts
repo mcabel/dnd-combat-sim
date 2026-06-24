@@ -174,6 +174,28 @@ console.log('\n=== 1. Cantrip template lookup (case-insensitive) ===\n');
   const sf = lookupCantripTemplate('sacred flame')!;
   eq('1o: Sacred Flame attackRoll = false (save)', sf.attackRoll, false);
   eq('1p: Sacred Flame saveAbility = dex', sf.saveAbility, 'dex');
+
+  // ── Session 63 Phase 3: new cantrip templates ──
+  eq('1q: "frostbite" → Frostbite', lookupCantripTemplate('frostbite')?.name, 'Frostbite');
+  eq('1r: "primal savagery" → Primal Savagery', lookupCantripTemplate('primal savagery')?.name, 'Primal Savagery');
+  eq('1s: "infestation" → Infestation', lookupCantripTemplate('infestation')?.name, 'Infestation');
+  eq('1t: "lightning lure" → Lightning Lure', lookupCantripTemplate('lightning lure')?.name, 'Lightning Lure');
+
+  const fb = lookupCantripTemplate('frostbite')!;
+  eq('1u: Frostbite damageSides = 6', fb.damageSides, 6);
+  eq('1v: Frostbite damageType = cold', fb.damageType, 'cold');
+  eq('1w: Frostbite saveAbility = con', fb.saveAbility, 'con');
+  eq('1x: Frostbite tags = damage,cc', fb.tags.join(','), 'damage,cc');
+
+  const ps = lookupCantripTemplate('primal savagery')!;
+  eq('1y: Primal Savagery attackRoll = true (melee spell attack)', ps.attackRoll, true);
+  eq('1z: Primal Savagery rangeFt = 5 (touch)', ps.rangeFt, 5);
+  eq('1aa: Primal Savagery damageSides = 10 (d10)', ps.damageSides, 10);
+  eq('1ab: Primal Savagery damageType = acid', ps.damageType, 'acid');
+
+  const ll = lookupCantripTemplate('lightning lure')!;
+  eq('1ac: Lightning Lure saveAbility = str', ll.saveAbility, 'str');
+  eq('1ad: Lightning Lure rangeFt = 15', ll.rangeFt, 15);
 }
 
 // ============================================================

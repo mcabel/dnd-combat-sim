@@ -132,6 +132,29 @@ const CANTRIP_TEMPLATES: Record<string, CantripTemplate> = {
     rangeFt: 60, attackRoll: false, saveAbility: 'int', tags: ['damage', 'cc'],
     rider: '-1d4 next save (not applied in Phase 1)',
   },
+  // ── Session 63 Phase 3 additions: 4 more single-target combat cantrips ──
+  // These expand monster cantrip coverage (more creatures can now cast their
+  // cantrips instead of falling back to weapon attacks).
+  'frostbite': {
+    name: 'Frostbite', damageSides: 6, damageType: 'cold',
+    rangeFt: 60, attackRoll: false, saveAbility: 'con', tags: ['damage', 'cc'],
+    rider: 'disadvantage on next weapon attack (not applied in Phase 1)',
+  },
+  'primal savagery': {
+    name: 'Primal Savagery', damageSides: 10, damageType: 'acid',
+    rangeFt: 5, attackRoll: true, tags: ['damage'],
+    // MELEE spell attack (touch range). Not a save.
+  },
+  'infestation': {
+    name: 'Infestation', damageSides: 6, damageType: 'poison',
+    rangeFt: 30, attackRoll: false, saveAbility: 'con', tags: ['damage', 'cc'],
+    rider: 'forced movement up to 5 ft (not applied in Phase 1)',
+  },
+  'lightning lure': {
+    name: 'Lightning Lure', damageSides: 8, damageType: 'lightning',
+    rangeFt: 15, attackRoll: false, saveAbility: 'str', tags: ['damage', 'cc'],
+    rider: 'pull target up to 10 ft toward caster (not applied in Phase 1)',
+  },
 };
 
 // Case-insensitive lookup index (built once at module load).
