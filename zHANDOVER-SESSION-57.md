@@ -128,7 +128,7 @@ The planner picks the **highest-current-HP** enemy in melee range. The instakill
 ## CI Status
 
 Single commit pushed to `main` (this session):
-- `Session 57 Core Engine TG-030: Quivering Palm (Open Hand Monk 17)`
+- `5d795d4` — Session 57 Core Engine TG-030: Quivering Palm (Open Hand Monk 17)
 
 CI should pass (all local tests green; the only combat.ts path touched is the new `case 'quiveringPalm':` which is exercised by the new test + the AI planner test).
 

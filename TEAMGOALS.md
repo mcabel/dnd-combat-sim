@@ -830,7 +830,7 @@ completed by a single agent without coordination.
 
 #### TG-030: Quivering Palm action type (TG-017 step 4) — blocked on TG-024
 
-- **Status:** DONE — Session 57 (commit pending)
+- **Status:** DONE — Session 57 (commit `5d795d4`)
 - **Owners:** Core Engine (driving — owns `src/engine/combat.ts` `executePlannedAction`)
 - **Source:** TG-017 step 4.
 - **Summary:** Quivering Palm (Open Hand Monk 17) needs a new `'quiveringPalm'` action type in `executePlannedAction`, mirroring the `'draconicPresence'` pattern from Session 49. Touch attack + CON save + instakill on failed save / 10d10 necrotic on success. Costs 3 ki.
