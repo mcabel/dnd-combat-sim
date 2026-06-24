@@ -572,6 +572,48 @@ function planBonusAction(
     return secondWindPlan(self);
   }
 
+  // --- 2.3. Flurry of Blows (Monk 2+, PHB p.78) + Open Hand Technique (Open Hand 3+, PHB p.79) ──
+  // TG-031: Monk spends 1 ki to make 2 unarmed strikes as a bonus action.
+  // Open Hand Monk 3+ adds a rider (prone/push/disabler) on hit.
+  // Priority: after Rage/Second Wind (defensive resources first), before
+  // Healing Word (offensive bonus action — only fires if there's a living
+  // enemy in melee range to hit). Requires the Ki class feature + ≥1 ki.
+  if (hasFeature(self, 'Ki') && self.resources?.ki && self.resources.ki.remaining >= 1) {
+    // Find a living enemy in melee range (5 ft) — prefer the planned target
+    // if it's in range, otherwise search for any adjacent enemy.
+    let foTarget: Combatant | null = null;
+    if (target && !target.isDead && !target.isUnconscious) {
+      const dFt = chebyshev3D(self.pos, target.pos) * 5;
+      if (dFt <= 5) foTarget = target;
+    }
+    if (!foTarget) {
+      for (const e of livingEnemiesOf(self, battlefield)) {
+        const dFt = chebyshev3D(self.pos, e.pos) * 5;
+        if (dFt <= 5) { foTarget = e; break; }
+      }
+    }
+    if (foTarget) {
+      // Open Hand Technique choice (default 'prone'). v1 AI heuristic:
+      // - 'disabler' if the target has spell slots (caster — prevents Counterspell/Shield)
+      // - 'prone' otherwise (gives melee advantage to the monk + allies)
+      // - 'push' is situational (edge of pit) — v1 doesn't model terrain hazards,
+      //   so the AI never picks 'push' (but tests can set it manually)
+      let choice: 'prone' | 'push' | 'disabler' = 'prone';
+      if (hasFeature(self, 'Open Hand Technique')) {
+        const hasSpellSlots = foTarget.resources?.spellSlots &&
+          Object.values(foTarget.resources.spellSlots).some(s => s.remaining > 0);
+        if (hasSpellSlots) choice = 'disabler';
+      }
+      return {
+        type: 'flurryOfBlows',
+        action: null,
+        targetId: foTarget.id,
+        description: `${self.name} uses Flurry of Blows on ${foTarget.name} (1 ki — 2 unarmed strikes${hasFeature(self, 'Open Hand Technique') ? ` + Open Hand Technique (${choice})` : ''})`,
+        openHandTechniqueChoice: hasFeature(self, 'Open Hand Technique') ? choice : undefined,
+      };
+    }
+  }
+
   // --- 2.5. Healing Word (Cleric / Druid / Bard — bonus action heal) ---
   // Higher priority than Bardic Inspiration: reviving a downed ally is urgent.
   // Only triggers when a heal target exists (downed ally or critical HP within 60ft).

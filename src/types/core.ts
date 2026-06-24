@@ -1999,6 +1999,7 @@ export interface PlannedAction {
     | 'wholenessOfBody'  // Open Hand Monk 6 — self-heal 3×monk level, 1/long rest (PHB p.79)
     | 'draconicPresence' // Draconic Sorcerer 18 — frighten aura, WIS save, 1/combat (PHB p.102)
     | 'quiveringPalm'    // Open Hand Monk 17 — touch + CON save, instakill on fail / 10d10 necrotic on success, 3 ki (PHB p.80)
+    | 'flurryOfBlows'    // Monk 2 — bonus action, 1 ki, 2 unarmed strikes; Open Hand Technique rider fires after (PHB p.78 + p.79)
     | 'spellHeal'    // legacy — no longer dispatched; retained for test compatibility
     | 'cureWounds'  // Cure Wounds — action, 1d8+mod heal per slot level, touch range (PHB p.230)
     | 'faerieFire'     // Faerie Fire AoE control (concentration)
@@ -2289,6 +2290,16 @@ export interface PlannedAction {
   // its `shouldCast` + `execute`. This avoids adding 262 individual case
   // branches for the Session 19 bulk-implementation pass.
   spellName?: string;
+  // ── TG-031: Open Hand Technique choice (Open Hand Monk 3, PHB p.79) ──
+  // When the monk uses Flurry of Blows and hits, they can impose one effect
+  // on the target: 'prone' (DEX save or knocked prone), 'push' (STR save or
+  // pushed 15 ft), or 'disabler' (can't take reactions until end of monk's
+  // next turn). Set by the planner on the 'flurryOfBlows' PlannedAction.
+  // Default 'prone' if Open Hand Technique is present and no choice was set.
+  // v1 simplification: rider fires once per Flurry (after the second hit),
+  // not per hit (PHB p.79: "immediately after you hit" — per hit is more
+  // canon-accurate but fiddly for v1).
+  openHandTechniqueChoice?: 'prone' | 'push' | 'disabler';
 }
 
 // ============================================================

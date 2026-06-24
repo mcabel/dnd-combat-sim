@@ -7,7 +7,7 @@
 
 import {
   Combatant, Battlefield, TurnPlan, PlannedAction, Action, Vec3,
-  ReactionTrigger, ReactionOutcome,
+  ReactionTrigger, ReactionOutcome, Condition,
 } from '../types/core';
 import {
   rollAttack, rollDamage, rollSave, applyDamage, applyHeal,
@@ -3430,6 +3430,157 @@ export function executePlannedAction(
           qpTarget.id, save.roll);
         log(state, 'death', qpTarget.id,
           `${qpTarget.name} is slain by Quivering Palm!`, undefined, 0);
+      }
+      break;
+    }
+    case 'flurryOfBlows': {
+      // ── TG-031: Flurry of Blows (Monk 2, PHB p.78) + Open Hand Technique (Open Hand Monk 3, PHB p.79) ──
+      // PHB p.78: "Immediately after you take the Attack action on your turn,
+      // you can spend 1 ki point to make two unarmed strikes as a bonus action."
+      // PHB p.79 (Open Hand Technique): "Whenever you hit a creature with one
+      // of the attacks granted by your Flurry of Blows, you can impose one of
+      // the following effects on that target:
+      //   • It must succeed on a Dexterity saving throw or be knocked prone.
+      //   • It must make a Strength saving throw. If it fails, you can push it
+      //     up to 15 feet away from you.
+      //   • It can't take reactions until the end of your next turn."
+      //
+      // v1 simplification: the rider fires ONCE per Flurry (after the second
+      // hit), not per hit (PHB p.79: "immediately after you hit" — per hit is
+      // more canon-accurate but fiddly for v1). The choice is set on
+      // plan.openHandTechniqueChoice (default 'prone' if Open Hand Technique
+      // is present and no choice was set).
+      //
+      // Guard: has Ki feature + ≥1 ki + a living enemy target in melee range.
+      const ki = actor.resources?.ki;
+      if (!ki || ki.remaining < 1) {
+        log(state, 'action', actor.id, `${plan.description} (insufficient ki: ${ki?.remaining ?? 0}/1 — no-op)`);
+        break;
+      }
+      const foTarget = plan.targetId
+        ? state.battlefield.combatants.get(plan.targetId) ?? null
+        : null;
+      if (!foTarget || foTarget.isDead || foTarget.isUnconscious) {
+        log(state, 'action', actor.id, `${plan.description} (no valid target — no-op)`);
+        break;
+      }
+      const foDistFt = chebyshev3D(actor.pos, foTarget.pos) * 5;
+      if (foDistFt > 5) {
+        log(state, 'action', actor.id,
+          `${plan.description} (target ${foTarget.name} out of range: ${foDistFt} ft — no-op)`);
+        break;
+      }
+
+      // Spend 1 ki
+      ki.remaining -= 1;
+      log(state, 'action', actor.id, plan.description, foTarget.id);
+
+      // Construct the unarmed strike Action.
+      // Monk Martial Arts (PHB p.76): use DEX for attack + damage (instead of
+      // STR). Hit bonus = prof + max(DEX, WIS). Damage die scales with level:
+      // 1d4 (1-4), 1d6 (5-10), 1d8 (11-16), 1d10 (17-20). Damage bonus = max(DEX, WIS).
+      const monkLevel = actor.classLevels?.['Monk'] ?? actor.level ?? 1;
+      const foProf = combatantProfBonus(actor);
+      const foDexMod = abilityMod(actor.dex);
+      const foWisMod = abilityMod(actor.wis);
+      const foAbilityMod = Math.max(foDexMod, foWisMod);
+      const martialDie = monkLevel >= 17 ? 10 : monkLevel >= 11 ? 8 : monkLevel >= 5 ? 6 : 4;
+      const unarmedAction: Action = {
+        name: 'Flurry of Blows (unarmed strike)',
+        isMultiattack: false,
+        attackType: 'melee',
+        reach: 5,
+        range: { normal: 5, long: 5 },
+        hitBonus: foProf + foAbilityMod,
+        damage: { count: 1, sides: martialDie, bonus: foAbilityMod, average: Math.floor((martialDie + 1) / 2) + foAbilityMod },
+        damageType: 'bludgeoning',
+        saveDC: null, saveAbility: null,
+        isAoE: false, isControl: false,
+        requiresConcentration: false,
+        slotLevel: 0,
+        costType: 'bonusAction',
+        legendaryCost: 0,
+        description: 'Flurry of Blows unarmed strike',
+      };
+
+      // Make 2 unarmed strike attacks (PHB p.78: "two unarmed strikes")
+      let hitsLanded = 0;
+      for (let i = 0; i < 2; i++) {
+        if (foTarget.isDead || foTarget.isUnconscious) break;  // target died mid-flurry
+        resolveAttack(actor, foTarget, unarmedAction, state);
+        // resolveAttack doesn't return hit/miss, but if the target took damage
+        // (HP decreased), we count it as a hit. Check the log for a hit event.
+        // Simpler: check if an attack_hit or attack_crit event was logged for
+        // this attack on this target in the last few events.
+        const recentHit = state.log.events.length > 0 &&
+          state.log.events.slice(-6).some(e =>
+            (e.type === 'attack_hit' || e.type === 'attack_crit') &&
+            e.actorId === actor.id && e.targetId === foTarget.id
+          );
+        if (recentHit) hitsLanded++;
+      }
+
+      log(state, 'action', actor.id,
+        `${actor.name} completes Flurry of Blows (${hitsLanded}/2 hits landed, ${ki.remaining} ki remaining)`,
+        foTarget.id);
+
+      // ── Open Hand Technique rider (PHB p.79) ──
+      // Fires if the monk has the feature + at least one hit landed + a choice
+      // is set (default 'prone'). v1: fires once per Flurry (after the second
+      // hit), not per hit.
+      if (hitsLanded > 0 && hasFeature(actor, 'Open Hand Technique')) {
+        const choice = plan.openHandTechniqueChoice ?? 'prone';  // default prone
+        const riderDC = 8 + foProf + foWisMod;  // monk ki save DC
+        log(state, 'action', actor.id,
+          `${actor.name} applies Open Hand Technique (${choice}) to ${foTarget.name}!`,
+          foTarget.id);
+
+        if (choice === 'prone') {
+          // PHB p.79: "It must succeed on a Dexterity saving throw or be knocked prone."
+          const dexSave = rollSaveReactable(state, actor, foTarget, 'dex', riderDC);
+          if (dexSave.success) {
+            log(state, 'save_success', actor.id,
+              `${foTarget.name} resists Open Hand Technique (DEX ${dexSave.total} vs DC ${riderDC}) — not prone!`,
+              foTarget.id, dexSave.roll);
+          } else {
+            addCondition(foTarget, 'prone' as Condition);
+            log(state, 'save_fail', actor.id,
+              `${foTarget.name} succumbs to Open Hand Technique (DEX ${dexSave.total} vs DC ${riderDC}) — KNOCKED PRONE!`,
+              foTarget.id, dexSave.roll);
+            log(state, 'condition_add', actor.id,
+              `${foTarget.name} is prone!`, foTarget.id);
+          }
+        } else if (choice === 'push') {
+          // PHB p.79: "It must make a Strength saving throw. If it fails, you
+          // can push it up to 15 feet away from you."
+          const strSave = rollSaveReactable(state, actor, foTarget, 'str', riderDC);
+          if (strSave.success) {
+            log(state, 'save_success', actor.id,
+              `${foTarget.name} resists Open Hand Technique (STR ${strSave.total} vs DC ${riderDC}) — not pushed!`,
+              foTarget.id, strSave.roll);
+          } else {
+            const oldPos: Vec3 = { ...foTarget.pos };
+            pushAway(foTarget, actor.pos, 15);
+            log(state, 'save_fail', actor.id,
+              `${foTarget.name} succumbs to Open Hand Technique (STR ${strSave.total} vs DC ${riderDC}) — PUSHED 15 ft!`,
+              foTarget.id, strSave.roll);
+            log(state, 'move', actor.id,
+              `${foTarget.name} is pushed 15 ft by Open Hand Technique (${oldPos.x},${oldPos.y}) → (${foTarget.pos.x},${foTarget.pos.y})`,
+              foTarget.id);
+          }
+        } else if (choice === 'disabler') {
+          // PHB p.79: "It can't take reactions until the end of your next turn."
+          // v1 simplification: set budget.reactionUsed = true on the target.
+          // This prevents the target from reacting until resetBudget clears
+          // it at the start of the target's next turn. Canon says "end of YOUR
+          // [the monk's] next turn" — the target may recover slightly early if
+          // they act before the monk's next turn, but for v1 single-combat
+          // scope this is an acceptable simplification.
+          foTarget.budget.reactionUsed = true;
+          log(state, 'condition_add', actor.id,
+            `${foTarget.name} can't take reactions until the end of ${actor.name}'s next turn! (Open Hand Technique)`,
+            foTarget.id);
+        }
       }
       break;
     }

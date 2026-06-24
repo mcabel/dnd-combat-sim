@@ -9,18 +9,17 @@
 
 ## Core Engine Workstream (HANDOVER-SESSION-XX)
 
-### Active Objective (Session 57 refresh)
+### Active Objective (Session 58 refresh)
 
-**TG-031: Open Hand Technique Flurry rider** (Open Hand Monk 3, PHB p.79 —
-per-Flurry-of-Blows hit rider: choose to push 15 ft / knock prone / disable
-reaction. Costs 1 ki per Flurry). Now the #1 Tier-B priority — UNBLOCKED by
-TG-024 (ki transfer landed in Session 55). Needs a rider in the
-`flurryOfBlows` case in `executePlannedAction` + a `openHandTechniqueChoice`
-field on `TurnPlan`.
+**TG-028: Booming/Green-Flame Blade "melee spell attack" label fix** (PHB
+2014/TCE — comment-only fix). Now the LAST remaining Core Engine task. Both
+modules label their primary hit as "melee spell attack (attackType='spell')"
+when TCE clarifies it's a "melee weapon attack". Risk of misleading future
+implementers. Cantrip-z owns both files.
 
 ### Current Phase
 
-**TG-030 DONE (Session 57).** Prerequisite groundwork complete:
+**TG-031 DONE (Session 58).** Prerequisite groundwork complete:
 - Concentration enforcement (TG-002) ✅
 - Parser fields incl. `isUndead`/`isConstruct`/`hasMetalArmor` (TG-004) ✅
 - Cantrip planner branches 13A-13N (TG-003) ✅
@@ -31,44 +30,42 @@ field on `TurnPlan`.
 - **TG-032** Land Druid Nature's Ward fey/elemental charm/frighten immunity ✅
 - **TG-030** Quivering Palm (Open Hand Monk 17) — touch + CON save +
   instakill/10d10 necrotic, 3 ki ✅
+- **TG-031** Flurry of Blows (Monk 2) + Open Hand Technique (Open Hand 3) —
+  1 ki bonus action, 2 unarmed strikes, rider (prone/push/disabler) ✅
 
-### Acceptance Criteria (TG-031)
+### Acceptance Criteria (TG-028)
 
-- `openHandTechniqueChoice?: 'prone' | 'push' | 'disabler'` on `TurnPlan`
-  (default 'prone' for AI)
-- In `combat.ts` Flurry-of-Blows case, after the second attack, apply the
-  chosen effect (prone = addCondition('prone'); push = pushAway 15 ft;
-  disabler = prevent reaction until next turn)
-- Planner: branch for `openHandTechniqueChoice` selection based on target
-  state (knock prone if not prone; push if adjacent to pit; disable reaction
-  if caster)
-- Costs 1 ki per Flurry (payable via `resources.ki`)
-- New test `src/test/open_hand_technique.test.ts`: Monk 3 with Flurry of
-  Blows hits target twice → target is prone (default choice). Manually-set
-  choice 'push' → target moved 15 ft
+- `src/spells/booming_blade.ts` line 31: change "melee spell attack
+  (attackType='spell')" → "melee weapon attack"
+- `src/spells/green_flame_blade.ts` line 36: same change
+- `src/spells/green_flame_blade.ts` line 263: update "after the melee spell"
+  → "after the melee weapon attack"
 - All existing tests still pass; `tsc --noEmit` clean
+- Risk: ZERO — comment-only
 
-### Immediate Priority (reverse published order, newest pre-2024 first)
+### Immediate Priority
 
-1. **TG-031** (PHB 2014): Open Hand Technique Flurry rider — UNBLOCKED
-   (TG-024 done), promoted to #1 after TG-030 landed in Session 57
-2. **TG-028** (PHB 2014/TCE): Booming/Green-Flame Blade "melee spell attack"
-   label fix — comment-only, can be slotted in any session
+1. **TG-028** (PHB 2014/TCE): Booming/Green-Flame Blade label fix —
+   comment-only, the LAST remaining Core Engine task. Cantrip-z owns.
 
 ### Notes
 
-- TG-030 DONE (Session 57): Quivering Palm implemented as a single-action
-  v1 simplification (touch + CON save collapsed). Instakill on CON save
-  fail / 10d10 necrotic on success. Costs 3 ki (spent only on hit).
-  Note: the leveler's description said "10d12 necrotic, or half on CON
-  save" — this was a pre-existing documentation error; the engine
-  implements PHB-accurate "instakill on fail / 10d10 on success".
-- TG-032 DONE (Session 56): Nature's Ward fey/elemental charm/frighten
-  immunity via `sourceCreatureType` on `ActiveEffect`.
+- TG-031 DONE (Session 58): Flurry of Blows + Open Hand Technique implemented.
+  This also implemented Flurry of Blows itself (was NOT implemented before —
+  the spec assumed it existed). The `case 'flurryOfBlows':` handles both the
+  Flurry (1 ki, 2 unarmed strikes) + the Open Hand Technique rider (prone/
+  push/disabler on hit). v1: rider fires once per Flurry (after the second
+  hit), not per hit.
+- TG-030 DONE (Session 57): Quivering Palm — single-action v1 simplification.
+- TG-032 DONE (Session 56): Nature's Ward fey/elemental charm/frighten immunity.
 - TG-024 DONE (Session 55): `ki` + `sorceryPoints` transfer to Combatant.
 - Cantrip-z's summon Phase 1 is live; Phase 4 spells still need bespoke
   subsystems (deferred under TG-006 Phase 4).
 - TG-001 (persistent-buff subsystem): **DONE** (Session 48 RFC-001).
+- **All Tier-A + Tier-B Core Engine tasks are DONE except TG-028 (comment-only).**
+  The Open Hand Monk's full progression is now mechanically functional:
+  Open Hand Technique (TG-031), Wholeness of Body (Session 47), Diamond Soul
+  (Session 48), Quivering Palm (TG-030).
 
 ---
 

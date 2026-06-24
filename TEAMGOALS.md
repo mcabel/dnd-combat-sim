@@ -845,17 +845,18 @@ completed by a single agent without coordination.
 
 #### TG-031: Open Hand Technique Flurry rider (TG-017 step 3) — blocked on TG-024
 
-- **Status:** OPEN — proposed Session 53 (promotes TG-017 step 3)
+- **Status:** DONE — Session 58 (commit pending)
 - **Owners:** Core Engine (driving — owns `src/engine/combat.ts` + `src/ai/planner.ts`)
 - **Source:** TG-017 step 3.
 - **Summary:** Open Hand Technique (Monk 3) fires per Flurry-of-Blows hit: choose to push 15 ft / knock prone / disable reaction until next turn. The rider needs to fire BETWEEN the two Flurry attacks (per PHB p.79 "immediately after you hit"). v1 simplification: rider fires once per Flurry (after the second hit), not per hit.
 - **Implementation plan:**
-  1. Add `openHandTechniqueChoice?: 'prone' | 'push' | 'disabler'` to `TurnPlan` (default 'prone' for AI).
-  2. In `combat.ts` Flurry-of-Blows case, after the second attack, apply the chosen effect.
-  3. Planner: branch for `openHandTechniqueChoice` selection based on target state (knock prone if not prone; push if adjacent to pit; disable reaction if caster).
-  4. Test (`src/test/open_hand_technique.test.ts`): Monk 3 with Flurry of Blows hits target twice → target is prone (default choice). Manually-set choice 'push' → target moved 15 ft.
-- **Risk:** MEDIUM — per-turn rider sequencing is fiddly.
-- **Coordination protocol:** Core Engine drives; blocked on TG-024.
+  1. Add `openHandTechniqueChoice?: 'prone' | 'push' | 'disabler'` to `PlannedAction` (default 'prone' for AI). ✅ DONE — added to `PlannedAction` (not `TurnPlan` — the choice is specific to the Flurry of Blows action, and `executePlannedAction` only receives `PlannedAction`).
+  2. In `combat.ts` Flurry-of-Blows case, after the second attack, apply the chosen effect. ✅ DONE — added `case 'flurryOfBlows':` to `executePlannedAction`. Spends 1 ki, constructs an unarmed strike Action (Martial Arts die scales with level: 1d4/1d6/1d8/1d10), calls `resolveAttack` twice. If the monk has Open Hand Technique + ≥1 hit landed, applies the rider: 'prone' (DEX save or `addCondition('prone')`), 'push' (STR save or `pushAway` 15 ft), 'disabler' (sets `budget.reactionUsed = true` — v1 simplification for "can't take reactions until end of your next turn").
+  3. Planner: branch for `openHandTechniqueChoice` selection. ✅ DONE — added to `planBonusAction` (section 2.3, after Second Wind). Fires when monk has Ki feature + ≥1 ki + a living enemy in melee range (5 ft). AI heuristic: 'disabler' if the target has spell slots (caster — prevents Counterspell/Shield reactions); 'prone' otherwise (gives melee advantage). 'push' is situational (edge of pit) — v1 doesn't model terrain hazards, so the AI never picks 'push' (tests can set it manually).
+  4. Test (`src/test/open_hand_technique.test.ts`): ✅ DONE — 27 assertions covering: feature/ki setup, 1 ki spent, 2 unarmed strikes (damage dealt), 'prone' rider (DEX save fail → prone), 'push' rider (STR save fail → pushed 15 ft), 'disabler' rider (reactionUsed = true), insufficient ki → no-op, out of range → no-op, vanilla monk → no rider, hit bonus verification, target dies mid-flurry (second strike skipped), default choice 'prone', ki save DC verification (8 + prof + WIS), costType verification.
+- **Risk:** MEDIUM (per original spec — per-turn rider sequencing is fiddly) → actual risk was MEDIUM-LOW. The v1 single-rider-per-Flurry approach avoids per-hit sequencing complexity. All edge cases handled: insufficient ki, out of range, target dies mid-flurry, vanilla monk (no rider). All 11 regression test files pass (combat, engine, mechanics, phase4, integration, scenario, ai, wholeness_of_body, diamond_soul, quivering_palm, resources).
+- **Coordination protocol:** Core Engine drives; UNBLOCKED by TG-024 (ki transfer landed Session 55).
+- **Note:** This also implements Flurry of Blows itself (PHB p.78) — the monk's 1-ki bonus action for 2 unarmed strikes. Before TG-031, Flurry of Blows was NOT implemented at all (the spec assumed it existed). The `case 'flurryOfBlows':` handles both the Flurry + the Open Hand Technique rider.
 
 #### TG-032: Land Druid fey/elemental charm/frighten immunity (promotes TG-018)
 
