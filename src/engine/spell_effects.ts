@@ -200,7 +200,7 @@ export function removeEffectsFromCaster(casterId: string, bf: Battlefield): void
       if (e.effectType === 'battlefield_obstacle') {
         removeBattlefieldObstacle(bf, e);
       }
-      _undoEffect(combatant, e);
+      undoEffect(combatant, e);
     }
 
     combatant.activeEffects = combatant.activeEffects.filter(e => e.casterId !== casterId);
@@ -269,13 +269,19 @@ export function removeEffectById(
   if (effect.effectType === 'battlefield_obstacle') {
     removeBattlefieldObstacle(bf, effect);
   }
-  _undoEffect(target, effect);
+  undoEffect(target, effect);
   target.activeEffects = target.activeEffects.filter(e => e.id !== effectId);
 }
 
 // ---- Helpers ------------------------------------------------
 
-function _undoEffect(target: Combatant, effect: ActiveEffect): void {
+/**
+ * Undo the structural side-effects of an ActiveEffect on a combatant.
+ * Called when an effect is removed (concentration break, expiry, dispel).
+ *
+ * Exported for use by the effect-pipeline expiry step (Phase 2).
+ */
+export function undoEffect(target: Combatant, effect: ActiveEffect): void {
   switch (effect.effectType) {
     case 'advantage_vs':
       // Removes ALL vulnerability entries with this source label — safe because

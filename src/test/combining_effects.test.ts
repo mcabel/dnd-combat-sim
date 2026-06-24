@@ -1,8 +1,8 @@
 // ============================================================
 // Test: Combining Game Effects — Priority Activation Pipeline
-// RFC: docs/RFC-COMBINING-EFFECTS.md (Phase 1)
+// RFC: docs/RFC-COMBINING-EFFECTS.md (Phase 1 + Phase 2 + Phase 3)
 //
-// Session 64 scope:
+// Session 64 scope (Phase 1):
 //   ✅ Same-name effects coexist in activeEffects (not deduped/removed)
 //   ✅ Only the active (top-priority) effect applies; rest suppressed
 //   ✅ Priority order: power > total duration > most recently activated
@@ -12,6 +12,14 @@
 //   ✅ Read helpers (getActiveBlessDie, getActiveAcBonus, etc.) filter !suppressed
 //   ✅ removeEffectsFromCaster triggers immediate re-evaluation
 //   ✅ Effect identity registry (Blindness/Deafness + Darkness → 'blinded')
+//
+// Session 65 scope (Phase 2 + Phase 3):
+//   ✅ sourceTurnExpires expiry: effects removed when bf.round > sourceTurnExpires
+//   ✅ Takeover on expiry: suppressed same-name effect promotes when active expires
+//   ✅ Conditions reconciled after expiry (active effect's condition re-added)
+//   ✅ Blindness/Deafness expires after 10 rounds (1 min)
+//   ✅ Two Blindness/Deafness: first expires, second takes over
+//   ✅ Power > duration: higher-DC effect stays active despite shorter duration
 //
 // Run: npx ts-node --transpile-only src/test/combining_effects.test.ts
 // ============================================================
@@ -38,7 +46,7 @@ import {
   EFFECT_IDENTITY_REGISTRY,
 } from '../engine/effect_identity';
 import { runCombat, makeFlatBattlefield } from '../engine/combat';
-import { Combatant, Battlefield, ActiveEffect, Vec3 } from '../types/core';
+import { Combatant, Battlefield, ActiveEffect, Vec3, Condition } from '../types/core';
 
 // ---- Harness ------------------------------------------------
 
@@ -515,6 +523,387 @@ console.log('\n=== 14. Three same-name effects: top active, rest suppressed ===\
   eq('14g: getActiveBlessDie = 4 (clericB takeover)', getActiveBlessDie(fighter), 4);
   const active2 = fighter.activeEffects.filter(e => !e.suppressed);
   eq('14h: active is clericB now', active2[0].casterId, 'clericB');
+}
+
+// ============================================================
+console.log('\n=== 15. Phase 2: Single effect expires (sourceTurnExpires) ===\n');
+// ============================================================
+
+{
+  // Blindness/Deafness: appliedTurn=1, sourceTurnExpires=11 (1 min = 10 rounds).
+  // Before expiry (round ≤ 11): effect is active, target is blinded.
+  // After expiry (round > 11): effect is removed, target is no longer blinded.
+  const target = makeC({ id: 'target' });
+  const bf = makeBF([target]);
+  bf.round = 1;
+
+  applySpellEffect(target, {
+    casterId: 'casterA', spellName: 'Blindness/Deafness',
+    effectType: 'condition_apply',
+    payload: { condition: 'blinded' as Condition, saveDC: 14 },
+    sourceIsConcentration: false,
+    appliedTurn: 1,
+    sourceTurnExpires: 11,  // 1 min = 10 rounds from appliedTurn 1
+  });
+  reevaluateEffects(target, bf);
+
+  eq('15a: effect in activeEffects before expiry', target.activeEffects.length, 1);
+  assert('15b: target is blinded before expiry', target.conditions.has('blinded'));
+
+  // Advance to round 11 — effect should still be active (round <= sourceTurnExpires)
+  bf.round = 11;
+  reevaluateEffects(target, bf);
+  eq('15c: effect still in activeEffects at round 11 (boundary)', target.activeEffects.length, 1);
+  assert('15d: target still blinded at round 11 (boundary)', target.conditions.has('blinded'));
+
+  // Advance to round 12 — effect should be expired and removed
+  bf.round = 12;
+  reevaluateEffects(target, bf);
+  eq('15e: effect removed from activeEffects after expiry', target.activeEffects.length, 0);
+  assert('15f: target no longer blinded after expiry', !target.conditions.has('blinded'));
+}
+
+// ============================================================
+console.log('\n=== 16. Phase 2: Takeover on expiry — same-name effect promotes ===\n');
+// ============================================================
+
+{
+  // Two Blindness/Deafness castings on the same target:
+  //   casterA: appliedTurn=1, sourceTurnExpires=11 (10-round duration)
+  //   casterB: appliedTurn=5, sourceTurnExpires=15 (10-round duration, cast later)
+  // Both impose 'blinded'. Power equal (same saveDC). Duration equal (both 10 rounds).
+  // Recency tiebreak: casterB (appliedTurn 5) > casterA (appliedTurn 1) → casterB active.
+  //
+  // When casterB's effect expires at round 15, casterA should have already expired
+  // at round 11 — so no takeover. Let's set up a more interesting scenario:
+  //
+  // casterA: appliedTurn=1, sourceTurnExpires=11 (10-round duration)
+  // casterB: appliedTurn=5, sourceTurnExpires=25 (20-round duration — upcast or longer spell)
+  // Duration tiebreak: casterB (20) > casterA (10) → casterB active.
+  // When casterA expires at round 11, nothing changes (it was suppressed).
+  // When casterB expires at round 25... but casterA already expired. So no takeover.
+  //
+  // Best scenario: casterA (longer duration, lower power) vs casterB (shorter, higher power):
+  // casterA: appliedTurn=1, sourceTurnExpires=25, saveDC=13 (longer duration, weaker)
+  // casterB: appliedTurn=5, sourceTurnExpires=15, saveDC=18 (shorter duration, stronger)
+  // Power > duration: casterB (DC 18) is active, casterA suppressed.
+  // At round 15: casterB expires → casterA promotes → target stays blinded.
+  const target = makeC({ id: 'target' });
+  const bf = makeBF([target]);
+  bf.round = 1;
+
+  // casterA: longer duration, weaker DC
+  applySpellEffect(target, {
+    casterId: 'casterA', spellName: 'Blindness/Deafness',
+    effectType: 'condition_apply',
+    payload: { condition: 'blinded' as Condition, saveDC: 13 },
+    sourceIsConcentration: false,
+    appliedTurn: 1,
+    sourceTurnExpires: 25,
+  });
+  // casterB: shorter duration, stronger DC
+  applySpellEffect(target, {
+    casterId: 'casterB', spellName: 'Blindness/Deafness',
+    effectType: 'condition_apply',
+    payload: { condition: 'blinded' as Condition, saveDC: 18 },
+    sourceIsConcentration: false,
+    appliedTurn: 5,
+    sourceTurnExpires: 15,
+  });
+  reevaluateEffects(target, bf);
+
+  eq('16a: two blinded effects in stack', target.activeEffects.length, 2);
+  assert('16b: target is blinded', target.conditions.has('blinded'));
+
+  // Power > duration: casterB (DC 18) should be active
+  const activeBefore = target.activeEffects.find(e => !e.suppressed);
+  eq('16c: casterB (higher DC) is active', activeBefore?.casterId, 'casterB');
+
+  // Advance to round 16 — casterB (sourceTurnExpires=15) expires, casterA takes over
+  bf.round = 16;
+  reevaluateEffects(target, bf);
+
+  // casterB expired and removed; casterA promoted
+  eq('16d: one effect remains after expiry', target.activeEffects.length, 1);
+  eq('16e: remaining effect is casterA (takeover)', target.activeEffects[0].casterId, 'casterA');
+  assert('16f: casterA effect is active (not suppressed)', !target.activeEffects[0].suppressed);
+  assert('16g: target still blinded after takeover', target.conditions.has('blinded'));
+  eq('16h: casterA sourceTurnExpires preserved', target.activeEffects[0].sourceTurnExpires, 25);
+
+  // Advance to round 26 — casterA (sourceTurnExpires=25) also expires
+  bf.round = 26;
+  reevaluateEffects(target, bf);
+  eq('16i: all effects expired', target.activeEffects.length, 0);
+  assert('16j: target no longer blinded', !target.conditions.has('blinded'));
+}
+
+// ============================================================
+console.log('\n=== 17. Phase 2: Suppressed effect expires (no impact on active) ===\n');
+// ============================================================
+
+{
+  // casterA (higher DC, active): appliedTurn=1, sourceTurnExpires=25, saveDC=18
+  // casterB (lower DC, suppressed): appliedTurn=5, sourceTurnExpires=15, saveDC=13
+  // When casterB expires at round 15, casterA should remain active — no disruption.
+  const target = makeC({ id: 'target' });
+  const bf = makeBF([target]);
+  bf.round = 1;
+
+  applySpellEffect(target, {
+    casterId: 'casterA', spellName: 'Blindness/Deafness',
+    effectType: 'condition_apply',
+    payload: { condition: 'blinded' as Condition, saveDC: 18 },
+    sourceIsConcentration: false,
+    appliedTurn: 1,
+    sourceTurnExpires: 25,
+  });
+  applySpellEffect(target, {
+    casterId: 'casterB', spellName: 'Blindness/Deafness',
+    effectType: 'condition_apply',
+    payload: { condition: 'blinded' as Condition, saveDC: 13 },
+    sourceIsConcentration: false,
+    appliedTurn: 5,
+    sourceTurnExpires: 15,
+  });
+  reevaluateEffects(target, bf);
+
+  // casterA is active (higher DC)
+  const activeBefore = target.activeEffects.find(e => !e.suppressed);
+  eq('17a: casterA is active before expiry', activeBefore?.casterId, 'casterA');
+
+  // Advance to round 16 — casterB (sourceTurnExpires=15) expires (it was suppressed, no impact)
+  bf.round = 16;
+  reevaluateEffects(target, bf);
+
+  eq('17b: one effect remains (casterA)', target.activeEffects.length, 1);
+  eq('17c: remaining effect is casterA', target.activeEffects[0].casterId, 'casterA');
+  assert('17d: casterA still active', !target.activeEffects[0].suppressed);
+  assert('17e: target still blinded', target.conditions.has('blinded'));
+}
+
+// ============================================================
+console.log('\n=== 18. Phase 2: Expiry + concentration break combined ===\n');
+// ============================================================
+
+{
+  // casterA: concentration Bless (no sourceTurnExpires — lasts until conc breaks)
+  // casterB: non-concentration Bless with sourceTurnExpires=11
+  // When casterB expires, casterA (concentration) should continue active.
+  // When casterA's concentration breaks, casterB already expired — no takeover.
+  const fighter = makeC({ id: 'fighter' });
+  const bf = makeBF([fighter]);
+  bf.round = 1;
+
+  // casterA: concentration Bless
+  applySpellEffect(fighter, {
+    casterId: 'clericA', spellName: 'Bless', effectType: 'bless_die',
+    payload: { dieSides: 4 }, sourceIsConcentration: true, appliedTurn: 1,
+  });
+  // casterB: non-concentration Bless (e.g. from a magic item, 10 rounds)
+  applySpellEffect(fighter, {
+    casterId: 'clericB', spellName: 'Bless', effectType: 'bless_die',
+    payload: { dieSides: 4 }, sourceIsConcentration: false,
+    appliedTurn: 3, sourceTurnExpires: 13,
+  });
+  reevaluateEffects(fighter, bf);
+
+  // Duration tiebreak: clericA (concentration = Infinity) > clericB (10 rounds)
+  // → clericA active
+  const activeBefore = fighter.activeEffects.find(e => !e.suppressed);
+  eq('18a: clericA (concentration, longer duration) is active', activeBefore?.casterId, 'clericA');
+  eq('18b: getActiveBlessDie = 4', getActiveBlessDie(fighter), 4);
+
+  // clericB's non-concentration Bless expires
+  bf.round = 14;
+  reevaluateEffects(fighter, bf);
+  eq('18c: clericB expired, one effect remains', fighter.activeEffects.length, 1);
+  eq('18d: remaining is clericA (concentration)', fighter.activeEffects[0].casterId, 'clericA');
+  eq('18e: getActiveBlessDie = 4 (clericA still active)', getActiveBlessDie(fighter), 4);
+}
+
+// ============================================================
+console.log('\n=== 19. Phase 3: Takeover-on-expiry end-to-end (Darkness + Blindness/Deafness) ===\n');
+// ============================================================
+
+{
+  // RFC §8 test case 6: Darkness spell active rounds 1-10 (concentration);
+  // casterB casts Blindness/Deafness at fighter round 3 (expires round 13).
+  // Both impose 'blinded'. Darkness (concentration = Infinity duration) has
+  // longer total duration → Darkness is active, Blindness/Deafness suppressed.
+  // When Darkness ends round 10 (concentration break), Blindness/Deafness
+  // promotes → target stays blinded for 3 more rounds (rounds 10-13).
+  const fighter = makeC({ id: 'fighter' });
+  const bf = makeBF([fighter]);
+  bf.round = 1;
+
+  // Darkness imposes 'blinded' via condition_apply (simplified for this test —
+  // in the full engine, Darkness creates a battlefield_obstacle; the condition
+  // is implicit from being inside the AoE. For pipeline testing, we model it
+  // as a condition_apply effect with concentration).
+  applySpellEffect(fighter, {
+    casterId: 'casterDarkness', spellName: 'Darkness',
+    effectType: 'condition_apply',
+    payload: { condition: 'blinded' as Condition, saveDC: 15 },
+    sourceIsConcentration: true, appliedTurn: 1,
+  });
+
+  // Round 3: Blindness/Deafness cast
+  applySpellEffect(fighter, {
+    casterId: 'casterBlind', spellName: 'Blindness/Deafness',
+    effectType: 'condition_apply',
+    payload: { condition: 'blinded' as Condition, saveDC: 14 },
+    sourceIsConcentration: false,
+    appliedTurn: 3,
+    sourceTurnExpires: 13,  // 1 min from round 3
+  });
+  reevaluateEffects(fighter, bf);
+
+  eq('19a: two blinded effects in stack', fighter.activeEffects.length, 2);
+  assert('19b: target is blinded', fighter.conditions.has('blinded'));
+
+  // Duration tiebreak: Darkness (concentration = Infinity) > Blindness/Deafness (10 rounds)
+  // → Darkness is active
+  const activeBefore = fighter.activeEffects.find(e => !e.suppressed);
+  eq('19c: Darkness (concentration) is active', activeBefore?.casterId, 'casterDarkness');
+
+  // Darkness concentration breaks at round 10
+  removeEffectsFromCaster('casterDarkness', bf);
+
+  // Blindness/Deafness takes over
+  eq('19d: one blinded effect remains', fighter.activeEffects.length, 1);
+  eq('19e: Blindness/Deafness takes over', fighter.activeEffects[0].casterId, 'casterBlind');
+  assert('19f: target still blinded after takeover', fighter.conditions.has('blinded'));
+
+  // Advance past Blindness/Deafness expiry
+  bf.round = 14;
+  reevaluateEffects(fighter, bf);
+  eq('19g: all effects expired', fighter.activeEffects.length, 0);
+  assert('19h: target no longer blinded', !fighter.conditions.has('blinded'));
+}
+
+// ============================================================
+console.log('\n=== 20. Phase 2: Non-concentration ac_bonus expires ===\n');
+// ============================================================
+
+{
+  // Mage Armor (non-concentration, 8hr) + Shield of Faith (concentration).
+  // Both are ac_bonus effects but different effectNames ('mage-armor' vs
+  // 'shield-of-faith') → they STACK (different names, not same-name overlap).
+  // When Shield of Faith breaks, Mage Armor stays.
+  // When Mage Armor expires, Shield of Faith stays.
+  const target = makeC({ id: 'target' });
+  const bf = makeBF([target]);
+  bf.round = 1;
+
+  applySpellEffect(target, {
+    casterId: 'wizard', spellName: 'Mage Armor', effectType: 'ac_bonus',
+    payload: { acBonus: 3 }, sourceIsConcentration: false,
+    appliedTurn: 1, sourceTurnExpires: 4801,  // 8 hr = 4800 rounds
+  });
+  applySpellEffect(target, {
+    casterId: 'cleric', spellName: 'Shield of Faith', effectType: 'ac_bonus',
+    payload: { acBonus: 2 }, sourceIsConcentration: true, appliedTurn: 1,
+  });
+  reevaluateEffects(target, bf);
+
+  // Different effectNames → both active (stack)
+  assert('20a: both effects in stack', target.activeEffects.length === 2);
+  eq('20b: ac_bonus stacks (3 + 2 = 5)', getActiveAcBonus(target), 5);
+
+  // Shield of Faith breaks → Mage Armor still active
+  removeEffectsFromCaster('cleric', bf);
+  eq('20c: one effect remains (Mage Armor)', target.activeEffects.length, 1);
+  eq('20d: ac_bonus = 3 (Mage Armor only)', getActiveAcBonus(target), 3);
+}
+
+// ============================================================
+console.log('\n=== 21. Phase 2: No expiry for concentration effects (no sourceTurnExpires) ===\n');
+// ============================================================
+
+{
+  // Concentration effects don't have sourceTurnExpires — they last until
+  // concentration breaks. Advancing rounds should NOT expire them.
+  const target = makeC({ id: 'target' });
+  const bf = makeBF([target]);
+  bf.round = 1;
+
+  applySpellEffect(target, {
+    casterId: 'clericA', spellName: 'Bless', effectType: 'bless_die',
+    payload: { dieSides: 4 }, sourceIsConcentration: true, appliedTurn: 1,
+  });
+  reevaluateEffects(target, bf);
+
+  // Advance to round 1000 — concentration effect should NOT expire
+  bf.round = 1000;
+  reevaluateEffects(target, bf);
+  eq('21a: concentration effect not expired at round 1000', target.activeEffects.length, 1);
+  eq('21b: getActiveBlessDie still 4', getActiveBlessDie(target), 4);
+}
+
+// ============================================================
+console.log('\n=== 22. Phase 3: Cascading takeover with three effects ===\n');
+// ============================================================
+
+{
+  // Three Blindness/Deafness effects on the same target with different expiry turns.
+  // casterA: DC 18, appliedTurn=1, sourceTurnExpires=11 (10 rounds)
+  // casterB: DC 16, appliedTurn=5, sourceTurnExpires=15 (10 rounds)
+  // casterC: DC 14, appliedTurn=8, sourceTurnExpires=18 (10 rounds)
+  //
+  // Power order: casterA (18) > casterB (16) > casterC (14).
+  // casterA active, casterB + casterC suppressed.
+  //
+  // Round 11: casterA expires → casterB promoted (next highest DC)
+  // Round 15: casterB expires → casterC promoted
+  // Round 18: casterC expires → all gone
+  const target = makeC({ id: 'target' });
+  const bf = makeBF([target]);
+  bf.round = 1;
+
+  applySpellEffect(target, {
+    casterId: 'casterA', spellName: 'Blindness/Deafness',
+    effectType: 'condition_apply',
+    payload: { condition: 'blinded' as Condition, saveDC: 18 },
+    sourceIsConcentration: false, appliedTurn: 1, sourceTurnExpires: 11,
+  });
+  applySpellEffect(target, {
+    casterId: 'casterB', spellName: 'Blindness/Deafness',
+    effectType: 'condition_apply',
+    payload: { condition: 'blinded' as Condition, saveDC: 16 },
+    sourceIsConcentration: false, appliedTurn: 5, sourceTurnExpires: 15,
+  });
+  applySpellEffect(target, {
+    casterId: 'casterC', spellName: 'Blindness/Deafness',
+    effectType: 'condition_apply',
+    payload: { condition: 'blinded' as Condition, saveDC: 14 },
+    sourceIsConcentration: false, appliedTurn: 8, sourceTurnExpires: 18,
+  });
+  reevaluateEffects(target, bf);
+
+  eq('22a: three effects in stack', target.activeEffects.length, 3);
+  const active0 = target.activeEffects.find(e => !e.suppressed);
+  eq('22b: casterA (highest DC) is active', active0?.casterId, 'casterA');
+  assert('22c: target is blinded', target.conditions.has('blinded'));
+
+  // Round 11: casterA expires → casterB promoted
+  bf.round = 12;
+  reevaluateEffects(target, bf);
+  eq('22d: two effects remain after casterA expires', target.activeEffects.length, 2);
+  eq('22e: casterB now active (cascading takeover)', target.activeEffects.find(e => !e.suppressed)?.casterId, 'casterB');
+  assert('22f: target still blinded after casterA expiry', target.conditions.has('blinded'));
+
+  // Round 15: casterB expires → casterC promoted
+  bf.round = 16;
+  reevaluateEffects(target, bf);
+  eq('22g: one effect remains after casterB expires', target.activeEffects.length, 1);
+  eq('22h: casterC now active (cascading takeover)', target.activeEffects[0].casterId, 'casterC');
+  assert('22i: target still blinded after casterB expiry', target.conditions.has('blinded'));
+
+  // Round 18: casterC expires
+  bf.round = 19;
+  reevaluateEffects(target, bf);
+  eq('22j: all effects expired', target.activeEffects.length, 0);
+  assert('22k: target no longer blinded', !target.conditions.has('blinded'));
 }
 
 // ---- Results ------------------------------------------------

@@ -1,5 +1,5 @@
 // ============================================================
-// Effect Priority-Activation Pipeline — RFC-COMBINING-EFFECTS Phase 1
+// Effect Priority-Activation Pipeline — RFC-COMBINING-EFFECTS
 //
 // Module: src/engine/effect_pipeline.ts
 //
@@ -15,35 +15,43 @@
 // Removal from the stack happens ONLY when a source ends — never as a side
 // effect of the priority-activation step.
 //
-// Phase 1 scope (this module):
+// Phase 1 (Session 64):
 //   - reevaluateEffects(): group by effectName → sort by priority → toggle
-//     suppressed. NO condition re-derivation (conditions Set stays
-//     authoritative — Phase 4). NO sourceTurnExpires expiry (Phase 2).
-//   - Called from runCombat turn-start (after updateDetectionStates) AND
-//     from removeEffectsFromCaster (so suppressed effects promote immediately
-//     when a concentration break removes the active effect mid-turn).
+//     suppressed. NO condition re-derivation (Phase 4).
+//   - Called from runCombat turn-start AND from removeEffectsFromCaster.
 //
-// Phase 2 (DEFERRED): sourceTurnExpires expiry removal.
+// Phase 2 (this session):
+//   - sourceTurnExpires expiry: before grouping, remove effects whose
+//     sourceTurnExpires ≤ bf.round. Call undoEffect() for structural
+//     cleanup, then reconcile conditions from remaining unsuppressed
+//     effects (handles takeover-on-expiry for condition_apply effects).
+//   - Spell modules populate sourceTurnExpires on non-concentration
+//     effects with finite durations (Blindness/Deafness 1 min, etc.).
+//
 // Phase 3 (DEFERRED): explicit takeover-on-expiry tests.
 // Phase 4 (DEFERRED): conditions derived from pipeline (replaces direct
 //   addCondition/removeCondition for spell-sourced conditions).
 // ============================================================
 
-import { ActiveEffect, Combatant, Battlefield } from '../types/core';
+import { ActiveEffect, Combatant, Battlefield, Condition } from '../types/core';
+import { undoEffect, removeBattlefieldObstacle, removeTerrainDifficulty } from './spell_effects';
 
 /**
  * Re-evaluate the active-effects pipeline for one combatant.
  *
  * Steps:
- *   1. Group activeEffects by effectName (the priority-activation key).
+ *   0. Expire effects whose sourceTurnExpires ≤ bf.round (non-concentration
+ *      duration expiry). Call undoEffect() for structural cleanup, then
+ *      remove from activeEffects.
+ *   1. Group remaining activeEffects by effectName (the priority-activation key).
  *   2. For each group with >1 effect, sort by priority (power > total
  *      duration > most recently activated) and mark the top one
  *      `suppressed: false` (active), the rest `suppressed: true`.
  *   3. For single-effect groups, ensure suppressed = false.
- *
- * This step ONLY toggles `suppressed` flags. It does NOT remove any effect
- * from activeEffects. Removal happens only when a source ends (concentration
- * break via removeEffectsFromCaster, or sourceTurnExpires expiry in Phase 2).
+ *   4. Reconcile conditions: ensure unsuppressed condition_apply effects'
+ *      conditions are in the combatant's conditions Set (handles takeover
+ *      after expiry — undoEffect may have deleted a condition that a
+ *      newly-promoted suppressed effect still imposes).
  *
  * Call from:
  *   - runCombat turn-start (after updateDetectionStates) — refreshes the
@@ -52,7 +60,38 @@ import { ActiveEffect, Combatant, Battlefield } from '../types/core';
  *     each affected combatant so suppressed effects promote to active
  *     immediately (no 1-round gap).
  */
-export function reevaluateEffects(c: Combatant, _bf: Battlefield): void {
+export function reevaluateEffects(c: Combatant, bf: Battlefield): void {
+  const round = bf.round;
+
+  // ── Phase 2 step 0: expire non-concentration effects ──
+  // Remove effects whose sourceTurnExpires has passed. This is the ONLY
+  // step that removes effects from the stack (besides concentration break
+  // via removeEffectsFromCaster). For each expired effect, do full
+  // structural cleanup (undoEffect + obstacle/terrain removal).
+  const expired: ActiveEffect[] = [];
+  c.activeEffects = c.activeEffects.filter(e => {
+    if (e.sourceTurnExpires !== undefined && round > e.sourceTurnExpires) {
+      expired.push(e);
+      return false;
+    }
+    return true;
+  });
+
+  for (const e of expired) {
+    // Structural cleanup matching removeEffectById / removeEffectsFromCaster:
+    // terrain zones and battlefield obstacles need extra battlefield-level
+    // cleanup before the per-combatant undoEffect.
+    if (e.effectType === 'terrain_zone' && (e.payload as Record<string, unknown>).terrainDifficulty) {
+      removeTerrainDifficulty(bf, e);
+    }
+    if (e.effectType === 'battlefield_obstacle') {
+      removeBattlefieldObstacle(bf, e);
+    }
+    undoEffect(c, e);
+  }
+
+  // ── Steps 1-3: group by effectName → priority sort → toggle suppressed ──
+
   // Group by effectName. Effects without effectName are treated as unique
   // (each is its own group of 1 → always active).
   const groups = new Map<string, ActiveEffect[]>();
@@ -85,6 +124,47 @@ export function reevaluateEffects(c: Combatant, _bf: Battlefield): void {
     for (let i = 1; i < group.length; i++) {
       group[i].suppressed = true;      // suppressed but retained (takeover candidates)
     }
+  }
+
+  // ── Phase 2 step 4: reconcile conditions ──
+  // After expiry + priority sort, ensure unsuppressed condition_apply effects'
+  // conditions are in the Set. undoEffect() may have deleted a condition that
+  // a newly-promoted suppressed effect still imposes. This is a lightweight
+  // version of Phase 4's _rederiveConditions — it only ADDS conditions, never
+  // removes them, so non-spell conditions (from monster traits etc.) are
+  // preserved.
+  reconcileConditions(c);
+}
+
+/**
+ * Ensure unsuppressed condition_apply effects' conditions are in the Set.
+ * After expiry, undoEffect() may have deleted a condition that a
+ * newly-promoted suppressed effect still imposes. This re-adds it.
+ *
+ * This is NOT a full re-derivation (Phase 4) — it only adds conditions
+ * from active (unsuppressed) spell effects. It does NOT remove conditions
+ * that are not backed by any active effect (that would require Phase 4's
+ * _rederiveConditions, which also preserves non-spell conditions separately).
+ */
+function reconcileConditions(c: Combatant): void {
+  for (const e of c.activeEffects) {
+    if (e.suppressed) continue;
+    if (e.effectType === 'condition_apply' && (e.payload as Record<string, unknown>).condition) {
+      c.conditions.add((e.payload as Record<string, unknown>).condition as Condition);
+    } else if (e.effectType === 'dominated') {
+      c.conditions.add('charmed');
+      c.conditions.add('incapacitated');
+    } else if (e.effectType === 'suggestion') {
+      c.conditions.add('charmed');
+    } else if (e.effectType === 'invisible') {
+      c.conditions.add('invisible');
+    }
+  }
+  // Cascade: paralyzed/stunned/petrified → incapacitated
+  if (c.conditions.has('paralyzed') ||
+      c.conditions.has('stunned') ||
+      c.conditions.has('petrified')) {
+    c.conditions.add('incapacitated');
   }
 }
 

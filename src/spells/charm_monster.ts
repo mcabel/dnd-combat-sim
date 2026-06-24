@@ -119,6 +119,8 @@ export function execute(caster: Combatant, target: Combatant, state: EngineState
     casterId: caster.id, spellName: 'Charm Monster',
     effectType: 'condition_apply', payload: { condition: 'charmed' },
     sourceIsConcentration: false,   // PHB p.221: NOT concentration (1 hr)
+    appliedTurn: state.battlefield.round,
+    sourceTurnExpires: state.battlefield.round + 600,   // PHB p.221: 1 hr = 600 rounds
   });
   emit(state, 'condition_add', caster.id,
     `${target.name} is CHARMED by Charm Monster! (disadv on attacks vs caster, caster has adv on social)`, target.id);

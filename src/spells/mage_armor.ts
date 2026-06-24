@@ -58,6 +58,8 @@ export function execute(caster: Combatant, state: EngineState): void {
     effectType: 'ac_bonus',
     payload: { acBonus: bonus },
     sourceIsConcentration: false,
+    appliedTurn: state.battlefield.round,
+    sourceTurnExpires: state.battlefield.round + 4800,   // PHB p.256: 8 hr = 4800 rounds
   });
 
   state.log.events.push({

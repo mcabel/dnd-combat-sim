@@ -11,8 +11,9 @@
 //         throw. On a success, the spell ends.
 //
 // v1 simplifications:
-//   - Duration: canon 1 min (no concentration). v1 has no duration tracker
-//     — condition persists for the v1 combat. NOT concentration.
+//   - Duration: canon 1 min = 10 rounds. sourceTurnExpires tracks the
+//     expiry turn (appliedTurn + 10). The effect-pipeline's reevaluateEffects
+//     expires it automatically when bf.round > sourceTurnExpires.
 //   - v1 always picks 'blinded' (more impactful in combat than deafened).
 //   - End-of-turn save to shake off: NOT modelled (v1 has no per-turn
 //     save hook for non-concentration spells).
@@ -70,10 +71,16 @@ export function execute(caster: Combatant, target: Combatant, state: EngineState
     `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} CON save vs Blindness/Deafness (rolled ${save.total})`, target.id, save.roll);
   if (save.success) { emit(state, 'action', caster.id, `${target.name} resists Blindness/Deafness!`, target.id); return; }
   // v1: always pick 'blinded' (more impactful — disadvantage on attacks)
+  // Duration: 1 min = 10 rounds (PHB p.219). sourceTurnExpires tracks when
+  // the effect expires so the pipeline can remove it + promote any suppressed
+  // same-name effect (e.g. Darkness-spell blinded → Blindness/Deafness takeover).
+  const round = state.battlefield.round;
   applySpellEffect(target, {
     casterId: caster.id, spellName: 'Blindness/Deafness',
-    effectType: 'condition_apply', payload: { condition: 'blinded' as Condition },
+    effectType: 'condition_apply', payload: { condition: 'blinded' as Condition, saveDC },
     sourceIsConcentration: false,
+    appliedTurn: round,
+    sourceTurnExpires: round + 10,   // 1 min = 10 rounds
   });
   emit(state, 'condition_add', caster.id, `${target.name} is BLINDED by Blindness/Deafness!`, target.id);
 }
