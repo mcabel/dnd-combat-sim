@@ -658,7 +658,7 @@ export interface Combatant {
    */
   deathBurst?: {
     damage: DiceExpression | null;
-    damageType: DamageType;
+    damageType?: DamageType;   // undefined when damage is null (condition-only bursts)
     saveDC: number;
     saveAbility: 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha';
     radius: number;       // in feet

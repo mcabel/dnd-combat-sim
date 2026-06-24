@@ -350,7 +350,7 @@ function parseDeathBurst(
     // "11 ({@damage 2d10})" — we capture just the XdY part (bonus derived from
     // the literal "N (XdY)" prefix when present, else 0).
     let damage: DiceExpression | null = null;
-    let damageType: DamageType = 'fire'; // sensible default; overridden below
+    let damageType: DamageType | undefined = undefined; // undefined when no damage (condition-only bursts)
     let halfOnSuccess = false;
     const dmgMatch = text.match(/(\d+)d(\d+)/i);
     if (dmgMatch) {
@@ -377,18 +377,28 @@ function parseDeathBurst(
       halfOnSuccess = /half/i.test(text);
     }
 
-    // Conditions: scan for {@condition <name>} tags. flattenEntries strips
-    // the {@condition ...} wrapper and leaves the condition name. Match
-    // known conditions in the text.
+    // Conditions: extract from {@condition <name>} tags in the RAW text (before
+    // stripping). This avoids false positives from condition names mentioned in
+    // other contexts (e.g. Slithering Bloodfin: "is no longer {@condition blinded}
+    // or {@condition restrained}" — those are REMOVALS, not applications).
+    // We exclude conditions preceded by "no longer" or "ending" (removal context).
     const KNOWN_CONDITIONS = [
       'blinded', 'deafened', 'paralyzed', 'petrified', 'poisoned',
       'prone', 'restrained', 'stunned', 'unconscious',
     ];
     const conditions: string[] = [];
-    for (const cond of KNOWN_CONDITIONS) {
-      if (new RegExp(`\\b${cond}\\b`, 'i').test(text)) {
-        conditions.push(cond);
-      }
+    const conditionTagRegex = /\{@condition\s+([^}|]+)(?:\|[^}]*)?\}/gi;
+    let condMatch;
+    while ((condMatch = conditionTagRegex.exec(rawText)) !== null) {
+      const condName = condMatch[1].trim().toLowerCase();
+      if (!KNOWN_CONDITIONS.includes(condName)) continue;
+      // Check the 50 chars BEFORE the tag for "no longer" / "ending" (removal context).
+      // 50 chars covers the span between two adjacent {@condition} tags (e.g.
+      // Slithering Bloodfin: "is no longer {@condition blinded} or {@condition restrained}"
+      // — the "no longer" is 37 chars before the "restrained" tag).
+      const beforeTag = rawText.substring(Math.max(0, condMatch.index - 50), condMatch.index).toLowerCase();
+      if (/no\s+longer|ending|removes|cures/.test(beforeTag)) continue; // removal — skip
+      if (!conditions.includes(condName)) conditions.push(condName);
     }
 
     return {

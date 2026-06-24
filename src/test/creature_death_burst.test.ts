@@ -52,7 +52,7 @@ function eq<T>(label: string, a: T, e: T): void {
 // Mephit/Smoke Mephit/Gas Spore/Goblin (MM), Frost Worm (EGW), Galvanice
 // Weird (GGR), Cinder/Dust/Mist/Rime Hulk (BGG), Ice Mephit (MM),
 // Tarrasque (MM).
-const NEEDED_SOURCES = ['mm-2014', 'mm', 'egw', 'ggr', 'bgg', 'dmg'];
+const NEEDED_SOURCES = ['mm-2014', 'mm', 'egw', 'ggr', 'bgg', 'dmg', 'dosi', 'crcotn', 'pota', 'scc'];
 function loadBestiary(): Map<string, Raw5etoolsMonster> {
   const dir = path.join(__dirname, '../../bestiaryData');
   const allFiles = fs.readdirSync(dir).filter(f => f.endsWith('.json'));
@@ -255,6 +255,191 @@ console.log('\n=== 8. parseDeathBurst — Smoke Mephit (no save → no burst) ==
   // Smoke Mephit's "Death Burst" creates a smoke cloud — no save, no damage.
   // v1 parser correctly skips traits with no save DC.
   eq('Smoke Mephit has NO deathBurst (no save → skipped)', c.deathBurst, undefined);
+}
+
+// ============================================================
+console.log('\n=== 8b. parseDeathBurst — Dust Hulk (BGG, condition-only, dmgType fix) ===\n');
+{
+  const c = spawn('Dust Hulk');
+  assert('Dust Hulk has deathBurst', c.deathBurst !== undefined);
+  if (c.deathBurst) {
+    eq('Dust Hulk damage = null (condition-only)', c.deathBurst.damage, null);
+    eq('Dust Hulk damageType = undefined (no damage → no type)', c.deathBurst.damageType, undefined);
+    eq('Dust Hulk saveDC = 14', c.deathBurst.saveDC, 14);
+    eq('Dust Hulk saveAbility = con', c.deathBurst.saveAbility, 'con');
+    eq('Dust Hulk radius = 10', c.deathBurst.radius, 10);
+    assert('Dust Hulk conditions includes blinded',
+      c.deathBurst.conditions?.includes('blinded') === true);
+  }
+}
+
+// ============================================================
+console.log('\n=== 8c. parseDeathBurst — Rime Hulk (BGG, cold, save-for-none) ===\n');
+{
+  const c = spawn('Rime Hulk');
+  assert('Rime Hulk has deathBurst', c.deathBurst !== undefined);
+  if (c.deathBurst) {
+    eq('Rime Hulk damage count = 3', c.deathBurst.damage?.count, 3);
+    eq('Rime Hulk damage sides = 6', c.deathBurst.damage?.sides, 6);
+    eq('Rime Hulk damageType = cold', c.deathBurst.damageType, 'cold');
+    eq('Rime Hulk saveDC = 15', c.deathBurst.saveDC, 15);
+    eq('Rime Hulk saveAbility = con', c.deathBurst.saveAbility, 'con');
+    eq('Rime Hulk radius = 10', c.deathBurst.radius, 10);
+    eq('Rime Hulk halfOnSuccess = false (save-for-none)', c.deathBurst.halfOnSuccess, false);
+  }
+}
+
+// ============================================================
+console.log('\n=== 8d. parseDeathBurst — Slithering Bloodfin (CRCotN, condition-removal context) ===\n');
+{
+  const c = spawn('Slithering Bloodfin');
+  assert('Slithering Bloodfin has deathBurst', c.deathBurst !== undefined);
+  if (c.deathBurst) {
+    eq('Bloodfin damage count = 3', c.deathBurst.damage?.count, 3);
+    eq('Bloodfin damage sides = 6', c.deathBurst.damage?.sides, 6);
+    eq('Bloodfin damageType = poison', c.deathBurst.damageType, 'poison');
+    eq('Bloodfin saveDC = 15', c.deathBurst.saveDC, 15);
+    eq('Bloodfin saveAbility = con', c.deathBurst.saveAbility, 'con');
+    eq('Bloodfin radius = 10', c.deathBurst.radius, 10);
+    // The text says "falls prone... and is no longer blinded or restrained" —
+    // the "blinded" and "restrained" are REMOVALS (not applications). The parser
+    // should only capture "prone" (the actual condition to apply).
+    assert('Bloodfin conditions includes prone',
+      c.deathBurst.conditions?.includes('prone') === true);
+    assert('Bloodfin conditions does NOT include blinded (removal context)',
+      c.deathBurst.conditions?.includes('blinded') !== true);
+    assert('Bloodfin conditions does NOT include restrained (removal context)',
+      c.deathBurst.conditions?.includes('restrained') !== true);
+  }
+}
+
+// ============================================================
+console.log('\n=== 8e. parseDeathBurst — Fume Drake (DoSI, poison) ===\n');
+{
+  const c = spawn('Fume Drake');
+  assert('Fume Drake has deathBurst', c.deathBurst !== undefined);
+  if (c.deathBurst) {
+    eq('Fume Drake damage count = 1', c.deathBurst.damage?.count, 1);
+    eq('Fume Drake damage sides = 8', c.deathBurst.damage?.sides, 8);
+    eq('Fume Drake damageType = poison', c.deathBurst.damageType, 'poison');
+    eq('Fume Drake saveDC = 11', c.deathBurst.saveDC, 11);
+    eq('Fume Drake saveAbility = con', c.deathBurst.saveAbility, 'con');
+    eq('Fume Drake radius = 5', c.deathBurst.radius, 5);
+  }
+}
+
+// ============================================================
+console.log('\n=== 8f. parseDeathBurst — Gas Spore (MM, poison + disease) ===\n');
+{
+  const c = spawn('Gas Spore');
+  assert('Gas Spore has deathBurst', c.deathBurst !== undefined);
+  if (c.deathBurst) {
+    eq('Gas Spore damage count = 3', c.deathBurst.damage?.count, 3);
+    eq('Gas Spore damage sides = 6', c.deathBurst.damage?.sides, 6);
+    eq('Gas Spore damageType = poison', c.deathBurst.damageType, 'poison');
+    eq('Gas Spore saveDC = 15', c.deathBurst.saveDC, 15);
+    eq('Gas Spore saveAbility = con', c.deathBurst.saveAbility, 'con');
+    eq('Gas Spore radius = 20', c.deathBurst.radius, 20);
+    // Disease is not modeled in v1 (documented); the poisoned condition IS captured.
+    assert('Gas Spore conditions includes poisoned',
+      c.deathBurst.conditions?.includes('poisoned') === true);
+  }
+}
+
+// ============================================================
+console.log('\n=== 8g. parseDeathBurst — Ice Mephit (MM, slashing, half on save) ===\n');
+{
+  const c = spawn('Ice Mephit');
+  assert('Ice Mephit has deathBurst', c.deathBurst !== undefined);
+  if (c.deathBurst) {
+    eq('Ice Mephit damage count = 1', c.deathBurst.damage?.count, 1);
+    eq('Ice Mephit damage sides = 8', c.deathBurst.damage?.sides, 8);
+    eq('Ice Mephit damageType = slashing', c.deathBurst.damageType, 'slashing');
+    eq('Ice Mephit saveDC = 10', c.deathBurst.saveDC, 10);
+    eq('Ice Mephit saveAbility = dex', c.deathBurst.saveAbility, 'dex');
+    eq('Ice Mephit radius = 5', c.deathBurst.radius, 5);
+    eq('Ice Mephit halfOnSuccess = true', c.deathBurst.halfOnSuccess, true);
+  }
+}
+
+// ============================================================
+console.log('\n=== 8h. parseDeathBurst — Magma Mephit (MM, fire, half on save) ===\n');
+{
+  const c = spawn('Magma Mephit');
+  assert('Magma Mephit has deathBurst', c.deathBurst !== undefined);
+  if (c.deathBurst) {
+    eq('Magma Mephit damage count = 2', c.deathBurst.damage?.count, 2);
+    eq('Magma Mephit damage sides = 6', c.deathBurst.damage?.sides, 6);
+    eq('Magma Mephit damageType = fire', c.deathBurst.damageType, 'fire');
+    eq('Magma Mephit saveDC = 11', c.deathBurst.saveDC, 11);
+    eq('Magma Mephit saveAbility = dex', c.deathBurst.saveAbility, 'dex');
+    eq('Magma Mephit halfOnSuccess = true', c.deathBurst.halfOnSuccess, true);
+  }
+}
+
+// ============================================================
+console.log('\n=== 8i. parseDeathBurst — Steam Mephit (MM, fire, NO half) ===\n');
+{
+  const c = spawn('Steam Mephit');
+  assert('Steam Mephit has deathBurst', c.deathBurst !== undefined);
+  if (c.deathBurst) {
+    eq('Steam Mephit damage count = 1', c.deathBurst.damage?.count, 1);
+    eq('Steam Mephit damage sides = 8', c.deathBurst.damage?.sides, 8);
+    eq('Steam Mephit damageType = fire', c.deathBurst.damageType, 'fire');
+    eq('Steam Mephit saveDC = 10', c.deathBurst.saveDC, 10);
+    eq('Steam Mephit saveAbility = dex', c.deathBurst.saveAbility, 'dex');
+    eq('Steam Mephit radius = 5', c.deathBurst.radius, 5);
+    // "or take 4 (1d8) fire damage" — no "half" wording → save-for-none
+    eq('Steam Mephit halfOnSuccess = false (save-for-none)', c.deathBurst.halfOnSuccess, false);
+  }
+}
+
+// ============================================================
+console.log('\n=== 8j. parseDeathBurst — Stonemelder (PotA, bludgeoning, half on save) ===\n');
+{
+  const c = spawn('Stonemelder');
+  assert('Stonemelder has deathBurst', c.deathBurst !== undefined);
+  if (c.deathBurst) {
+    eq('Stonemelder damage count = 2', c.deathBurst.damage?.count, 2);
+    eq('Stonemelder damage sides = 10', c.deathBurst.damage?.sides, 10);
+    eq('Stonemelder damageType = bludgeoning', c.deathBurst.damageType, 'bludgeoning');
+    eq('Stonemelder saveDC = 14', c.deathBurst.saveDC, 14);
+    eq('Stonemelder saveAbility = dex', c.deathBurst.saveAbility, 'dex');
+    eq('Stonemelder radius = 10', c.deathBurst.radius, 10);
+    eq('Stonemelder halfOnSuccess = true', c.deathBurst.halfOnSuccess, true);
+  }
+}
+
+// ============================================================
+console.log('\n=== 8k. parseDeathBurst — Art Elemental Mascot (SCC, condition-only, dmgType fix) ===\n');
+{
+  const c = spawn('Art Elemental Mascot');
+  assert('Art Elemental Mascot has deathBurst', c.deathBurst !== undefined);
+  if (c.deathBurst) {
+    eq('Art Elemental Mascot damage = null (condition-only)', c.deathBurst.damage, null);
+    eq('Art Elemental Mascot damageType = undefined (no damage → no type)', c.deathBurst.damageType, undefined);
+    eq('Art Elemental Mascot saveDC = 11', c.deathBurst.saveDC, 11);
+    eq('Art Elemental Mascot saveAbility = con', c.deathBurst.saveAbility, 'con');
+    eq('Art Elemental Mascot radius = 5', c.deathBurst.radius, 5);
+    assert('Art Elemental Mascot conditions includes blinded',
+      c.deathBurst.conditions?.includes('blinded') === true);
+  }
+}
+
+// ============================================================
+console.log('\n=== 8l. parseDeathBurst — Spirit Statue Mascot (SCC, radiant) ===\n');
+{
+  const c = spawn('Spirit Statue Mascot');
+  assert('Spirit Statue Mascot has deathBurst', c.deathBurst !== undefined);
+  if (c.deathBurst) {
+    eq('Spirit Statue Mascot damage count = 1', c.deathBurst.damage?.count, 1);
+    eq('Spirit Statue Mascot damage sides = 6', c.deathBurst.damage?.sides, 6);
+    eq('Spirit Statue Mascot damageType = radiant', c.deathBurst.damageType, 'radiant');
+    eq('Spirit Statue Mascot saveDC = 12', c.deathBurst.saveDC, 12);
+    eq('Spirit Statue Mascot saveAbility = con', c.deathBurst.saveAbility, 'con');
+    eq('Spirit Statue Mascot radius = 5', c.deathBurst.radius, 5);
+    eq('Spirit Statue Mascot halfOnSuccess = false (save-for-none)', c.deathBurst.halfOnSuccess, false);
+  }
 }
 
 // ============================================================

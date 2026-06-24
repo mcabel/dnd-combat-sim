@@ -404,7 +404,7 @@ Documented for future sessions. NOT in scope for the immediate megabatch.
 | 4a | ✅ DONE | 52 | 2f7ced4 | Magic Resistance (65 creatures); rollSave grants advantage |
 | 4b | ✅ DONE | 52 | 2f7ced4 | Regeneration (13 creatures); start-of-turn heal + stop-clause suppression |
 | 4c | ✅ DONE | 52 | cfb8a11 | Magic Weapons flag (19 creatures); full nonmagical-bypass deferred |
-| 4d | ✅ DONE | 53 | 23ff730 | Death Burst (14 creatures parsed across 7 pre-2024 sources); checkDeath hook + chain reactions; 63 test assertions |
+| 4d | ✅ DONE | 53+59 | 23ff730 | Death Burst (18 of 19 unique creatures parsed across 10 pre-2024 sources); checkDeath hook + chain reactions; 149 test assertions. Session 59: fixed damageType default bug (condition-only bursts now undefined, was 'fire') + fixed Slithering Bloodfin condition over-match (excludes "no longer" removal context); added 11 new test sections (86 new assertions). Smoke Mephit remains unparsed (no save DC — cloud-only, genuinely unparseable as a save-based burst). |
 | 4e (Session 52) | ✅ DONE | 52 | cfb8a11 | Blood Frenzy (7) + Swarm/cannotRegainHP (10) + Siege Monster metadata (5) |
 | 4e-remaining | ✅ PARTIAL | 53 | 2850c18 | Sunlight Sensitivity (120) + Avoidance (8) wired into engine. 6 more metadata flags parsed (Ambusher 10, Brute 14, False Appearance 100, Siege Monster 71, Water Breathing 33, Hold Breath 57). Remaining: Charge (49), Pounce (24), Incorporeal Movement (54), Superior Invisibility (15), Rejuvenation (33) — need movement/AI/death-respawn hooks. |
 | 4f | ✅ DONE | 53 | cdc68c4 | Superior Invisibility (15 creatures) wired into AI planner + engine. Incorporeal Movement (51 creatures) parsed as metadata-only (v1 movement has no collision detection). |
