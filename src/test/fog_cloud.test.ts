@@ -343,6 +343,11 @@ console.log('\n=== 8. Integration: runCombat ===\n');
 
 {
   // Full combat: low-HP caster casts Fog Cloud round 1.
+  // The enemy's hitBonus is -20 so it never hits → the caster never takes
+  // damage → concentration never breaks → the Fog Cloud obstacle persists.
+  // Without this, the ~45% concentration-save fail rate + ~3% crit-death
+  // rate makes the test flaky (obstacle removed when concentration breaks
+  // or caster dies).
   const caster = makeC({
     id: 'caster', faction: 'party', pos: { x: 0, y: 5, z: 0 },
     actions: [fogCloudAction()], resources: slots(2),
@@ -354,7 +359,8 @@ console.log('\n=== 8. Integration: runCombat ===\n');
     actions: [{
       name: 'Shortbow', isMultiattack: false,
       attackType: 'ranged', reach: 5, range: { normal: 80, long: 320 },
-      hitBonus: 4, damage: { count: 1, sides: 6, bonus: 2, average: 5 },
+      hitBonus: -20,  // never hits → no damage → concentration never breaks
+      damage: { count: 1, sides: 6, bonus: 2, average: 5 },
       damageType: 'piercing', saveDC: null, saveAbility: null,
       isAoE: false, isControl: false, requiresConcentration: false,
       costType: 'action', legendaryCost: 0, description: '',
