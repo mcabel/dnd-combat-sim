@@ -410,7 +410,7 @@ Documented for future sessions. NOT in scope for the immediate megabatch.
 | 4f | ✅ DONE | 53 | cdc68c4 | Superior Invisibility (15 creatures) wired into AI planner + engine. Incorporeal Movement (51 creatures) parsed as metadata-only (v1 movement has no collision detection). |
 | 4g | ✅ DONE | 53 | 8622bda | Charge (49 creatures) + Pounce (24 creatures) movement-triggered riders. _turnStartPos tracking in resetBudget. Extra damage + STR save vs push/prone (Charge), STR save vs prone (Pounce). |
 | 4h | ✅ DONE | 53 | 809a413 | Rejuvenation (33 creatures) metadata-only. reformTimeHours + conditionText parsed. v1 metadata-only — trait only matters in multi-day scenarios (not simulated). |
-| 5 | DEFERRED | — | — | lair + spellcasting + shapechanger |
+| 5b (step 1) | ✅ METADATA | 60 | c1e8014 | Monster spellcasting metadata parser (945 creatures). Parsed saveDC + spellAttackBonus + ability + atWill + daily + slots into `monsterSpellcasting` field. NOT consumed by engine — Batch 5b step 2 (planner + engine integration) is HIGH-risk, deferred. 16 test assertions. |
 
 **Session 53 note:** User uploaded ~99 bestiary sourcebooks mid-session (was 2 in Session 52). All counts above reflect the expanded dataset. Parser robustness fixes (rawCreatureType handling for `{type: {choose: [...]}}` shape) + 4 stale test files updated to be source-aware (no longer pin MM-only creature names). See zHANDOVER-SESSION-53.md for full details.
 
