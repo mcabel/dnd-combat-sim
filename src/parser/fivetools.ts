@@ -1631,6 +1631,11 @@ export function monsterToCombatant(
   );
   const siegeMonster = traits.some(t => /^Siege\s+Monster$/i.test(t.trim()));
   const waterBreathing = traits.some(t => /^Water\s+Breathing$/i.test(t.trim()));
+  // Session 63 RFC-COMBINING-EFFECTS: Devil's Sight trait (MM: Imp, Barbed
+  // Devil, Horned Devil, etc.). "Magical darkness doesn't impede the devil's
+  // darkvision." Parsed as a boolean flag on senses; consumed by
+  // isVisionBlocked() in los.ts to skip magical-darkness obstacles.
+  const hasDevilsSight = traits.some(t => /^Devil'?s?\s+Sight$/i.test(t.trim()));
   // Session 53 Batch 4f: Superior Invisibility + Incorporeal Movement
   const superiorInvisibility = traits.some(t => /^Superior\s+Invisibility$/i.test(t.trim()));
   const incorporealMovement = traits.some(t => /^Incorporeal\s+Movement$/i.test(t.trim()));
@@ -1754,7 +1759,15 @@ export function monsterToCombatant(
     // ── Session 52 Creature Megabatch Batch 2: saves/skills/senses ──
     saveProficiencies:      parseSaves(raw.save),
     skillProficiencies:     parseSkills(raw.skill),
-    senses:                 parseSenses(raw.senses, raw.passive),
+    senses:                 (() => {
+      const s = parseSenses(raw.senses, raw.passive);
+      // Merge Devil's Sight trait flag into senses (Session 63).
+      if (hasDevilsSight) {
+        if (!s) return { devilsSight: true };
+        return { ...s, devilsSight: true };
+      }
+      return s;
+    })(),
     bardicInspirationDie: null,
     wardingBond: null,
     activeEffects:   [],

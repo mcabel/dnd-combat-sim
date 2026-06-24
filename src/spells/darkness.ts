@@ -256,6 +256,7 @@ export function execute(
     height: 1,
     blocksMovement: false,
     blocksVision: true,
+    isMagicalDarkness: true,   // Session 63: blocks darkvision; Devil's Sight penetrates
   };
 
   // Add the obstacle to the battlefield.

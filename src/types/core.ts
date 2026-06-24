@@ -1273,14 +1273,29 @@ export interface Combatant {
 
   /** Vision modes + passive perception, parsed from 5etools `senses` +
    *  `passive`. Range in feet (e.g. { darkvision: 120, blindsight: 60,
-   *  passivePerception: 23 }). Not yet consumed by the LOS engine (TG-007);
-   *  recorded as metadata so adding more bestiary sources auto-populates it. */
+   *  passivePerception: 23 }). Consumed by the perception subsystem
+   *  (RFC-VISION-AUDIO Phase 2-3). */
   senses?: {
     darkvision?: number;
     blindsight?: number;
     truesight?: number;
     tremorsense?: number;
     passivePerception?: number;
+    /**
+     * ── Session 63 RFC-COMBINING-EFFECTS: Devil's Sight ──
+     * Parsed from the "Devil's Sight" monster trait (MM: Imp, Barbed Devil,
+     * Horned Devil, etc.) + the Warlock Eldritch Invocation (PHB p.110).
+     * Description: "Magical darkness doesn't impede the devil's darkvision."
+     *
+     * Distinct from darkvision: Devil's Sight lets the creature see through
+     * MAGICAL darkness (obstacles where isMagicalDarkness === true), which
+     * normal darkvision cannot. Requires darkvision to also be set — Devil's
+     * Sight extends darkvision, it doesn't grant sight on its own.
+     *
+     * Stored as boolean (not a range) — the trait doesn't specify a range,
+     * so it applies to the creature's full darkvision range.
+     */
+    devilsSight?: boolean;
   };
 
   // Bardic Inspiration die granted by a Bard (PHB p.54).
@@ -2151,6 +2166,25 @@ export interface Obstacle {
   blocksMovement: boolean;
   blocksVision: boolean;
   isOpen?: boolean;
+  /**
+   * ── Session 63 RFC-COMBINING-EFFECTS: magical darkness flag ──
+   * Set to true by the Darkness spell (PHB p.230) and any other source of
+   * MAGICAL darkness that explicitly blocks darkvision. Per the user's
+   * directive: "magical darkness only blocks darkvision if the cause source
+   * explicitly says so (e.g. the spell Darkness). Other sources will allow
+   * darkvision to see."
+   *
+   * - Darkness spell (PHB p.230): "A creature with darkvision can't see
+   *   through this darkness" → isMagicalDarkness = true, blocksVision = true.
+   * - Fog Cloud (normal obscurement): isMagicalDarkness = undefined, blocksVision = true.
+   * - Natural darkness (lightLevel: 'darkness'): no obstacle; handled by lightLevel.
+   *
+   * Devil's Sight (monster trait / Warlock invocation): "Magical darkness
+   * doesn't impede the devil's darkvision." An observer with `senses.devilsSight`
+   * can see through obstacles where isMagicalDarkness === true (their darkvision
+   * penetrates magical darkness). Implemented in hasLineOfSight() + isVisuallyDetected().
+   */
+  isMagicalDarkness?: boolean;
 }
 
 // ---- Battlefield --------------------------------------------

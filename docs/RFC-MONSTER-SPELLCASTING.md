@@ -302,20 +302,51 @@ Bespoke spell modules already have `metadata` objects. Extend them with an optio
 
 ---
 
-## 9.1 Autonomous Decisions (Session 63 — Core + Sheet offline)
+## 9.1 User Decisions (Session 63 — user review of autonomous choices)
 
-The implementing agent (Z.ai, Session 63) made the following autonomous
-decisions to unblock Phase 1 implementation. These are conservative,
-reversible, and documented here so the user can override them later:
+The user reviewed the 6 doubts and confirmed the autonomous decisions with
+refinements + added design directives for the AI weighting system. These
+supersede the autonomous choices and gate Phase 2/3 implementation.
 
-| # | Doubt | Decision | Rationale |
-|---|-------|----------|-----------|
-| 1 | Spell library coverage | **(A) Skip unimplemented** | Phase 1 is LOW-MEDIUM risk; casting stubs with no effect is worse than falling back to weapon attacks. Phase 1 only dispatches cantrips with a known `CANTRIP_TEMPLATE` (top ~13 combat cantrips). Utility cantrips (Mage Hand, Prestidigitation, Dancing Lights) are skipped — they have no combat effect. |
-| 2 | Opener spells | **Weighted system decides** (no forced opener) | Forcing a specific opener is brittle. The weighted scoring already boosts `damage`/`cc` tags on round 1 with 3+ enemies (×1.5/×1.8). Phase 1 has no concentration spells yet, so this is moot for now; Phase 3 will revisit with daily-use concentration spells. |
-| 3 | Cantrip vs slotted spell | **(B) Cantrip-finisher bonus** | When the target's current HP ≤ the cantrip's average damage × 1.5, the cantrip gets a ×1.3 weight boost ("finisher" — save the slot). Phase 1 has no slots, so this mainly affects Phase 2. Documented now for forward-compat. |
-| 4 | Concentration breaking | **(A) Break automatically** | Matches existing PC caster behavior (the planner doesn't avoid concentration spells when one is active — the new spell overwrites). Phase 1 has no concentration cantrips, so this is moot now; Phase 2+ will inherit this decision. |
-| 5 | Daily-use spells | **(B) Situational priority** | Save daily-use spells for high-impact moments (low HP escape, clutch CC). Burning a 3/day Blight on round 1 when you have Fireball slots is wasteful. Daily-use spells get a context-weighted score (boosted when self HP < 30% or a downed ally exists), NOT a flat "always cast first" priority. Phase 3 implements this. |
-| 6 | Unimplemented spell handling | **(A) Skip silently** | Pairs with Doubt #1. A generic spell-attack fallback would be gameable and incorrect (wrong damage type, wrong save, wrong range). Skipped spells fall through to the weapon-attack path, which is always correct. |
+### Confirmed Decisions
+
+| # | Doubt | Decision | User Refinement |
+|---|-------|----------|-----------------|
+| 1 | Spell library coverage | **(A) Skip unimplemented** | Unbuilt spells in monster lists get **priority in the task queue** — track them so the next spell-implementation batch targets the most-needed monster spells first. |
+| 2 | Opener spells | **(A) Weighted system decides** | Add **pattern bias** to the weighting system (see §9.2). Research video game / simulator AI state machines for a well-designed "intelligence." Each side plays to win (optimal within their means). |
+| 3 | Cantrip vs slotted spell | **(B) Cantrip-finisher bonus** | "Enemies grouped" bias > "target almost dead" bias. Also add **AC-vs-save targeting bias** (e.g. AC 12 + save 20 → target AC; half-damage-on-save spells like Fireball favored when save is high). |
+| 4 | Concentration breaking | **(A) Break automatically** | "Preserving concentration" gets a **bias bonus**. Don't churn concentration spells turn-to-turn unless a new situation clearly merits the swap. Robust research + planning required (see §9.2). |
+| 5 | Daily-use spells | **(A) Use them — go all out** | **Fights are to the death.** Retreat, social interaction, negotiation = OUT OF SCOPE. Monster side **never saves resources** — they go all out vs the player side. Monsters are always "rested" + full resources on spawn. Teleport/Dimension Door used defensively (get distance to heal/buff) or offensively (kite enemies with lesser/no ranged options). |
+| 6 | Unimplemented spell handling | **(A) Skip silently** | Confirmed as-is. |
+
+### §9.2 Pattern Bias AI System (NEW — user-directed)
+
+The user directed a more sophisticated AI weighting system. Full design in
+`docs/RFC-PATTERN-BIAS-AI.md` (written this session). Summary:
+
+- **Pattern biases** (situation-based weight multipliers):
+  - Strong ally wounded → boost healing/defensive spells.
+  - Enemies grouped (≥2 within AoE radius) → boost AoE spells.
+  - "Enemies grouped" bias > "target almost dead" (finisher) bias.
+  - AC-vs-save targeting: if target AC < target save bonus → prefer attack-roll spells; if save is high but spell deals half-on-save → still favored (Fireball).
+  - Concentration preservation: bias bonus for NOT breaking concentration unless the new situation clearly merits it.
+- **Resource strategy (monster side)**: monsters go ALL OUT. No resource conservation. Daily-use spells are used as soon as they're the highest-weighted option. Fights are to the death.
+- **Resource strategy (player side)**: PCs play to win but may conserve (long-rest scarcity model — unchanged from existing behavior).
+- **Research basis**: video game AI state machines (FSM, behavior trees, utility AI), MCTS for tactical combat, D&D 5e optimization community heuristics.
+
+### §9.3 Combining Game Effects (NEW — user-directed, separate RFC)
+
+The user directed a new "active effects pipeline" per DMG p.252 "Combining
+Game Effects" + PHB Ch.10 "Combining Magical Effects." Full design in
+`docs/RFC-COMBINING-EFFECTS.md` (written this session). Summary:
+
+- **Same-name effects don't stack**: when 2+ active effects share a name (two Blinded, two Spirit Guardians), only the MOST POTENT applies while durations overlap.
+- **Priority order**: most powerful > longest duration > most recently cast/applied (XGE details).
+- **Source tracking**: each effect tracks its originating source; ending the source ends the effect.
+- **Takeover on expiry**: when the strongest expires, the next-strongest with the highest remaining duration takes over.
+- **Conditions don't stack** (effects don't worsen with multiple instances) EXCEPT Exhaustion (has levels).
+- **Magical darkness source-specificity**: only blocks darkvision if the source explicitly says so (Darkness spell does; other darkness sources don't).
+- **Devil's Sight**: distinct from darkvision — sees through magical darkness (added as a new vision mode this session).
 
 **Net effect for Phase 1**: monsters with `monsterSpellcasting` now cast their
 combat cantrips (Ray of Frost, Fire Bolt, Sacred Flame, Toll the Dead, etc.)

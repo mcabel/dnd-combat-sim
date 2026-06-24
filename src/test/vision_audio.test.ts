@@ -1145,6 +1145,70 @@ console.log('\n=== 25. Phase 3: OA visibility gating ===\n');
 }
 
 // ============================================================
+console.log('\n=== 26. Phase 3: Devil\'s Sight sees through magical darkness ===\n');
+// ============================================================
+
+{
+  // Devil's Sight observer (Barbed Devil-style: darkvision 120 + devilsSight).
+  const devil = makeC({
+    id: 'devil', pos: { x: 0, y: 0, z: 0 },
+    senses: { darkvision: 120, devilsSight: true, passivePerception: 13 },
+  });
+  const normalObserver = makeC({
+    id: 'normal', pos: { x: 0, y: 0, z: 0 },
+    senses: { darkvision: 120, passivePerception: 13 },  // darkvision, no Devil's Sight
+  });
+
+  // Target behind a magical-darkness obstacle (Darkness spell).
+  // Darkness obstacle: x=3..5, y=-2..4, blocksVision=true, isMagicalDarkness=true.
+  const magicalDarkness: Obstacle = {
+    id: 'dark1', x: 3, y: -2, z: 0, width: 3, depth: 7, height: 1,
+    blocksMovement: false, blocksVision: true, isMagicalDarkness: true,
+  };
+  const targetBehindDarkness = makeC({ id: 'tgt1', pos: { x: 8, y: 0, z: 0 } });  // 40 ft
+  const bf1 = makeBF([devil, normalObserver, targetBehindDarkness], [magicalDarkness]);
+
+  assert('26a: Devil\'s Sight sees through magical darkness',
+    isVisuallyDetected(devil, targetBehindDarkness, bf1));
+  eq('26b: Devil\'s Sight detection state = visible',
+    getDetectionState(devil, targetBehindDarkness, bf1), 'visible');
+
+  assert('26c: normal darkvision can NOT see through magical darkness',
+    !isVisuallyDetected(normalObserver, targetBehindDarkness, bf1));
+
+  // Target behind a FOG obstacle (not magical darkness). Devil's Sight does
+  // NOT help — it only penetrates magical darkness, not fog.
+  const fog: Obstacle = {
+    id: 'fog1', x: 3, y: -2, z: 0, width: 3, depth: 7, height: 1,
+    blocksMovement: false, blocksVision: true,  // NO isMagicalDarkness
+  };
+  const targetBehindFog = makeC({ id: 'tgt2', pos: { x: 8, y: 0, z: 0 } });
+  const bf2 = makeBF([devil, targetBehindFog], [fog]);
+  assert('26d: Devil\'s Sight does NOT see through fog (only magical darkness)',
+    !isVisuallyDetected(devil, targetBehindFog, bf2));
+
+  // Devil's Sight + invisible target (in open field) — Devil's Sight does NOT
+  // grant invisibility detection (that's truesight/See Invisibility).
+  const invisibleTarget = makeC({ id: 'inv', pos: { x: 4, y: 0, z: 0 } });
+  invisibleTarget.conditions.add('invisible');
+  const bf3 = makeBF([devil, invisibleTarget]);
+  assert('26e: Devil\'s Sight does NOT see invisible (not truesight)',
+    !isVisuallyDetected(devil, invisibleTarget, bf3));
+
+  // Devil's Sight in natural darkness (lightLevel: 'darkness') — Devil's Sight
+  // alone (without darkvision) doesn't help in natural darkness. With
+  // darkvision it already works. This test confirms no regression.
+  const bf4 = makeBF([devil, targetBehindDarkness]);
+  bf4.lightLevel = 'darkness';
+  // No obstacle here — just testing darkvision in natural darkness still works.
+  const nearTarget = makeC({ id: 'near', pos: { x: 4, y: 0, z: 0 } });  // 20 ft
+  const bf5 = makeBF([devil, nearTarget]);
+  bf5.lightLevel = 'darkness';
+  assert('26f: Devil\'s Sight + darkvision sees in natural darkness',
+    isVisuallyDetected(devil, nearTarget, bf5));
+}
+
+// ============================================================
 
 console.log('\n─────────────────────────────────────────────');
 console.log(`Results: ${passed} passed, ${failed} failed`);

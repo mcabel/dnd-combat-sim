@@ -196,11 +196,24 @@ function isEffectBlocked(p: Vec2, q: Vec2, obstacles: Obstacle[]): boolean {
   return false;
 }
 
-/** true if segment P→Q is visually blocked by any vision-blocking obstacle */
-function isVisionBlocked(p: Vec2, q: Vec2, obstacles: Obstacle[]): boolean {
+/** true if segment P→Q is visually blocked by any vision-blocking obstacle.
+ *
+ * Session 63 RFC-COMBINING-EFFECTS: if `observer` is provided and has
+ * `senses.devilsSight`, magical-darkness obstacles (isMagicalDarkness === true)
+ * do NOT block the observer's vision. Devil's Sight (MM: Imp, Barbed Devil,
+ * etc. + Warlock invocation PHB p.110): "Magical darkness doesn't impede the
+ * devil's darkvision." This lets the observer see through magical darkness
+ * (but NOT through fog, walls, or other non-darkness obscurement).
+ */
+function isVisionBlocked(
+  p: Vec2, q: Vec2, obstacles: Obstacle[], observer?: Combatant,
+): boolean {
+  const hasDevilsSight = observer?.senses?.devilsSight === true;
   for (const obs of obstacles) {
     if (obs.isOpen) continue;
     if (!obs.blocksVision) continue;
+    // Devil's Sight: skip magical-darkness obstacles (see through them).
+    if (hasDevilsSight && obs.isMagicalDarkness === true) continue;
     if (segmentIntersectsAABB(p, q, getObstacleAABB(obs))) return true;
   }
   return false;
@@ -281,7 +294,9 @@ export function computeLOS(
   const cover = toCoverState(bestClear, targetCorners.length);
 
   // ── Vision check: any target corner visible from best source? ─────────────
-  const hasLineOfSight = targetCorners.some(tc => !isVisionBlocked(bestSrc, tc, obstacles));
+  // Session 63 RFC-COMBINING-EFFECTS: pass `attacker` as the observer so
+  // isVisionBlocked can skip magical-darkness obstacles for Devil's Sight.
+  const hasLineOfSight = targetCorners.some(tc => !isVisionBlocked(bestSrc, tc, obstacles, attacker));
 
   return {
     hasLineOfEffect: cover !== 'total',
