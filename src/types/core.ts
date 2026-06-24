@@ -975,6 +975,30 @@ export interface Combatant {
   };
 
   /**
+   * ── Session 63 RFC-MONSTER-SPELLCASTING Phase 2+ (forward-compat) ──
+   * Runtime spell-slot tracking for monsters with `monsterSpellcasting.slots`.
+   * Initialized at combat start from `monsterSpellcasting.slots` (max per
+   * level, remaining = max). Consumed by `consumeMonsterSpellSlot()` when a
+   * monster casts a slotted spell. Phase 1 (this session) does NOT consume
+   * these — at-will + cantrips are infinite. Phase 2 wires consumption.
+   *
+   * Optional — absent on monsters without slot-based spellcasting and on all
+   * legacy combatants (backward-compatible).
+   */
+  monsterSpellSlots?: { [level: number]: { max: number; remaining: number } };
+
+  /**
+   * ── Session 63 RFC-MONSTER-SPELLCASTING Phase 3+ (forward-compat) ──
+   * Runtime daily-use tracking for monsters with `monsterSpellcasting.daily`.
+   * Initialized at combat start from `monsterSpellcasting.daily` (max per
+   * spell, remaining = max). Consumed when a monster casts a daily-use spell.
+   * Phase 1 (this session) does NOT consume these. Phase 3 wires consumption.
+   *
+   * Optional — absent on monsters without daily-use spells (backward-compat).
+   */
+  monsterDailyUses?: { [spellName: string]: { max: number; remaining: number } };
+
+  /**
    * ── Session 60: Lair Actions (Batch 5a — metadata + basic engine hook) ──
    * 137 pre-2024 creatures have lair actions (from legendarygroups.json).
    * PHB/MM: "On initiative count 20 (losing initiative ties), the [creature]

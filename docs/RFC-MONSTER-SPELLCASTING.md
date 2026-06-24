@@ -302,6 +302,29 @@ Bespoke spell modules already have `metadata` objects. Extend them with an optio
 
 ---
 
+## 9.1 Autonomous Decisions (Session 63 — Core + Sheet offline)
+
+The implementing agent (Z.ai, Session 63) made the following autonomous
+decisions to unblock Phase 1 implementation. These are conservative,
+reversible, and documented here so the user can override them later:
+
+| # | Doubt | Decision | Rationale |
+|---|-------|----------|-----------|
+| 1 | Spell library coverage | **(A) Skip unimplemented** | Phase 1 is LOW-MEDIUM risk; casting stubs with no effect is worse than falling back to weapon attacks. Phase 1 only dispatches cantrips with a known `CANTRIP_TEMPLATE` (top ~13 combat cantrips). Utility cantrips (Mage Hand, Prestidigitation, Dancing Lights) are skipped — they have no combat effect. |
+| 2 | Opener spells | **Weighted system decides** (no forced opener) | Forcing a specific opener is brittle. The weighted scoring already boosts `damage`/`cc` tags on round 1 with 3+ enemies (×1.5/×1.8). Phase 1 has no concentration spells yet, so this is moot for now; Phase 3 will revisit with daily-use concentration spells. |
+| 3 | Cantrip vs slotted spell | **(B) Cantrip-finisher bonus** | When the target's current HP ≤ the cantrip's average damage × 1.5, the cantrip gets a ×1.3 weight boost ("finisher" — save the slot). Phase 1 has no slots, so this mainly affects Phase 2. Documented now for forward-compat. |
+| 4 | Concentration breaking | **(A) Break automatically** | Matches existing PC caster behavior (the planner doesn't avoid concentration spells when one is active — the new spell overwrites). Phase 1 has no concentration cantrips, so this is moot now; Phase 2+ will inherit this decision. |
+| 5 | Daily-use spells | **(B) Situational priority** | Save daily-use spells for high-impact moments (low HP escape, clutch CC). Burning a 3/day Blight on round 1 when you have Fireball slots is wasteful. Daily-use spells get a context-weighted score (boosted when self HP < 30% or a downed ally exists), NOT a flat "always cast first" priority. Phase 3 implements this. |
+| 6 | Unimplemented spell handling | **(A) Skip silently** | Pairs with Doubt #1. A generic spell-attack fallback would be gameable and incorrect (wrong damage type, wrong save, wrong range). Skipped spells fall through to the weapon-attack path, which is always correct. |
+
+**Net effect for Phase 1**: monsters with `monsterSpellcasting` now cast their
+combat cantrips (Ray of Frost, Fire Bolt, Sacred Flame, Toll the Dead, etc.)
+using a weighted selection. Utility cantrips and unimplemented spells are
+skipped → the monster falls back to its weapon attacks (existing behavior).
+No regression risk: monsters without `monsterSpellcasting` are unaffected.
+
+---
+
 ## 10. Backward Compatibility
 
 - **No changes to existing PC spellcasting**: PCs use `resources.spellSlots` + the existing generic-spell loop. Monster spellcasting is a separate code path.

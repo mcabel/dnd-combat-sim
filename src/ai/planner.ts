@@ -287,6 +287,8 @@ import { shouldCast as shouldCastFindGreaterSteed }    from '../spells/find_grea
 import { GENERIC_SPELL_LIST } from '../spells/_generic_registry';
 // ── Session 42 Task #18 — Thirsting Blade check ──
 import { hasInvocation } from '../spells/_invocations';
+// ── Session 63 RFC-MONSTER-SPELLCASTING Phase 1 — monster cantrip casting ──
+import { selectMonsterSpell } from './monster_spellcasting';
 // ── Session 43 Task #24 — Extra Attack feature check ──
 import { hasFeature } from '../characters/builder';
 import { selectAction, selfPreserveDecision, selectLegendaryAction, isActionAvailable } from './actions';
@@ -5157,6 +5159,32 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
         plan.bonusAction = planBonusAction(self, gustTarget, battlefield);
         return plan;
       }
+    }
+  }
+
+  // === SESSION 63 — MONSTER SPELLCASTING (RFC-MONSTER-SPELLCASTING Phase 1) ===
+  // Monsters with `monsterSpellcasting` (945 creatures) have cantrips + at-will
+  // spells that are NOT in their `actions` array (the parser stores them in
+  // `monsterSpellcasting.atWill` + `monsterSpellcasting.slots[0].spells`).
+  // This branch builds synthetic spell-attack Actions for their combat cantrips
+  // (Ray of Frost, Fire Bolt, Sacred Flame, etc.) and picks the best one via
+  // weighted scoring (tags × context). Returns null if no cantrip qualifies →
+  // falls through to the generic-spell loop / weapon attacks.
+  //
+  // Phase 1 scope: at-will + cantrips only (no slot consumption, no daily).
+  // Phase 2+ will extend to slot-based + daily-use spells.
+  //
+  // This branch sits ABOVE the generic-spell loop so monster cantrips are
+  // preferred over improvised weapon attacks, but BELOW all bespoke spell
+  // branches (a monster that also has a bespoke spell in `actions` — e.g.
+  // a Lich's Paralyzing Touch — would have already been handled above).
+  if (!plan.action && self.monsterSpellcasting) {
+    const monsterSpellPlan = selectMonsterSpell(self, battlefield);
+    if (monsterSpellPlan) {
+      plan.action = monsterSpellPlan;
+      plan.targetId = monsterSpellPlan.targetId ?? null;
+      plan.bonusAction = planBonusAction(self, target, battlefield);
+      return plan;
     }
   }
 
