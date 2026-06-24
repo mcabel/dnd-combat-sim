@@ -196,6 +196,8 @@ import { shouldCast as shouldCastTashasHideousLaughter } from '../spells/tashas_
 import { shouldCast as shouldCastDimensionDoor } from '../spells/dimension_door';
 import { shouldCast as shouldCastFogCloud } from '../spells/fog_cloud';
 import { shouldCast as shouldCastDarkness } from '../spells/darkness';
+import { shouldCast as shouldCastWallOfFire } from '../spells/wall_of_fire';
+import { shouldCast as shouldCastScrying } from '../spells/scrying';
 import { shouldShapechange } from '../engine/shapechange';
 // ── Session 62 RFC-VISION-AUDIO Phase 1: perception + detection helpers ──
 import {
@@ -4565,6 +4567,18 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
     }
   }
 
+  // --- WALL OF FIRE (L4, DEX save 5d8 fire + conc damage_zone) ---
+  // PHB p.285: 120 ft, concentration. v1: single-target zone (mirrors Flaming Sphere).
+  if (!plan.action && self.actions.some(a => a.name === 'Wall of Fire')) {
+    const wofTarget = shouldCastWallOfFire(self, battlefield);
+    if (wofTarget) {
+      plan.action = { type: 'wallOfFire', action: null, targetId: wofTarget.id, description: `${self.name} casts Wall of Fire at ${wofTarget.name}` };
+      plan.targetId = wofTarget.id;
+      plan.bonusAction = planBonusAction(self, wofTarget, battlefield);
+      return plan;
+    }
+  }
+
   // --- 12CL2b. DARKNESS (15-ft radius magical darkness, L2, concentration) ---
   // Session 63: PHB p.230. Self-centered defensive/control spell — blocks
   // vision for everyone in the sphere (including the caster) + enables Hide.
@@ -4593,11 +4607,7 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
   // Session 62: PHB p.243. Self-centered defensive spell — blocks vision
   // for everyone in the sphere (including the caster) + enables Hide.
   // shouldCast returns the caster (self) or null.
-  // Priority: LOW — this is a defensive/positioning spell, not damage.
-  // Fires when the caster is low HP + near enemies, or outnumbered with
-  // allies who could hide. Sits BELOW Darkness (Darkness is preferred when
-  // both are available — L2 slot, blocks darkvision in Phase 2) but ABOVE
-  // the generic spell loop so it wins over the L1 generic entry.
+  // Priority: LOW — sits BELOW Darkness (preferred when both available).
   if (!plan.action && self.actions.some(a => a.name === 'Fog Cloud')) {
     const fcTarget = shouldCastFogCloud(self, battlefield);
     if (fcTarget) {
@@ -4611,6 +4621,13 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
       plan.bonusAction = planBonusAction(self, self, battlefield);
       return plan;
     }
+  }
+
+  // --- SCRYING (L5, out-of-combat only) ---
+  // PHB p.273: 10-min cast time — shouldCastScrying always returns false.
+  // Listed to prevent unknown-action fallthrough; never fires in combat.
+  if (!plan.action && self.actions.some(a => a.name === 'Scrying')) {
+    if (shouldCastScrying(self, battlefield)) { /* never */ }
   }
 
   // --- 12CM. CHARM PERSON (WIS save or charmed, L1, NO conc) ---

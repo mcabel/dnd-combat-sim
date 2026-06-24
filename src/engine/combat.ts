@@ -656,6 +656,12 @@ import {
   execute as executeDarkness,
 } from '../spells/darkness';
 import {
+  shouldCast as shouldCastWallOfFire,
+  execute as executeWallOfFire,
+} from '../spells/wall_of_fire';
+// Scrying: out-of-combat stub — shouldCast always returns false
+import { shouldCast as shouldCastScrying } from '../spells/scrying';
+import {
   shouldShapechange,
   executeShapechange,
   revertOnDeath as revertShapechangeOnDeath,
@@ -5219,6 +5225,22 @@ export function executePlannedAction(
       // creature rider), no occupied-destination damage.
       const dd = shouldCastDimensionDoor(actor, bf);
       if (dd) executeDimensionDoor(actor, dd.destination, state);
+      break;
+    }
+
+    case 'wallOfFire': {
+      // Wall of Fire — PHB p.285: 120 ft, DEX save 5d8 fire + conc damage_zone (L4, v1: single-target).
+      const wofTargetId = plan.targetId;
+      const wofTarget = wofTargetId ? bf.combatants.get(wofTargetId) ?? null : null;
+      const wofLive = wofTarget && !wofTarget.isDead && !wofTarget.isUnconscious ? wofTarget : shouldCastWallOfFire(actor, bf);
+      if (wofLive) executeWallOfFire(actor, wofLive, state);
+      break;
+    }
+
+    case 'scrying': {
+      // Scrying — PHB p.273: 10-min cast time, out-of-combat only.
+      // shouldCastScrying always returns false; this branch is a safety guard.
+      if (shouldCastScrying(actor, bf)) { /* never fires in combat */ }
       break;
     }
 

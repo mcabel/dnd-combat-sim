@@ -2544,6 +2544,8 @@ export interface PlannedAction {
     | 'shapechange'       // Session 61 RFC-SHAPECHANGER Phase 1: monster trait — swap size/speed/AC per form (53+ creatures)
     | 'fogCloud'          // Session 62: Fog Cloud — PHB p.243: 120 ft, 20-ft sphere heavy obscurement, concentration 1 min (blocks vision; enables Hide)
     | 'darkness'          // Session 63: Darkness — PHB p.230: 60 ft, 15-ft radius magical darkness, concentration 10 min (blocks vision + darkvision; enables Hide)
+    | 'wallOfFire'        // Wall of Fire — PHB p.285: 120 ft, DEX save 5d8 fire + damage_zone, concentration (L4, v1: single-target)
+    | 'scrying'           // Scrying — PHB p.273: WIS save, 10-min cast, out-of-combat only (stub)
     | 'charmPerson'       // Charm Person — PHB p.221: 30 ft, WIS save or charmed, NO concentration (Session 27 TG-004: humanoid-only NOW enforced)
     | 'compelledDuel'     // Compelled Duel — PHB p.224: 30 ft, WIS save or frightened (taunt), concentration (movement-restriction simplified)
     | 'grease'            // Grease — PHB p.245: 60 ft, 10-ft radius AoE, DEX save or prone, NO concentration (persistent-terrain simplified)
