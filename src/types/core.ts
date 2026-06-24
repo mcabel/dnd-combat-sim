@@ -2281,6 +2281,7 @@ export interface PlannedAction {
     | 'blindnessDeafness' // Blindness/Deafness — PHB p.219: 30 ft, CON save or blinded, NO concentration (v1: always blinded)
     | 'banishment'        // Banishment — PHB p.217: 60 ft, CHA save, concentration; fey/elemental/etc removed permanently, others incapacitated
     | 'tashasHideousLaughter' // Tasha's Hideous Laughter — PHB p.282: 30 ft, WIS save or prone+incapacitated, concentration
+    | 'dimensionDoor'     // Dimension Door — PHB p.233: self, ACTION teleport up to 500 ft, NO concentration (v1: caster-only, no willing-creature rider, no occupied-dest damage)
     | 'charmPerson'       // Charm Person — PHB p.221: 30 ft, WIS save or charmed, NO concentration (Session 27 TG-004: humanoid-only NOW enforced)
     | 'compelledDuel'     // Compelled Duel — PHB p.224: 30 ft, WIS save or frightened (taunt), concentration (movement-restriction simplified)
     | 'grease'            // Grease — PHB p.245: 60 ft, 10-ft radius AoE, DEX save or prone, NO concentration (persistent-terrain simplified)

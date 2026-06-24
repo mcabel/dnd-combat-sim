@@ -644,6 +644,10 @@ import {
   execute as executeTashasHideousLaughter,
 } from '../spells/tashas_hideous_laughter';
 import {
+  shouldCast as shouldCastDimensionDoor,
+  execute as executeDimensionDoor,
+} from '../spells/dimension_door';
+import {
   shouldCast as shouldCastCharmPerson,
   execute as executeCharmPerson,
 } from '../spells/charm_person';
@@ -5150,6 +5154,15 @@ export function executePlannedAction(
       const thlTarget = thlTargetId ? bf.combatants.get(thlTargetId) ?? null : null;
       const thlLive = thlTarget && !thlTarget.isDead && !thlTarget.isUnconscious ? thlTarget : shouldCastTashasHideousLaughter(actor, bf);
       if (thlLive) executeTashasHideousLaughter(actor, thlLive, state);
+      break;
+    }
+
+    case 'dimensionDoor': {
+      // Dimension Door — PHB p.233: self, ACTION teleport up to 500 ft, NO conc.
+      // shouldCast returns { destination } | null. v1: caster-only (no willing
+      // creature rider), no occupied-destination damage.
+      const dd = shouldCastDimensionDoor(actor, bf);
+      if (dd) executeDimensionDoor(actor, dd.destination, state);
       break;
     }
 

@@ -193,6 +193,7 @@ import { shouldCast as shouldCastAnimalFriendship } from '../spells/animal_frien
 import { shouldCast as shouldCastCauseFear } from '../spells/cause_fear';
 import { shouldCast as shouldCastBanishment } from '../spells/banishment';
 import { shouldCast as shouldCastTashasHideousLaughter } from '../spells/tashas_hideous_laughter';
+import { shouldCast as shouldCastDimensionDoor } from '../spells/dimension_door';
 import { shouldCast as shouldCastCharmPerson } from '../spells/charm_person';
 import { shouldCast as shouldCastCompelledDuel } from '../spells/compelled_duel';
 import { shouldCast as shouldCastGrease } from '../spells/grease';
@@ -4406,6 +4407,28 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
       plan.action = { type: 'tashasHideousLaughter', action: null, targetId: thlTarget.id, description: `${self.name} casts Tasha's Hideous Laughter at ${thlTarget.name}` };
       plan.targetId = thlTarget.id;
       plan.bonusAction = planBonusAction(self, thlTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- DIMENSION DOOR (self teleport 500 ft, L4, ACTION, NO conc) ---
+  // PHB p.233: action, self, teleport up to 500 ft, NO concentration.
+  // v1: caster-only (no willing-creature rider). Used to close huge distance
+  // gaps (when >60 ft from nearest enemy — Misty Step only covers 30 ft) OR
+  // to escape melee when below 30% HP. shouldCast returns { destination }.
+  // Priority: below damage spells (this is a positioning spell, not damage),
+  // but above the generic spell loop so it wins over the L4 generic entry.
+  if (!plan.action && self.actions.some(a => a.name === 'Dimension Door')) {
+    const dd = shouldCastDimensionDoor(self, battlefield);
+    if (dd) {
+      plan.action = {
+        type: 'dimensionDoor',
+        action: null,
+        targetId: self.id,    // self-targeted; destination is recomputed in execute
+        description: `${self.name} casts Dimension Door (teleport up to 500 ft)`,
+      };
+      plan.targetId = self.id;
+      plan.bonusAction = planBonusAction(self, self, battlefield);
       return plan;
     }
   }
