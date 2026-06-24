@@ -341,6 +341,48 @@ export interface ActiveEffect {
   // monster casters, fivetools.ts:1236 populates it from the 5etools type
   // field. The check in applySpellEffect compares lowercased values.
   sourceCreatureType?: string;
+
+  // ── Session 64 RFC-COMBINING-EFFECTS Phase 1: priority activation ──
+  // Per DMG p.252 "Combining Game Effects" + PHB Ch.10 "Combining Magical
+  // Effects": when 2+ effects share an `effectName`, only the most potent
+  // applies (power > total duration > most recently activated). Both effects
+  // COEXIST in activeEffects with timers running; the loser gets
+  // `suppressed: true` (dormant, not deleted). When the active expires, the
+  // next-highest suppressed effect takes over. See RFC-COMBINING-EFFECTS.md.
+
+  /**
+   * Canonical effect identity — the key for same-name priority activation.
+   * Two effects with the same effectName overlap (DMG p.252).
+   *
+   * Distinct from spellName: Blindness/Deafness spell + Darkness spell both
+   * → 'blinded'; two Spirit Guardians from different clerics → 'spirit-guardians'.
+   *
+   * Auto-populated by applySpellEffect via resolveEffectName() when absent.
+   * Spell modules can override by setting it explicitly.
+   */
+  effectName?: string;
+
+  /** Originating source instance ID. When the source ends (concentration break,
+   *  AoE expiry, caster death), all effects with this sourceId are removed.
+   *  If absent, lifecycle is bound to casterId + sourceIsConcentration (legacy). */
+  sourceId?: string;
+
+  /** Turn number when this effect's source expires (non-concentration finite
+   *  duration). reevaluateEffects removes effects where round > sourceTurnExpires.
+   *  undefined = no expiry (concentration-bound or permanent). */
+  sourceTurnExpires?: number;
+
+  /** Turn number when this effect was applied. XGE final tiebreaker ("most
+   *  recently activated") when potency + duration are equal. Higher = more recent.
+   *  Auto-populated by applySpellEffect when absent (defaults to 0). */
+  appliedTurn?: number;
+
+  /** True = this effect is suppressed by priority activation (a higher-priority
+   *  same-name effect is active). Suppressed effects stay in activeEffects with
+   *  timers running; they do NOT apply their mechanics. When the active effect
+   *  is removed, reevaluateEffects promotes the next-highest suppressed effect.
+   *  undefined/false = active (not suppressed). */
+  suppressed?: boolean;
 }
 
 // ---- Action -------------------------------------------------

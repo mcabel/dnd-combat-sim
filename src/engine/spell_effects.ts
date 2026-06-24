@@ -25,6 +25,9 @@
 
 import { ActiveEffect, Combatant, Battlefield, SpellEffectType, DamageType, AbilityScore, Condition, Vec3, TerrainType } from '../types/core';
 import { grantVulnerability, grantSelf, removeBySource } from './adv_system';
+// ── Session 64 RFC-COMBINING-EFFECTS Phase 1: priority activation ──
+import { resolveEffectNameFromDef } from './effect_identity';
+import { reevaluateEffects, isActive } from './effect_pipeline';
 
 // ---- ID generator -------------------------------------------
 
@@ -54,7 +57,17 @@ export function applySpellEffect(
   target: Combatant,
   def: Omit<ActiveEffect, 'id'>,
 ): ActiveEffect {
-  const effect: ActiveEffect = { ...def, id: nextEffectId() };
+  // ── Session 64 RFC-COMBINING-EFFECTS Phase 1 ──
+  // Auto-populate effectName via the identity registry when absent, so spell
+  // modules don't all need updating in lock-step. Spell modules can override
+  // by setting effectName explicitly on the def.
+  const effectName = def.effectName ?? resolveEffectNameFromDef(def);
+  const effect: ActiveEffect = {
+    ...def,
+    effectName,
+    appliedTurn: def.appliedTurn ?? 0,   // default 0; spell modules with bf in scope can pass bf.round
+    id: nextEffectId(),
+  };
   target.activeEffects.push(effect);
 
   switch (effect.effectType) {
@@ -191,6 +204,13 @@ export function removeEffectsFromCaster(casterId: string, bf: Battlefield): void
     }
 
     combatant.activeEffects = combatant.activeEffects.filter(e => e.casterId !== casterId);
+
+    // ── Session 64 RFC-COMBINING-EFFECTS Phase 1 ──
+    // After removing this caster's effects, re-evaluate priority activation
+    // so any suppressed same-name effects from OTHER casters promote to
+    // active immediately (no 1-round gap). E.g. cleric A's Bless breaks →
+    // cleric B's suppressed Bless promotes to active right now.
+    reevaluateEffects(combatant, bf);
   }
 
   // ── Moving Zone cleanup ──
@@ -403,7 +423,7 @@ function _undoEffect(target: Combatant, effect: ActiveEffect): void {
  */
 export function getActiveAcBonus(c: Combatant): number {
   return c.activeEffects
-    .filter(e => e.effectType === 'ac_bonus')
+    .filter(e => e.effectType === 'ac_bonus' && isActive(e))
     .reduce((sum, e) => sum + (e.payload.acBonus ?? 0), 0);
 }
 
@@ -419,7 +439,7 @@ export function getActiveAcBonus(c: Combatant): number {
  */
 export function getActiveAcFloor(c: Combatant): number {
   return c.activeEffects
-    .filter(e => e.effectType === 'ac_floor')
+    .filter(e => e.effectType === 'ac_floor' && isActive(e))
     .reduce((max, e) => Math.max(max, e.payload.acFloor ?? 0), 0);
 }
 
@@ -432,7 +452,7 @@ export function getActiveAcFloor(c: Combatant): number {
  */
 export function getActiveBlessDie(c: Combatant): number {
   return c.activeEffects
-    .filter(e => e.effectType === 'bless_die')
+    .filter(e => e.effectType === 'bless_die' && isActive(e))
     .reduce((max, e) => Math.max(max, e.payload.dieSides ?? 0), 0);
 }
 
@@ -444,7 +464,7 @@ export function getActiveBlessDie(c: Combatant): number {
  */
 export function getActiveBaneDie(c: Combatant): number {
   return c.activeEffects
-    .filter(e => e.effectType === 'bane_die')
+    .filter(e => e.effectType === 'bane_die' && isActive(e))
     .reduce((max, e) => Math.max(max, e.payload.dieSides ?? 0), 0);
 }
 
@@ -483,7 +503,7 @@ export function getActiveHexDie(target: Combatant, attackerId: string): number {
  * can return them safely.
  */
 export function getActiveDamageZones(c: Combatant): ActiveEffect[] {
-  return c.activeEffects.filter(e => e.effectType === 'damage_zone');
+  return c.activeEffects.filter(e => e.effectType === 'damage_zone' && isActive(e));
 }
 
 // ---- Weapon enchant query (Session 17 — Magic Weapon PHB p.257) ---
@@ -509,6 +529,7 @@ export function getActiveWeaponEnchant(c: Combatant): { attackBonus: number; dam
   let damageDieType: DamageType | undefined;
   for (const e of c.activeEffects) {
     if (e.effectType !== 'weapon_enchant') continue;
+    if (!isActive(e)) continue;  // Session 64: suppressed effects don't apply
     attackBonus += e.payload.attackBonus ?? 0;
     damageBonus  += e.payload.damageBonus  ?? 0;
     // Session 27 Batch 3: extra damage die (Divine Favor, Holy Weapon, etc.)

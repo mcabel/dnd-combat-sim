@@ -667,6 +667,8 @@ import {
   updateDetectionStates,
   revealOnCast,
 } from './perception';
+// ── Session 64 RFC-COMBINING-EFFECTS Phase 1: priority activation ──
+import { reevaluateEffects } from './effect_pipeline';
 import {
   shouldCast as shouldCastCharmPerson,
   execute as executeCharmPerson,
@@ -5791,6 +5793,15 @@ export function runCombat(
       // O(n²) per turn — fine for v1 small combats. Idempotent; lazy-inits
       // the detection Map on combatants that don't have one yet.
       updateDetectionStates(battlefield);
+
+      // ── Session 64 RFC-COMBINING-EFFECTS Phase 1: priority activation ──
+      // At the start of each combatant's turn, re-evaluate the active-effects
+      // pipeline: group same-name effects, mark the most potent as active,
+      // suppress the rest. This ensures suppressed effects are correctly
+      // promoted when the active one was removed since the actor's last turn.
+      // (removeEffectsFromCaster also calls reevaluateEffects for immediate
+      // promotion on concentration break — this is the periodic refresh.)
+      reevaluateEffects(actor, battlefield);
 
       // ── Session 46 Task #29-follow-up-2: Survivor (Champion 18) regen ──
       // PHB p.73: "At 18th level, you attain the pinnacle of resilience in
