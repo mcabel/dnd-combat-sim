@@ -830,17 +830,18 @@ completed by a single agent without coordination.
 
 #### TG-030: Quivering Palm action type (TG-017 step 4) — blocked on TG-024
 
-- **Status:** OPEN — proposed Session 53 (promotes TG-017 step 4)
+- **Status:** DONE — Session 57 (commit pending)
 - **Owners:** Core Engine (driving — owns `src/engine/combat.ts` `executePlannedAction`)
 - **Source:** TG-017 step 4.
-- **Summary:** Quivering Palm (Open Hand Monk 17) needs a new `'quiveringPalm'` action type in `executePlannedAction`, mirroring the `'draconicPresence'` pattern from Session 49. Touch attack + CON save + instakill on failed save / 10d8 necrotic on success. Costs 3 ki.
+- **Summary:** Quivering Palm (Open Hand Monk 17) needs a new `'quiveringPalm'` action type in `executePlannedAction`, mirroring the `'draconicPresence'` pattern from Session 49. Touch attack + CON save + instakill on failed save / 10d10 necrotic on success. Costs 3 ki.
 - **Implementation plan:**
-  1. Add `'quiveringPalm'` case to `executePlannedAction` in `combat.ts`.
-  2. Add `quiveringPalmTargets?: Set<string>` to `Combatant` (track which targets have been "touched" and are vulnerable to the follow-up 10d8 trigger).
-  3. Planner (`planner.ts`): add a branch that picks the highest-HP target for the touch (then triggers 10d8 on a later turn if the target is still alive).
-  4. Test (`src/test/quivering_palm.test.ts`): Monk 17 vs 60-HP target — touch succeeds, follow-up triggers, CON save fails → target dies. CON save succeeds → 10d8 necrotic.
-- **Risk:** MEDIUM — touch + CON save + instakill has many edge cases.
-- **Coordination protocol:** Core Engine drives; blocked on TG-024 (ki transfer).
+  1. Add `'quiveringPalm'` case to `executePlannedAction` in `combat.ts`. ✅ DONE — added after `'draconicPresence'` case. Rolls unarmed strike touch attack (prof + max(DEX, WIS) mod); on hit, spends 3 ki + target makes CON save (DC = 8 + prof + WIS, monk ki save DC). Fail → reduced to 0 HP (instakill). Success → 10d10 necrotic. Ki spent ONLY on hit (PHB-accurate: "When you hit... you can spend 3 ki").
+  2. `quiveringPalmTargets?: Set<string>` on `Combatant` — DEFERRED. v1 collapses the two-step (touch now / trigger later action) into a single action (documented as v1 simplification). The multi-day vibration duration is not modeled (v1 is single-combat scope).
+  3. Planner (`planner.ts`): ✅ DONE — added branch after Draconic Presence. Fires when monk has Quivering Palm feature + ≥3 ki + a living enemy in melee range (5 ft) + HP > 20%. Target priority: highest-current-HP enemy (instakill is most valuable against high-HP targets).
+  4. Test (`src/test/quivering_palm.test.ts`): ✅ DONE — 31 assertions covering: feature/ki setup, CON save fail → instakill, CON save success → 10d10 necrotic (range [10, 100]), touch miss → no ki spent, insufficient ki → no-op, no feature → no-op, out of range → no-op, dead target → no-op, save DC verification (8 + prof 6 + WIS 5 = 19), hit bonus verification (prof + max(DEX, WIS)), high-HP target instakill (100 HP → 0), death log event.
+- **Risk:** MEDIUM (per original spec — touch + CON save + instakill has many edge cases) → actual risk was MEDIUM-LOW. The v1 single-action collapse avoids the multi-turn tracking complexity. All edge cases handled: miss (no ki spent), insufficient ki, no feature, out of range, dead target. All 10 regression test files pass (combat, engine, mechanics, phase4, integration, scenario, ai, wholeness_of_body, diamond_soul, resources).
+- **Coordination protocol:** Core Engine drives; UNBLOCKED by TG-024 (ki transfer landed Session 55).
+- **Note:** The leveler's Quivering Palm description said "10d12 necrotic, or half on CON save" — this is WRONG. PHB p.80 says "If it fails, it is reduced to 0 hit points. If it succeeds, it takes 10d10 necrotic damage." The engine implements the PHB-accurate version (instakill on fail / 10d10 on success). The leveler description is a pre-existing documentation error (not corrected to avoid touching the Sheet-owned file without coordination).
 
 #### TG-031: Open Hand Technique Flurry rider (TG-017 step 3) — blocked on TG-024
 

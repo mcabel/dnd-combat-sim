@@ -1998,6 +1998,7 @@ export interface PlannedAction {
     | 'secondWind' | 'rage' | 'layOnHands' | 'bardicInspiration'
     | 'wholenessOfBody'  // Open Hand Monk 6 — self-heal 3×monk level, 1/long rest (PHB p.79)
     | 'draconicPresence' // Draconic Sorcerer 18 — frighten aura, WIS save, 1/combat (PHB p.102)
+    | 'quiveringPalm'    // Open Hand Monk 17 — touch + CON save, instakill on fail / 10d10 necrotic on success, 3 ki (PHB p.80)
     | 'spellHeal'    // legacy — no longer dispatched; retained for test compatibility
     | 'cureWounds'  // Cure Wounds — action, 1d8+mod heal per slot level, touch range (PHB p.230)
     | 'faerieFire'     // Faerie Fire AoE control (concentration)

@@ -25,6 +25,7 @@ import {
   rollDiceString as rollBoomingBladeDice,
   rollAbilityCheck,  // Session 43 Task #26: for rollAbilityCheckReactable
   elementalAffinityBonus,  // Session 47 Task #29-follow-up-5: Draconic Sorcerer
+  combatantProfBonus,  // TG-030: Quivering Palm attack bonus + ki save DC
 } from './utils';
 import {
   chebyshev3D, distanceFt, euclideanDistFt, canReach, estimateMoveCostFt,
@@ -3322,6 +3323,113 @@ export function executePlannedAction(
         // No uses remaining — shouldn't happen (planner guards this), but
         // log a no-op to avoid silent failure.
         log(state, 'action', actor.id, `${plan.description} (no uses remaining — no-op)`);
+      }
+      break;
+    }
+    case 'quiveringPalm': {
+      // ── TG-030: Quivering Palm (Open Hand Monk 17, PHB p.80) ──
+      // "When you hit a creature with an unarmed strike, you can spend 3 ki
+      //  points to start these imperceptible vibrations... When you use this
+      //  action, the creature must make a Constitution saving throw. If it
+      //  fails, it is reduced to 0 hit points. If it succeeds, it takes 10d10
+      //  necrotic damage."
+      //
+      // v1 simplification: collapses the two-step (touch now / trigger later
+      // action) into a single action — the monk uses an action to make an
+      // unarmed strike touch attack; on hit, spends 3 ki and the target
+      // immediately makes the CON save (instakill on fail / 10d10 necrotic on
+      // success). The multi-day vibration duration + "action to end" mechanic
+      // are not modeled (v1 is single-combat scope). Ki is spent ONLY on hit
+      // (PHB-accurate: "When you hit... you can spend 3 ki"). On miss, no ki
+      // is spent and the action is wasted.
+      //
+      // Guard: requires Quivering Palm class feature + 3 ki + a living enemy
+      // target in melee range (5 ft touch).
+      if (!hasFeature(actor, 'Quivering Palm')) {
+        log(state, 'action', actor.id, `${plan.description} (no Quivering Palm feature — no-op)`);
+        break;
+      }
+      const ki = actor.resources?.ki;
+      if (!ki || ki.remaining < 3) {
+        log(state, 'action', actor.id, `${plan.description} (insufficient ki: ${ki?.remaining ?? 0}/3 — no-op)`);
+        break;
+      }
+      const qpTarget = plan.targetId
+        ? state.battlefield.combatants.get(plan.targetId) ?? null
+        : null;
+      if (!qpTarget || qpTarget.isDead || qpTarget.isUnconscious) {
+        log(state, 'action', actor.id, `${plan.description} (no valid target — no-op)`);
+        break;
+      }
+      // Touch range = 5 ft (melee)
+      const distFt = chebyshev3D(actor.pos, qpTarget.pos) * 5;
+      if (distFt > 5) {
+        log(state, 'action', actor.id,
+          `${plan.description} (target ${qpTarget.name} out of range: ${distFt} ft — no-op)`);
+        break;
+      }
+
+      log(state, 'action', actor.id, plan.description);
+
+      // Roll the unarmed strike touch attack.
+      // Monk unarmed strike: proficiency + max(DEX, WIS) mod (PHB p.76 Martial Arts).
+      const prof = combatantProfBonus(actor);
+      const dexMod = abilityMod(actor.dex);
+      const wisMod = abilityMod(actor.wis);
+      const hitBonus = prof + Math.max(dexMod, wisMod);
+      const atkResult = rollAttack(hitBonus, false, false);
+
+      // Compute effective AC (natural AC + ac_floor + ac_bonus; skip cover +
+      // warding bond + mirror image — the touch attack is in melee range with
+      // no mirror retarget, so those modifiers don't apply for v1 simplicity).
+      const acFloor = getActiveAcFloor(qpTarget);
+      const naturalAC = acFloor > 0 ? Math.max(qpTarget.ac, acFloor) : qpTarget.ac;
+      const targetAC = naturalAC + getActiveAcBonus(qpTarget);
+
+      // PHB p.194: nat 20 always hits; nat 1 always misses. rollAttack sets
+      // isCrit (nat 20) and isFumble (nat 1).
+      const qpHits = atkResult.isCrit || (!atkResult.isFumble && atkResult.total >= targetAC);
+      if (!qpHits) {
+        // Miss — no ki spent (PHB: "When you hit... you can spend 3 ki")
+        log(state, 'action', actor.id,
+          `${actor.name} misses the Quivering Palm touch attack on ${qpTarget.name} (rolled ${atkResult.total} vs AC ${targetAC}) — no ki spent.`,
+          qpTarget.id, atkResult.roll);
+        break;
+      }
+
+      // Hit — spend 3 ki
+      ki.remaining -= 3;
+      log(state, 'action', actor.id,
+        `${actor.name} lands the Quivering Palm touch on ${qpTarget.name}! (3 ki spent, ${ki.remaining} ki remaining)`,
+        qpTarget.id);
+
+      // CON save DC = 8 + prof + WIS mod (monk ki save DC, PHB p.76)
+      const saveDC = 8 + prof + wisMod;
+      const save = rollSaveReactable(state, actor, qpTarget, 'con', saveDC);
+
+      if (save.success) {
+        // PHB p.80: "If it succeeds, it takes 10d10 necrotic damage."
+        let necroticDmg = 0;
+        for (let i = 0; i < 10; i++) necroticDmg += rollDie(10);
+        applyDamageWithTempHP(qpTarget, necroticDmg, 'necrotic');
+        log(state, 'save_success', actor.id,
+          `${qpTarget.name} resists Quivering Palm (CON ${save.total} vs DC ${saveDC}) — takes ${necroticDmg} necrotic damage!`,
+          qpTarget.id, save.roll);
+        log(state, 'damage', actor.id,
+          `${qpTarget.name} takes ${necroticDmg} necrotic from Quivering Palm.`,
+          qpTarget.id, necroticDmg);
+        // checkDeath handles isDead if HP reached 0
+        checkDeath(qpTarget, state);
+      } else {
+        // PHB p.80: "If it fails, it is reduced to 0 hit points."
+        qpTarget.currentHP = 0;
+        qpTarget.isDead = true;
+        if (qpTarget.isPlayer) qpTarget.isUnconscious = true;
+        log(state, 'save_fail', actor.id,
+          `${qpTarget.name} succumbs to Quivering Palm (CON ${save.total} vs DC ${saveDC}) — reduced to 0 HP! INSTAKILL!`,
+          qpTarget.id, save.roll);
+        log(state, 'death', qpTarget.id,
+          `${qpTarget.name} is slain by Quivering Palm!`, undefined, 0);
       }
       break;
     }

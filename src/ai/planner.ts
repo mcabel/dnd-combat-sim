@@ -915,6 +915,53 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
     }
   }
 
+  // ── TG-030: Quivering Palm (Open Hand Monk 17, PHB p.80) ──
+  // "When you hit a creature with an unarmed strike, you can spend 3 ki
+  //  points to start these imperceptible vibrations... If it fails [CON save],
+  //  it is reduced to 0 hit points. If it succeeds, it takes 10d10 necrotic."
+  //
+  // v1 simplification: single action (touch + CON save collapsed). Costs 3 ki.
+  //
+  // Priority: AFTER Draconic Presence (AoE frighten) but BEFORE self-preserve.
+  // Quivering Palm is the monk's strongest single-target nuke — an instakill
+  // on a failed CON save. The planner fires it when:
+  //   - Monk has the Quivering Palm feature (Open Hand 17)
+  //   - Monk has ≥ 3 ki available
+  //   - There's a living enemy in melee range (5 ft touch)
+  //   - HP > 20% (don't waste the action when about to die — retreat instead)
+  //
+  // Target priority: highest-current-HP enemy in melee range (the instakill
+  // is most valuable against a high-HP target that would otherwise take many
+  // rounds to whittle down).
+  if (hasFeature(self, 'Quivering Palm')
+      && self.resources?.ki && self.resources.ki.remaining >= 3) {
+    const hpRatio = self.maxHP > 0 ? self.currentHP / self.maxHP : 1;
+    if (hpRatio > 0.2) {
+      // Find the highest-HP living enemy in melee range (5 ft)
+      let bestTarget: Combatant | null = null;
+      let bestHP = -1;
+      for (const e of livingEnemiesOf(self, battlefield)) {
+        const dFt = chebyshev3D(self.pos, e.pos) * 5;
+        if (dFt <= 5 && e.currentHP > bestHP) {
+          bestHP = e.currentHP;
+          bestTarget = e;
+        }
+      }
+      if (bestTarget) {
+        plan.action = {
+          type: 'quiveringPalm',
+          action: null,
+          targetId: bestTarget.id,
+          description: `${self.name} uses Quivering Palm on ${bestTarget.name} (3 ki — CON save or instakill / 10d10 necrotic)`,
+        };
+        plan.targetId = bestTarget.id;
+        const anyEnemy = livingEnemiesOf(self, battlefield)[0] ?? null;
+        plan.bonusAction = planBonusAction(self, anyEnemy, battlefield);
+        return plan;
+      }
+    }
+  }
+
   // === SELF-PRESERVE CHECK (Smart only) ===
   if (self.aiProfile === 'smart') {
     const preserve = selfPreserveDecision(self, battlefield);
