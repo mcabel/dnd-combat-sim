@@ -858,7 +858,7 @@ completed by a single agent without coordination.
 
 #### TG-032: Land Druid fey/elemental charm/frighten immunity (promotes TG-018)
 
-- **Status:** DONE — Session 56 (commit pending)
+- **Status:** DONE — Session 56 (commit `0dfa147`)
 - **Owners:** Core Engine (driving — owns `src/engine/spell_effects.ts` + `src/types/core.ts` `ActiveEffect`)
 - **Source:** Session 53 audit; TG-018.
 - **Summary:** Nature's Ward (Land Druid 10, PHB p.69) grants immunity to charmed and frightened by fey and elementals. v1's `addCondition` doesn't track source-creature-type, so it can't apply this restriction. Needs a `sourceCreatureType?: string` field on `ActiveEffect` and a check in `applySpellEffect`'s `condition_apply` path.
