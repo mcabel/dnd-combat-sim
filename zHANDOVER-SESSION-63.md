@@ -172,18 +172,27 @@ Phase 3 targeting enforcement is partially implemented this session:
 
 ## Next Agent Priorities
 
-1. **Get user review of the 6 autonomous doubt decisions** (RFC §9.1) — these gate Monster Spellcasting Phase 2 implementation. If the user disagrees with any, adjust before starting Phase 2.
-2. **Implement Monster Spellcasting Phase 2** (slot-based spells) — MEDIUM-HIGH risk. Start by wiring `initMonsterSpellSlots()` at combat start, then extend `selectMonsterSpell()` to iterate `slots[1-9]` + dispatch via GENERIC_SPELLS. ~600 creatures.
-3. **Implement Vision/Audio Phase 3 Q4** (`attackAdvantageState` detection-map consult) — MEDIUM risk. Extend `attackAdvantageState` in `src/engine/utils.ts` to derive disadv from detection state + cancel invisible-disadv when `_seeInvisibilityActive`.
-4. **Implement Vision/Audio Phase 3 Q5** ("creature you can see" spell enforcement) — LOW-MEDIUM risk. Add a centralized guard in `executePlannedAction` using a hardcoded Set of well-known sight-required spells.
-5. **Implement Wall of Fire** (L4, 29 monsters) — needs a line/ring zone subsystem (new effectType or extend `damage_zone`).
-6. **Implement more spells** per `docs/SPELL-DELEGATION-SPEC.md`.
+**User has reviewed the 6 doubts** (see RFC-MONSTER-SPELLCASTING.md §9.1 for refined decisions). Key directives:
+- Monsters go ALL OUT (no resource conservation; always rested; fight to death).
+- Implement pattern-bias AI (RFC-PATTERN-BIAS-AI.md) + combining-effects pipeline (RFC-COMBINING-EFFECTS.md).
+- Unbuilt monster spells get priority in the task queue.
+
+1. **Implement RFC-COMBINING-EFFECTS Phase 1** (same-name effect dedup) — MEDIUM-HIGH risk. Add `effectName` + `sourceId` to ActiveEffect; build the effect-identity registry; implement same-name dedup at turn start. This is the foundation for Darkness/Blindness overlap, two Spirit Guardians, etc.
+2. **Implement RFC-PATTERN-BIAS-AI Phase 1** (pattern detectors) — MEDIUM risk. Add the 8 pattern detectors (enemyCluster, finisher, woundedAlly, acVsSave, concentrationPreservation, kiting, defensiveEscape, resourceAllOut) + wire into `computeSpellWeight()`. Priority: enemyCluster > finisher > woundedAlly.
+3. **Implement Monster Spellcasting Phase 2** (slot-based spells) — MEDIUM-HIGH risk. Wire `initMonsterSpellSlots()` at combat start; extend `selectMonsterSpell()` to iterate `slots[1-9]` + dispatch via GENERIC_SPELLS. ~600 creatures. Pair with the pattern-bias system for spell selection.
+4. **Implement Vision/Audio Phase 3 Q4** (`attackAdvantageState` detection-map consult) — MEDIUM risk. Extend `attackAdvantageState` in `src/engine/utils.ts` to derive disadv from detection state + cancel invisible-disadv when `_seeInvisibilityActive`.
+5. **Implement Vision/Audio Phase 3 Q5** ("creature you can see" spell enforcement) — LOW-MEDIUM risk. Add a centralized guard in `executePlannedAction` using a hardcoded Set of well-known sight-required spells.
+6. **Track + prioritize unbuilt monster spells** — build a script that scans all 945 monsters' `monsterSpellcasting` + reports which spell names aren't in GENERIC_SPELLS / CANTRIP_TEMPLATES, sorted by frequency. Use this to prioritize the next spell-implementation batch.
+7. **Implement Wall of Fire** (L4, 29 monsters) — needs a line/ring zone subsystem (new effectType or extend `damage_zone`).
+8. **Implement more spells** per `docs/SPELL-DELEGATION-SPEC.md`.
 
 ---
 
 ## Key Files for Next Agent to Read
 
-- **`docs/RFC-MONSTER-SPELLCASTING.md`** — full RFC + §9.1 autonomous decisions (start here for Phase 2)
+- **`docs/RFC-MONSTER-SPELLCASTING.md`** — full RFC + §9.1 **user-confirmed decisions** (start here for Phase 2)
+- **`docs/RFC-COMBINING-EFFECTS.md`** — NEW (Session 63): active-effects pipeline design (DMG p.252 same-name dedup, source tracking, takeover-on-expiry)
+- **`docs/RFC-PATTERN-BIAS-AI.md`** — NEW (Session 63): pattern-bias spell-selection AI (8 detectors, composition formula, concentration churn prevention, monster all-out vs PC conservation)
 - **`docs/RFC-VISION-AUDIO.md`** — vision/audio subsystem design (Phase 1-3 mostly done, Phase 3 Q4/Q5 + Phase 4 pending)
 - **`docs/SPELL-DELEGATION-SPEC.md`** — spell implementation tasks + pattern
 - **`src/ai/monster_spellcasting.ts`** — the monster spellcasting module (Phase 1 done with 17 cantrips; extend for Phase 2/3)
