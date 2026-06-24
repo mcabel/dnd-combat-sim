@@ -36,6 +36,14 @@ export interface SpellTemplate {
   slotLevel: number;
   /** Bonus-action cost instead of action */
   bonusAction?: boolean;
+  /**
+   * True if this spell has no in-combat use (ritual, divination, utility).
+   * The AI planner skips spells with no `shouldCast` module; this flag is a
+   * secondary safety net for Batch 5b monster-spellcasting integration —
+   * when the engine wires up monster spell selection it checks this tag before
+   * attempting to cast.  Spells with outOfCombat=true are never selected.
+   */
+  outOfCombat?: boolean;
 }
 
 // ---- Helpers ------------------------------------------------
@@ -5297,6 +5305,92 @@ export const SPELL_DB: Record<string, SpellTemplate> = {
     isControl: false,
     requiresConcentration: false,
     slotLevel: 0,
+  },
+
+  // ── Out-of-combat utility spells ─────────────────────────────────────────
+  //
+  // These spells have NO mechanical effect during a v1 combat encounter.
+  // They appear in 945 monster spellcasting lists parsed in Session 60
+  // (Batch 5b step 1).  They are registered here so that the Batch 5b step 2
+  // engine integration (monster spell selection) can look them up, see
+  // outOfCombat=true, and skip them rather than throwing a "spell not found"
+  // warning.
+  //
+  // The AI planner already ignores spells with no bespoke shouldCast module;
+  // outOfCombat=true is a belt-and-suspenders guard for direct SPELL_DB lookup.
+  //
+  // Source: PHB 2014 (all 10 spells). requiresConcentration matches canon.
+
+  'detect magic': {
+    // 1st-level divination (ritual). Sense magic within 30 ft.  Canon: conc, 10 min.
+    attackType: null, rangeNormal: 0, damage: null, damageType: null,
+    isAoE: false, isControl: false, requiresConcentration: true, slotLevel: 1,
+    outOfCombat: true,
+  },
+
+  'comprehend languages': {
+    // 1st-level divination (ritual). Understand spoken/written language. 1 hr.
+    attackType: null, rangeNormal: 0, damage: null, damageType: null,
+    isAoE: false, isControl: false, requiresConcentration: false, slotLevel: 1,
+    outOfCombat: true,
+  },
+
+  'identify': {
+    // 1st-level divination (ritual). Touch. Learn properties of a magic item.
+    attackType: null, rangeNormal: 5, damage: null, damageType: null,
+    isAoE: false, isControl: false, requiresConcentration: false, slotLevel: 1,
+    outOfCombat: true,
+  },
+
+  'locate object': {
+    // 2nd-level divination. Self. Sense direction to an object within 1,000 ft.
+    // Canon: concentration, 10 min.
+    attackType: null, rangeNormal: 0, damage: null, damageType: null,
+    isAoE: false, isControl: false, requiresConcentration: true, slotLevel: 2,
+    outOfCombat: true,
+  },
+
+  'clairvoyance': {
+    // 3rd-level divination. Range 1 mile. Invisible sensor — see/hear. Conc, 10 min.
+    attackType: null, rangeNormal: 5280, damage: null, damageType: null,
+    isAoE: false, isControl: false, requiresConcentration: true, slotLevel: 3,
+    outOfCombat: true,
+  },
+
+  'sending': {
+    // 3rd-level evocation. Range unlimited. 25-word telepathic message, 1 reply.
+    attackType: null, rangeNormal: 5280, damage: null, damageType: null,
+    isAoE: false, isControl: false, requiresConcentration: false, slotLevel: 3,
+    outOfCombat: true,
+  },
+
+  'tongues': {
+    // 3rd-level divination. Touch. Understand any spoken language. 1 hr.
+    attackType: null, rangeNormal: 5, damage: null, damageType: null,
+    isAoE: false, isControl: false, requiresConcentration: false, slotLevel: 3,
+    outOfCombat: true,
+  },
+
+  'water breathing': {
+    // 3rd-level transmutation (ritual). Range 30 ft. Up to 10 creatures. 24 hr.
+    attackType: null, rangeNormal: 30, damage: null, damageType: null,
+    isAoE: false, isControl: false, requiresConcentration: false, slotLevel: 3,
+    outOfCombat: true,
+  },
+
+  'divination': {
+    // 4th-level divination (ritual). Self. Receive an omen about a course of action.
+    attackType: null, rangeNormal: 0, damage: null, damageType: null,
+    isAoE: false, isControl: false, requiresConcentration: false, slotLevel: 4,
+    outOfCombat: true,
+  },
+
+  'locate creature': {
+    // 4th-level divination. Self. Sense direction to a creature within 1,000 ft.
+    // Canon: concentration, 1 hr.
+    attackType: null, rangeNormal: 0, damage: null, damageType: null,
+    isAoE: false, isControl: false, requiresConcentration: true, slotLevel: 4,
+    outOfCombat: true,
   },
 
 };
