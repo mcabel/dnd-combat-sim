@@ -799,7 +799,7 @@ completed by a single agent without coordination.
 
 #### TG-028: Fix "melee spell attack" labels in Booming Blade + Green-Flame Blade (TG-014)
 
-- **Status:** OPEN — proposed Session 53 (promotes TG-014)
+- **Status:** DONE — Session 49 (Core Engine). Commit 7766253.
 - **Owners:** Cantrip-z (driving — owns `src/spells/booming_blade.ts` + `green_flame_blade.ts`)
 - **Source:** TG-014.
 - **Summary:** Comment-only fix. Both modules label their primary hit as "melee spell attack (attackType='spell')" when TCE clarifies it's a "melee weapon attack". Risk of misleading future implementers.
