@@ -845,7 +845,7 @@ completed by a single agent without coordination.
 
 #### TG-031: Open Hand Technique Flurry rider (TG-017 step 3) — blocked on TG-024
 
-- **Status:** DONE — Session 58 (commit pending)
+- **Status:** DONE — Session 58 (commit `dcd44de`)
 - **Owners:** Core Engine (driving — owns `src/engine/combat.ts` + `src/ai/planner.ts`)
 - **Source:** TG-017 step 3.
 - **Summary:** Open Hand Technique (Monk 3) fires per Flurry-of-Blows hit: choose to push 15 ft / knock prone / disable reaction until next turn. The rider needs to fire BETWEEN the two Flurry attacks (per PHB p.79 "immediately after you hit"). v1 simplification: rider fires once per Flurry (after the second hit), not per hit.

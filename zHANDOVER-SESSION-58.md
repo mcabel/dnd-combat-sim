@@ -120,7 +120,7 @@ The planner picks the Open Hand Technique choice based on target state:
 ## CI Status
 
 Single commit pushed to `main` (this session):
-- `Session 58 Core Engine TG-031: Flurry of Blows + Open Hand Technique`
+- `dcd44de` — Session 58 Core Engine TG-031: Flurry of Blows + Open Hand Technique
 
 CI should pass (all local tests green; the new `case 'flurryOfBlows':` is exercised by the new test + the AI planner test).
 
