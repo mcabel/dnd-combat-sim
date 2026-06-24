@@ -31,8 +31,9 @@
 //   save-based (attackType='save' + saveDC + saveAbility) cantrips.
 // ============================================================
 
-import { Combatant, Battlefield, Action, PlannedAction, DamageType } from '../types/core';
+import { Combatant, Battlefield, Action, PlannedAction, DamageType, AbilityScore } from '../types/core';
 import { chebyshev3D } from '../engine/movement';
+import { composeBiases, collectCantripBiases } from './pattern_bias';
 
 // ---- Spell Tags (RFC §4.1) ----------------------------------
 
@@ -395,9 +396,13 @@ function finisherMultiplier(targetHP: number, cantripAvgDmg: number): number {
  *
  *   weight = baseWeight(level) × tagMultiplier(primaryTag, ctx)
  *            × finisherMultiplier(targetHP, avgDmg) × availabilityMultiplier
+ *            × composeBiases(biases)
  *
  * Phase 1: availabilityMultiplier is always 1.0 (at-will + cantrips = infinite).
  * Phase 2: 0.0 if no slot remains, 1.0 otherwise.
+ *
+ * The `biases` parameter is new in RFC-PATTERN-BIAS-AI Phase 1.
+ * Default [] → composeBiases([]) = 1.0 (backward-compatible).
  */
 export function computeSpellWeight(
   spellName: string,
@@ -406,6 +411,7 @@ export function computeSpellWeight(
   avgDamage: number,
   ctx: SpellcastContext,
   targetHP: number,
+  biases: number[] = [],
 ): number {
   if (tags.length === 0) return 0;  // no tags → skip
   const primaryTag = tags[0];
@@ -413,7 +419,8 @@ export function computeSpellWeight(
   const tagMult = tagMultiplier(primaryTag, ctx);
   const finisher = finisherMultiplier(targetHP, avgDamage);
   const availability = 1.0;  // Phase 1: at-will = infinite
-  return base * tagMult * finisher * availability;
+  const biasProduct = composeBiases(biases);
+  return base * tagMult * finisher * availability * biasProduct;
 }
 
 // ---- Synthetic Action Builder -------------------------------
@@ -587,9 +594,17 @@ export function selectMonsterSpell(
     const diceCount = cantripDiceCount(self.casterLevel);
     const avgDmg = cantripAverageDamage(diceCount, tmpl.damageSides);
 
-    // Compute weight.
+    // ── RFC-PATTERN-BIAS-AI Phase 1: collect pattern biases ──
+    // Each detector returns a multiplier (1.0 = neutral, >1.0 = boost,
+    // <1.0 = penalise, 0.0 = veto). They compose multiplicatively.
+    const biases = collectCantripBiases(
+      ctx, bf, self, target, tmpl.tags, avgDmg,
+      tmpl.attackRoll, tmpl.saveAbility as AbilityScore | undefined,
+    );
+
+    // Compute weight (now includes pattern bias composition).
     const weight = computeSpellWeight(
-      tmpl.name, tmpl.tags, 0, avgDmg, ctx, target.currentHP,
+      tmpl.name, tmpl.tags, 0, avgDmg, ctx, target.currentHP, biases,
     );
 
     // Tie-breaking: higher weight wins; ties → higher damage sides; then alpha.
