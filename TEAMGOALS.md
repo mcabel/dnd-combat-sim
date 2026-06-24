@@ -858,16 +858,17 @@ completed by a single agent without coordination.
 
 #### TG-032: Land Druid fey/elemental charm/frighten immunity (promotes TG-018)
 
-- **Status:** OPEN — proposed Session 53 (promotes TG-018)
-- **Owners:** Core Engine (driving — owns `src/engine/spell_effects.ts` + `src/engine/utils.ts` `addCondition`)
+- **Status:** DONE — Session 56 (commit pending)
+- **Owners:** Core Engine (driving — owns `src/engine/spell_effects.ts` + `src/types/core.ts` `ActiveEffect`)
 - **Source:** Session 53 audit; TG-018.
-- **Summary:** Nature's Ward (Land Druid 10) grants immunity to charmed and frightened by fey and elementals. v1's `addCondition` doesn't track source-creature-type, so it can't apply this restriction. Needs a `sourceCreatureType?: string` field on `ActiveEffect` and a check in `addCondition`.
+- **Summary:** Nature's Ward (Land Druid 10, PHB p.69) grants immunity to charmed and frightened by fey and elementals. v1's `addCondition` doesn't track source-creature-type, so it can't apply this restriction. Needs a `sourceCreatureType?: string` field on `ActiveEffect` and a check in `applySpellEffect`'s `condition_apply` path.
 - **Implementation plan:**
-  1. Add `sourceCreatureType?: string` to `ActiveEffect` (in `core.ts`).
-  2. Add `creatureType?: string` to `Combatant` (parser already populates `creatureType` for monsters in `fivetools.ts`).
-  3. In `addCondition`, when applying `charmed` or `frightened`, check if the target has Nature's Ward class feature AND the source effect's `sourceCreatureType` is `fey` or `elemental` → skip application.
-  4. Test (`src/test/natures_ward.test.ts` extends existing): Land Druid 10 vs Fey caster's Charm Person → spell lands but condition is rejected.
-- **Risk:** MEDIUM — touches `addCondition` hot path.
+  1. Add `sourceCreatureType?: string` to `ActiveEffect` (in `core.ts`). ✅ DONE — added at the end of the interface with a doc comment explaining the backward-compat no-op behavior.
+  2. `creatureType` already exists on `Combatant` (core.ts:935, populated by `fivetools.ts:1236` for monsters). ✅ Confirmed — no change needed.
+  3. In `applySpellEffect` `condition_apply`, when applying `charmed` or `frightened`, check if the target has Nature's Ward AND `effect.sourceCreatureType` is `fey` or `elemental` → skip application. ✅ DONE — added after the existing poisoned-block. Backward-compatible: if `sourceCreatureType` is absent, the check is a no-op (condition applies as before).
+  4. Test (`src/test/natures_ward.test.ts` extends existing): ✅ DONE — added 13 new assertions (sections 14-23) covering fey/elemental source × charmed/frightened (immune), humanoid source (not immune), legacy no-sourceCreatureType (backward-compat), vanilla druid (no NW), and 2 end-to-end tests using the actual `charm_person.ts` execute() with fey vs humanoid casters.
+  5. Example spell modules updated to set `sourceCreatureType: caster.creatureType`: ✅ DONE — `charm_person.ts` (charmed) + `cause_fear.ts` (frightened). Other charm/frighten spells (fear, charm_monster, suggestion, hypnotic_pattern, crown_of_madness, wrathful_smite, fast_friends, animal_friendship, compelled_duel, enemies_abound, incite_greed, geas, weird, phantasmal_killer) remain backward-compatible — they'll gain the immunity check automatically if/when updated to set `sourceCreatureType`.
+- **Risk:** MEDIUM (per original spec — touches `applySpellEffect` hot path) → actual risk was LOW. The change is purely additive (a new optional field + a guard that only fires when 3 conditions are ALL true: target has NW, condition is charmed/frightened, sourceCreatureType is fey/elemental). All 15 charm/frighten spell tests + 6 core engine suites pass with zero regressions.
 - **Coordination protocol:** Core Engine drives.
 
 ### Tier-C items (HIGH risk or split-required, defer)

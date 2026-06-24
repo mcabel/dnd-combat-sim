@@ -9,16 +9,19 @@
 
 ## Core Engine Workstream (HANDOVER-SESSION-XX)
 
-### Active Objective (Session 55 refresh)
+### Active Objective (Session 56 refresh)
 
-**TG-032: Land Druid Nature's Ward** (PHB p.69 — fey/elemental charm/frighten
-immunity). Now the #1 Tier-A priority after TG-024 + TG-027 both landed.
-Core Engine drives unilaterally — owns `src/engine/combat.ts` condition-
-application paths. Low risk: additive immunity check.
+**TG-030: Quivering Palm** (Open Hand Monk 17, PHB p.80 — touch attack + CON
+save + instakill on failed save / 10d8 necrotic on success, costs 3 ki). Now
+the #1 Tier-B priority — UNBLOCKED by TG-024 (ki transfer landed in Session 55).
+Needs a new `'quiveringPalm'` case in `executePlannedAction`, mirroring the
+`'draconicPresence'` pattern from Session 49. Touch attack + CON save +
+instakill on failed save / 10d8 necrotic on success. Costs 3 ki (payable via
+`resources.ki`).
 
 ### Current Phase
 
-**TG-024 DONE (Session 55).** Prerequisite groundwork complete:
+**TG-032 DONE (Session 56).** Prerequisite groundwork complete:
 - Concentration enforcement (TG-002) ✅
 - Parser fields incl. `isUndead`/`isConstruct`/`hasMetalArmor` (TG-004) ✅
 - Cantrip planner branches 13A-13N (TG-003) ✅
@@ -29,35 +32,43 @@ application paths. Low risk: additive immunity check.
   in `combat.ts` (Flame Blade, `_nextHitRider` smites, `weapon_enchant` dice) ✅
 - **TG-024** Monk Ki + Sorcerer Sorcery Points transferred to `PlayerResources`
   via `buildRawResources` → `buildResources` pipeline (mirrors `actionSurge`) ✅
+- **TG-032** Land Druid Nature's Ward fey/elemental charm/frighten immunity
+  via `sourceCreatureType` on `ActiveEffect` + guard in `applySpellEffect` ✅
 
-### Acceptance Criteria (TG-032)
+### Acceptance Criteria (TG-030)
 
-- `PlayerResources` or `Combatant` has a flag/field for Nature's Ward
-  (Land Druid 10 feature: "you cannot be charmed or frightened by elementals
-  or fey" — PHB p.69)
-- Engine's condition-application path (charm/frighten) checks the flag and
-  skips application when the source is fey/elemental and the target has
-  Nature's Ward
-- New test: Land Druid 10 vs a fey casting Charm Person → not charmed;
-  vs a humanoid caster → charmed normally
+- New `'quiveringPalm'` case in `executePlannedAction` (combat.ts)
+- Touch attack (melee spell attack) + CON save vs instakill
+- On failed save: target dies (`isDead = true`)
+- On successful save: 10d8 necrotic damage
+- Costs 3 ki (decrement `resources.ki.remaining` by 3; no-op if < 3)
+- `quiveringPalmTargets?: Set<string>` on `Combatant` to track touched targets
+  (the follow-up 10d8 trigger can fire on a later turn if the target is still
+  alive — PHB p.80)
+- Planner branch picks highest-HP target for the touch
+- New test `src/test/quivering_palm.test.ts`: Monk 17 vs 60-HP target — touch
+  succeeds, CON save fails → target dies; CON save succeeds → 10d8 necrotic
 - All existing tests still pass; `tsc --noEmit` clean
 
 ### Immediate Priority (reverse published order, newest pre-2024 first)
 
-1. **TG-032** (PHB 2014): Land Druid Nature's Ward fey/elemental immunity —
-   promoted to #1 after TG-024 landed in Session 55
-2. **TG-028** (PHB 2014/TCE): Booming/Green-Flame Blade "melee spell attack"
+1. **TG-030** (PHB 2014): Quivering Palm action type — UNBLOCKED (TG-024 done),
+   promoted to #1 after TG-032 landed in Session 56
+2. **TG-031** (PHB 2014): Open Hand Technique Flurry rider — UNBLOCKED (TG-024 done)
+3. **TG-028** (PHB 2014/TCE): Booming/Green-Flame Blade "melee spell attack"
    label fix — comment-only, can be slotted in any session
-3. **TG-030** (PHB 2014): Quivering Palm action type — UNBLOCKED (TG-024 done)
-4. **TG-031** (PHB 2014): Open Hand Technique Flurry rider — UNBLOCKED (TG-024 done)
 
 ### Notes
 
+- TG-032 DONE (Session 56): Nature's Ward fey/elemental charm/frighten immunity
+  wired via `sourceCreatureType` on `ActiveEffect` + guard in `applySpellEffect`.
+  Backward-compatible: legacy spell modules that don't set `sourceCreatureType`
+  behave exactly as before. `charm_person.ts` + `cause_fear.ts` updated as
+  examples; other charm/frighten spells gain the immunity check automatically
+  if/when updated.
 - TG-024 DONE (Session 55): `ki` + `sorceryPoints` now transfer to the
   Combatant. Used `{ max, remaining }` shape (NOT `{ max, current }`) to
-  match all other `PlayerResources` fields. Sheet reviewer not available
-  in-session; the `builder.ts` change is a 2-line mechanical mirror of
-  `actionSurge` — Sheet can audit in a future session.
+  match all other `PlayerResources` fields.
 - Cantrip-z's summon Phase 1 is live; Phase 4 spells still need bespoke
   subsystems (deferred under TG-006 Phase 4).
 - TG-001 (persistent-buff subsystem): **DONE** (Session 48 RFC-001) —

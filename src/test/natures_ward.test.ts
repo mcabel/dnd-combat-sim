@@ -1,12 +1,11 @@
 // ============================================================
-// Test: Land Druid Nature's Ward (Session 47, Task #29-follow-up-3)
+// Test: Land Druid Nature's Ward (Session 47, Task #29-follow-up-3 + TG-032)
 //
-// Validates that Nature's Ward (Land Druid 10, PHB p.68) is mechanically
+// Validates that Nature's Ward (Land Druid 10, PHB p.68-69) is mechanically
 // wired into the engine:
-//   - Immune to the 'poisoned' condition (blanket immunity)
-//   - Disease immunity: no-op (diseases not tracked in v1)
-//   - Fey/elemental charm/frighten immunity: v1 simplification (needs source
-//     tracking — documented, not tested here)
+//   - Immune to the 'poisoned' condition (blanket immunity) — Session 47
+//   - Disease immunity: no-op (diseases not tracked in v1) — Session 47
+//   - Fey/elemental charm/frighten immunity — TG-032 (Session 56)
 //
 // Coverage:
 //   1. Land Druid 10 has "Nature's Ward" feature
@@ -16,12 +15,23 @@
 //   5. addCondition('prone') still works (not blocked)
 //   6. Direct conditions.add('poisoned') NOT blocked (engine uses addCondition)
 //   7. applySpellEffect condition_apply 'poisoned' is blocked
-//   8. applySpellEffect condition_apply 'frightened' still works (not blocked)
+//   8. applySpellEffect condition_apply 'frightened' still works (no sourceCreatureType)
 //   9. Poisoned condition does NOT grant disadvantage on attacks for NW druid
 //  10. Poisoned condition DOES grant disadvantage for vanilla druid
 //  11. Poison damage still applies to HP (NW grants condition immunity, not damage resistance)
 //  12. End-to-end: poison-spell cast on NW druid does not apply 'poisoned' condition
 //  13. End-to-end: poison-spell cast on vanilla druid DOES apply 'poisoned'
+//  TG-032 (Session 56) — fey/elemental charm/frighten immunity:
+//  14. NW druid + fey source charmed → NOT applied (immune)
+//  15. NW druid + elemental source frightened → NOT applied (immune)
+//  16. NW druid + fey source frightened → NOT applied (immune)
+//  17. NW druid + elemental source charmed → NOT applied (immune)
+//  18. NW druid + humanoid source charmed → IS applied (not immune)
+//  19. NW druid + humanoid source frightened → IS applied (not immune)
+//  20. NW druid + no sourceCreatureType (legacy) charmed → IS applied (backward-compat)
+//  21. Vanilla druid + fey source charmed → IS applied (no Nature's Ward)
+//  22. End-to-end: fey caster's Charm Person on NW druid → not charmed
+//  23. End-to-end: humanoid caster's Charm Person on NW druid → charmed
 //
 // Run: npx ts-node src/test/natures_ward.test.ts
 // ============================================================
@@ -234,9 +244,12 @@ console.log('\n--- 8. applySpellEffect condition_apply frightened still works --
     payload: { condition: 'frightened' as Condition },
     sourceIsConcentration: false,
   });
-  // Note: fey/elemental frighten immunity is NOT wired (v1 simplification —
-  // requires source-creature-type tracking). The condition applies.
-  assert('8. frightened IS applied (v1 simplification — fey/elemental check not wired)',
+  // Note: TG-032 (Session 56) wired the fey/elemental frighten immunity for
+  // effects that set sourceCreatureType. This call does NOT set it (legacy
+  // pattern), so the backward-compat no-op applies and frightened IS applied.
+  // Tests 14-23 below cover the TG-032 fey/elemental immunity with explicit
+  // sourceCreatureType.
+  assert('8. frightened IS applied (no sourceCreatureType — backward-compat)',
     druid.conditions.has('frightened'));
 }
 
@@ -322,6 +335,224 @@ console.log('\n--- 13. End-to-end: poison spell DOES poison vanilla druid ---');
     sourceIsConcentration: false,
   });
   assert('13. vanilla druid IS poisoned by spell', druid.conditions.has('poisoned'));
+}
+
+// ============================================================
+// TG-032 (Session 56): Fey/elemental charm/frighten immunity
+//
+// PHB p.69 (Nature's Ward, Land Druid 10): "Starting at 10th level, you
+// can't be charmed or frightened by fey or elementals." This requires
+// source-creature-type tracking on the ActiveEffect. The check lives in
+// applySpellEffect's condition_apply path (which has the effect object);
+// addCondition (utils.ts) only takes (target, condition) and can't check
+// the source type.
+//
+// Coverage:
+//  14. NW druid + fey source charmed → NOT applied (immune)
+//  15. NW druid + elemental source frightened → NOT applied (immune)
+//  16. NW druid + fey source frightened → NOT applied (immune)
+//  17. NW druid + elemental source charmed → NOT applied (immune)
+//  18. NW druid + humanoid source charmed → IS applied (not immune)
+//  19. NW druid + humanoid source frightened → IS applied (not immune)
+//  20. NW druid + no sourceCreatureType (legacy) charmed → IS applied
+//      (backward-compat — check is a no-op when sourceCreatureType absent)
+//  21. Vanilla druid + fey source charmed → IS applied (no Nature's Ward)
+//  22. End-to-end: fey caster's Charm Person on NW druid → not charmed
+//  23. End-to-end: humanoid caster's Charm Person on NW druid → charmed
+// ============================================================
+console.log('\n--- TG-032: Fey/elemental charm/frighten immunity ---');
+
+// Helper: build a Land Druid 10 with Nature's Ward
+function makeNaturesWardDruid(): Combatant {
+  const sheet = levelTo(makeDruid1(), 'Druid', 10, 'Circle of the Land');
+  return buildCombatant(sheet, { x: 0, y: 0, z: 0 });
+}
+
+// 14. NW druid + fey source charmed → NOT applied
+{
+  const druid = makeNaturesWardDruid();
+  assert("14a. has Nature's Ward", hasFeature(druid, "Nature's Ward"));
+  applySpellEffect(druid, {
+    casterId: 'fey-caster',
+    spellName: 'Charm Person',
+    effectType: 'condition_apply',
+    payload: { condition: 'charmed' as Condition },
+    sourceIsConcentration: false,
+    sourceCreatureType: 'fey',
+  });
+  assert('14b. charmed NOT applied (fey source, Nature\'s Ward)', !druid.conditions.has('charmed'));
+}
+
+// 15. NW druid + elemental source frightened → NOT applied
+{
+  const druid = makeNaturesWardDruid();
+  applySpellEffect(druid, {
+    casterId: 'elem-caster',
+    spellName: 'Cause Fear',
+    effectType: 'condition_apply',
+    payload: { condition: 'frightened' as Condition },
+    sourceIsConcentration: false,
+    sourceCreatureType: 'elemental',
+  });
+  assert('15. frightened NOT applied (elemental source, Nature\'s Ward)', !druid.conditions.has('frightened'));
+}
+
+// 16. NW druid + fey source frightened → NOT applied
+{
+  const druid = makeNaturesWardDruid();
+  applySpellEffect(druid, {
+    casterId: 'fey-caster',
+    spellName: 'Fear',
+    effectType: 'condition_apply',
+    payload: { condition: 'frightened' as Condition },
+    sourceIsConcentration: false,
+    sourceCreatureType: 'fey',
+  });
+  assert('16. frightened NOT applied (fey source, Nature\'s Ward)', !druid.conditions.has('frightened'));
+}
+
+// 17. NW druid + elemental source charmed → NOT applied
+{
+  const druid = makeNaturesWardDruid();
+  applySpellEffect(druid, {
+    casterId: 'elem-caster',
+    spellName: 'Charm Monster',
+    effectType: 'condition_apply',
+    payload: { condition: 'charmed' as Condition },
+    sourceIsConcentration: false,
+    sourceCreatureType: 'elemental',
+  });
+  assert('17. charmed NOT applied (elemental source, Nature\'s Ward)', !druid.conditions.has('charmed'));
+}
+
+// 18. NW druid + humanoid source charmed → IS applied (not immune)
+{
+  const druid = makeNaturesWardDruid();
+  applySpellEffect(druid, {
+    casterId: 'human-caster',
+    spellName: 'Charm Person',
+    effectType: 'condition_apply',
+    payload: { condition: 'charmed' as Condition },
+    sourceIsConcentration: false,
+    sourceCreatureType: 'humanoid',
+  });
+  assert('18. charmed IS applied (humanoid source — not immune)', druid.conditions.has('charmed'));
+}
+
+// 19. NW druid + humanoid source frightened → IS applied (not immune)
+{
+  const druid = makeNaturesWardDruid();
+  applySpellEffect(druid, {
+    casterId: 'human-caster',
+    spellName: 'Cause Fear',
+    effectType: 'condition_apply',
+    payload: { condition: 'frightened' as Condition },
+    sourceIsConcentration: false,
+    sourceCreatureType: 'humanoid',
+  });
+  assert('19. frightened IS applied (humanoid source — not immune)', druid.conditions.has('frightened'));
+}
+
+// 20. NW druid + no sourceCreatureType (legacy) charmed → IS applied (backward-compat)
+{
+  const druid = makeNaturesWardDruid();
+  applySpellEffect(druid, {
+    casterId: 'legacy-caster',
+    spellName: 'Charm Person',
+    effectType: 'condition_apply',
+    payload: { condition: 'charmed' as Condition },
+    sourceIsConcentration: false,
+    // sourceCreatureType intentionally OMITTED — simulates legacy spell
+    // modules that haven't been updated to set the field. The Nature's Ward
+    // fey/elemental check must be a no-op (condition applies as before).
+  });
+  assert('20. charmed IS applied (legacy — no sourceCreatureType)', druid.conditions.has('charmed'));
+}
+
+// 21. Vanilla druid + fey source charmed → IS applied (no Nature's Ward)
+{
+  const sheet = levelTo(makeDruid1(), 'Druid', 10);  // no subclass
+  const druid = buildCombatant(sheet, { x: 0, y: 0, z: 0 });
+  assert("21a. vanilla druid does NOT have Nature's Ward", !hasFeature(druid, "Nature's Ward"));
+  applySpellEffect(druid, {
+    casterId: 'fey-caster',
+    spellName: 'Charm Person',
+    effectType: 'condition_apply',
+    payload: { condition: 'charmed' as Condition },
+    sourceIsConcentration: false,
+    sourceCreatureType: 'fey',
+  });
+  assert('21b. charmed IS applied (vanilla druid, fey source — no NW)', druid.conditions.has('charmed'));
+}
+
+// 22. End-to-end: fey caster's Charm Person on NW druid → not charmed
+//     Uses the actual charm_person.ts execute() which now sets sourceCreatureType.
+{
+  const { execute: executeCharmPerson } = require('../spells/charm_person');
+  const druid = makeNaturesWardDruid();
+  // Build a fey caster with Charm Person in its actions
+  const feyCaster = makeCombatant('fey-caster-e2e', {
+    faction: 'enemy',
+    creatureType: 'fey',
+    wis: 8,  // low WIS → fails the save
+    actions: [{
+      name: 'Charm Person', isMultiattack: false, attackType: 'save',
+      reach: 0, range: { normal: 30, long: 30 }, hitBonus: null,
+      damage: null, damageType: null, saveDC: 25, saveAbility: 'wis',
+      isAoE: false, isControl: true, requiresConcentration: false,
+      slotLevel: 1, costType: 'action', legendaryCost: 0, description: 'Charm Person',
+    }],
+    resources: { spellSlots: { 1: { max: 2, remaining: 2 } } } as any,
+  });
+  const bf = {
+    width: 20, height: 20, depth: 1, cells: [],
+    combatants: new Map([[feyCaster.id, feyCaster], [druid.id, druid]]),
+    round: 1, initiativeOrder: [feyCaster.id, druid.id],
+  } as any;
+  const state = {
+    battlefield: bf,
+    log: { events: [], winner: null, rounds: 0 },
+    disengagedThisTurn: new Set(), damageThisRound: new Map(),
+    noDamageRounds: new Map(), rageDamagedSinceLastTurn: new Set(),
+  } as any;
+
+  executeCharmPerson(feyCaster, druid, state);
+  assert("22. NW druid NOT charmed by fey caster's Charm Person (immune)",
+    !druid.conditions.has('charmed'));
+}
+
+// 23. End-to-end: humanoid caster's Charm Person on NW druid → charmed
+{
+  const { execute: executeCharmPerson } = require('../spells/charm_person');
+  const druid = makeNaturesWardDruid();
+  const humanoidCaster = makeCombatant('human-caster-e2e', {
+    faction: 'enemy',
+    creatureType: 'humanoid',
+    wis: 8,
+    actions: [{
+      name: 'Charm Person', isMultiattack: false, attackType: 'save',
+      reach: 0, range: { normal: 30, long: 30 }, hitBonus: null,
+      damage: null, damageType: null, saveDC: 25, saveAbility: 'wis',
+      isAoE: false, isControl: true, requiresConcentration: false,
+      slotLevel: 1, costType: 'action', legendaryCost: 0, description: 'Charm Person',
+    }],
+    resources: { spellSlots: { 1: { max: 2, remaining: 2 } } } as any,
+  });
+  const bf = {
+    width: 20, height: 20, depth: 1, cells: [],
+    combatants: new Map([[humanoidCaster.id, humanoidCaster], [druid.id, druid]]),
+    round: 1, initiativeOrder: [humanoidCaster.id, druid.id],
+  } as any;
+  const state = {
+    battlefield: bf,
+    log: { events: [], winner: null, rounds: 0 },
+    disengagedThisTurn: new Set(), damageThisRound: new Map(),
+    noDamageRounds: new Map(), rageDamagedSinceLastTurn: new Set(),
+  } as any;
+
+  executeCharmPerson(humanoidCaster, druid, state);
+  assert("23. NW druid IS charmed by humanoid caster's Charm Person (not immune)",
+    druid.conditions.has('charmed'));
 }
 
 // ============================================================

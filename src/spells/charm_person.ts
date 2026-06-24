@@ -86,7 +86,7 @@ export function execute(caster: Combatant, target: Combatant, state: EngineState
   emit(state, save.success ? 'save_success' : 'save_fail', caster.id,
     `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} WIS save vs Charm Person (rolled ${save.total})`, target.id, save.roll);
   if (save.success) { emit(state, 'action', caster.id, `${target.name} resists Charm Person — not charmed!`, target.id); return; }
-  applySpellEffect(target, { casterId: caster.id, spellName: 'Charm Person', effectType: 'condition_apply', payload: { condition: 'charmed' }, sourceIsConcentration: false });
+  applySpellEffect(target, { casterId: caster.id, spellName: 'Charm Person', effectType: 'condition_apply', payload: { condition: 'charmed' }, sourceIsConcentration: false, sourceCreatureType: caster.creatureType });
   emit(state, 'condition_add', caster.id, `${target.name} is CHARMED by Charm Person! (humanoid-only enforced)`, target.id);
 }
 

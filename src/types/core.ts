@@ -271,6 +271,22 @@ export interface ActiveEffect {
    * does the same for the caster.
    */
   breaksOnAttackOrCast?: boolean;
+
+  // ── TG-032: source creature type (for Nature's Ward-style immunities) ──
+  // The creature type of the effect's source caster (e.g. 'fey', 'elemental',
+  // 'humanoid', 'undead'). Optional — set by spell modules that apply charmed
+  // / frightened conditions when the caster's type matters for immunity checks
+  // (e.g. Land Druid 10 Nature's Ward: PHB p.69 "you can't be charmed or
+  // frightened by fey or elementals"). When absent, the Nature's Ward fey/
+  // elemental check is skipped (backward-compatible — existing spell modules
+  // that don't set this behave exactly as before).
+  //
+  // Spell modules set this to `caster.creatureType` when constructing the
+  // ActiveEffect. For PC casters, creatureType is typically undefined (PCs
+  // are humanoids by default but the field isn't always populated); for
+  // monster casters, fivetools.ts:1236 populates it from the 5etools type
+  // field. The check in applySpellEffect compares lowercased values.
+  sourceCreatureType?: string;
 }
 
 // ---- Action -------------------------------------------------

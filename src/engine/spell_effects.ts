@@ -78,6 +78,20 @@ export function applySpellEffect(
       if (effect.payload.condition === 'poisoned' && target.classFeatures?.includes("Nature's Ward")) {
         break; // immune — do not apply
       }
+      // ── TG-032: Nature's Ward fey/elemental charm/frighten immunity ──
+      // PHB p.69: "Starting at 10th level, you can't be charmed or frightened
+      // by fey or elementals." If the target has Nature's Ward AND the effect
+      // carries a sourceCreatureType of 'fey' or 'elemental' AND the condition
+      // is charmed or frightened, skip application. Backward-compatible: if
+      // sourceCreatureType is absent (legacy spell modules), the check is a
+      // no-op and the condition applies as before.
+      if (
+        target.classFeatures?.includes("Nature's Ward") &&
+        (effect.payload.condition === 'charmed' || effect.payload.condition === 'frightened') &&
+        (effect.sourceCreatureType === 'fey' || effect.sourceCreatureType === 'elemental')
+      ) {
+        break; // immune — fey/elemental source cannot charm/frighten Nature's Ward target
+      }
       target.conditions.add(effect.payload.condition!);
       break;
 
