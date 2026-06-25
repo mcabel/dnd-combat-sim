@@ -316,6 +316,16 @@ export function removeEffectById(
   }
   undoEffect(target, effect);
   target.activeEffects = target.activeEffects.filter(e => e.id !== effectId);
+
+  // ── Fix: rebuild conditions Set after effect removal ──
+  // undoEffect() calls _removeConditionSource() (removes the effect's
+  // sourceId from _conditionSources) but does NOT rebuild the `conditions`
+  // Set. Without this reevaluateEffects() call, the conditions Set stays
+  // stale — e.g. Invisibility's breaksOnAttackOrCast removes the
+  // activeEffect but `target.conditions.has('invisible')` still returns
+  // true. Mirrors removeEffectsFromCaster (line ~258) which calls
+  // reevaluateEffects after removing concentration-bound effects.
+  reevaluateEffects(target, bf);
 }
 
 // ---- Helpers ------------------------------------------------

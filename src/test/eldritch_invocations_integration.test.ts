@@ -595,13 +595,14 @@ console.log('\n--- 10. End-to-end: CHA 20 (+5) Agonizing Blast damage ---');
 }
 
 // ============================================================
-// 11. ELDRITCH_INVOCATIONS registry has all 7 v1 entries (Sessions 38-41)
+// 11. ELDRITCH_INVOCATIONS registry has all 8 v1 entries (Sessions 38-41, 63)
 // ============================================================
-console.log('\n--- 11. Registry has all 7 v1 invocations (Sessions 38-41) ---');
+console.log('\n--- 11. Registry has all 8 v1 invocations (Sessions 38-41, 63) ---');
 {
   const names = Object.keys(ELDRITCH_INVOCATIONS).sort();
   // Session 41 Task #16: 3 new invocations added (Eldritch Spear, Eldritch Mind, Thirsting Blade)
-  eq('11a. registry has 7 entries (was 4 pre-Session 41)', names.length, 7);
+  // Session 63: Devil's Sight added (4 → 5 → 7 → 8 over Sessions 38-41-63)
+  eq('11a. registry has 8 entries (was 4 pre-Session 41)', names.length, 8);
   assert('11b. includes Agonizing Blast',    names.includes('Agonizing Blast'));
   assert('11c. includes Grasp of Hadar',    names.includes('Grasp of Hadar'));
   assert('11d. includes Lance of Lethargy', names.includes('Lance of Lethargy'));
@@ -610,6 +611,8 @@ console.log('\n--- 11. Registry has all 7 v1 invocations (Sessions 38-41) ---');
   assert('11f. includes Eldritch Spear',    names.includes('Eldritch Spear'));
   assert('11g. includes Eldritch Mind',     names.includes('Eldritch Mind'));
   assert('11h. includes Thirsting Blade',   names.includes('Thirsting Blade'));
+  // Session 63 addition
+  assert('11i. includes Devil\'s Sight',    names.includes("Devil's Sight"));
 }
 
 // ============================================================

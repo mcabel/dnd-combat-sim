@@ -110,7 +110,14 @@ console.log('\n=== 1. Spell database ===\n');
   assert('Bless in DB (implemented Session 34)',         bless !== null);
   assert('Bless: requiresConcentration = true',         bless?.requiresConcentration === true);
   assert('Bless: no damage (buff spell)',                bless?.damage === null);
-  assert('Detect Magic → null (utility)',                lookupSpell('Detect Magic') === null);
+  // Detect Magic was added to SPELL_DB in Session 60 (Batch 5b) as an
+  // out-of-combat utility spell so the monster spell selection engine can
+  // look it up and skip it (outOfCombat=true) rather than warning. It has
+  // no combat effect but IS registered.
+  const dm = lookupSpell('Detect Magic');
+  assert('Detect Magic in DB (Session 60 utility registration)', dm !== null);
+  assert('Detect Magic: outOfCombat = true',              dm?.outOfCombat === true);
+  assert('Detect Magic: no damage (utility)',             dm?.damage === null);
   {
     const cw = lookupSpell('Cure Wounds');
     assert('Cure Wounds in DB (heal-only, no damage)',   cw !== null && cw?.damage === null);
