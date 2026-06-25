@@ -1,6 +1,6 @@
 {
   "level": 6,
-  "generatedAt": "2026-06-25T05:34:04.160Z",
+  "generatedAt": "2026-06-25T16:38:50.810Z",
   "generatorVersion": 2,
   "scopeRule": "pre-2024 canon; reprints: newest in-scope source wins; XPHB(2024) out of scope; creatures keep all variants (not applicable to spells)",
   "sourceDates": {
@@ -26,8 +26,8 @@
     "XPHB"
   ],
   "count": 51,
-  "implementedCount": 35,
-  "remainingInScope": 15,
+  "implementedCount": 38,
+  "remainingInScope": 12,
   "spells": [
     {
       "name": "Arcane Gate",
@@ -287,8 +287,8 @@
       "page": 229,
       "level": 6,
       "school": "Necromancy",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "create_undead.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1452,8 +1452,8 @@
       "page": 285,
       "level": 6,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "wall_of_ice.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1516,8 +1516,8 @@
       "page": 288,
       "level": 6,
       "school": "Transmutation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "wind_walk.ts",
       "inScope": true,
       "otherSources": [
         {

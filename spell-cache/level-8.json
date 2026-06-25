@@ -1,6 +1,6 @@
 {
   "level": 8,
-  "generatedAt": "2026-06-25T05:34:04.160Z",
+  "generatedAt": "2026-06-25T16:38:50.810Z",
   "generatorVersion": 2,
   "scopeRule": "pre-2024 canon; reprints: newest in-scope source wins; XPHB(2024) out of scope; creatures keep all variants (not applicable to spells)",
   "sourceDates": {
@@ -26,8 +26,8 @@
     "XPHB"
   ],
   "count": 26,
-  "implementedCount": 18,
-  "remainingInScope": 7,
+  "implementedCount": 21,
+  "remainingInScope": 4,
   "spells": [
     {
       "name": "Abi-Dalzim's Horrid Wilting",
@@ -95,8 +95,8 @@
       "page": 213,
       "level": 8,
       "school": "Abjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "antimagic_field.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -586,8 +586,8 @@
       "page": 258,
       "level": 8,
       "school": "Conjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "maze.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -642,8 +642,8 @@
       "page": 259,
       "level": 8,
       "school": "Abjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "mind_blank.ts",
       "inScope": true,
       "otherSources": [
         {

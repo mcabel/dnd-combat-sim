@@ -1,6 +1,6 @@
 {
   "level": 5,
-  "generatedAt": "2026-06-25T05:34:04.160Z",
+  "generatedAt": "2026-06-25T16:38:50.810Z",
   "generatorVersion": 2,
   "scopeRule": "pre-2024 canon; reprints: newest in-scope source wins; XPHB(2024) out of scope; creatures keep all variants (not applicable to spells)",
   "sourceDates": {
@@ -26,8 +26,8 @@
     "XPHB"
   ],
   "count": 67,
-  "implementedCount": 47,
-  "remainingInScope": 17,
+  "implementedCount": 51,
+  "remainingInScope": 13,
   "spells": [
     {
       "name": "Alustriel's Mooncloak",
@@ -962,8 +962,8 @@
       "page": 249,
       "level": 5,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "hallow.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1420,8 +1420,8 @@
       "page": 270,
       "level": 5,
       "school": "Necromancy",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "raise_dead.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1964,8 +1964,8 @@
       "page": 285,
       "level": 5,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "wall_of_force.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -2020,8 +2020,8 @@
       "page": 287,
       "level": 5,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "wall_of_stone.ts",
       "inScope": true,
       "otherSources": [
         {
