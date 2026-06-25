@@ -8,11 +8,13 @@
 
 ## Session Summary
 
-This session implemented **3 new monster spell modules** (Batch 4) directly addressing the Session 68 handover's recommended next batch, then discovered and fixed **4 pre-existing CI test failures** (3 deterministic assertion failures + 1 API-mismatch crash that also resolved 2 of the 5 pre-existing tsc errors).
+This session implemented **3 new monster spell modules** (Batch 4) directly addressing the Session 68 handover's recommended next batch, then discovered and fixed **4 pre-existing CI test failures** (3 deterministic assertion failures + 1 API-mismatch crash that also resolved 2 of the 5 pre-existing tsc errors). A follow-up pass then fixed **all remaining pre-existing CI crashes** (darkness/fog_cloud obstacle subsystem, 5 creature-test bestiary-loader crashes, 1 statistical flake) — bringing CI to **all green**.
 
-**Coverage delta:** 301 → 304 implemented monster spells (+3); 153 → 150 remaining (-3). The spell cache also refreshed: 474 → 477 implemented total (the +3 are this session's work).
+**Coverage delta:** 301 → 304 implemented monster spells (+3); 153 → 150 remaining (-3). The spell cache: 474 implemented total (fog_cloud/darkness were already counted as implemented when they were stubs; rewriting them to real implementations didn't change the count).
 
 **tsc error delta:** 5 → 3 (the 2 `dimensionDoor` errors are now resolved; the 3 remaining are pre-existing `Record<string,unknown>` casts unrelated to spell work).
+
+**CI status:** ALL 4 CHECKS GREEN ✅ (was red X since before Session 68).
 
 ### What was done
 
@@ -53,13 +55,22 @@ This session implemented **3 new monster spell modules** (Batch 4) directly addr
 - `bulk_spell_dispatch.test.ts` passes (214).
 - `tsc --noEmit` introduces **0 new type errors** — dropped from 5 to 3 (2 dimensionDoor errors resolved).
 
+4. **Follow-up: all remaining CI crashes fixed (commit `3b8ad1c`)** — 4 categories:
+   - **Fog Cloud** (PHB p.243): implemented the obstacle subsystem the Session 62 test expected (was a stub). 20-ft radius sphere (9×9 grid), self-centered, concentration. Adds a vision-blocking `Obstacle` to `bf.obstacles` (`blocksVision=true`, `blocksMovement=false`, `isMagicalDarkness` NOT set). ActiveEffect: `battlefield_obstacle`, `sourceIsConcentration=true`. `shouldCast`: 3 strategies (low HP+near enemy, outnumbered+allies, round-1 opener). `removeEffectsFromCaster` cleans up obstacle on conc break. Test: `fog_cloud.test.ts` 43p/0f (was CRASH).
+   - **Darkness** (PHB p.230): same obstacle subsystem (was a stub). 15-ft radius sphere (7×7 grid), self-centered, concentration. `isMagicalDarkness=true` on obstacle, `blocksDarkvision=true` in payload (Phase 2 forward-compat). `shouldCast`: same 3 strategies (45ft near threshold vs Fog Cloud's 60ft). Test: `darkness.test.ts` 59p/0f (was CRASH).
+   - **5 creature test crashes**: `mergeBestiaries()` crashed on `legendarygroups.json` (has `legendaryGroup`, no `monster` array) — fixed with a defensive guard (`if (!file?.monster || !Array.isArray(file.monster)) continue`). `parseMonsterSpellcasting()` crashed on non-string atWill spell entries — fixed by using `String(sp)` to coerce (matching the daily/slots parsers). Tests: creature_saves 58p, creature_defenses 92p, creature_magic_resist_regen 34p, creature_recharge_legendary 52p, creature_traits_4ce 15p (all were CRASH).
+   - **subclass_features flake**: test 22 (Champion crit rate > 1.25× vanilla) used N=1000 random rolls with ~0.01% failure probability. Bumped N to 5000 (P(failure) → ~10^-20). Test: 40p/0f (was 39p/1f flake).
+   - Also updated `dimension_door_wall_of_fire.test.ts` Stub Metadata section: fog_cloud/darkness vision flags are now `true` (implemented, were `false` as stubs). Test: 49p/0f (was 47p/2f).
+
 ---
 
-## Commits this session (3, all pushed)
+## Commits this session (5, all pushed)
 
 1. `572aa8d` — Session 68 Batch 4: Plane Shift, Teleport, Animate Dead (+ spell cache + coverage refresh)
 2. `f041248` — Fix 3 pre-existing CI test failures (eldritch count, Detect Magic DB, invisibility removeEffectById conditions desync)
 3. `a105a16` — Fix dimension_door API mismatch (crash + 2 tsc errors)
+4. `dda468f` — Session 69 handover (initial)
+5. `3b8ad1c` — Fix all remaining pre-existing CI crashes (darkness, fog_cloud, 5 creature tests, subclass_features flake) — **CI now all green**
 
 ---
 
@@ -67,7 +78,9 @@ This session implemented **3 new monster spell modules** (Batch 4) directly addr
 
 ### RFC-COMBINING-EFFECTS — Phase 1-4 ALL DONE ✅ (unchanged)
 
-### RFC-VISION-AUDIO — Phase 1-3 ALL DONE ✅, Phase 4 DEFERRED (unchanged)
+### RFC-VISION-AUDIO — Phase 1-3 ALL DONE ✅, Phase 4 PARTIALLY DONE (obstacle subsystem implemented this session)
+
+The battlefield-obstacle subsystem (Fog Cloud + Darkness) is now implemented (was deferred stubs). The `Obstacle` type, `hasLineOfSight`, `canTakeHideAction`, and `removeBattlefieldObstacle` infrastructure already existed; the spell modules just needed real `shouldCast`/`execute` implementations. Darkness sets `isMagicalDarkness=true` + `blocksDarkvision=true` (Phase 2 forward-compat flags). The remaining Phase 4 items (per-cell light sources, mobile obscurement zones that move with the caster, line-of-effect for blindsight) are still deferred.
 
 ### RFC-PATTERN-BIAS-AI — Phase 1 DONE ✅, Phase 2 NOT STARTED (unchanged)
 
@@ -98,25 +111,21 @@ This session implemented **3 new monster spell modules** (Batch 4) directly addr
 | `eldritch_invocations_integration.test.ts` (73 tests) | ✅ All pass (was 71p/1f — fixed) |
 | `spell_actions.test.ts` (54 tests) | ✅ All pass (was 51p/1f — fixed) |
 | `invisibility_break_on_attack.test.ts` (36 tests) | ✅ All pass (was 34p/2f — fixed) |
-| `tsc --noEmit` | ✅ 3 errors (was 5 — 2 dimensionDoor errors resolved; 3 remaining are pre-existing `Record<string,unknown>` casts) |
-| `npm run spell-cache:build` | ✅ Runs clean — 477 implemented, 67 remaining |
+| `tsc --noEmit` | ✅ 3 errors (pre-existing `Record<string,unknown>` casts — unchanged, unrelated to spell work) |
+| `npm run spell-cache:build` | ✅ Runs clean — 474 implemented, 70 remaining |
 | `npm run scan:monster-spells` | ✅ Runs clean — 304 monster spells implemented, 150 remaining |
+| `darkness.test.ts` (59 tests) | ✅ All pass (was CRASH — obstacle subsystem implemented) |
+| `fog_cloud.test.ts` (43 tests) | ✅ All pass (was CRASH — obstacle subsystem implemented) |
+| `creature_saves.test.ts` (58 tests) | ✅ All pass (was CRASH — bestiary loader fixed) |
+| `creature_defenses.test.ts` (92 tests) | ✅ All pass (was CRASH — bestiary loader fixed) |
+| `creature_magic_resist_regen.test.ts` (34 tests) | ✅ All pass (was CRASH — bestiary loader + spell parser fixed) |
+| `creature_recharge_legendary.test.ts` (52 tests) | ✅ All pass (was CRASH — bestiary loader fixed) |
+| `creature_traits_4ce.test.ts` (15 tests) | ✅ All pass (was CRASH — bestiary loader fixed) |
+| `subclass_features.test.ts` (40 tests) | ✅ All pass (was 39p/1f flake — N bumped 1000→5000) |
 
-### Pre-existing CI failures still remaining (NOT caused by this session — out of scope)
+### CI status: ALL GREEN ✅
 
-These 7 test files crash/timeout on the clean baseline (a447f78, before this session's work). They are pre-existing bugs in other subsystems:
-
-| Test file | Failure type | Root cause | Subsystem |
-|-----------|-------------|------------|-----------|
-| `darkness.test.ts` | CRASH (TypeError) | Darkness execute doesn't add battlefield obstacle; metadata flags missing | RFC-VISION-AUDIO Phase 4 (obstacle subsystem) |
-| `fog_cloud.test.ts` | CRASH (TypeError) | Fog Cloud execute doesn't add obstacle; metadata flags missing | RFC-VISION-AUDIO Phase 4 (obstacle subsystem) |
-| `creature_defenses.test.ts` | CRASH (TypeError) | `file.monster is not iterable` — bestiary data parsing | Creature test infrastructure |
-| `creature_magic_resist_regen.test.ts` | CRASH (TypeError) | Same bestiary parsing issue | Creature test infrastructure |
-| `creature_recharge_legendary.test.ts` | CRASH (TypeError) | Same bestiary parsing issue | Creature test infrastructure |
-| `creature_saves.test.ts` | CRASH (TypeError) | Same bestiary parsing issue | Creature test infrastructure |
-| `creature_traits_4ce.test.ts` | CRASH (TypeError) | Same bestiary parsing issue | Creature test infrastructure |
-
-These are documented for the next agent. The darkness/fog_cloud crashes require implementing the battlefield-obstacle subsystem (RFC-VISION-AUDIO Phase 4 — explicitly DEFERRED). The creature test crashes require fixing the bestiary data loader (`file.monster` structure mismatch).
+**All 4 CI checks pass on commit `3b8ad1c`:** `build` ✅, `test` ✅, `deploy` ✅, `report-build-status` ✅. The red X that had persisted since before Session 68 is now **completely gone**. All 388 test files pass with 0 failures (the only CI annotation is an informational Node.js 20 deprecation warning).
 
 ---
 
@@ -224,15 +233,15 @@ None — all substantive work is committed and pushed. The working tree is clean
 
 ## Verification Snapshot (for the "no red X" check)
 
-- `git log --oneline -5` shows: `45bdfc9` (handover), `a105a16` (DD fix), `f041248` (3 test fixes), `572aa8d` (Batch 4), `efccb52` (Session 68 handover).
+- `git log --oneline -6` shows: `3b8ad1c` (all CI fixes), `dda468f` (handover), `a105a16` (DD fix), `f041248` (3 test fixes), `572aa8d` (Batch 4), `efccb52` (Session 68 handover).
 - `git status` → clean working tree.
-- `tsc --noEmit 2>&1 | grep "error TS" | grep -v "src/test/" | wc -l` → **3** (was 5 — 2 dimensionDoor errors resolved; 3 remaining are pre-existing `Record<string,unknown>` casts).
-- All test files listed in "Build Status" pass with 0 failures locally.
-- **CI status (a105a16 run, completed):** The `test` check shows a red X (failure). Verified via CI job logs that the failing files are:
-  - **7 pre-existing TIMEOUT/CRASH files** (all crash identically on parent commit `efccb52`):
-    - `creature_defenses`, `creature_magic_resist_regen`, `creature_recharge_legendary`, `creature_saves`, `creature_traits_4ce` (5 — bestiary data parsing crash `file.monster is not iterable`)
-    - `darkness`, `fog_cloud` (2 — RFC-VISION-AUDIO Phase 4 obstacle subsystem not implemented)
-  - **1 flaky failure**: `subclass_features.test.ts` (39p/1f on a105a16 CI; 40p/0f on a447f78 CI; 40p/0f locally on both — random dice outcome, NOT caused by this session's changes)
-  - **Zero new failures introduced by this session.** The 4 failures that WERE fixable (eldritch count, Detect Magic DB, invisibility removeEffectById desync, dimension_door API crash) are all fixed and now pass on CI.
-- GitHub: commits `572aa8d`, `f041248`, `a105a16`, `45bdfc9` all pushed cleanly to `main`.
-- **zHANDOVER-SESSION-69.md** committed (`45bdfc9`) and uploaded to `/home/z/my-project/upload/zHANDOVER-SESSION-69.md`.
+- `tsc --noEmit 2>&1 | grep "error TS" | grep -v "src/test/" | wc -l` → **3** (pre-existing `Record<string,unknown>` casts — unchanged, unrelated to spell work).
+- All test files pass with 0 failures locally (verified 30+ suites including all 8 previously-crashing files).
+- **CI status (commit `3b8ad1c`, completed): ALL 4 CHECKS GREEN ✅**
+  - `build`: success ✅
+  - `test`: success ✅ (all 388 test files pass, 0 failures — the red X is GONE)
+  - `deploy`: success ✅
+  - `report-build-status`: success ✅
+  - The only CI annotation is an informational Node.js 20 deprecation warning (not a failure).
+- GitHub: commits `572aa8d`, `f041248`, `a105a16`, `dda468f`, `3b8ad1c` all pushed cleanly to `main`.
+- **zHANDOVER-SESSION-69.md** committed and uploaded to `/home/z/my-project/upload/zHANDOVER-SESSION-69.md`.
