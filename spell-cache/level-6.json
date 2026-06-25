@@ -1,6 +1,6 @@
 {
   "level": 6,
-  "generatedAt": "2026-06-20T18:07:58.089Z",
+  "generatedAt": "2026-06-25T05:34:04.160Z",
   "generatorVersion": 2,
   "scopeRule": "pre-2024 canon; reprints: newest in-scope source wins; XPHB(2024) out of scope; creatures keep all variants (not applicable to spells)",
   "sourceDates": {
@@ -26,8 +26,8 @@
     "XPHB"
   ],
   "count": 51,
-  "implementedCount": 33,
-  "remainingInScope": 17,
+  "implementedCount": 35,
+  "remainingInScope": 15,
   "spells": [
     {
       "name": "Arcane Gate",
@@ -196,8 +196,8 @@
       "page": 226,
       "level": 6,
       "school": "Conjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "conjure_fey.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1243,8 +1243,8 @@
       "page": 112,
       "level": 6,
       "school": "Conjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "summon_fiend.ts",
       "inScope": true,
       "otherSources": [
         {

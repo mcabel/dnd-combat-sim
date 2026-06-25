@@ -8,7 +8,8 @@
     "test:parser": "ts-node src/test/parser.test.ts",
     "spell-cache:build": "ts-node --transpile-only scripts/spell-cache/build.ts",
     "spell-cache:pick": "ts-node --transpile-only scripts/spell-cache/pick.ts",
-    "spell-cache:show": "ts-node --transpile-only scripts/spell-cache/show.ts"
+    "spell-cache:show": "ts-node --transpile-only scripts/spell-cache/show.ts",
+    "scan:monster-spells": "ts-node --transpile-only scripts/scan_monster_spells.ts"
   },
   "devDependencies": {
     "@types/node": "^20.19.39",

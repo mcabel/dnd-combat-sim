@@ -176,6 +176,20 @@ export function lookupCantripTemplate(spellName: string): CantripTemplate | null
   return CANTRIP_BY_LOWER[spellName.toLowerCase().trim()] ?? null;
 }
 
+/**
+ * Session 67 — spell-coverage tracker.
+ *
+ * Returns the canonical (capitalized) names of every cantrip currently in
+ * `CANTRIP_TEMPLATES`. Used by `scripts/scan_monster_spells.ts` to mark
+ * those cantrips as "implemented" even when they are not in the spell cache
+ * (the cache only covers PHB/XGE/TCE/etc. spell modules in `src/spells/`,
+ * not the monster-only combat cantrip templates handled directly in this
+ * module).
+ */
+export function listCantripTemplateNames(): string[] {
+  return Object.values(CANTRIP_TEMPLATES).map(t => t.name);
+}
+
 // ---- Spell Tag Derivation (RFC §6) --------------------------
 
 /**

@@ -19,6 +19,7 @@
 import {
   selectMonsterSpell,
   lookupCantripTemplate,
+  listCantripTemplateNames,
   deriveSpellTags,
   cantripDiceCount,
   computeSpellcastContext,
@@ -196,6 +197,22 @@ console.log('\n=== 1. Cantrip template lookup (case-insensitive) ===\n');
   const ll = lookupCantripTemplate('lightning lure')!;
   eq('1ac: Lightning Lure saveAbility = str', ll.saveAbility, 'str');
   eq('1ad: Lightning Lure rangeFt = 15', ll.rangeFt, 15);
+
+  // ── Session 67: listCantripTemplateNames — used by spell-coverage scanner ──
+  const allNames = listCantripTemplateNames();
+  eq('1ae: listCantripTemplateNames returns 17 cantrips', allNames.length, 17);
+  eq('1af: listCantripTemplateNames includes Fire Bolt',
+    allNames.includes('Fire Bolt'), true);
+  eq('1ag: listCantripTemplateNames includes Lightning Lure',
+    allNames.includes('Lightning Lure'), true);
+  eq('1ah: listCantripTemplateNames excludes utility cantrips (no Mage Hand)',
+    allNames.includes('Mage Hand'), false);
+  // Every name should round-trip through lookupCantripTemplate
+  let allRoundTrip = true;
+  for (const n of allNames) {
+    if (!lookupCantripTemplate(n)) { allRoundTrip = false; break; }
+  }
+  eq('1ai: every listed name round-trips through lookupCantripTemplate', allRoundTrip, true);
 }
 
 // ============================================================

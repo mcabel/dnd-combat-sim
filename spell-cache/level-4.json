@@ -1,6 +1,6 @@
 {
   "level": 4,
-  "generatedAt": "2026-06-20T18:07:58.089Z",
+  "generatedAt": "2026-06-25T05:34:04.160Z",
   "generatorVersion": 2,
   "scopeRule": "pre-2024 canon; reprints: newest in-scope source wins; XPHB(2024) out of scope; creatures keep all variants (not applicable to spells)",
   "sourceDates": {
@@ -26,8 +26,8 @@
     "XPHB"
   ],
   "count": 57,
-  "implementedCount": 41,
-  "remainingInScope": 15,
+  "implementedCount": 52,
+  "remainingInScope": 4,
   "spells": [
     {
       "name": "Arcane Eye",
@@ -163,8 +163,8 @@
       "page": 217,
       "level": 4,
       "school": "Abjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "banishment.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -333,8 +333,8 @@
       "page": 226,
       "level": 4,
       "school": "Conjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "conjure_minor_elementals.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -366,8 +366,8 @@
       "page": 226,
       "level": 4,
       "school": "Conjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "conjure_woodland_beings.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -466,8 +466,8 @@
       "page": 233,
       "level": 4,
       "school": "Conjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "dimension_door.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -689,8 +689,8 @@
       "page": 156,
       "level": 4,
       "school": "Conjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "find_greater_steed.ts",
       "inScope": true,
       "otherSources": [],
       "classes": [],
@@ -954,8 +954,8 @@
       "page": 246,
       "level": 4,
       "school": "Illusion",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "greater_invisibility.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1611,8 +1611,8 @@
       "page": 109,
       "level": 4,
       "school": "Conjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "summon_aberration.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1641,8 +1641,8 @@
       "page": 111,
       "level": 4,
       "school": "Conjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "summon_construct.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1673,8 +1673,8 @@
       "page": 111,
       "level": 4,
       "school": "Conjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "summon_elemental.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1703,8 +1703,8 @@
       "page": 166,
       "level": 4,
       "school": "Conjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "summon_greater_demon.ts",
       "inScope": true,
       "otherSources": [],
       "classes": [],
@@ -1760,8 +1760,8 @@
       "page": 285,
       "level": 4,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "wall_of_fire.ts",
       "inScope": true,
       "otherSources": [
         {
