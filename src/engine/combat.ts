@@ -768,6 +768,13 @@ import { shouldCast as shouldCastForbiddance } from '../spells/forbiddance';
 import { shouldCast as shouldCastPlanarAlly } from '../spells/planar_ally';
 import { shouldCast as shouldCastResurrection } from '../spells/resurrection';
 import { shouldCast as shouldCastSimulacrum } from '../spells/simulacrum';
+// ── Session 71 — Batch B/C: 6 deferred combat spell stubs ──────────────
+import { shouldCast as shouldCastThunderStep } from '../spells/thunder_step';
+import { shouldCast as shouldCastWindWall } from '../spells/wind_wall';
+import { shouldCast as shouldCastWallOfThorns } from '../spells/wall_of_thorns';
+import { shouldCast as shouldCastPrismaticWall } from '../spells/prismatic_wall';
+import { shouldCast as shouldCastProtectionFromEvilAndGood } from '../spells/protection_from_evil_and_good';
+import { shouldCast as shouldCastDispelEvilAndGood } from '../spells/dispel_evil_and_good';
 import {
   shouldCast as shouldCastPlaneShift,
   execute as executePlaneShift,
@@ -5695,6 +5702,34 @@ export function executePlannedAction(
     }
     case 'simulacrum': {
       if (shouldCastSimulacrum(actor, bf)) { /* never fires in combat */ }
+      break;
+    }
+
+    // ── Session 71 — Batch B/C: 6 deferred combat spell stubs ──────────────
+    // All shouldCast functions always return null (deferred implementation).
+    // These case branches are safety guards against unknown-action fallthrough.
+    case 'thunderStep': {
+      if (shouldCastThunderStep(actor, bf)) { /* never fires in combat */ }
+      break;
+    }
+    case 'windWall': {
+      if (shouldCastWindWall(actor, bf)) { /* never fires in combat */ }
+      break;
+    }
+    case 'wallOfThorns': {
+      if (shouldCastWallOfThorns(actor, bf)) { /* never fires in combat */ }
+      break;
+    }
+    case 'prismaticWall': {
+      if (shouldCastPrismaticWall(actor, bf)) { /* never fires in combat */ }
+      break;
+    }
+    case 'protectionFromEvilAndGood': {
+      if (shouldCastProtectionFromEvilAndGood(actor, bf)) { /* never fires in combat */ }
+      break;
+    }
+    case 'dispelEvilAndGood': {
+      if (shouldCastDispelEvilAndGood(actor, bf)) { /* never fires in combat */ }
       break;
     }
 

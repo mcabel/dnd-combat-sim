@@ -264,6 +264,13 @@ import { shouldCast as shouldCastForbiddance } from '../spells/forbiddance';
 import { shouldCast as shouldCastPlanarAlly } from '../spells/planar_ally';
 import { shouldCast as shouldCastResurrection } from '../spells/resurrection';
 import { shouldCast as shouldCastSimulacrum } from '../spells/simulacrum';
+// ── Session 71 — Batch B/C: 6 deferred combat spell stubs ──────────────
+import { shouldCast as shouldCastThunderStep } from '../spells/thunder_step';
+import { shouldCast as shouldCastWindWall } from '../spells/wind_wall';
+import { shouldCast as shouldCastWallOfThorns } from '../spells/wall_of_thorns';
+import { shouldCast as shouldCastPrismaticWall } from '../spells/prismatic_wall';
+import { shouldCast as shouldCastProtectionFromEvilAndGood } from '../spells/protection_from_evil_and_good';
+import { shouldCast as shouldCastDispelEvilAndGood } from '../spells/dispel_evil_and_good';
 import { shouldCast as shouldCastPlaneShift } from '../spells/plane_shift';
 import { shouldCast as shouldCastTeleport } from '../spells/teleport';
 import { shouldCast as shouldCastAnimateDead } from '../spells/animate_dead';
@@ -5099,6 +5106,29 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
   }
   if (!plan.action && self.actions.some(a => a.name === 'Simulacrum')) {
     if (shouldCastSimulacrum(self, battlefield)) { /* never */ }
+  }
+
+  // ── Session 71 — Batch B/C: 6 deferred combat spell stubs ──────────────
+  // All shouldCast functions always return null (deferred implementation).
+  // These branches are safety guards so the planner never plans an unknown
+  // action if a future refactor changes shouldCast to return non-null.
+  if (!plan.action && self.actions.some(a => a.name === 'Thunder Step')) {
+    if (shouldCastThunderStep(self, battlefield)) { /* never fires */ }
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'Wind Wall')) {
+    if (shouldCastWindWall(self, battlefield)) { /* never fires */ }
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'Wall of Thorns')) {
+    if (shouldCastWallOfThorns(self, battlefield)) { /* never fires */ }
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'Prismatic Wall')) {
+    if (shouldCastPrismaticWall(self, battlefield)) { /* never fires */ }
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'Protection from Evil and Good')) {
+    if (shouldCastProtectionFromEvilAndGood(self, battlefield)) { /* never fires */ }
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'Dispel Evil and Good')) {
+    if (shouldCastDispelEvilAndGood(self, battlefield)) { /* never fires */ }
   }
 
   // --- 12CM. CHARM PERSON (WIS save or charmed, L1, NO conc) ---

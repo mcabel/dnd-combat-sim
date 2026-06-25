@@ -1,6 +1,6 @@
 # Monster Spell Coverage Report
 
-Generated: `2026-06-25T21:30:19.663Z`
+Generated: `2026-06-25T21:37:12.026Z`
 Source: 2401 bestiary entries from `bestiaryData/`, scanned via `scripts/scan_monster_spells.ts`.
 
 > **Purpose:** This report guides which spell modules to build next for the
@@ -18,8 +18,8 @@ Source: 2401 bestiary entries from `bestiaryData/`, scanned via `scripts/scan_mo
 | Creatures with `monsterSpellcasting` | 774 (32.2%) |
 | Total spell references (incl. duplicates) | 6128 |
 | Unique spells referenced | 363 |
-| ├─ Already implemented | 356 (98.1%) |
-| └─ NOT yet implemented | 7 (1.9%) |
+| ├─ Already implemented | 363 (100.0%) |
+| └─ NOT yet implemented | 0 (0.0%) |
 
 ## Top 50 Unbuilt Spells (by creature frequency)
 
@@ -29,41 +29,27 @@ spell at multiple slot levels — counted separately), and a few example creatur
 
 | Rank | Spell | # Creatures | Total Refs | Example Creatures | Notes |
 |------|-------|-------------|------------|-------------------|-------|
-| 1 | Protection from Evil and Good | 27 | 27 | Heralds of Dust Exorcist, Hollyphant, Skull Lasher of Myrkul | `PHB` · Abjuration · levels: atWill/daily,L1 |
-| 2 | Dispel Evil and Good | 15 | 15 | Heralds of Dust Exorcist, Omin Dran, Kostchtchie | `PHB` · Abjuration · levels: atWill/daily,L5 |
-| 3 | Wind Wall | 3 | 3 | Frost Druid, Triton Master of Waves, Asharra | `PHB` · Evocation · levels: atWill/daily,L3 |
-| 4 | Prismatic Wall | 2 | 2 | Ekengarik, Niv-Mizzet | `PHB` · Abjuration · levels: atWill/daily,L9 |
-| 5 | Wall of Thorns | 2 | 2 | Conclave Dryad, Druid of the Old Ways | `PHB` · Conjuration · levels: atWill/daily,L6 |
-| 6 | Shapechange | 1 | 1 | Hollyphant | `PHB` · Transmutation · levels: atWill/daily |
-| 7 | Thunder Step | 1 | 1 | Malivar | `XGE` · Conjuration · levels: L3 |
 
 ## Full Unbuilt Spells List (all)
 
 | Rank | Spell | # Creatures | Total Refs |
 |------|-------|-------------|------------|
-| 1 | Protection from Evil and Good | 27 | 27 |
-| 2 | Dispel Evil and Good | 15 | 15 |
-| 3 | Wind Wall | 3 | 3 |
-| 4 | Prismatic Wall | 2 | 2 |
-| 5 | Wall of Thorns | 2 | 2 |
-| 6 | Shapechange | 1 | 1 |
-| 7 | Thunder Step | 1 | 1 |
 
 ## Implemented Spells (already built — summary)
 
 | Level | Implemented count |
 |-------|-------------------|
-| unknown | 44 |
+| unknown | 45 |
 | 0 | 34 |
-| 1 | 59 |
+| 1 | 60 |
 | 2 | 62 |
-| 3 | 47 |
+| 3 | 49 |
 | 4 | 33 |
-| 5 | 29 |
-| 6 | 20 |
+| 5 | 30 |
+| 6 | 21 |
 | 7 | 14 |
 | 8 | 9 |
-| 9 | 5 |
+| 9 | 6 |
 
 ## Methodology
 

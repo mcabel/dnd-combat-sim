@@ -2621,6 +2621,17 @@ export interface PlannedAction {
     | 'planarAlly'               // Planar Ally — PHB p.265: L6 Conj, 60 ft, 10-min cast
     | 'resurrection'             // Resurrection — PHB p.272: L7 Nec, touch, 1-hr cast
     | 'simulacrum'               // Simulacrum — PHB p.276: L7 Ill, touch, 12-hr cast
+    // ── Session 71 — Batch B/C: 6 deferred combat spell stubs ──────────────
+    // Each module is a coverage stub (shouldCast always null) so the monster-
+    // spell coverage report counts these spells as implemented. Real combat
+    // behavior is deferred until the relevant engine subsystem (wall/zone,
+    // advantage-vs-creature-type, effect-removal, teleport+AoE) is built.
+    | 'thunderStep'              // Thunder Step — XGE p.168: L3 Conj, 90 ft, teleport + 3d10 thunder AoE
+    | 'windWall'                 // Wind Wall — PHB p.288: L3 Evoc, 120 ft, conc, ranged-weapon-miss wall
+    | 'wallOfThorns'             // Wall of Thorns — PHB p.287: L6 Conj, 120 ft, conc, damage-on-enter wall
+    | 'prismaticWall'            // Prismatic Wall — PHB p.267: L9 Abj, 60 ft, 7-layer complex wall
+    | 'protectionFromEvilAndGood' // Protection from Evil and Good — PHB p.270: L1 Abj, touch, conc, advantage vs creature-type
+    | 'dispelEvilAndGood'        // Dispel Evil and Good — PHB p.233: L5 Abj, self, conc, break enchantment
     | 'charmPerson'       // Charm Person — PHB p.221: 30 ft, WIS save or charmed, NO concentration (Session 27 TG-004: humanoid-only NOW enforced)
     | 'compelledDuel'     // Compelled Duel — PHB p.224: 30 ft, WIS save or frightened (taunt), concentration (movement-restriction simplified)
     | 'grease'            // Grease — PHB p.245: 60 ft, 10-ft radius AoE, DEX save or prone, NO concentration (persistent-terrain simplified)

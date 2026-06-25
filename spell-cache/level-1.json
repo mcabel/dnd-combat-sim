@@ -1,6 +1,6 @@
 {
   "level": 1,
-  "generatedAt": "2026-06-25T19:33:38.857Z",
+  "generatedAt": "2026-06-25T21:37:10.666Z",
   "generatorVersion": 2,
   "scopeRule": "pre-2024 canon; reprints: newest in-scope source wins; XPHB(2024) out of scope; creatures keep all variants (not applicable to spells)",
   "sourceDates": {
@@ -26,8 +26,8 @@
     "XPHB"
   ],
   "count": 82,
-  "implementedCount": 80,
-  "remainingInScope": 1,
+  "implementedCount": 81,
+  "remainingInScope": 0,
   "spells": [
     {
       "name": "Absorb Elements",
@@ -1942,8 +1942,8 @@
       "page": 270,
       "level": 1,
       "school": "Abjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "protection_from_evil_and_good.ts",
       "inScope": true,
       "otherSources": [
         {
