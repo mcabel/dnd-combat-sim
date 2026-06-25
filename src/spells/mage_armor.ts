@@ -15,6 +15,11 @@ import { Combatant, Battlefield } from '../types/core';
 import { EngineState } from '../engine/combat';
 import { applySpellEffect } from '../engine/spell_effects';
 
+export const metadata = {
+  name: 'Mage Armor', level: 1, school: 'abjuration', rangeFt: 5,
+  concentration: false, castingTime: 'action',
+} as const;
+
 function dexMod(c: Combatant): number {
   return Math.floor((c.dex - 10) / 2);
 }

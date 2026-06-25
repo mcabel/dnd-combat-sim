@@ -171,9 +171,16 @@ for (const [k, v] of Object.entries(CANTRIP_TEMPLATES)) {
  *
  * Monster spell names from `monsterSpellcasting` are lowercase
  * (e.g. 'ray of frost'). This function normalizes and matches.
+ *
+ * Session 69 fix: also strips trailing 5etools cross-reference asterisks
+ * (e.g. "fire bolt*" → "fire bolt"). The * marks spells sourced from a
+ * different book than the monster's source — without this strip, monsters
+ * whose atWill list contains "fire bolt*" would fail to look up the
+ * Fire Bolt cantrip template and skip it entirely.
  */
 export function lookupCantripTemplate(spellName: string): CantripTemplate | null {
-  return CANTRIP_BY_LOWER[spellName.toLowerCase().trim()] ?? null;
+  const normalized = spellName.toLowerCase().trim().replace(/\s*\*+\s*$/, '');
+  return CANTRIP_BY_LOWER[normalized] ?? null;
 }
 
 /**

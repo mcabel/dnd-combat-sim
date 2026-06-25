@@ -99,6 +99,13 @@ function normalize(raw: string): string {
     .trim()
     // strip trailing parentheticals like "(self only)" or "(as an action)"
     .replace(/\s*\([^)]*\)\s*$/, '')
+    // strip trailing 5etools cross-reference asterisks (e.g. "Mirror Image*",
+    // "acid splash *"). The * marks spells sourced from a different book
+    // than the monster's source — it's a metadata marker, not part of the
+    // spell name. Without this strip, ~100+ already-implemented spells were
+    // incorrectly counted as "unbuilt" because "Mirror Image*" didn't match
+    // the cache entry "Mirror Image". (Session 69 fix.)
+    .replace(/\s*\*+\s*$/, '')
     .trim();
 }
 
