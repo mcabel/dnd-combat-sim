@@ -697,6 +697,24 @@ import {
 } from '../spells/create_undead';
 // Raise Dead: out-of-combat stub — shouldCast always returns false
 import { shouldCast as shouldCastRaiseDead } from '../spells/raise_dead';
+import {
+  shouldCast as shouldCastEtherealness,
+  execute as executeEtherealness,
+} from '../spells/etherealness';
+import {
+  shouldCast as shouldCastWindWalk,
+  execute as executeWindWalk,
+} from '../spells/wind_walk';
+import {
+  shouldCast as shouldCastGate,
+  execute as executeGate,
+} from '../spells/gate';
+import {
+  shouldCast as shouldCastHallow,
+  execute as executeHallow,
+} from '../spells/hallow';
+// Wish: out-of-combat stub — shouldCast always returns false
+import { shouldCast as shouldCastWish } from '../spells/wish';
 // Scrying: out-of-combat stub — shouldCast always returns false
 import { shouldCast as shouldCastScrying } from '../spells/scrying';
 import {
@@ -5363,6 +5381,42 @@ export function executePlannedAction(
       // Raise Dead — PHB p.258: touch, 1-hour cast, out-of-combat only.
       // shouldCastRaiseDead always returns null; this branch is a safety guard.
       if (shouldCastRaiseDead(actor, bf)) { /* never fires in combat */ }
+      break;
+    }
+
+    case 'etherealness': {
+      // Etherealness — self-targeted defensive (shouldCast returns caster or null).
+      const ethTarget = shouldCastEtherealness(actor, bf);
+      if (ethTarget) executeEtherealness(actor, ethTarget, state);
+      break;
+    }
+
+    case 'windWalk': {
+      // Wind Walk — self-targeted movement/escape (shouldCast returns caster or null).
+      const wwTarget = shouldCastWindWalk(actor, bf);
+      if (wwTarget) executeWindWalk(actor, wwTarget, state);
+      break;
+    }
+
+    case 'gate': {
+      // Gate — spawns an entity; shouldCast returns the caster (self) or null.
+      const gTarget = shouldCastGate(actor, bf);
+      if (gTarget) executeGate(actor, gTarget, state);
+      break;
+    }
+
+    case 'hallow': {
+      // Hallow — single-target advantage_vs (Daylight vs undead/fiend).
+      const halTargetId = plan.targetId;
+      const halTarget = halTargetId ? bf.combatants.get(halTargetId) ?? null : null;
+      const halLive = halTarget && !halTarget.isDead && !halTarget.isUnconscious ? halTarget : shouldCastHallow(actor, bf);
+      if (halLive) executeHallow(actor, halLive, state);
+      break;
+    }
+
+    case 'wish': {
+      // Wish — out-of-combat stub. shouldCast always returns false.
+      if (shouldCastWish(actor, bf)) { /* never fires in combat */ }
       break;
     }
 

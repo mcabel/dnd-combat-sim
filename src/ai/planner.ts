@@ -207,6 +207,11 @@ import { shouldCast as shouldCastMindBlank } from '../spells/mind_blank';
 import { shouldCast as shouldCastSymbol } from '../spells/symbol';
 import { shouldCast as shouldCastCreateUndead } from '../spells/create_undead';
 import { shouldCast as shouldCastRaiseDead } from '../spells/raise_dead';
+import { shouldCast as shouldCastEtherealness } from '../spells/etherealness';
+import { shouldCast as shouldCastWindWalk } from '../spells/wind_walk';
+import { shouldCast as shouldCastGate } from '../spells/gate';
+import { shouldCast as shouldCastHallow } from '../spells/hallow';
+import { shouldCast as shouldCastWish } from '../spells/wish';
 import { shouldCast as shouldCastScrying } from '../spells/scrying';
 import { shouldShapechange } from '../engine/shapechange';
 // ── Session 62 RFC-VISION-AUDIO Phase 1: perception + detection helpers ──
@@ -4726,6 +4731,72 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
       plan.action = { type: 'raiseDead', action: null, targetId: rdTarget.id, description: `${self.name} casts Raise Dead` };
       plan.targetId = rdTarget.id;
       plan.bonusAction = planBonusAction(self, rdTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- ETHEREALNESS (L7, NO save, conc — invisible / Border Ethereal) ---
+  // PHB p.238: self, concentration. v1: defensive escape (invisible effect).
+  // Priority: defensive — fires when caster is below 50% HP.
+  if (!plan.action && self.actions.some(a => a.name === 'Etherealness')) {
+    const ethTarget = shouldCastEtherealness(self, battlefield);
+    if (ethTarget) {
+      plan.action = { type: 'etherealness', action: null, targetId: ethTarget.id, description: `${self.name} casts Etherealness, stepping into the Border Ethereal` };
+      plan.targetId = ethTarget.id;
+      plan.bonusAction = planBonusAction(self, ethTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- WIND WALK (L6, NO save, conc — mist form: fly 300 + incapacitated) ---
+  // PHB p.288: self (v1: caster only), concentration. Priority: defensive —
+  // fires on low HP (escape) or no enemies within 30 ft (reposition).
+  if (!plan.action && self.actions.some(a => a.name === 'Wind Walk')) {
+    const wwTarget = shouldCastWindWalk(self, battlefield);
+    if (wwTarget) {
+      plan.action = { type: 'windWalk', action: null, targetId: wwTarget.id, description: `${self.name} casts Wind Walk, becoming a cloud of mist` };
+      plan.targetId = wwTarget.id;
+      plan.bonusAction = planBonusAction(self, wwTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- GATE (L9, NO save, conc — spawn entity) ---
+  // PHB p.244: 60ft, concentration. v1: spawns a shadow ally.
+  // Priority: MEDIUM — summon spells are valuable (extra body on field).
+  if (!plan.action && self.actions.some(a => a.name === 'Gate')) {
+    const gTarget = shouldCastGate(self, battlefield);
+    if (gTarget) {
+      plan.action = { type: 'gate', action: null, targetId: gTarget.id, description: `${self.name} casts Gate, tearing a rift in reality` };
+      plan.targetId = gTarget.id;
+      plan.bonusAction = planBonusAction(self, gTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- HALLOW (L5, NO save, NO conc — Daylight: advantage_vs undead/fiend) ---
+  // PHB p.249: 60ft (v1 trigger radius), NO conc (canon 24 hr).
+  // v1: Daylight effect only — undead/fiends have disadv on attacks.
+  // Priority: MEDIUM — situational (only vs undead/fiends).
+  if (!plan.action && self.actions.some(a => a.name === 'Hallow')) {
+    const halTarget = shouldCastHallow(self, battlefield);
+    if (halTarget) {
+      plan.action = { type: 'hallow', action: null, targetId: halTarget.id, description: `${self.name} casts Hallow (Daylight) at ${halTarget.name}` };
+      plan.targetId = halTarget.id;
+      plan.bonusAction = planBonusAction(self, halTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- WISH (L9, action — out-of-combat stub) ---
+  // PHB p.288: never fires in combat (duplicate-any-spell deferred).
+  // shouldCast always returns false.
+  if (!plan.action && self.actions.some(a => a.name === 'Wish')) {
+    const wTarget = shouldCastWish(self, battlefield);
+    if (wTarget) {
+      plan.action = { type: 'wish', action: null, targetId: wTarget.id, description: `${self.name} casts Wish` };
+      plan.targetId = wTarget.id;
+      plan.bonusAction = planBonusAction(self, wTarget, battlefield);
       return plan;
     }
   }
