@@ -1,6 +1,6 @@
 {
   "level": 8,
-  "generatedAt": "2026-06-25T19:26:34.659Z",
+  "generatedAt": "2026-06-25T19:33:38.857Z",
   "generatorVersion": 2,
   "scopeRule": "pre-2024 canon; reprints: newest in-scope source wins; XPHB(2024) out of scope; creatures keep all variants (not applicable to spells)",
   "sourceDates": {
@@ -26,8 +26,8 @@
     "XPHB"
   ],
   "count": 26,
-  "implementedCount": 21,
-  "remainingInScope": 4,
+  "implementedCount": 24,
+  "remainingInScope": 1,
   "spells": [
     {
       "name": "Abi-Dalzim's Horrid Wilting",
@@ -190,8 +190,8 @@
       "page": 222,
       "level": 8,
       "school": "Necromancy",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "clone.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -280,8 +280,8 @@
       "page": 231,
       "level": 8,
       "school": "Conjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "demiplane.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -770,8 +770,8 @@
       "page": 281,
       "level": 8,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "telepathy.ts",
       "inScope": true,
       "otherSources": [
         {

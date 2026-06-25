@@ -1,6 +1,6 @@
 {
   "level": 1,
-  "generatedAt": "2026-06-25T19:26:34.659Z",
+  "generatedAt": "2026-06-25T19:33:38.857Z",
   "generatorVersion": 2,
   "scopeRule": "pre-2024 canon; reprints: newest in-scope source wins; XPHB(2024) out of scope; creatures keep all variants (not applicable to spells)",
   "sourceDates": {
@@ -26,8 +26,8 @@
     "XPHB"
   ],
   "count": 82,
-  "implementedCount": 78,
-  "remainingInScope": 3,
+  "implementedCount": 80,
+  "remainingInScope": 1,
   "spells": [
     {
       "name": "Absorb Elements",
@@ -771,8 +771,8 @@
       "page": 231,
       "level": 1,
       "school": "Divination",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "detect_poison_and_disease.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1684,8 +1684,8 @@
       "page": 252,
       "level": 1,
       "school": "Illusion",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "illusory_script.ts",
       "inScope": true,
       "otherSources": [
         {

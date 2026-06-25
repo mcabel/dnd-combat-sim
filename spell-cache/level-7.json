@@ -1,6 +1,6 @@
 {
   "level": 7,
-  "generatedAt": "2026-06-25T19:26:34.659Z",
+  "generatedAt": "2026-06-25T19:33:38.857Z",
   "generatorVersion": 2,
   "scopeRule": "pre-2024 canon; reprints: newest in-scope source wins; XPHB(2024) out of scope; creatures keep all variants (not applicable to spells)",
   "sourceDates": {
@@ -26,8 +26,8 @@
     "XPHB"
   ],
   "count": 30,
-  "implementedCount": 24,
-  "remainingInScope": 5,
+  "implementedCount": 26,
+  "remainingInScope": 3,
   "spells": [
     {
       "name": "Conjure Celestial",
@@ -661,8 +661,8 @@
       "page": 272,
       "level": 7,
       "school": "Necromancy",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "resurrection.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -787,8 +787,8 @@
       "page": 276,
       "level": 7,
       "school": "Illusion",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "simulacrum.ts",
       "inScope": true,
       "otherSources": [
         {

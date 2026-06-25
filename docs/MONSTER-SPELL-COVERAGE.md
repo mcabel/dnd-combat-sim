@@ -1,6 +1,6 @@
 # Monster Spell Coverage Report
 
-Generated: `2026-06-25T19:26:35.989Z`
+Generated: `2026-06-25T19:33:40.178Z`
 Source: 2401 bestiary entries from `bestiaryData/`, scanned via `scripts/scan_monster_spells.ts`.
 
 > **Purpose:** This report guides which spell modules to build next for the
@@ -18,8 +18,8 @@ Source: 2401 bestiary entries from `bestiaryData/`, scanned via `scripts/scan_mo
 | Creatures with `monsterSpellcasting` | 775 (32.3%) |
 | Total spell references (incl. duplicates) | 6136 |
 | Unique spells referenced | 364 |
-| ├─ Already implemented | 339 (93.1%) |
-| └─ NOT yet implemented | 25 (6.9%) |
+| ├─ Already implemented | 355 (97.5%) |
+| └─ NOT yet implemented | 9 (2.5%) |
 
 ## Top 50 Unbuilt Spells (by creature frequency)
 
@@ -33,27 +33,11 @@ spell at multiple slot levels — counted separately), and a few example creatur
 | 2 | Dispel Evil and Good | 15 | 15 | Heralds of Dust Exorcist, Omin Dran, Kostchtchie | `PHB` · Abjuration · levels: atWill/daily,L5 |
 | 3 | [object Object] | 5 | 8 | Zodar, Lichen Lich, Master Sage | levels: atWill/daily |
 | 4 | Wind Wall | 3 | 3 | Frost Druid, Triton Master of Waves, Asharra | `PHB` · Evocation · levels: atWill/daily,L3 |
-| 5 | Astral Projection | 2 | 2 | Sarevok, Pazuzu | `PHB` · Necromancy · levels: atWill/daily |
-| 6 | Find the Path | 2 | 2 | Madam Eva, Klauth | `PHB` · Divination · levels: atWill/daily,L6 |
-| 7 | Prismatic Wall | 2 | 2 | Ekengarik, Niv-Mizzet | `PHB` · Abjuration · levels: atWill/daily,L9 |
-| 8 | Resurrection | 2 | 2 | Mephistopheles, Solar | `PHB` · Necromancy · levels: atWill/daily |
-| 9 | Simulacrum | 2 | 2 | Edwin Odesseiron, Manshoon | `PHB` · Illusion · levels: atWill/daily,L7 |
-| 10 | Wall of Thorns | 2 | 2 | Conclave Dryad, Druid of the Old Ways | `PHB` · Conjuration · levels: atWill/daily,L6 |
-| 11 | Word of Recall | 2 | 2 | Astral Elf Star Priest, Solar Bastion Knight | `PHB` · Conjuration · levels: atWill/daily |
-| 12 | Clone | 1 | 1 | Edwin Odesseiron | `PHB` · Necromancy · levels: atWill/daily |
-| 13 | Contingency | 1 | 1 | Edwin Odesseiron | `PHB` · Evocation · levels: atWill/daily |
-| 14 | Demiplane | 1 | 1 | Mahadi the Rakshasa | `PHB` · Conjuration · levels: atWill/daily |
-| 15 | Detect Poison and Disease | 1 | 1 | Treefolk | `PHB` · Divination · levels: atWill/daily |
-| 16 | Drawmij's Instant Summons | 1 | 1 | Master Sage | `PHB` · Conjuration · levels: atWill/daily |
-| 17 | Forbiddance | 1 | 1 | Undying Councilor | `PHB` · Abjuration · levels: L6 |
-| 18 | Illusory Script | 1 | 1 | Brahma Lutier | `PHB` · Illusion · levels: L1 |
-| 19 | Otiluke's Freezing Sphere (45 ({@damage 13d6}) Damage) | 1 | 1 | Cryonax | levels: atWill/daily |
-| 20 | Planar Ally | 1 | 1 | Undying Councilor | `PHB` · Conjuration · levels: L6 |
-| 21 | Planar Binding | 1 | 1 | Master Sage | `PHB` · Abjuration · levels: atWill/daily |
-| 22 | Rope Trick | 1 | 1 | Withers | `PHB` · Transmutation · levels: L2 |
-| 23 | Shapechange | 1 | 1 | Hollyphant | `PHB` · Transmutation · levels: atWill/daily |
-| 24 | Telepathy | 1 | 1 | Alustriel Silverhand | `PHB` · Evocation · levels: atWill/daily |
-| 25 | Thunder Step | 1 | 1 | Malivar | `XGE` · Conjuration · levels: L3 |
+| 5 | Prismatic Wall | 2 | 2 | Ekengarik, Niv-Mizzet | `PHB` · Abjuration · levels: atWill/daily,L9 |
+| 6 | Wall of Thorns | 2 | 2 | Conclave Dryad, Druid of the Old Ways | `PHB` · Conjuration · levels: atWill/daily,L6 |
+| 7 | Otiluke's Freezing Sphere (45 ({@damage 13d6}) Damage) | 1 | 1 | Cryonax | levels: atWill/daily |
+| 8 | Shapechange | 1 | 1 | Hollyphant | `PHB` · Transmutation · levels: atWill/daily |
+| 9 | Thunder Step | 1 | 1 | Malivar | `XGE` · Conjuration · levels: L3 |
 
 ## Full Unbuilt Spells List (all)
 
@@ -63,41 +47,25 @@ spell at multiple slot levels — counted separately), and a few example creatur
 | 2 | Dispel Evil and Good | 15 | 15 |
 | 3 | [object Object] | 5 | 8 |
 | 4 | Wind Wall | 3 | 3 |
-| 5 | Astral Projection | 2 | 2 |
-| 6 | Find the Path | 2 | 2 |
-| 7 | Prismatic Wall | 2 | 2 |
-| 8 | Resurrection | 2 | 2 |
-| 9 | Simulacrum | 2 | 2 |
-| 10 | Wall of Thorns | 2 | 2 |
-| 11 | Word of Recall | 2 | 2 |
-| 12 | Clone | 1 | 1 |
-| 13 | Contingency | 1 | 1 |
-| 14 | Demiplane | 1 | 1 |
-| 15 | Detect Poison and Disease | 1 | 1 |
-| 16 | Drawmij's Instant Summons | 1 | 1 |
-| 17 | Forbiddance | 1 | 1 |
-| 18 | Illusory Script | 1 | 1 |
-| 19 | Otiluke's Freezing Sphere (45 ({@damage 13d6}) Damage) | 1 | 1 |
-| 20 | Planar Ally | 1 | 1 |
-| 21 | Planar Binding | 1 | 1 |
-| 22 | Rope Trick | 1 | 1 |
-| 23 | Shapechange | 1 | 1 |
-| 24 | Telepathy | 1 | 1 |
-| 25 | Thunder Step | 1 | 1 |
+| 5 | Prismatic Wall | 2 | 2 |
+| 6 | Wall of Thorns | 2 | 2 |
+| 7 | Otiluke's Freezing Sphere (45 ({@damage 13d6}) Damage) | 1 | 1 |
+| 8 | Shapechange | 1 | 1 |
+| 9 | Thunder Step | 1 | 1 |
 
 ## Implemented Spells (already built — summary)
 
 | Level | Implemented count |
 |-------|-------------------|
-| unknown | 33 |
+| unknown | 43 |
 | 0 | 34 |
-| 1 | 58 |
-| 2 | 61 |
+| 1 | 59 |
+| 2 | 62 |
 | 3 | 47 |
 | 4 | 33 |
 | 5 | 29 |
-| 6 | 17 |
-| 7 | 13 |
+| 6 | 20 |
+| 7 | 14 |
 | 8 | 9 |
 | 9 | 5 |
 

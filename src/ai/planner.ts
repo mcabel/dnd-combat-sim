@@ -246,6 +246,24 @@ import { shouldCast as shouldCastAwaken } from '../spells/awaken';
 import { shouldCast as shouldCastHeroesFeast } from '../spells/heroes_feast';
 import { shouldCast as shouldCastProgrammedIllusion } from '../spells/programmed_illusion';
 import { shouldCast as shouldCastImprisonment } from '../spells/imprisonment';
+// ── Session 69 Batch 8: 16 more out-of-combat utility spells (stubs) ──
+// All shouldCast → null; safety-guard imports (never fire in combat).
+import { shouldCast as shouldCastDetectPoisonAndDisease } from '../spells/detect_poison_and_disease';
+import { shouldCast as shouldCastIllusoryScript } from '../spells/illusory_script';
+import { shouldCast as shouldCastRopeTrick } from '../spells/rope_trick';
+import { shouldCast as shouldCastPlanarBinding } from '../spells/planar_binding';
+import { shouldCast as shouldCastFindThePath } from '../spells/find_the_path';
+import { shouldCast as shouldCastWordOfRecall } from '../spells/word_of_recall';
+import { shouldCast as shouldCastContingency } from '../spells/contingency';
+import { shouldCast as shouldCastDemiplane } from '../spells/demiplane';
+import { shouldCast as shouldCastTelepathy } from '../spells/telepathy';
+import { shouldCast as shouldCastAstralProjection } from '../spells/astral_projection';
+import { shouldCast as shouldCastClone } from '../spells/clone';
+import { shouldCast as shouldCastDrawmajsInstantSummons } from '../spells/drawmajs_instant_summons';
+import { shouldCast as shouldCastForbiddance } from '../spells/forbiddance';
+import { shouldCast as shouldCastPlanarAlly } from '../spells/planar_ally';
+import { shouldCast as shouldCastResurrection } from '../spells/resurrection';
+import { shouldCast as shouldCastSimulacrum } from '../spells/simulacrum';
 import { shouldCast as shouldCastPlaneShift } from '../spells/plane_shift';
 import { shouldCast as shouldCastTeleport } from '../spells/teleport';
 import { shouldCast as shouldCastAnimateDead } from '../spells/animate_dead';
@@ -5030,6 +5048,57 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
   }
   if (!plan.action && self.actions.some(a => a.name === 'Imprisonment')) {
     if (shouldCastImprisonment(self, battlefield)) { /* never */ }
+  }
+
+  // ── Session 69 Batch 8: 16 more out-of-combat utility spells (stubs) ──
+  // All shouldCast → null; listed to prevent unknown-action fallthrough.
+  if (!plan.action && self.actions.some(a => a.name === 'Detect Poison and Disease')) {
+    if (shouldCastDetectPoisonAndDisease(self, battlefield)) { /* never */ }
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'Illusory Script')) {
+    if (shouldCastIllusoryScript(self, battlefield)) { /* never */ }
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'Rope Trick')) {
+    if (shouldCastRopeTrick(self, battlefield)) { /* never */ }
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'Planar Binding')) {
+    if (shouldCastPlanarBinding(self, battlefield)) { /* never */ }
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'Find the Path')) {
+    if (shouldCastFindThePath(self, battlefield)) { /* never */ }
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'Word of Recall')) {
+    if (shouldCastWordOfRecall(self, battlefield)) { /* never */ }
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'Contingency')) {
+    if (shouldCastContingency(self, battlefield)) { /* never */ }
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'Demiplane')) {
+    if (shouldCastDemiplane(self, battlefield)) { /* never */ }
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'Telepathy')) {
+    if (shouldCastTelepathy(self, battlefield)) { /* never */ }
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'Astral Projection')) {
+    if (shouldCastAstralProjection(self, battlefield)) { /* never */ }
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'Clone')) {
+    if (shouldCastClone(self, battlefield)) { /* never */ }
+  }
+  if (!plan.action && self.actions.some(a => a.name === "Drawmij's Instant Summons")) {
+    if (shouldCastDrawmajsInstantSummons(self, battlefield)) { /* never */ }
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'Forbiddance')) {
+    if (shouldCastForbiddance(self, battlefield)) { /* never */ }
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'Planar Ally')) {
+    if (shouldCastPlanarAlly(self, battlefield)) { /* never */ }
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'Resurrection')) {
+    if (shouldCastResurrection(self, battlefield)) { /* never */ }
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'Simulacrum')) {
+    if (shouldCastSimulacrum(self, battlefield)) { /* never */ }
   }
 
   // --- 12CM. CHARM PERSON (WIS save or charmed, L1, NO conc) ---

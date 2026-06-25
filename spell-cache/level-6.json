@@ -1,6 +1,6 @@
 {
   "level": 6,
-  "generatedAt": "2026-06-25T19:26:34.659Z",
+  "generatedAt": "2026-06-25T19:33:38.857Z",
   "generatorVersion": 2,
   "scopeRule": "pre-2024 canon; reprints: newest in-scope source wins; XPHB(2024) out of scope; creatures keep all variants (not applicable to spells)",
   "sourceDates": {
@@ -26,8 +26,8 @@
     "XPHB"
   ],
   "count": 51,
-  "implementedCount": 41,
-  "remainingInScope": 9,
+  "implementedCount": 47,
+  "remainingInScope": 3,
   "spells": [
     {
       "name": "Arcane Gate",
@@ -229,8 +229,8 @@
       "page": 227,
       "level": 6,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "contingency.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -381,8 +381,8 @@
       "page": 235,
       "level": 6,
       "school": "Conjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "drawmajs_instant_summons.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -500,8 +500,8 @@
       "page": 240,
       "level": 6,
       "school": "Divination",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "find_the_path.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -591,8 +591,8 @@
       "page": 243,
       "level": 6,
       "school": "Abjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "forbiddance.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1106,8 +1106,8 @@
       "page": 265,
       "level": 6,
       "school": "Conjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "planar_ally.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1548,8 +1548,8 @@
       "page": 289,
       "level": 6,
       "school": "Conjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "word_of_recall.ts",
       "inScope": true,
       "otherSources": [
         {

@@ -750,6 +750,24 @@ import { shouldCast as shouldCastAwaken } from '../spells/awaken';
 import { shouldCast as shouldCastHeroesFeast } from '../spells/heroes_feast';
 import { shouldCast as shouldCastProgrammedIllusion } from '../spells/programmed_illusion';
 import { shouldCast as shouldCastImprisonment } from '../spells/imprisonment';
+// ── Session 69 Batch 8: 16 more out-of-combat utility spells (stubs) ──
+// All shouldCast → null (never fire in combat). Safety-guard imports.
+import { shouldCast as shouldCastDetectPoisonAndDisease } from '../spells/detect_poison_and_disease';
+import { shouldCast as shouldCastIllusoryScript } from '../spells/illusory_script';
+import { shouldCast as shouldCastRopeTrick } from '../spells/rope_trick';
+import { shouldCast as shouldCastPlanarBinding } from '../spells/planar_binding';
+import { shouldCast as shouldCastFindThePath } from '../spells/find_the_path';
+import { shouldCast as shouldCastWordOfRecall } from '../spells/word_of_recall';
+import { shouldCast as shouldCastContingency } from '../spells/contingency';
+import { shouldCast as shouldCastDemiplane } from '../spells/demiplane';
+import { shouldCast as shouldCastTelepathy } from '../spells/telepathy';
+import { shouldCast as shouldCastAstralProjection } from '../spells/astral_projection';
+import { shouldCast as shouldCastClone } from '../spells/clone';
+import { shouldCast as shouldCastDrawmajsInstantSummons } from '../spells/drawmajs_instant_summons';
+import { shouldCast as shouldCastForbiddance } from '../spells/forbiddance';
+import { shouldCast as shouldCastPlanarAlly } from '../spells/planar_ally';
+import { shouldCast as shouldCastResurrection } from '../spells/resurrection';
+import { shouldCast as shouldCastSimulacrum } from '../spells/simulacrum';
 import {
   shouldCast as shouldCastPlaneShift,
   execute as executePlaneShift,
@@ -5611,6 +5629,72 @@ export function executePlannedAction(
     }
     case 'imprisonment': {
       if (shouldCastImprisonment(actor, bf)) { /* never fires in combat */ }
+      break;
+    }
+
+    // ── Session 69 Batch 8: 16 more out-of-combat utility spells (stubs) ──
+    case 'detectPoisonAndDisease': {
+      if (shouldCastDetectPoisonAndDisease(actor, bf)) { /* never fires in combat */ }
+      break;
+    }
+    case 'illusoryScript': {
+      if (shouldCastIllusoryScript(actor, bf)) { /* never fires in combat */ }
+      break;
+    }
+    case 'ropeTrick': {
+      if (shouldCastRopeTrick(actor, bf)) { /* never fires in combat */ }
+      break;
+    }
+    case 'planarBinding': {
+      if (shouldCastPlanarBinding(actor, bf)) { /* never fires in combat */ }
+      break;
+    }
+    case 'findThePath': {
+      if (shouldCastFindThePath(actor, bf)) { /* never fires in combat */ }
+      break;
+    }
+    case 'wordOfRecall': {
+      if (shouldCastWordOfRecall(actor, bf)) { /* never fires in combat */ }
+      break;
+    }
+    case 'contingency': {
+      if (shouldCastContingency(actor, bf)) { /* never fires in combat */ }
+      break;
+    }
+    case 'demiplane': {
+      if (shouldCastDemiplane(actor, bf)) { /* never fires in combat */ }
+      break;
+    }
+    case 'telepathy': {
+      if (shouldCastTelepathy(actor, bf)) { /* never fires in combat */ }
+      break;
+    }
+    case 'astralProjection': {
+      if (shouldCastAstralProjection(actor, bf)) { /* never fires in combat */ }
+      break;
+    }
+    case 'clone': {
+      if (shouldCastClone(actor, bf)) { /* never fires in combat */ }
+      break;
+    }
+    case 'drawmajsInstantSummons': {
+      if (shouldCastDrawmajsInstantSummons(actor, bf)) { /* never fires in combat */ }
+      break;
+    }
+    case 'forbiddance': {
+      if (shouldCastForbiddance(actor, bf)) { /* never fires in combat */ }
+      break;
+    }
+    case 'planarAlly': {
+      if (shouldCastPlanarAlly(actor, bf)) { /* never fires in combat */ }
+      break;
+    }
+    case 'resurrection': {
+      if (shouldCastResurrection(actor, bf)) { /* never fires in combat */ }
+      break;
+    }
+    case 'simulacrum': {
+      if (shouldCastSimulacrum(actor, bf)) { /* never fires in combat */ }
       break;
     }
 

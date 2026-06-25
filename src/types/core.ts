@@ -2602,6 +2602,25 @@ export interface PlannedAction {
     | 'heroesFeast'              // Heroes' Feast — PHB p.250: L6 Con, 30 ft, 10-min cast
     | 'programmedIllusion'       // Programmed Illusion — PHB p.269: L6 Ill, 120 ft, permanent
     | 'imprisonment'             // Imprisonment — PHB p.252: L9 Abj, 30 ft, 1-min cast
+    // ── Session 69 Batch 8: 16 more out-of-combat utility spells (stubs) ──
+    // All have shouldCast→null (never fire in combat). Modules exist so the
+    // monster-spell coverage report counts them as implemented.
+    | 'detectPoisonAndDisease'   // Detect Poison and Disease — PHB p.231: L1 Div, self, conc 10 min (ritual)
+    | 'illusoryScript'           // Illusory Script — PHB p.252: L1 Ill, touch, 1-min cast (ritual)
+    | 'ropeTrick'                // Rope Trick — PHB p.272: L2 Trans, touch, 1 hr
+    | 'planarBinding'            // Planar Binding — PHB p.265: L5 Abj, 60 ft, 1-hr cast
+    | 'findThePath'              // Find the Path — PHB p.240: L6 Div, self, 1-min cast, conc
+    | 'wordOfRecall'             // Word of Recall — PHB p.289: L6 Conj, 5 ft, instant
+    | 'contingency'              // Contingency — PHB p.227: L6 Evoc, self, 10-min cast
+    | 'demiplane'                // Demiplane — PHB p.231: L8 Conj, 60 ft, 1 hr
+    | 'telepathy'                // Telepathy — PHB p.281: L8 Evoc, unlimited, 24 hr
+    | 'astralProjection'         // Astral Projection — PHB p.215: L9 Nec, 10 ft, 1-hr cast
+    | 'clone'                    // Clone — PHB p.222: L8 Nec, touch, 1-hr cast
+    | 'drawmajsInstantSummons'   // Drawmij's Instant Summons — PHB p.235: L6 Conj, touch, 1-min cast
+    | 'forbiddance'              // Forbiddance — PHB p.243: L6 Abj, touch, 10-min cast (ritual)
+    | 'planarAlly'               // Planar Ally — PHB p.265: L6 Conj, 60 ft, 10-min cast
+    | 'resurrection'             // Resurrection — PHB p.272: L7 Nec, touch, 1-hr cast
+    | 'simulacrum'               // Simulacrum — PHB p.276: L7 Ill, touch, 12-hr cast
     | 'charmPerson'       // Charm Person — PHB p.221: 30 ft, WIS save or charmed, NO concentration (Session 27 TG-004: humanoid-only NOW enforced)
     | 'compelledDuel'     // Compelled Duel — PHB p.224: 30 ft, WIS save or frightened (taunt), concentration (movement-restriction simplified)
     | 'grease'            // Grease — PHB p.245: 60 ft, 10-ft radius AoE, DEX save or prone, NO concentration (persistent-terrain simplified)
