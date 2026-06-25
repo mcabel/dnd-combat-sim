@@ -186,8 +186,14 @@ console.log('\n=== 2. Death Saving Throws ===\n');
   assert('3 failures → dead (seen in 50 rolls)', gotDead);
 
   // nat 20: regain 1 HP
+  // Session 71 fix: bumped from 100 to 1000 rolls to eliminate statistical
+  // flake. P(nat-20 on a d20) = 1/20 = 5%. P(no nat-20 in N rolls) =
+  // 0.95^N. With N=100: P(failure) ≈ 0.59% (~1 in 170 CI runs would flake —
+  // observed on commit 692a1a9). With N=1000: P(failure) ≈ 10^-23
+  // (essentially impossible). Same approach as Session 70's silvery_barbs
+  // flake fix (N 100→1000).
   let gotNat20 = false;
-  for (let i = 0; i < 100; i++) {
+  for (let i = 0; i < 1000; i++) {
     const pc4 = makeDownedPC();
     if (rollDeathSave(pc4) === 'stable' && pc4.currentHP > 0) {
       gotNat20 = true;
@@ -196,7 +202,7 @@ console.log('\n=== 2. Death Saving Throws ===\n');
       break;
     }
   }
-  assert('nat 20 revives with 1 HP (seen in 100 rolls)', gotNat20);
+  assert('nat 20 revives with 1 HP (seen in 1000 rolls)', gotNat20);
 
   // Ongoing: normal roll (mixed)
   const ongoing = makeDownedPC();
