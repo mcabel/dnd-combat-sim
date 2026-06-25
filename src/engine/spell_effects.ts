@@ -43,6 +43,43 @@ export function _resetEffectIdCounter(): void {
   _nextId = 1;
 }
 
+// ---- RFC-COMBINING-EFFECTS Phase 4: condition source tracking helpers ----
+
+/** Reserved sourceId for conditions from non-spell sources (combat mechanics, etc.) */
+const NON_SPELL_SOURCE = 'non-spell';
+
+/**
+ * Register a sourceId as imposing a condition on the target.
+ * Used by applySpellEffect (sourceId = effect.id) and addCondition
+ * (sourceId = 'non-spell'). The pipeline's _rederiveConditions()
+ * rebuilds the conditions Set by checking which sourceIds are still valid.
+ */
+function _addConditionSource(target: Combatant, condition: Condition, sourceId: string): void {
+  if (!target._conditionSources) target._conditionSources = new Map();
+  let sources = target._conditionSources.get(condition);
+  if (!sources) { sources = new Set(); target._conditionSources.set(condition, sources); }
+  sources.add(sourceId);
+}
+
+/**
+ * Remove a sourceId from imposing a condition on the target.
+ * Used by undoEffect when a spell effect is removed. After removal,
+ * if no other sourceId backs the condition, _rederiveConditions()
+ * will correctly exclude it from the rebuilt Set.
+ *
+ * IMPORTANT: we do NOT delete the entry from _conditionSources even
+ * if the sourceIds Set becomes empty. Empty entries serve as "tombstones"
+ * that tell _rederiveConditions this condition was previously spell-sourced
+ * (not a non-spell condition that was set directly on the Set).
+ */
+function _removeConditionSource(target: Combatant, condition: Condition, sourceId: string): void {
+  const sources = target._conditionSources?.get(condition);
+  if (sources) {
+    sources.delete(sourceId);
+    // Do NOT delete the entry even if empty — it serves as a tombstone
+  }
+}
+
 // ---- Apply --------------------------------------------------
 
 /**
@@ -105,12 +142,18 @@ export function applySpellEffect(
       ) {
         break; // immune — fey/elemental source cannot charm/frighten Nature's Ward target
       }
+      // ── RFC-COMBINING-EFFECTS Phase 4: source-tracked conditions ──
+      // Add to conditions Set for immediate visibility AND register the source
+      // in _conditionSources so the pipeline can correctly re-derive later.
       target.conditions.add(effect.payload.condition!);
+      _addConditionSource(target, effect.payload.condition!, effect.id);
       break;
 
     case 'dominated':
       target.conditions.add('charmed');
       target.conditions.add('incapacitated');
+      _addConditionSource(target, 'charmed', effect.id);
+      _addConditionSource(target, 'incapacitated', effect.id);
       break;
 
     case 'suggestion':
@@ -118,6 +161,7 @@ export function applySpellEffect(
       // Modeled as charmed (can't attack the caster) + disadvantage on the
       // target's own attack rolls (following the suggestion — won't fight effectively).
       target.conditions.add('charmed');
+      _addConditionSource(target, 'charmed', effect.id);
       grantSelf(target, 'disadvantage', 'attack', effect.spellName, 'permanent');
       break;
 
@@ -140,6 +184,7 @@ export function applySpellEffect(
       grantSelf(target, 'advantage', 'attack', effect.spellName, 'permanent');
       // 3. Add the invisible condition (for OA immunity, etc.)
       target.conditions.add('invisible');
+      _addConditionSource(target, 'invisible', effect.id);
       break;
 
     case 'taunt':
@@ -290,7 +335,14 @@ export function undoEffect(target: Combatant, effect: ActiveEffect): void {
       break;
 
     case 'condition_apply':
-      target.conditions.delete(effect.payload.condition!);
+      // ── RFC-COMBINING-EFFECTS Phase 4: source-tracked conditions ──
+      // Remove this effect's sourceId from _conditionSources. The pipeline's
+      // _rederiveConditions() will rebuild the Set from remaining sources.
+      // If another same-name effect is suppressed and takes over, its sourceId
+      // remains in _conditionSources and the condition persists — this fixes
+      // the pre-existing bug where Darkness ending wrongly removed 'blinded'
+      // even though Blindness/Deafness was still active (just was suppressed).
+      _removeConditionSource(target, effect.payload.condition!, effect.id);
       // Clear save-fail tracker if this effect belongs to a tracker spell
       // (Contagion / Flesh to Stone). When the condition is removed (e.g.
       // by concentration break or removeEffectsFromCaster), the tracker
@@ -303,12 +355,14 @@ export function undoEffect(target: Combatant, effect: ActiveEffect): void {
       break;
 
     case 'dominated':
-      target.conditions.delete('charmed');
-      target.conditions.delete('incapacitated');
+      // ── RFC-COMBINING-EFFECTS Phase 4: source-tracked conditions ──
+      _removeConditionSource(target, 'charmed', effect.id);
+      _removeConditionSource(target, 'incapacitated', effect.id);
       break;
 
     case 'suggestion':
-      target.conditions.delete('charmed');
+      // ── RFC-COMBINING-EFFECTS Phase 4: source-tracked conditions ──
+      _removeConditionSource(target, 'charmed', effect.id);
       removeBySource(target, effect.spellName);
       break;
 
@@ -318,8 +372,8 @@ export function undoEffect(target: Combatant, effect: ActiveEffect): void {
       break;
 
     case 'invisible':
-      // Remove the invisible condition + both adv_system entries
-      target.conditions.delete('invisible');
+      // ── RFC-COMBINING-EFFECTS Phase 4: source-tracked conditions ──
+      _removeConditionSource(target, 'invisible', effect.id);
       removeBySource(target, effect.spellName);
       break;
 

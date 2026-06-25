@@ -474,13 +474,13 @@ export function applyDamage(target: Combatant, amount: number): number {
   if (target.currentHP === 0) {
     if (target.isPlayer) {
       target.isUnconscious = true;
-      target.conditions.add('unconscious');
-      target.conditions.add('incapacitated');
+      addCondition(target, 'unconscious');
+      addCondition(target, 'incapacitated');
     } else {
       target.isDead = true;
       target.isUnconscious = true;
-      target.conditions.add('unconscious');
-      target.conditions.add('incapacitated');
+      addCondition(target, 'unconscious');
+      addCondition(target, 'incapacitated');
     }
   }
 
@@ -548,24 +548,50 @@ export function addCondition(target: Combatant, condition: Condition): void {
     return; // immune — do not apply the condition
   }
   target.conditions.add(condition);
-  // Cascade: incapacitated implies can't take actions
+  // ── RFC-COMBINING-EFFECTS Phase 4: source-tracked condition map ──
+  // addCondition is called from non-spell sources (monster traits, class
+  // features, combat mechanics like waking up, etc.). These conditions
+  // must survive the pipeline's _rederiveConditions() rebuild.
+  if (!target._conditionSources) target._conditionSources = new Map();
+  let sources = target._conditionSources.get(condition);
+  if (!sources) { sources = new Set(); target._conditionSources.set(condition, sources); }
+  sources.add('non-spell');
+  // Cascade: paralyzed/stunned/petrified → incapacitated
   if (condition === 'paralyzed' || condition === 'stunned' || condition === 'petrified') {
     target.conditions.add('incapacitated');
+    let incSources = target._conditionSources.get('incapacitated');
+    if (!incSources) { incSources = new Set(); target._conditionSources.set('incapacitated', incSources); }
+    incSources.add('non-spell');
   }
   // Auto-break concentration on incapacitated (PHB p.203: "You lose concentration
-  // on a spell if you are incapacitated"). Note: this only nulls the concentration
-  // flag — conc-sourced effects (conditions, terrain zones) remain until
-  // removeEffectsFromCaster is called. The caller (combat.ts) should call
-  // removeEffectsFromCaster after addCondition to fully clean up. v1 limitation:
-  // effects may briefly persist without concentration anchor.
+  // on a spell if you are incapacitated"). We null the concentration object
+  // directly. Callers that need to also call removeEffectsFromCaster should
+  // check concentration BEFORE calling addCondition('incapacitated'), or check
+  // for the _concentrationAutoBroken flag after calling addCondition.
   if (condition === 'incapacitated' && target.concentration?.active) {
-    target.concentration.active = false;
-    target.concentration.spellName = null;
+    const spellName = target.concentration.spellName;
+    target.concentration = null;
+    // Set a flag so the combat system can detect that concentration was
+    // auto-broken by incapacitation and call removeEffectsFromCaster.
+    // This is necessary because removeEffectsFromCaster needs the Battlefield
+    // which addCondition doesn't have access to.
+    (target as Record<string, unknown>)._concentrationAutoBroken = spellName ?? true;
   }
 }
 
 export function removeCondition(target: Combatant, condition: Condition): void {
   target.conditions.delete(condition);
+  // ── RFC-COMBINING-EFFECTS Phase 4: source-tracked condition map ──
+  // Remove the 'non-spell' source entry. If other sources (spell effects)
+  // still impose this condition, they remain in _conditionSources and will
+  // be re-derived by the pipeline. This handles the case where a combat
+  // mechanic removes a condition (e.g. standing up removes 'prone') but
+  // a spell might also independently impose it.
+  const sources = target._conditionSources?.get(condition);
+  if (sources) {
+    sources.delete('non-spell');
+    // Do NOT delete the entry even if empty — tombstone for _rederiveConditions
+  }
   // Clean up cascade if no other incapacitating condition remains
   if (condition === 'incapacitated') {
     const stillIncap = target.conditions.has('paralyzed')

@@ -29,8 +29,16 @@
 //     effects with finite durations (Blindness/Deafness 1 min, etc.).
 //
 // Phase 3 (DEFERRED): explicit takeover-on-expiry tests.
-// Phase 4 (DEFERRED): conditions derived from pipeline (replaces direct
-//   addCondition/removeCondition for spell-sourced conditions).
+// Phase 4 (Session 66): conditions derived from source-tracked map.
+//   - Replaced _nonspecllConditions with _conditionSources:
+//     Map<Condition, Set<sourceId>>. Each condition tracks which sources
+//     impose it ('non-spell' for combat mechanics, effect.id for spells).
+//   - _rederiveConditions() rebuilds conditions Set by checking which
+//     sourceIds are still valid. This cleanly distinguishes expired spell
+//     conditions from non-spell conditions — fixing the bug where Darkness
+//     ending wrongly removed 'blinded' even though Blindness/Deafness was
+//     still active, AND the bug where expired spell conditions persisted
+//     via the backward-compat carry-over step.
 // ============================================================
 
 import { ActiveEffect, Combatant, Battlefield, Condition } from '../types/core';
@@ -126,46 +134,100 @@ export function reevaluateEffects(c: Combatant, bf: Battlefield): void {
     }
   }
 
-  // ── Phase 2 step 4: reconcile conditions ──
-  // After expiry + priority sort, ensure unsuppressed condition_apply effects'
-  // conditions are in the Set. undoEffect() may have deleted a condition that
-  // a newly-promoted suppressed effect still imposes. This is a lightweight
-  // version of Phase 4's _rederiveConditions — it only ADDS conditions, never
-  // removes them, so non-spell conditions (from monster traits etc.) are
-  // preserved.
-  reconcileConditions(c);
+  // ── Phase 4 step 4: re-derive conditions from source-tracked map ──
+  // Rebuild the conditions Set from _conditionSources. Each condition
+  // maps to sourceIds ('non-spell' or effect.id). A condition is derived
+  // if any sourceId is valid (non-spell always, effect.id only if the
+  // effect is still in activeEffects and unsuppressed). This cleanly
+  // handles: (a) takeover — when a spell effect promotes from suppressed,
+  // its sourceId becomes valid again; (b) expiry — when a spell effect
+  // is removed from activeEffects, its sourceId becomes invalid, and
+  // undoEffect already removed it from _conditionSources.
+  _rederiveConditions(c);
 }
 
 /**
- * Ensure unsuppressed condition_apply effects' conditions are in the Set.
- * After expiry, undoEffect() may have deleted a condition that a
- * newly-promoted suppressed effect still imposes. This re-adds it.
+ * Re-derive the conditions Set from the pipeline state.
  *
- * This is NOT a full re-derivation (Phase 4) — it only adds conditions
- * from active (unsuppressed) spell effects. It does NOT remove conditions
- * that are not backed by any active effect (that would require Phase 4's
- * _rederiveConditions, which also preserves non-spell conditions separately).
+ * Rebuilds `c.conditions` from `_conditionSources`:
+ *   - Each condition maps to a Set of sourceIds.
+ *   - 'non-spell' sourceIds always count (conditions from combat mechanics,
+ *     monster traits, class features, etc.).
+ *   - Effect-ID sourceIds count only if the effect still exists in
+ *     `activeEffects` and is unsuppressed.
+ *   - A condition is derived if ANY of its sourceIds is valid.
+ *
+ * Then cascades: paralyzed/stunned/petrified → incapacitated.
+ *
+ * This replaces the old approach of:
+ *   1. Starting with _nonspecllConditions
+ *   2. Adding conditions from unsuppressed effects
+ *   3. Backward-compat carry-over of "orphan" conditions from the existing Set
+ *
+ * The old step 3 was the bug: it carried over conditions from expired spell
+ * effects because once the effect was removed from activeEffects, there was
+ * no way to distinguish them from non-spell conditions. The source-tracked
+ * approach eliminates this ambiguity entirely.
  */
-function reconcileConditions(c: Combatant): void {
-  for (const e of c.activeEffects) {
-    if (e.suppressed) continue;
-    if (e.effectType === 'condition_apply' && (e.payload as Record<string, unknown>).condition) {
-      c.conditions.add((e.payload as Record<string, unknown>).condition as Condition);
-    } else if (e.effectType === 'dominated') {
-      c.conditions.add('charmed');
-      c.conditions.add('incapacitated');
-    } else if (e.effectType === 'suggestion') {
-      c.conditions.add('charmed');
-    } else if (e.effectType === 'invisible') {
-      c.conditions.add('invisible');
+function _rederiveConditions(c: Combatant): void {
+  const derived = new Set<Condition>();
+
+  // Seed _conditionSources from the existing conditions Set if not yet created.
+  // All existing conditions are assumed to be non-spell sources (they were set
+  // before Phase 4 tracking existed). This handles:
+  //   - Test factories that set conditions directly via the constructor
+  //   - Legacy combatants created before Phase 4
+  if (!c._conditionSources) {
+    c._conditionSources = new Map();
+    for (const cond of c.conditions) {
+      let sources = new Set<string>();
+      sources.add('non-spell');
+      c._conditionSources.set(cond, sources);
     }
   }
-  // Cascade: paralyzed/stunned/petrified → incapacitated
-  if (c.conditions.has('paralyzed') ||
-      c.conditions.has('stunned') ||
-      c.conditions.has('petrified')) {
-    c.conditions.add('incapacitated');
+
+  // Also handle conditions added directly to the Set after _conditionSources
+  // was created (e.g. by test code or combat mechanics that bypass
+  // addCondition). A condition in the Set but NOT in _conditionSources
+  // was never tracked → must be non-spell. Add it.
+  //
+  // A condition in _conditionSources with an EMPTY sourceIds set is a
+  // "tombstone" — it was spell-sourced and all sources were removed by
+  // undoEffect. We do NOT re-add it as non-spell.
+  for (const cond of c.conditions) {
+    if (!c._conditionSources.has(cond)) {
+      let sources = new Set<string>();
+      sources.add('non-spell');
+      c._conditionSources.set(cond, sources);
+    }
   }
+
+  for (const [cond, sourceIds] of c._conditionSources) {
+    for (const sourceId of sourceIds) {
+      if (sourceId === 'non-spell') {
+        // Non-spell source: always valid (monster trait, combat mechanic, etc.)
+        derived.add(cond);
+        break;
+      }
+      // Spell-effect source: valid only if the effect still exists and is unsuppressed
+      const effect = c.activeEffects.find(e => e.id === sourceId);
+      if (effect && !effect.suppressed) {
+        derived.add(cond);
+        break;
+      }
+    }
+  }
+
+  // Cascade: paralyzed/stunned/petrified → incapacitated
+  if (derived.has('paralyzed') ||
+      derived.has('stunned') ||
+      derived.has('petrified')) {
+    derived.add('incapacitated');
+  }
+
+  // Replace the Set content (preserves Set identity for any external refs).
+  c.conditions.clear();
+  for (const cond of derived) c.conditions.add(cond);
 }
 
 /**

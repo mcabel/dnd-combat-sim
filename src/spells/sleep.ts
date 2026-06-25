@@ -43,7 +43,7 @@
 
 import { Combatant, Battlefield } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
-import { rollDie } from '../engine/utils';
+import { rollDie, addCondition } from '../engine/utils';
 import { distanceFt } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 
@@ -166,17 +166,25 @@ export function execute(
       budget -= target.currentHP;
 
       target.isUnconscious = true;
-      target.conditions.add('sleeping');
-      target.conditions.add('unconscious');
-      target.conditions.add('incapacitated');
 
-      // Break concentration if the target was concentrating
-      if (target.concentration?.active) {
-        const spellName = target.concentration.spellName ?? 'spell';
+      // Break concentration if the target was concentrating.
+      // Must check BEFORE adding 'incapacitated' condition, because
+      // addCondition('incapacitated') auto-breaks concentration (PHB p.203)
+      // by setting active = false, and we need to emit the event with the spell name.
+      const wasConcentrating = target.concentration?.active;
+      const concSpellName = target.concentration?.spellName ?? 'spell';
+
+      addCondition(target, 'sleeping');
+      addCondition(target, 'unconscious');
+      addCondition(target, 'incapacitated');
+
+      // After addCondition('incapacitated'), concentration.active is set to false.
+      // We emit the concentration break event and null the object.
+      if (wasConcentrating) {
         target.concentration = null;
         emit(
           state, 'condition_remove', target.id,
-          `${target.name}'s concentration on ${spellName} breaks as they fall asleep!`,
+          `${target.name}'s concentration on ${concSpellName} breaks as they fall asleep!`,
           target.id,
         );
       }

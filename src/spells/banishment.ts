@@ -33,7 +33,7 @@
 import { Combatant, Battlefield } from '../types/core';
 import { rollSaveReactable, CombatEvent, EngineState } from '../engine/combat';
 import { applySpellEffect, removeEffectsFromCaster } from '../engine/spell_effects';
-import { startConcentration } from '../engine/utils';
+import { startConcentration, addCondition } from '../engine/utils';
 import { chebyshev3D } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
 
@@ -113,7 +113,7 @@ export function execute(caster: Combatant, target: Combatant, state: EngineState
       sourceIsConcentration: true,
     });
     // Also mark as "banished" (can't take actions, can't be targeted)
-    target.conditions.add('incapacitated');
+    addCondition(target, 'incapacitated');
     emit(state, 'condition_add', caster.id,
       `${target.name} is BANISHED to a demiplane (incapacitated until concentration ends)!`, target.id);
   }

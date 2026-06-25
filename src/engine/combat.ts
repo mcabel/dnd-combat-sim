@@ -49,7 +49,7 @@ import { tickAdvantages, grantSelf, grantVulnerability } from './adv_system';
 import { getSummonEntry }                           from '../summons/registry';
 import { rollGrappleContest, rollGrappleContestDetailed, rollShoveContest, canGrappleOrShoveTarget, rollDiceString } from './utils';
 import { computeLOS } from './los';
-import { removeEffectsFromCaster, removeEffectById, getActiveAcBonus, getActiveAcFloor, getActiveBlessDie, getActiveBaneDie, getActiveHexDie, getActiveDamageZones, getActiveWeaponEnchant, getActiveEnlargeReduce, getActiveTaunt, getActiveCurseAttackDisadv, getActiveCurseRider, applySpellEffect, getActiveTerrainZones, makeTerrainFn } from './spell_effects';
+import { removeEffectsFromCaster, removeEffectById, undoEffect, getActiveAcBonus, getActiveAcFloor, getActiveBlessDie, getActiveBaneDie, getActiveHexDie, getActiveDamageZones, getActiveWeaponEnchant, getActiveEnlargeReduce, getActiveTaunt, getActiveCurseAttackDisadv, getActiveCurseRider, applySpellEffect, getActiveTerrainZones, makeTerrainFn } from './spell_effects';
 import { TerrainZone } from './spell_effects';
 import { applyCantripEffect, getCantripAttackAdvantage, resolveCantripAction, resolveCantripAoE, resolveCantripTouchEffect } from './cantrip_effects';
 import { execute as executeHex } from '../spells/hex';
@@ -2408,6 +2408,9 @@ function checkDeath(target: Combatant, state: EngineState, attacker?: Combatant)
   }
 
   // Break concentration on going down (PHB p.203)
+  // Also handle concentration auto-broken by addCondition('incapacitated')
+  // (which nulls concentration and sets _concentrationAutoBroken flag).
+  const autoBroken = (target as Record<string, unknown>)._concentrationAutoBroken;
   if (target.concentration?.active) {
     const spellName = target.concentration.spellName ?? 'spell';
     removeEffectsFromCaster(target.id, state.battlefield);
@@ -2415,6 +2418,19 @@ function checkDeath(target: Combatant, state: EngineState, attacker?: Combatant)
     target.concentration = null;
     log(state, 'condition_remove', target.id,
       `${target.name}'s concentration on ${spellName} breaks!`, undefined);
+  }
+  // ── RFC-COMBINING-EFFECTS Phase 4: auto-broken concentration cleanup ──
+  // If addCondition('incapacitated') auto-broke concentration (because the
+  // target dropped to 0 HP), addCondition nulled concentration but couldn't
+  // call removeEffectsFromCaster (no Battlefield access). The _concentrationAutoBroken
+  // flag stores the spell name. We clean up the effects here.
+  if (autoBroken) {
+    const spellName = typeof autoBroken === 'string' ? autoBroken : 'spell';
+    removeEffectsFromCaster(target.id, state.battlefield);
+    processFallDamage(state);
+    log(state, 'condition_remove', target.id,
+      `${target.name}'s concentration on ${spellName} breaks!`, undefined);
+    delete (target as Record<string, unknown>)._concentrationAutoBroken;
   }
 
   if (target.isPlayer) {
@@ -5983,17 +5999,21 @@ export function runCombat(
             if (tracker.successes >= tracker.maxCount) {
               // 3 successes: remove all effects from this tracker spell and clear it.
               // Remove matching active effects and their conditions.
+              // ── RFC-COMBINING-EFFECTS Phase 4: source-tracked conditions ──
+              // Call undoEffect for each matching effect to clean up
+              // _conditionSources and other structural state, then remove
+              // from activeEffects, then re-derive conditions via pipeline.
               const matchingEffects = actor.activeEffects.filter(
                 e => e.casterId === tracker.casterId && e.spellName === tracker.spellName
               );
-              for (const eff of matchingEffects) {
-                if (eff.effectType === 'condition_apply' && eff.payload.condition) {
-                  actor.conditions.delete(eff.payload.condition);
-                }
+              for (const me of matchingEffects) {
+                undoEffect(actor, me);
               }
               actor.activeEffects = actor.activeEffects.filter(
                 e => !(e.casterId === tracker.casterId && e.spellName === tracker.spellName)
               );
+              // Re-derive conditions from the pipeline after removing effects.
+              reevaluateEffects(actor, battlefield);
               log(state, 'condition_remove', tracker.casterId,
                 `${actor.name} overcomes ${tracker.spellName}! (3 successful saves — ${tracker.currentCondition} removed)`,
                 actor.id);
@@ -6004,17 +6024,20 @@ export function runCombat(
             if (tracker.fails >= tracker.maxCount) {
               // 3 fails: escalate condition.
               // Remove the current condition effects from this spell.
-              const matchingEffects = actor.activeEffects.filter(
+              // ── RFC-COMBINING-EFFECTS Phase 4: source-tracked conditions ──
+              // Call undoEffect for each matching effect to clean up
+              // _conditionSources and other structural state.
+              const matchingEffects2 = actor.activeEffects.filter(
                 e => e.casterId === tracker.casterId && e.spellName === tracker.spellName
               );
-              for (const eff of matchingEffects) {
-                if (eff.effectType === 'condition_apply' && eff.payload.condition) {
-                  actor.conditions.delete(eff.payload.condition);
-                }
+              for (const me of matchingEffects2) {
+                undoEffect(actor, me);
               }
               actor.activeEffects = actor.activeEffects.filter(
                 e => !(e.casterId === tracker.casterId && e.spellName === tracker.spellName)
               );
+              // Re-derive conditions from the pipeline after removing effects.
+              reevaluateEffects(actor, battlefield);
               // Apply the escalation condition.
               // For Flesh to Stone: petrified is NOT concentration-sourced (permanent).
               //   Use the TARGET's own ID as casterId so that removeEffectsFromCaster

@@ -74,6 +74,7 @@ import { Combatant, Battlefield, Condition } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
 import { chebyshev3D, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
+import { addCondition } from '../engine/utils';
 
 // ---- Metadata -----------------------------------------------
 
@@ -253,8 +254,8 @@ export function execute(
     // v1 uses the unconscious path for consistency with the death-
     // save subsystem. See metadata.powerWordKillPcInstantDeathV1Simplified.
     target.isUnconscious = true;
-    target.conditions.add('unconscious' as Condition);
-    target.conditions.add('incapacitated' as Condition);
+    addCondition(target, 'unconscious' as Condition);
+    addCondition(target, 'incapacitated' as Condition);
     emit(
       state, 'unconscious', caster.id,
       `Power Word Kill: ${target.name} drops to 0 HP and falls UNCONSCIOUS! (v1: PC instant-death simplified to unconscious+death-saves) — was ${killedHP} HP`,
@@ -265,8 +266,8 @@ export function execute(
     // monster death path.
     target.isDead = true;
     target.isUnconscious = true;
-    target.conditions.add('unconscious' as Condition);
-    target.conditions.add('incapacitated' as Condition);
+    addCondition(target, 'unconscious' as Condition);
+    addCondition(target, 'incapacitated' as Condition);
     emit(
       state, 'death', caster.id,
       `Power Word Kill: ${target.name} DIES INSTANTLY! (was ${killedHP} HP ≤ ${metadata.hpThreshold} threshold — no save, no attack roll)`,

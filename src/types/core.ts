@@ -1117,6 +1117,20 @@ export interface Combatant {
   // Conditions
   conditions: Set<Condition>;
 
+  // ── RFC-COMBINING-EFFECTS Phase 4: source-tracked condition map ──
+  // Maps each condition to the Set of sourceIds that impose it.
+  //   - 'non-spell' is a reserved sourceId for conditions added via
+  //     addCondition() (monster traits, class features, combat mechanics).
+  //   - Spell-sourced conditions use the effect.id from activeEffects.
+  //
+  // _rederiveConditions() rebuilds `conditions` by checking each sourceId:
+  //   'non-spell' always counts; effect IDs count only if the effect
+  //   still exists in activeEffects and is unsuppressed.
+  //
+  // This replaces the old _nonspecllConditions approach, which couldn't
+  // distinguish expired spell conditions from non-spell conditions.
+  _conditionSources?: Map<Condition, Set<string>>;
+
   // AI
   aiProfile: AIProfile;
   perception: PerceptionMemory;
