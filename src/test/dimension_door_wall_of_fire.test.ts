@@ -102,7 +102,7 @@ eq('name', ddMeta.name, 'Dimension Door');
 eq('level 4', ddMeta.level, 4);
 eq('concentration false', ddMeta.concentration, false);
 eq('school conjuration', ddMeta.school, 'conjuration');
-eq('range 500', ddMeta.rangeFt, 500);
+eq('teleport range 500', ddMeta.teleportRangeFt, 500);
 assert('ally carry flag false', ddMeta.dimensionDoorAllyCarryV1Implemented === false);
 
 console.log('\n=== Wall of Fire Metadata ===');
@@ -148,27 +148,29 @@ console.log('\n=== Dimension Door: shouldCast gates ===');
 }
 
 {
-  // Gate: not bloodied, no adjacent enemies → false
-  const caster = makeCaster('Dimension Door', 4, { currentHP: 100, maxHP: 100 });
-  const enemy = makeCombatant('enemy', { faction: 'enemy', pos: { x: 10, y: 10, z: 0 } });
+  // Gate: healthy + enemy at mid-range (30-60 ft) → no trigger (not closing, not escape)
+  const caster = makeCaster('Dimension Door', 4, { currentHP: 100, maxHP: 100, pos: { x: 0, y: 0, z: 0 } });
+  const enemy = makeCombatant('enemy', { faction: 'enemy', pos: { x: 8, y: 0, z: 0 } }); // 40 ft away
   const bf = makeBF([caster, enemy]);
-  assert('healthy, no adj enemies → false', !shouldCastDD(caster, bf));
+  assert('healthy + enemy 40ft away → null', shouldCastDD(caster, bf) === null);
 }
 
 {
-  // Trigger: bloodied (HP ≤ 50%)
-  const caster = makeCaster('Dimension Door', 4, { currentHP: 50, maxHP: 100 });
-  const bf = makeBF([caster]);
-  assert('bloodied → true', shouldCastDD(caster, bf));
+  // Trigger: escape mode (HP < 30% + adjacent enemy ≤5 ft)
+  const caster = makeCaster('Dimension Door', 4, { currentHP: 20, maxHP: 100, pos: { x: 5, y: 5, z: 0 } });
+  const enemy = makeCombatant('enemy', { faction: 'enemy', pos: { x: 6, y: 5, z: 0 } }); // 5 ft away
+  const bf = makeBF([caster, enemy]);
+  assert('escape mode (HP<30% + adj enemy) → fires', shouldCastDD(caster, bf) !== null);
 }
 
 {
-  // Trigger: surrounded (≥2 adjacent enemies at chebyshev distance 1)
-  const caster = makeCaster('Dimension Door', 4, { pos: { x: 5, y: 5, z: 0 }, currentHP: 80, maxHP: 100 });
-  const e1 = makeCombatant('e1', { faction: 'enemy', pos: { x: 6, y: 5, z: 0 } });
-  const e2 = makeCombatant('e2', { faction: 'enemy', pos: { x: 4, y: 5, z: 0 } });
-  const bf = makeBF([caster, e1, e2]);
-  assert('surrounded by 2 → true', shouldCastDD(caster, bf));
+  // Trigger: closing-distance mode (HP ≥ 30% + enemy >60 ft away)
+  const caster = makeCaster('Dimension Door', 4, { currentHP: 80, maxHP: 100, pos: { x: 0, y: 0, z: 0 } });
+  const enemy = makeCombatant('enemy', { faction: 'enemy', pos: { x: 13, y: 0, z: 0 } }); // 65 ft away
+  const bf = makeBF([caster, enemy]);
+  const result = shouldCastDD(caster, bf);
+  assert('closing mode (HP≥30% + enemy >60ft) → fires', result !== null);
+  assert('destination moves toward enemy (x > caster.x)', result !== null && result.destination.x > caster.pos.x);
 }
 
 // ============================================================
@@ -178,15 +180,17 @@ console.log('\n=== Dimension Door: execute teleports caster ===');
 
 {
   const caster = makeCaster('Dimension Door', 4, {
-    pos: { x: 5, y: 5, z: 0 }, currentHP: 50, maxHP: 100,
+    pos: { x: 5, y: 5, z: 0 }, currentHP: 20, maxHP: 100,  // HP < 30% → escape mode
   });
   // Enemy at (5,5) neighbour — caster should move far away
   const enemy = makeCombatant('enemy', { faction: 'enemy', pos: { x: 6, y: 5, z: 0 } });
   const bf = makeBF([caster, enemy]);
   const state = makeState(bf);
 
+  const result = shouldCastDD(caster, bf);
+  assert('shouldCast returned a destination', result !== null);
   const before = { ...caster.pos };
-  executeDD(caster, state);
+  if (result) executeDD(caster, result.destination, state);
 
   assert('caster moved', caster.pos.x !== before.x || caster.pos.y !== before.y,
     `before=(${before.x},${before.y}), after=(${caster.pos.x},${caster.pos.y})`);
@@ -196,16 +200,18 @@ console.log('\n=== Dimension Door: execute teleports caster ===');
 }
 
 {
-  // Caster ends up farther from enemy than before
+  // Caster ends up farther from enemy than before (escape mode)
   const caster = makeCaster('Dimension Door', 4, {
-    pos: { x: 10, y: 10, z: 0 }, currentHP: 30, maxHP: 100,
+    pos: { x: 10, y: 10, z: 0 }, currentHP: 20, maxHP: 100,  // HP < 30% → escape mode
   });
   const enemy = makeCombatant('enemy', { faction: 'enemy', pos: { x: 10, y: 11, z: 0 } });
   const bf = makeBF([caster, enemy]);
   const state = makeState(bf);
 
+  const result = shouldCastDD(caster, bf);
+  assert('shouldCast returned a destination', result !== null);
   const distBefore = Math.abs(caster.pos.x - enemy.pos.x) + Math.abs(caster.pos.y - enemy.pos.y);
-  executeDD(caster, state);
+  if (result) executeDD(caster, result.destination, state);
   const distAfter = Math.abs(caster.pos.x - enemy.pos.x) + Math.abs(caster.pos.y - enemy.pos.y);
 
   assert('caster farther from enemy after teleport', distAfter >= distBefore,
