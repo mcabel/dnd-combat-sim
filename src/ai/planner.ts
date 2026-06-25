@@ -213,6 +213,9 @@ import { shouldCast as shouldCastGate } from '../spells/gate';
 import { shouldCast as shouldCastHallow } from '../spells/hallow';
 import { shouldCast as shouldCastWish } from '../spells/wish';
 import { shouldCast as shouldCastScrying } from '../spells/scrying';
+import { shouldCast as shouldCastPlaneShift } from '../spells/plane_shift';
+import { shouldCast as shouldCastTeleport } from '../spells/teleport';
+import { shouldCast as shouldCastAnimateDead } from '../spells/animate_dead';
 import { shouldShapechange } from '../engine/shapechange';
 // ── Session 62 RFC-VISION-AUDIO Phase 1: perception + detection helpers ──
 import {
@@ -4797,6 +4800,59 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
       plan.action = { type: 'wish', action: null, targetId: wTarget.id, description: `${self.name} casts Wish` };
       plan.targetId = wTarget.id;
       plan.bonusAction = planBonusAction(self, wTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- PLANE SHIFT (L7, 5ft, CHA save, NO conc — banish) ---
+  // PHB p.266: touch range (5 ft), CHA save, NO concentration. v1: banish-only
+  // (skip travel mode + melee spell attack roll). Failed save = permanent
+  // removal (target on a random plane). Priority: VERY HIGH — a no-conc
+  // permanent removal at L7 ends the fight for one creature. Sits above
+  // the walls and Maze (Maze is L8; Plane Shift is L7 but needs touch range,
+  // so it's gated by adjacency). The 5-ft range is the balancing factor.
+  if (!plan.action && self.actions.some(a => a.name === 'Plane Shift')) {
+    const psTarget = shouldCastPlaneShift(self, battlefield);
+    if (psTarget) {
+      plan.action = { type: 'planeShift', action: null, targetId: psTarget.id, description: `${self.name} casts Plane Shift at ${psTarget.name}` };
+      plan.targetId = psTarget.id;
+      plan.bonusAction = planBonusAction(self, psTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- TELEPORT (L7, self, NO save, NO conc — self-escape) ---
+  // PHB p.281: self + up to 8 willing creatures (v1: self-only, mirrors
+  // Dimension Door). NO concentration. Priority: defensive — fires when
+  // caster is bloodied (HP ≤ 50%) OR surrounded (≥ 2 adjacent enemies).
+  // Sits below the damage spells (this is a positioning spell, not damage).
+  // Distinct from Dimension Door (L4): monsters that know Teleport but not
+  // Dimension Door use this. Higher slot, same v1 effect.
+  if (!plan.action && self.actions.some(a => a.name === 'Teleport')) {
+    if (shouldCastTeleport(self, battlefield)) {
+      plan.action = {
+        type: 'teleport',
+        action: null,
+        targetId: self.id,    // self-targeted; destination is recomputed in execute
+        description: `${self.name} casts Teleport (self-escape)`,
+      };
+      plan.targetId = self.id;
+      plan.bonusAction = planBonusAction(self, self, battlefield);
+      return plan;
+    }
+  }
+
+  // --- ANIMATE DEAD (L3, NO save, NO conc — spawn skeleton) ---
+  // PHB p.213: 10ft, v1: action (canon 1 min). Spawns 1 skeleton ally.
+  // Priority: MEDIUM — summon spells are valuable (extra body on field).
+  // Lower slot than Create Undead (L6) but weaker spawn (Skeleton HP 13
+  // vs Zombie HP 22). Sits next to Create Undead in priority.
+  if (!plan.action && self.actions.some(a => a.name === 'Animate Dead')) {
+    const adTarget = shouldCastAnimateDead(self, battlefield);
+    if (adTarget) {
+      plan.action = { type: 'animateDead', action: null, targetId: adTarget.id, description: `${self.name} casts Animate Dead` };
+      plan.targetId = adTarget.id;
+      plan.bonusAction = planBonusAction(self, adTarget, battlefield);
       return plan;
     }
   }

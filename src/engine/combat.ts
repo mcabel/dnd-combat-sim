@@ -718,6 +718,18 @@ import { shouldCast as shouldCastWish } from '../spells/wish';
 // Scrying: out-of-combat stub — shouldCast always returns false
 import { shouldCast as shouldCastScrying } from '../spells/scrying';
 import {
+  shouldCast as shouldCastPlaneShift,
+  execute as executePlaneShift,
+} from '../spells/plane_shift';
+import {
+  shouldCast as shouldCastTeleport,
+  execute as executeTeleport,
+} from '../spells/teleport';
+import {
+  shouldCast as shouldCastAnimateDead,
+  execute as executeAnimateDead,
+} from '../spells/animate_dead';
+import {
   shouldShapechange,
   executeShapechange,
   revertOnDeath as revertShapechangeOnDeath,
@@ -5417,6 +5429,32 @@ export function executePlannedAction(
     case 'wish': {
       // Wish — out-of-combat stub. shouldCast always returns false.
       if (shouldCastWish(actor, bf)) { /* never fires in combat */ }
+      break;
+    }
+
+    case 'planeShift': {
+      // Plane Shift — PHB p.266: 5ft, CHA save, NO conc — banish (removed for encounter).
+      // v1: banish-only (skip travel mode + melee spell attack roll).
+      const psTargetId = plan.targetId;
+      const psTarget = psTargetId ? bf.combatants.get(psTargetId) ?? null : null;
+      const psLive = psTarget && !psTarget.isDead && !psTarget.isUnconscious ? psTarget : shouldCastPlaneShift(actor, bf);
+      if (psLive) executePlaneShift(actor, psLive, state);
+      break;
+    }
+
+    case 'teleport': {
+      // Teleport — PHB p.281: self, NO save, NO conc — self-escape (L7).
+      // v1: self-only (mirrors Dimension Door). shouldCast returns boolean.
+      if (shouldCastTeleport(actor, bf)) executeTeleport(actor, state);
+      break;
+    }
+
+    case 'animateDead': {
+      // Animate Dead — PHB p.213: 10ft, NO save, NO conc — spawn skeleton (L3).
+      // v1: 1 skeleton (mirrors Create Undead pattern; skeleton instead of zombie).
+      // shouldCast returns the caster (self).
+      const adTarget = shouldCastAnimateDead(actor, bf);
+      if (adTarget) executeAnimateDead(actor, adTarget, state);
       break;
     }
 

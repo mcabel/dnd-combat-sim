@@ -1,6 +1,6 @@
 {
   "level": 7,
-  "generatedAt": "2026-06-25T16:38:50.810Z",
+  "generatedAt": "2026-06-25T17:01:47.734Z",
   "generatorVersion": 2,
   "scopeRule": "pre-2024 canon; reprints: newest in-scope source wins; XPHB(2024) out of scope; creatures keep all variants (not applicable to spells)",
   "sourceDates": {
@@ -26,8 +26,8 @@
     "XPHB"
   ],
   "count": 30,
-  "implementedCount": 22,
-  "remainingInScope": 7,
+  "implementedCount": 24,
+  "remainingInScope": 5,
   "spells": [
     {
       "name": "Conjure Celestial",
@@ -474,8 +474,8 @@
       "page": 266,
       "level": 7,
       "school": "Conjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "plane_shift.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -853,8 +853,8 @@
       "page": 281,
       "level": 7,
       "school": "Conjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "teleport.ts",
       "inScope": true,
       "otherSources": [
         {
