@@ -41,6 +41,31 @@ This session finished the **RFC-VISION-AUDIO Phase 3 Q5** planner filtering feat
 
 ---
 
+## Session 65 Retrospective (no handover was written)
+
+Session 65 was a heavy implementation session that never produced a handover document. For continuity, here is what Session 65 accomplished (reconstructed from git history):
+
+| Commit | Description |
+|--------|-------------|
+| `70c8458` | Session 64 handover + archive zHANDOVER-SESSION-62 (AGENTS.md max-2 rule) |
+| `b73f721` | Fix flaky fog_cloud integration test (8b/8c) — enemy hitBonus -20 |
+| `aae63a1` | RFC-COMBINING-EFFECTS Phase 2 (sourceTurnExpires expiry) + Phase 3 (takeover-on-expiry tests) |
+| `b9a9d69` | RFC-PATTERN-BIAS-AI Phase 1 (8 pattern detectors + composition formula) |
+| `5a99a53` | RFC-COMBINING-EFFECTS Phase 4 (source-tracked condition map) |
+| `3adb5d4` | Dimension Door + Wall of Fire + stubs (Fog Cloud, Darkness, Scrying) |
+| `e85055a` | HANDOVER-SESSION-50 |
+| `2087842` | RFC-VISION-AUDIO Phase 3 Q4/Q5 (detection-map advantage + creature-you-can-see) |
+
+### Session 65 key architectural changes:
+
+- **RFC-COMBINING-EFFECTS Phase 2+3** (`aae63a1`): Non-concentration effects now track `sourceTurnExpires` on the ActiveEffect. `reevaluateEffects()` has an expiry step that removes expired effects and promotes suppressed ones. Tests cover cascading takeover on expiry.
+- **RFC-COMBINING-EFFECTS Phase 4** (`5a99a53`): Replaced `_nonspecllConditions` with `_conditionSources: Map<Condition, Set<sourceId>>`. Each condition tracks which sources impose it ('non-spell' for combat mechanics, effect.id for spells). `_rederiveConditions()` rebuilds the conditions Set from active sources. Tombstone preservation: empty sourceId entries are kept (not deleted) to distinguish "never tracked" from "all sources removed". `_concentrationAutoBroken` flag bridges addCondition → checkDeath for auto-break cleanup.
+- **RFC-PATTERN-BIAS-AI Phase 1** (`b9a9d69`): 8 pattern detectors (enemyCluster, finisher, woundedAlly, acVsSave, concentrationPreservation, kiting, defensiveEscape, resourceAllOut) + composition formula wired into `computeSpellWeight()`.
+- **Dimension Door + Wall of Fire** (`3adb5d4`): Full implementations + stubs for Fog Cloud, Darkness (spell), Scrying.
+- **RFC-VISION-AUDIO Phase 3 Q4/Q5** (`2087842`): `attackAdvantageState()` accepts optional `bf` parameter — uses `getDetectionState()` for unseen-attacker advantage and can't-see-target disadvantage. `SPELLS_REQUIRING_VISIBLE_TARGET` (70+ spells). `requiresVisibleTarget()`, `canTargetWithSpell()`, `countVisiblyDetectedEnemies()`. OA visibility gating. See Invisibility consumption. Devil's Sight.
+
+---
+
 ## Current State of Major RFCs
 
 ### RFC-COMBINING-EFFECTS — Phase 1-4 ALL DONE ✅
