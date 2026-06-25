@@ -614,8 +614,11 @@ function parseMonsterSpellcasting(
   else if (/\bcharisma\b/i.test(headerText)) ability = 'cha';
 
   // At-will spells: strip {@spell name} → name
+  // ── Defensive: some bestiary entries have non-string spell entries
+  // (objects with notes). Use String(sp) to coerce, matching the daily/
+  // slots parsers below. Fixes creature_magic_resist_regen crash.
   const atWill: string[] | undefined = Array.isArray(s.will)
-    ? s.will.map((sp: string) => sp.replace(/\{@spell\s+([^}|]+)(?:\|[^}]*)?\}/i, '$1').trim()).filter(Boolean)
+    ? s.will.map((sp: unknown) => String(sp).replace(/\{@spell\s+([^}|]+)(?:\|[^}]*)?\}/i, '$1').trim()).filter(Boolean)
     : undefined;
 
   // Daily spells: { "1e": [...], "2e": [...] } → { spellName: usesPerDay }
@@ -1840,6 +1843,12 @@ export function mergeBestiaries(
   // Track which sources each name appeared in (to detect genuine reprints).
   const nameSources = new Map<string, Set<string>>();
   for (const file of files) {
+    // ── Defensive guard: some bestiaryData JSON files are not monster
+    // lists (e.g. legendarygroups.json has `legendaryGroup`, not
+    // `monster`). Skip files that lack a valid monster array so loading
+    // the full bestiary doesn't crash with "file.monster is not
+    // iterable". Fixes the 5 creature_* test crashes.
+    if (!file?.monster || !Array.isArray(file.monster)) continue;
     for (const m of file.monster) {
       const bareKey = m.name.toLowerCase();
       const src = (m.source ?? '').toLowerCase();

@@ -115,8 +115,10 @@ eq('range 120', wofMeta.rangeFt, 120);
 
 console.log('\n=== Stub Metadata ===');
 assert('scrying outOfCombat', scryMeta.outOfCombat === true);
-assert('fog cloud geometry flag false', fogMeta.fogCloudObscurementV1Implemented === false);
-assert('darkness vision flag false', darkMeta.darknessVisionV1Implemented === false);
+// Fog Cloud + Darkness were implemented in Session 69 (obstacle subsystem).
+// Their vision/obscurement flags are now `true` (was `false` when stubs).
+assert('fog cloud obscurement flag true (implemented Session 69)', fogMeta.fogCloudObscurementV1Implemented === true);
+assert('darkness vision flag true (implemented Session 69)', darkMeta.darknessVisionV1Implemented === true);
 
 // ============================================================
 // DIMENSION DOOR — shouldCast gates

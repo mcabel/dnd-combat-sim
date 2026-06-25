@@ -1,6 +1,6 @@
 # Spell Cache — Index
 
-Generated: `2026-06-25T17:01:47.734Z`
+Generated: `2026-06-25T18:23:31.597Z`
 
 **Total spells:** 557  ·  **Implemented:** 474  ·  **Remaining (in-scope, pre-2024):** 70
 

@@ -595,7 +595,11 @@ console.log('\n--- 22. End-to-end: Champion crits more than vanilla ---');
   let vanillaCrits = 0;
   let championAttacks = 0;
   let vanillaAttacks = 0;
-  const N = 1000;
+  // N=5000 (was 1000): with true crit rates ~10% (Champion, 19-20) vs ~5%
+  // (vanilla, 20 only), P(championRate <= vanillaRate * 1.25) drops from
+  // ~0.01% at N=1000 to ~10^-20 at N=5000. Eliminates the rare CI flake.
+  // Runtime: ~15s (was ~3s) — well under the 60s per-file CI timeout.
+  const N = 5000;
   for (let i = 0; i < N; i++) {
     // Champion
     const cFighter = buildCombatant(championSheet, { x: 0, y: 0, z: 0 });

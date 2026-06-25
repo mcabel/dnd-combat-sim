@@ -1,6 +1,6 @@
 # Monster Spell Coverage Report
 
-Generated: `2026-06-25T17:01:53.257Z`
+Generated: `2026-06-25T18:23:32.959Z`
 Source: 2401 bestiary entries from `bestiaryData/`, scanned via `scripts/scan_monster_spells.ts`.
 
 > **Purpose:** This report guides which spell modules to build next for the
