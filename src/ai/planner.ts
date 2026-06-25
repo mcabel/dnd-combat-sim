@@ -204,6 +204,7 @@ import {
   canTakeHideAction,
   countHiddenEnemies,
   countTargetableEnemies,
+  canTargetWithSpell,
 } from '../engine/perception';
 import { shouldCast as shouldCastCharmPerson } from '../spells/charm_person';
 import { shouldCast as shouldCastCompelledDuel } from '../spells/compelled_duel';

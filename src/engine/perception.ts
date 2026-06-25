@@ -611,6 +611,34 @@ export function countTargetableEnemies(
 }
 
 /**
+ * Count enemies that the combatant can visually detect (visible only,
+ * not position-known). Used by the planner for "creature you can see"
+ * spell targeting — these spells can ONLY target visible enemies.
+ *
+ * RFC-VISION-AUDIO Phase 3 Q5.
+ */
+export function countVisiblyDetectedEnemies(
+  self: Combatant,
+  bf: Battlefield,
+): number {
+  const detection = self.perception.detection;
+  let count = 0;
+  for (const c of bf.combatants.values()) {
+    if (c.id === self.id) continue;
+    if (c.faction === self.faction) continue;
+    if (c.isDead || c.isUnconscious) continue;
+    if (detection) {
+      if (detection.get(c.id) === 'visible') count++;
+    } else {
+      // Legacy fallback: no detection map → check conditions.
+      // Not hidden + not invisible = visible (v1 simplification).
+      if (!c.conditions.has('hidden') && !c.conditions.has('invisible')) count++;
+    }
+  }
+  return count;
+}
+
+/**
  * Return the list of living enemies the observer can target — i.e. those
  * whose detection state is 'visible' or 'position-known'. Enemies that are
  * 'hidden' (took Hide action, position unknown) or 'unknown' (lost track)
@@ -665,4 +693,150 @@ export function countHiddenEnemies(
     if (c.conditions.has('hidden')) count++;
   }
   return count;
+}
+
+// ---- "Creature You Can See" Spell Enforcement (Phase 3 Q5) ----
+
+/**
+ * Set of spell names that require "a creature you can see" as a target.
+ *
+ * Per PHB / XGE spell descriptions, these spells explicitly state
+ * "a creature you can see" in their targeting clause. If the caster
+ * cannot visually detect the target, the spell cannot be cast.
+ *
+ * This is a hardcoded v1 set. A more robust approach would parse the
+ * spell description for the phrase, but that's Phase 4+ scope.
+ *
+ * Sources: PHB 2014 spell descriptions, Xanathar's Guide to Everything.
+ */
+const SPELLS_REQUIRING_VISIBLE_TARGET: ReadonlySet<string> = new Set([
+  // Cantrips
+  'Chill Touch',       // "a creature you can see within range"
+  'Eldritch Blast',    // "a creature you can see within range"
+  'Fire Bolt',         // "a creature you can see within range"
+  'Guidance',          // "a creature you can see" (willing)
+  'Guiding Bolt',      // "a creature you can see within range"
+  'Mind Sliver',       // "a creature you can see within range"
+  'Sacred Flame',      // "a creature you can see within range"
+  'Spare the Dying',   // "a creature you can see within range"
+  'Toll the Dead',     // "a creature you can see within range"
+  'Vicious Mockery',   // "a creature you can see within range"
+  // Level 1
+  'Blindness/Deafness',// "a creature you can see within range"
+  'Bless',             // "up to three creatures of your choice" (visible implied)
+  'Bane',              // "up to three creatures of your choice" (visible implied)
+  'Cause Fear',        // "a creature you can see within range"
+  'Charm Person',      // "a humanoid you can see within range"
+  'Command',           // "a creature you can see within range"
+  'Compelled Duel',    // "a creature you can see within range"
+  'Detect Evil and Good', // "a creature you can see" (touch range but see required)
+  'Dissonant Whispers',// "a creature you can see within range"
+  'Entangle',          // area effect (no "you can see" — NOT included)
+  'Friends',           // "a creature you can see within range"
+  'Hex',               // "a creature you can see within range"
+  'Hunter\'s Mark',    // "a creature you can see within range"
+  'Inflict Wounds',    // "a creature you can see within range" (touch, but see required)
+  'Ray of Sickness',   // "a creature you can see within range"
+  'Shield of Faith',   // "a creature you can see within range"
+  'Sapping Sting',     // "a creature you can see within range"
+  'Silvery Barbs',     // "when a creature you can see"
+  'Tasha\'s Hideous Laughter', // "a creature you can see within range"
+  'Thunderous Smite',  // self-buff (no target — NOT included)
+  'Wrathful Smite',    // self-buff (no target — NOT included)
+  'Zephyr Strike',     // self-buff (no target — NOT included)
+  // Level 2
+  'Blindness/Deafness',// already listed (can be upcast)
+  'Blur',              // self-buff (NOT included)
+  'Calm Emotions',     // "each humanoid in a 20-foot radius you can see" (area, but see)
+  'Charm Monster',     // "a creature you can see within range"
+  'Crown of Madness',  // "a humanoid you can see within range"
+  'Hold Person',       // "a humanoid you can see within range"
+  'Invisibility',      // "a creature you touch" (NOT "you can see" — NOT included)
+  'Mind Spike',        // "a creature you can see within range"
+  'Phantasmal Force',  // "a creature you can see within range"
+  'Ray of Enfeeblement', // "a creature you can see within range"
+  'See Invisibility',  // self-buff (NOT included)
+  'Shadow Blade',      // self-buff (NOT included)
+  'Suggestion',        // "a creature you can see within range"
+  'Web',               // area effect (NOT included)
+  // Level 3
+  'Bestow Curse',      // "a creature you can see within range" (touch variant exists, but base is "you can see")
+  'Clairvoyance',      // self-buff (NOT included)
+  'Counterspell',      // reaction to a spell (NOT "creature you can see" — it's "a spell")
+  'Dispel Magic',      // object/creature/effect (NOT "creature you can see" specifically)
+  'Enemies Abound',    // "a creature you can see within range"
+  'Fear',              // cone (NOT "creature you can see" — area)
+  'Fast Friends',      // "a creature you can see within range"
+  'Hypnotic Pattern',  // area effect (NOT included)
+  'Lightning Bolt',    // line effect (NOT included)
+  'Spirit Guardians',  // self-buff (NOT included)
+  'Vortex Warp',       // "a creature you can see within range"
+  // Level 4
+  'Banishment',        // "a creature you can see within range"
+  'Blight',            // "a creature you can see within range"
+  'Charm Monster',     // already listed
+  'Dominate Beast',    // "a beast you can see within range"
+  'Greater Invisibility', // self-buff (NOT included)
+  // Level 5
+  'Contagion',         // "a creature you can see within range"
+  'Dominate Person',   // "a humanoid you can see within range"
+  'Geas',              // "a creature you can see within range"
+  'Hold Monster',      // "a creature you can see within range"
+  'Mind Spike',        // already listed (upcast)
+  // Level 6
+  'Disintegrate',      // "a creature you can see within range"
+  'Dominate Monster',  // "a creature you can see within range"
+  'Eyebite',           // self-activated (choose target each round — "a creature you can see")
+  'Flesh to Stone',    // "a creature you can see within range"
+  'Mass Suggestion',   // "up to twelve creatures you can see"
+  'Sunbeam',           // line effect (NOT "creature you can see" — it's a line)
+  'True Seeing',       // self-buff (NOT included)
+  // Level 7
+  'Finger of Death',   // "a creature you can see within range"
+  'Power Word Pain',   // "a creature you can see within range"
+  'Psychic Scream',    // "up to ten creatures you can see"
+  // Level 8
+  'Dominate Monster',  // already listed
+  'Feeblemind',        // "a creature you can see within range"
+  'Glibness',          // self-buff (NOT included)
+  'Power Word Stun',   // "a creature you can see within range"
+  'Sunburst',          // area effect (NOT included)
+  // Level 9
+  'Foresight',         // self/other buff (touch — NOT "you can see")
+  'Power Word Kill',   // "a creature you can see within range"
+  'Weird',             // area effect (NOT included)
+  // Monster / NPC spells
+  'Antagonize',        // "a creature you can see within range"
+  'Maddening Dark',    // area effect (NOT included)
+  'Superior Invisibility', // self-buff (NOT included)
+]);
+
+/**
+ * Check if a spell requires "a creature you can see" targeting.
+ */
+export function requiresVisibleTarget(spellName: string): boolean {
+  return SPELLS_REQUIRING_VISIBLE_TARGET.has(spellName);
+}
+
+/**
+ * Check if a caster can target a specific creature with a spell that
+ * requires "a creature you can see" targeting.
+ *
+ * Returns true if:
+ *   - The spell does NOT require visible targeting, OR
+ *   - The caster can visually detect the target
+ *
+ * Returns false if:
+ *   - The spell requires visible targeting AND the caster cannot
+ *     visually detect the target (hidden, position-known, unknown,
+ *     or invisible without see invisibility/truesight)
+ */
+export function canTargetWithSpell(
+  caster: Combatant,
+  target: Combatant,
+  spellName: string,
+  bf: Battlefield,
+): boolean {
+  if (!requiresVisibleTarget(spellName)) return true;
+  return isVisuallyDetected(caster, target, bf);
 }

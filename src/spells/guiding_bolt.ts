@@ -128,7 +128,8 @@ export function execute(
   );
 
   // Advantage state for the caster's attack roll (e.g. prone target, invisible, etc.)
-  const advState = resolveAttackAdvantage(caster, target, 'ranged');
+  // ── RFC-VISION-AUDIO Phase 3 Q4: pass Battlefield for detection-map ──
+  const advState = resolveAttackAdvantage(caster, target, 'ranged', state.battlefield);
 
   const result = rollAttack(hitBonus, advState.advantage, advState.disadvantage);
 

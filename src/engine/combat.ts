@@ -1444,7 +1444,8 @@ export function resolveAttack(
   }
 
   // Standard attack roll — include Pack Tactics advantage, Prone modifier, and Help action
-  const advState = resolveAttackAdvantage(attacker, target, action.attackType);
+  // ── RFC-VISION-AUDIO Phase 3 Q4: pass Battlefield for detection-map ──
+  const advState = resolveAttackAdvantage(attacker, target, action.attackType, state.battlefield);
   const { advantage: baseAdv, disadvantage: baseDisadv } = advState;
   // Cantrip intrinsic advantage (pre-roll): e.g. Shocking Grasp vs metal armor (PHB p.275)
   const cantripAdv = getCantripAttackAdvantage(attacker, target, action.name);

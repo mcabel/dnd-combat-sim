@@ -936,10 +936,52 @@ export function attackHits(roll: number, total: number, targetAC: number): boole
  */
 export function attackAdvantageState(
   attacker: Combatant,
-  target: Combatant
+  target: Combatant,
+  bf?: Battlefield
 ): { advantage: boolean; disadvantage: boolean } {
   let advantage = false;
   let disadvantage = false;
+
+  // ── RFC-VISION-AUDIO Phase 3 Q4: detection-map advantage/disadvantage ──
+  // When the Battlefield is available, consult the detection map for
+  // unseen-attacker and can't-see-target advantage/disadvantage.
+  // This replaces the condition-based checks for 'hidden' and 'invisible'
+  // with the more accurate detection model (visible / hidden /
+  // position-known / unknown).
+  if (bf) {
+    // Import perception module lazily to avoid circular deps at module level.
+    // (perception.ts imports from utils.ts — but only at function call time,
+    //  not at module initialization, so this is safe.)
+    const { getDetectionState } = require('./perception');
+
+    // Attacker's detection state from target's perspective:
+    // If the target can't see the attacker (hidden/position-known/unknown),
+    // the attacker is an "unseen attacker" → advantage (PHB p.194).
+    const attackerFromTarget = getDetectionState(target, attacker, bf);
+    if (attackerFromTarget !== 'visible') {
+      // Attacker is not visible to target → advantage (unseen attacker)
+      advantage = true;
+    }
+
+    // Target's detection state from attacker's perspective:
+    // If the attacker can't see the target, attacks have disadvantage.
+    const targetFromAttacker = getDetectionState(attacker, target, bf);
+    if (targetFromAttacker !== 'visible') {
+      // Can't see the target → disadvantage on attacks
+      disadvantage = true;
+    }
+  } else {
+    // ── Legacy: condition-based advantage/disadvantage (backward-compat) ──
+    // Used when bf is not available (tests, legacy callers).
+    // Invisible attacker has advantage on all attacks (PHB Appendix A)
+    if (attacker.conditions.has('invisible'))  advantage    = true;
+    // Hidden attacker has advantage on attacks (PHB p.194 — unseen attackers)
+    if (attacker.conditions.has('hidden'))     advantage    = true;
+    // Invisible target → attacker has disadvantage (PHB Appendix A)
+    if (target.conditions.has('invisible'))    disadvantage = true;
+    // Hidden target → attacker has disadvantage (PHB p.194 — attacking unseen)
+    if (target.conditions.has('hidden'))       disadvantage = true;
+  }
 
   // ── Attacker conditions (PHB Appendix A) ──────────────────
   if (attacker.conditions.has('blinded'))    disadvantage = true;
@@ -947,11 +989,6 @@ export function attackAdvantageState(
   if (attacker.conditions.has('poisoned'))   disadvantage = true;
   if (attacker.conditions.has('restrained')) disadvantage = true;
   if (attacker.conditions.has('prone'))      disadvantage = true;
-  // Invisible attacker has advantage on all attacks (PHB Appendix A)
-  if (attacker.conditions.has('invisible'))  advantage    = true;
-  // Hidden attacker has advantage on attacks (PHB p.194 — unseen attackers)
-  // Note: 'hidden' is removed in resolveAttack immediately after advantage is computed.
-  if (attacker.conditions.has('hidden'))     advantage    = true;
 
   // ── Target conditions (PHB Appendix A) ────────────────────
   if (target.conditions.has('blinded'))      advantage = true;
@@ -962,10 +999,6 @@ export function attackAdvantageState(
   if (target.conditions.has('restrained'))   advantage = true;
   if (target.conditions.has('stunned'))      advantage = true;
   if (target.conditions.has('unconscious'))  advantage = true;
-  // Invisible target → attacker has disadvantage (PHB Appendix A)
-  if (target.conditions.has('invisible'))    disadvantage = true;
-  // Hidden target → attacker has disadvantage (PHB p.194 — attacking an unseen creature)
-  if (target.conditions.has('hidden'))       disadvantage = true;
 
   // ── Advantage/disadvantage system entries (spells, feats, class features) ──
   // Attacker's own advantage on attack rolls
@@ -1000,9 +1033,10 @@ export function attackAdvantageState(
 export function resolveAttackAdvantage(
   attacker: Combatant,
   target: Combatant,
-  attackType: import('../types/core').AttackType | null
+  attackType: import('../types/core').AttackType | null,
+  bf?: Battlefield
 ): { advantage: boolean; disadvantage: boolean } {
-  const base = attackAdvantageState(attacker, target);
+  const base = attackAdvantageState(attacker, target, bf);
   let { advantage, disadvantage } = base;
 
   if (target.conditions.has('prone')) {
