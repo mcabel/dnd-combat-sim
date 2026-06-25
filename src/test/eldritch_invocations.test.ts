@@ -451,7 +451,6 @@ console.log('\n--- 12. Lance of Lethargy — EB miss → no slow ---');
   });
   const goblin = makeCombatant('goblin', {
     pos: { x: 2, y: 0, z: 0 },
-    ac: 30, // very high AC → miss
     currentHP: 100, maxHP: 100,
     speed: 30,
     faction: 'enemy',
@@ -459,8 +458,12 @@ console.log('\n--- 12. Lance of Lethargy — EB miss → no slow ---');
   const bf = makeBF([warlock, goblin]);
   const state = makeState(bf);
 
-  const missAction = { ...ELDRITCH_BLAST_ACTION, hitBonus: -100 };
-  resolveAttack(warlock, goblin, missAction, state);
+  // Force a deterministic miss via isCritOverride=false. Previously this test
+  // used `ac: 30` + `hitBonus: -100` to "guarantee" a miss, but per PHB p.194
+  // a natural 20 always hits regardless of AC/modifiers — so ~5% of the time
+  // the attack landed and 12a/12b failed. isCritOverride=false short-circuits
+  // the hit check in resolveAttack (combat.ts:1859) for a flake-free miss.
+  resolveAttack(warlock, goblin, ELDRITCH_BLAST_ACTION, state, false /* force miss */);
 
   eq('12a. goblin speed NOT reduced (miss)', goblin.speed, 30);
   assert('12b. no Lance of Lethargy log',
