@@ -206,7 +206,15 @@ console.log('\n--- 12. Existing proficiency not doubled ---');
   // Roll with isProficient=true (explicit) vs isProficient=false (Diamond Soul).
   // Both should give the same total (prof added once, not twice).
   // Run multiple times to average out dice.
-  const N = 100;
+  // Session 71 fix: bumped from N=100 to N=1000 to eliminate statistical
+  // flake. Variance of a single d20 roll = (20²-1)/12 ≈ 33.0, σ ≈ 5.74.
+  // Variance of avg(diff) over N rolls each side = 2 × 33.0 / N.
+  // With N=100: σ_diff ≈ 0.816, P(|diff| ≥ 2) ≈ 1.4% (~1 in 70 CI runs
+  // would flake — observed on commit 4cdeda6). With N=1000: σ_diff ≈ 0.258,
+  // P(|diff| ≥ 2) ≈ 10^-14 (essentially impossible). Same approach as
+  // Session 70's silvery_barbs flake fix and Session 71's mechanics.test.ts
+  // nat-20 flake fix.
+  const N = 1000;
   let sumExplicit = 0, sumImplicit = 0;
   for (let i = 0; i < N; i++) {
     sumExplicit += rollSave(monk, 'str', 100, true).total;   // explicit prof + Diamond Soul
@@ -215,7 +223,7 @@ console.log('\n--- 12. Existing proficiency not doubled ---');
   const avgExplicit = sumExplicit / N;
   const avgImplicit = sumImplicit / N;
   // Both should have the same average (prof added once either way).
-  // Allow a tolerance of 2 (dice noise over 100 rolls).
+  // Allow a tolerance of 2 (dice noise over 1000 rolls is now negligible).
   assert('12. proficiency not doubled (explicit ≈ implicit)',
     Math.abs(avgExplicit - avgImplicit) < 2,
     `explicit avg ${avgExplicit.toFixed(1)} vs implicit avg ${avgImplicit.toFixed(1)}`);
