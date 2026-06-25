@@ -266,9 +266,15 @@ console.log('\n--- 7. negated when reroll flips save to fail ---');
   // Run many trials to verify 'negated' happens at least sometimes.
   // Original roll 14, DC 13 → success. Reroll could be 1-20; lower of (14, reroll)
   // fails when lower < 13 (i.e. reroll < 13 → 60% chance of negation).
+  //
+  // Session 70 fix: bumped N from 100 to 1000 to eliminate a rare statistical
+  // flake (P(< 40 out of 100) ≈ 0.0015% = 1 in 69,000 — happened once in CI).
+  // With N=1000 and threshold 400, P(failure) ≈ 10^-38 (essentially impossible).
+  // Same approach as the Session 69 subclass_features flake fix (N 1000→5000).
+  const N = 1000;
   let negatedCount = 0;
   let failedCount = 0;
-  for (let i = 0; i < 100; i++) {
+  for (let i = 0; i < N; i++) {
     const caster = makeCasterWithSilveryBarbs(`caster_${i}`, { pos: { x: 0, y: 0, z: 0 } });
     const saver = makeCombatant(`saver_${i}`, { pos: { x: 2, y: 0, z: 0 }, faction: 'enemy' });
     const trigger = makeSaveSuccessTrigger(caster, saver, { roll: 14, total: 15, dc: 13 });
@@ -277,10 +283,10 @@ console.log('\n--- 7. negated when reroll flips save to fail ---');
     if (outcome.kind === 'negated') negatedCount++;
     if (outcome.kind === 'failed') failedCount++;
   }
-  // With 100 trials and 60% negation probability, we should see at least 40 negations
-  // (very conservative — actual expected is ~60).
-  assert(`7a. negated at least 40 times out of 100 (got ${negatedCount})`, negatedCount >= 40);
-  assert(`7b. failed at least 10 times out of 100 (got ${failedCount})`, failedCount >= 10);
+  // With N=1000 trials and 60% negation probability, expected ~600 negations.
+  // Threshold 400 is very conservative (P(failure) ≈ 10^-38).
+  assert(`7a. negated at least 400 times out of ${N} (got ${negatedCount})`, negatedCount >= 400);
+  assert(`7b. failed at least 100 times out of ${N} (got ${failedCount})`, failedCount >= 100);
 }
 
 // ============================================================
@@ -292,8 +298,13 @@ console.log('\n--- 8. failed when reroll does not flip ---');
   // only when reroll < 13 (60% chance). But even on reroll 1, lower=1 fails.
   // However we want to test the 'failed' path: need lower of (20, reroll) >= 13,
   // which means reroll >= 13 (40% chance).
+  //
+  // Session 70 fix: bumped N from 100 to 1000 to eliminate a rare statistical
+  // flake (P(< 20 out of 100) ≈ 0.0015% = 1 in 69,000). With N=1000 and
+  // threshold 200, P(failure) ≈ 10^-38.
+  const N = 1000;
   let failedCount = 0;
-  for (let i = 0; i < 100; i++) {
+  for (let i = 0; i < N; i++) {
     const caster = makeCasterWithSilveryBarbs(`c_${i}`, { pos: { x: 0, y: 0, z: 0 } });
     const saver = makeCombatant(`s_${i}`, { pos: { x: 2, y: 0, z: 0 }, faction: 'enemy' });
     const trigger = makeSaveSuccessTrigger(caster, saver, { roll: 20, total: 21, dc: 13 });
@@ -301,8 +312,8 @@ console.log('\n--- 8. failed when reroll does not flip ---');
     const outcome = executeReaction(caster, state, trigger);
     if (outcome.kind === 'failed') failedCount++;
   }
-  // Expected ~40 failures (reroll >= 13). Verify at least 20.
-  assert(`8a. failed at least 20 times out of 100 (got ${failedCount})`, failedCount >= 20);
+  // Expected ~400 failures (reroll >= 13). Verify at least 200 (P(failure) ≈ 10^-38).
+  assert(`8a. failed at least 200 times out of ${N} (got ${failedCount})`, failedCount >= 200);
 }
 
 // ============================================================
