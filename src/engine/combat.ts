@@ -679,6 +679,24 @@ import {
   shouldCast as shouldCastMagicCircle,
   execute as executeMagicCircle,
 } from '../spells/magic_circle';
+import {
+  shouldCast as shouldCastAntimagicField,
+  execute as executeAntimagicField,
+} from '../spells/antimagic_field';
+import {
+  shouldCast as shouldCastMindBlank,
+  execute as executeMindBlank,
+} from '../spells/mind_blank';
+import {
+  shouldCast as shouldCastSymbol,
+  execute as executeSymbol,
+} from '../spells/symbol';
+import {
+  shouldCast as shouldCastCreateUndead,
+  execute as executeCreateUndead,
+} from '../spells/create_undead';
+// Raise Dead: out-of-combat stub — shouldCast always returns false
+import { shouldCast as shouldCastRaiseDead } from '../spells/raise_dead';
 // Scrying: out-of-combat stub — shouldCast always returns false
 import { shouldCast as shouldCastScrying } from '../spells/scrying';
 import {
@@ -5300,6 +5318,51 @@ export function executePlannedAction(
       const mcTarget = mcTargetId ? bf.combatants.get(mcTargetId) ?? null : null;
       const mcLive = mcTarget && !mcTarget.isDead && !mcTarget.isUnconscious ? mcTarget : shouldCastMagicCircle(actor, bf);
       if (mcLive) executeMagicCircle(actor, mcLive, state);
+      break;
+    }
+
+    case 'antimagicField': {
+      // Antimagic Field — PHB p.213: self (10-ft sphere), NO save, conc —
+      // incapacitate enemy casters within 10 ft (L8, v1: multi-target).
+      // shouldCast returns the CASTER (self) or null.
+      const afTarget = shouldCastAntimagicField(actor, bf);
+      if (afTarget) executeAntimagicField(actor, afTarget, state);
+      break;
+    }
+
+    case 'mindBlank': {
+      // Mind Blank — PHB p.260: touch, NO save, NO conc — psychic + charm
+      // immunity (L8, v1: encounter-duration). Target is lowest-HP ally in 5 ft
+      // (or self). Planner-style: prefer the planned targetId if provided.
+      const mbTargetId = plan.targetId;
+      const mbTarget = mbTargetId ? bf.combatants.get(mbTargetId) ?? null : null;
+      const mbLive = mbTarget && !mbTarget.isDead && !mbTarget.isUnconscious ? mbTarget : shouldCastMindBlank(actor, bf);
+      if (mbLive) executeMindBlank(actor, mbLive, state);
+      break;
+    }
+
+    case 'symbol': {
+      // Symbol — PHB p.280: 30 ft (v1 trigger radius), CON save, conc —
+      // Pain: damage_zone (1d4 psychic) + advantage_vs disadv (L7, v1: Pain only).
+      const symTargetId = plan.targetId;
+      const symTarget = symTargetId ? bf.combatants.get(symTargetId) ?? null : null;
+      const symLive = symTarget && !symTarget.isDead && !symTarget.isUnconscious ? symTarget : shouldCastSymbol(actor, bf);
+      if (symLive) executeSymbol(actor, symLive, state);
+      break;
+    }
+
+    case 'createUndead': {
+      // Create Undead — PHB p.229: 10 ft, NO save, NO conc — spawn zombie
+      // (L6, v1: 1 zombie, no corpse req). shouldCast returns the caster (self).
+      const cuTarget = shouldCastCreateUndead(actor, bf);
+      if (cuTarget) executeCreateUndead(actor, cuTarget, state);
+      break;
+    }
+
+    case 'raiseDead': {
+      // Raise Dead — PHB p.258: touch, 1-hour cast, out-of-combat only.
+      // shouldCastRaiseDead always returns null; this branch is a safety guard.
+      if (shouldCastRaiseDead(actor, bf)) { /* never fires in combat */ }
       break;
     }
 

@@ -202,6 +202,11 @@ import { shouldCast as shouldCastWallOfIce } from '../spells/wall_of_ice';
 import { shouldCast as shouldCastWallOfStone } from '../spells/wall_of_stone';
 import { shouldCast as shouldCastMaze } from '../spells/maze';
 import { shouldCast as shouldCastMagicCircle } from '../spells/magic_circle';
+import { shouldCast as shouldCastAntimagicField } from '../spells/antimagic_field';
+import { shouldCast as shouldCastMindBlank } from '../spells/mind_blank';
+import { shouldCast as shouldCastSymbol } from '../spells/symbol';
+import { shouldCast as shouldCastCreateUndead } from '../spells/create_undead';
+import { shouldCast as shouldCastRaiseDead } from '../spells/raise_dead';
 import { shouldCast as shouldCastScrying } from '../spells/scrying';
 import { shouldShapechange } from '../engine/shapechange';
 // ── Session 62 RFC-VISION-AUDIO Phase 1: perception + detection helpers ──
@@ -4656,6 +4661,71 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
       plan.action = { type: 'magicCircle', action: null, targetId: mcTarget.id, description: `${self.name} casts Magic Circle, trapping ${mcTarget.name}` };
       plan.targetId = mcTarget.id;
       plan.bonusAction = planBonusAction(self, mcTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- ANTIMAGIC FIELD (L8, NO save, conc — incapacitate enemy casters in 10ft) ---
+  // PHB p.213: self, concentration. v1: multi-target incapacitate on enemy
+  // spellcasters within 10 ft. Priority: situational — only fires vs
+  // clustered enemy casters.
+  if (!plan.action && self.actions.some(a => a.name === 'Antimagic Field')) {
+    const afTarget = shouldCastAntimagicField(self, battlefield);
+    if (afTarget) {
+      plan.action = { type: 'antimagicField', action: null, targetId: afTarget.id, description: `${self.name} casts Antimagic Field` };
+      plan.targetId = afTarget.id;
+      plan.bonusAction = planBonusAction(self, afTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- MIND BLANK (L8, NO save, NO conc — psychic + charm immunity) ---
+  // PHB p.260: touch, 24 hr (v1: encounter). Priority: defensive — cast on
+  // lowest-HP ally or self. Sits LOW (long-duration buff, no immediate effect).
+  if (!plan.action && self.actions.some(a => a.name === 'Mind Blank')) {
+    const mbTarget = shouldCastMindBlank(self, battlefield);
+    if (mbTarget) {
+      plan.action = { type: 'mindBlank', action: null, targetId: mbTarget.id, description: `${self.name} casts Mind Blank on ${mbTarget.name}` };
+      plan.targetId = mbTarget.id;
+      plan.bonusAction = planBonusAction(self, mbTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- SYMBOL (L7, CON save, conc — Pain: damage_zone + disadv) ---
+  // PHB p.280: 30ft (v1 trigger radius), concentration. v1: Pain effect only.
+  // Priority: MEDIUM — single-target debuff + DoT. Sits above Mind Blank.
+  if (!plan.action && self.actions.some(a => a.name === 'Symbol')) {
+    const symTarget = shouldCastSymbol(self, battlefield);
+    if (symTarget) {
+      plan.action = { type: 'symbol', action: null, targetId: symTarget.id, description: `${self.name} casts Symbol (Pain) at ${symTarget.name}` };
+      plan.targetId = symTarget.id;
+      plan.bonusAction = planBonusAction(self, symTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- CREATE UNDEAD (L6, NO save, NO conc — spawn zombie) ---
+  // PHB p.229: 10ft, v1: action (canon 1 min). Spawns 1 zombie ally.
+  // Priority: MEDIUM — summon spells are valuable (extra body on field).
+  if (!plan.action && self.actions.some(a => a.name === 'Create Undead')) {
+    const cuTarget = shouldCastCreateUndead(self, battlefield);
+    if (cuTarget) {
+      plan.action = { type: 'createUndead', action: null, targetId: cuTarget.id, description: `${self.name} casts Create Undead` };
+      plan.targetId = cuTarget.id;
+      plan.bonusAction = planBonusAction(self, cuTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- RAISE DEAD (L5, 1-hour cast — out-of-combat stub) ---
+  // PHB p.258: never fires in combat. shouldCast always returns false.
+  if (!plan.action && self.actions.some(a => a.name === 'Raise Dead')) {
+    const rdTarget = shouldCastRaiseDead(self, battlefield);
+    if (rdTarget) {
+      plan.action = { type: 'raiseDead', action: null, targetId: rdTarget.id, description: `${self.name} casts Raise Dead` };
+      plan.targetId = rdTarget.id;
+      plan.bonusAction = planBonusAction(self, rdTarget, battlefield);
       return plan;
     }
   }
