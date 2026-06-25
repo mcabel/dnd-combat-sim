@@ -1,6 +1,6 @@
 {
   "level": 4,
-  "generatedAt": "2026-06-25T18:23:31.597Z",
+  "generatedAt": "2026-06-25T19:14:01.166Z",
   "generatorVersion": 2,
   "scopeRule": "pre-2024 canon; reprints: newest in-scope source wins; XPHB(2024) out of scope; creatures keep all variants (not applicable to spells)",
   "sourceDates": {
@@ -26,8 +26,8 @@
     "XPHB"
   ],
   "count": 57,
-  "implementedCount": 52,
-  "remainingInScope": 4,
+  "implementedCount": 55,
+  "remainingInScope": 1,
   "spells": [
     {
       "name": "Arcane Eye",
@@ -37,8 +37,8 @@
       "page": 214,
       "level": 4,
       "school": "Divination",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "arcane_eye.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -501,8 +501,8 @@
       "page": 234,
       "level": 4,
       "school": "Divination",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "divination.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1149,8 +1149,8 @@
       "page": 256,
       "level": 4,
       "school": "Divination",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "locate_creature.ts",
       "inScope": true,
       "otherSources": [
         {

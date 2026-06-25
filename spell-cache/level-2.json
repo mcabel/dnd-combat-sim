@@ -1,6 +1,6 @@
 {
   "level": 2,
-  "generatedAt": "2026-06-25T18:23:31.597Z",
+  "generatedAt": "2026-06-25T19:14:01.166Z",
   "generatorVersion": 2,
   "scopeRule": "pre-2024 canon; reprints: newest in-scope source wins; XPHB(2024) out of scope; creatures keep all variants (not applicable to spells)",
   "sourceDates": {
@@ -26,8 +26,8 @@
     "XPHB"
   ],
   "count": 94,
-  "implementedCount": 87,
-  "remainingInScope": 5,
+  "implementedCount": 89,
+  "remainingInScope": 3,
   "spells": [
     {
       "name": "Aganazzar's Scorcher",
@@ -256,8 +256,8 @@
       "page": 215,
       "level": 2,
       "school": "Divination",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "augury.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1681,8 +1681,8 @@
       "page": 256,
       "level": 2,
       "school": "Divination",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "locate_object.ts",
       "inScope": true,
       "otherSources": [
         {

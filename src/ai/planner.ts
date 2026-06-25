@@ -213,6 +213,25 @@ import { shouldCast as shouldCastGate } from '../spells/gate';
 import { shouldCast as shouldCastHallow } from '../spells/hallow';
 import { shouldCast as shouldCastWish } from '../spells/wish';
 import { shouldCast as shouldCastScrying } from '../spells/scrying';
+// ── Session 69 Batch 5: 10 out-of-combat utility divinations (stubs) ──
+// All shouldCast → null; safety-guard imports (never fire in combat).
+import { shouldCast as shouldCastDetectMagic } from '../spells/detect_magic';
+import { shouldCast as shouldCastComprehendLanguages } from '../spells/comprehend_languages';
+import { shouldCast as shouldCastIdentify } from '../spells/identify';
+import { shouldCast as shouldCastLocateObject } from '../spells/locate_object';
+import { shouldCast as shouldCastClairvoyance } from '../spells/clairvoyance';
+import { shouldCast as shouldCastSending } from '../spells/sending';
+import { shouldCast as shouldCastTongues } from '../spells/tongues';
+import { shouldCast as shouldCastWaterBreathing } from '../spells/water_breathing';
+import { shouldCast as shouldCastDivination } from '../spells/divination';
+import { shouldCast as shouldCastLocateCreature } from '../spells/locate_creature';
+// ── Session 69 Batch 6: 5 more out-of-combat utility divinations (stubs) ──
+// All shouldCast → null; safety-guard imports (never fire in combat).
+import { shouldCast as shouldCastDetectEvilAndGood } from '../spells/detect_evil_and_good';
+import { shouldCast as shouldCastAugury } from '../spells/augury';
+import { shouldCast as shouldCastRevivify } from '../spells/revivify';
+import { shouldCast as shouldCastArcaneEye } from '../spells/arcane_eye';
+import { shouldCast as shouldCastTrueSeeing } from '../spells/true_seeing';
 import { shouldCast as shouldCastPlaneShift } from '../spells/plane_shift';
 import { shouldCast as shouldCastTeleport } from '../spells/teleport';
 import { shouldCast as shouldCastAnimateDead } from '../spells/animate_dead';
@@ -4906,6 +4925,58 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
   // Listed to prevent unknown-action fallthrough; never fires in combat.
   if (!plan.action && self.actions.some(a => a.name === 'Scrying')) {
     if (shouldCastScrying(self, battlefield)) { /* never */ }
+  }
+
+  // ── Session 69 Batch 5: 10 out-of-combat utility divinations (stubs) ──
+  // All shouldCast → null; listed to prevent unknown-action fallthrough.
+  // They never fire in combat (divination/utility spells with no combat effect).
+  if (!plan.action && self.actions.some(a => a.name === 'Detect Magic')) {
+    if (shouldCastDetectMagic(self, battlefield)) { /* never */ }
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'Comprehend Languages')) {
+    if (shouldCastComprehendLanguages(self, battlefield)) { /* never */ }
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'Identify')) {
+    if (shouldCastIdentify(self, battlefield)) { /* never */ }
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'Locate Object')) {
+    if (shouldCastLocateObject(self, battlefield)) { /* never */ }
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'Clairvoyance')) {
+    if (shouldCastClairvoyance(self, battlefield)) { /* never */ }
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'Sending')) {
+    if (shouldCastSending(self, battlefield)) { /* never */ }
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'Tongues')) {
+    if (shouldCastTongues(self, battlefield)) { /* never */ }
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'Water Breathing')) {
+    if (shouldCastWaterBreathing(self, battlefield)) { /* never */ }
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'Divination')) {
+    if (shouldCastDivination(self, battlefield)) { /* never */ }
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'Locate Creature')) {
+    if (shouldCastLocateCreature(self, battlefield)) { /* never */ }
+  }
+
+  // ── Session 69 Batch 6: 5 more out-of-combat utility divinations (stubs) ──
+  // All shouldCast → null; listed to prevent unknown-action fallthrough.
+  if (!plan.action && self.actions.some(a => a.name === 'Detect Evil and Good')) {
+    if (shouldCastDetectEvilAndGood(self, battlefield)) { /* never */ }
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'Augury')) {
+    if (shouldCastAugury(self, battlefield)) { /* never */ }
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'Revivify')) {
+    if (shouldCastRevivify(self, battlefield)) { /* never */ }
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'Arcane Eye')) {
+    if (shouldCastArcaneEye(self, battlefield)) { /* never */ }
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'True Seeing')) {
+    if (shouldCastTrueSeeing(self, battlefield)) { /* never */ }
   }
 
   // --- 12CM. CHARM PERSON (WIS save or charmed, L1, NO conc) ---

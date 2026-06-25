@@ -717,6 +717,25 @@ import {
 import { shouldCast as shouldCastWish } from '../spells/wish';
 // Scrying: out-of-combat stub — shouldCast always returns false
 import { shouldCast as shouldCastScrying } from '../spells/scrying';
+// ── Session 69 Batch 5: 10 out-of-combat utility divinations (stubs) ──
+// All shouldCast → null (never fire in combat). Safety-guard imports.
+import { shouldCast as shouldCastDetectMagic } from '../spells/detect_magic';
+import { shouldCast as shouldCastComprehendLanguages } from '../spells/comprehend_languages';
+import { shouldCast as shouldCastIdentify } from '../spells/identify';
+import { shouldCast as shouldCastLocateObject } from '../spells/locate_object';
+import { shouldCast as shouldCastClairvoyance } from '../spells/clairvoyance';
+import { shouldCast as shouldCastSending } from '../spells/sending';
+import { shouldCast as shouldCastTongues } from '../spells/tongues';
+import { shouldCast as shouldCastWaterBreathing } from '../spells/water_breathing';
+import { shouldCast as shouldCastDivination } from '../spells/divination';
+import { shouldCast as shouldCastLocateCreature } from '../spells/locate_creature';
+// ── Session 69 Batch 6: 5 more out-of-combat utility divinations (stubs) ──
+// All shouldCast → null (never fire in combat). Safety-guard imports.
+import { shouldCast as shouldCastDetectEvilAndGood } from '../spells/detect_evil_and_good';
+import { shouldCast as shouldCastAugury } from '../spells/augury';
+import { shouldCast as shouldCastRevivify } from '../spells/revivify';
+import { shouldCast as shouldCastArcaneEye } from '../spells/arcane_eye';
+import { shouldCast as shouldCastTrueSeeing } from '../spells/true_seeing';
 import {
   shouldCast as shouldCastPlaneShift,
   execute as executePlaneShift,
@@ -5462,6 +5481,72 @@ export function executePlannedAction(
       // Scrying — PHB p.273: 10-min cast time, out-of-combat only.
       // shouldCastScrying always returns false; this branch is a safety guard.
       if (shouldCastScrying(actor, bf)) { /* never fires in combat */ }
+      break;
+    }
+
+    // ── Session 69 Batch 5: 10 out-of-combat utility divinations (stubs) ──
+    // All shouldCast → null; these branches are safety guards against
+    // unknown-action fallthrough. They never fire in combat.
+    case 'detectMagic': {
+      if (shouldCastDetectMagic(actor, bf)) { /* never fires in combat */ }
+      break;
+    }
+    case 'comprehendLanguages': {
+      if (shouldCastComprehendLanguages(actor, bf)) { /* never fires in combat */ }
+      break;
+    }
+    case 'identify': {
+      if (shouldCastIdentify(actor, bf)) { /* never fires in combat */ }
+      break;
+    }
+    case 'locateObject': {
+      if (shouldCastLocateObject(actor, bf)) { /* never fires in combat */ }
+      break;
+    }
+    case 'clairvoyance': {
+      if (shouldCastClairvoyance(actor, bf)) { /* never fires in combat */ }
+      break;
+    }
+    case 'sending': {
+      if (shouldCastSending(actor, bf)) { /* never fires in combat */ }
+      break;
+    }
+    case 'tongues': {
+      if (shouldCastTongues(actor, bf)) { /* never fires in combat */ }
+      break;
+    }
+    case 'waterBreathing': {
+      if (shouldCastWaterBreathing(actor, bf)) { /* never fires in combat */ }
+      break;
+    }
+    case 'divination': {
+      if (shouldCastDivination(actor, bf)) { /* never fires in combat */ }
+      break;
+    }
+    case 'locateCreature': {
+      if (shouldCastLocateCreature(actor, bf)) { /* never fires in combat */ }
+      break;
+    }
+
+    // ── Session 69 Batch 6: 5 more out-of-combat utility divinations (stubs) ──
+    case 'detectEvilAndGood': {
+      if (shouldCastDetectEvilAndGood(actor, bf)) { /* never fires in combat */ }
+      break;
+    }
+    case 'augury': {
+      if (shouldCastAugury(actor, bf)) { /* never fires in combat */ }
+      break;
+    }
+    case 'revivify': {
+      if (shouldCastRevivify(actor, bf)) { /* never fires in combat */ }
+      break;
+    }
+    case 'arcaneEye': {
+      if (shouldCastArcaneEye(actor, bf)) { /* never fires in combat */ }
+      break;
+    }
+    case 'trueSeeing': {
+      if (shouldCastTrueSeeing(actor, bf)) { /* never fires in combat */ }
       break;
     }
 

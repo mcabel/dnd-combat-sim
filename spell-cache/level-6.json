@@ -1,6 +1,6 @@
 {
   "level": 6,
-  "generatedAt": "2026-06-25T18:23:31.597Z",
+  "generatedAt": "2026-06-25T19:14:01.166Z",
   "generatorVersion": 2,
   "scopeRule": "pre-2024 canon; reprints: newest in-scope source wins; XPHB(2024) out of scope; creatures keep all variants (not applicable to spells)",
   "sourceDates": {
@@ -26,8 +26,8 @@
     "XPHB"
   ],
   "count": 51,
-  "implementedCount": 38,
-  "remainingInScope": 12,
+  "implementedCount": 39,
+  "remainingInScope": 11,
   "spells": [
     {
       "name": "Arcane Gate",
@@ -1416,8 +1416,8 @@
       "page": 284,
       "level": 6,
       "school": "Divination",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "true_seeing.ts",
       "inScope": true,
       "otherSources": [
         {

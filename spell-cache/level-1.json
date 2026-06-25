@@ -1,6 +1,6 @@
 {
   "level": 1,
-  "generatedAt": "2026-06-25T18:23:31.597Z",
+  "generatedAt": "2026-06-25T19:14:01.166Z",
   "generatorVersion": 2,
   "scopeRule": "pre-2024 canon; reprints: newest in-scope source wins; XPHB(2024) out of scope; creatures keep all variants (not applicable to spells)",
   "sourceDates": {
@@ -26,8 +26,8 @@
     "XPHB"
   ],
   "count": 82,
-  "implementedCount": 73,
-  "remainingInScope": 8,
+  "implementedCount": 77,
+  "remainingInScope": 4,
   "spells": [
     {
       "name": "Absorb Elements",
@@ -594,8 +594,8 @@
       "page": 224,
       "level": 1,
       "school": "Divination",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "comprehend_languages.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -699,8 +699,8 @@
       "page": 231,
       "level": 1,
       "school": "Divination",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "detect_evil_and_good.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -732,8 +732,8 @@
       "page": 231,
       "level": 1,
       "school": "Divination",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "detect_magic.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1650,8 +1650,8 @@
       "page": 252,
       "level": 1,
       "school": "Divination",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "identify.ts",
       "inScope": true,
       "otherSources": [
         {

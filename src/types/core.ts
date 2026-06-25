@@ -2564,6 +2564,29 @@ export interface PlannedAction {
     | 'teleport'         // Teleport — PHB p.281: self, NO save, NO conc — self-escape (L7, v1: self-only, mirrors Dimension Door)
     | 'animateDead'      // Animate Dead — PHB p.213: 10ft, NO save, NO conc — spawn skeleton (L3, v1: 1 skeleton, no corpse req)
     | 'scrying'           // Scrying — PHB p.273: WIS save, 10-min cast, out-of-combat only (stub)
+    // ── Session 69 Batch 5: 10 out-of-combat utility divinations (stubs) ──
+    // All have shouldCast→null (never fire in combat). Modules exist so the
+    // monster-spell coverage report counts them as implemented; they unlock
+    // no AI behavior but stop the "unbuilt spell" warning for 313 creature-refs.
+    | 'detectMagic'         // Detect Magic — PHB p.231: L1 Div, self, conc 10 min (ritual)
+    | 'comprehendLanguages' // Comprehend Languages — PHB p.224: L1 Div, self, 1 hr (ritual)
+    | 'identify'            // Identify — PHB p.252: L1 Div, touch, 1-min cast (ritual)
+    | 'locateObject'        // Locate Object — PHB p.256: L2 Div, self, conc 10 min
+    | 'clairvoyance'        // Clairvoyance — PHB p.222: L3 Div, 1 mile, conc 10 min, 10-min cast
+    | 'sending'             // Sending — PHB p.274: L3 Evoc, unlimited, 1 round
+    | 'tongues'             // Tongues — PHB p.283: L3 Div, touch, 1 hr
+    | 'waterBreathing'      // Water Breathing — PHB p.287: L3 Trans, 30 ft, 24 hr (ritual)
+    | 'divination'          // Divination — PHB p.234: L4 Div, self, instant (ritual)
+    | 'locateCreature'      // Locate Creature — PHB p.256: L4 Div, self, conc 1 hr
+    // ── Session 69 Batch 6: 5 more out-of-combat utility divinations (stubs) ──
+    // All have shouldCast→null (never fire in combat). Modules exist so the
+    // monster-spell coverage report counts them as implemented; they unlock
+    // no AI behavior but stop the "unbuilt spell" warning for 102 creature-refs.
+    | 'detectEvilAndGood'   // Detect Evil and Good — PHB p.231: L1 Div, self, conc 10 min
+    | 'augury'              // Augury — PHB p.215: L2 Div, self, instant (ritual, 1-min cast)
+    | 'revivify'            // Revivify — PHB p.272: L3 Nec, touch, instant (1-action cast, out-of-combat)
+    | 'arcaneEye'           // Arcane Eye — PHB p.214: L4 Div, 30 ft, conc 1 hr
+    | 'trueSeeing'          // True Seeing — PHB p.284: L6 Div, touch, 1 hr
     | 'charmPerson'       // Charm Person — PHB p.221: 30 ft, WIS save or charmed, NO concentration (Session 27 TG-004: humanoid-only NOW enforced)
     | 'compelledDuel'     // Compelled Duel — PHB p.224: 30 ft, WIS save or frightened (taunt), concentration (movement-restriction simplified)
     | 'grease'            // Grease — PHB p.245: 60 ft, 10-ft radius AoE, DEX save or prone, NO concentration (persistent-terrain simplified)

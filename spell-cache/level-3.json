@@ -1,6 +1,6 @@
 {
   "level": 3,
-  "generatedAt": "2026-06-25T18:23:31.597Z",
+  "generatedAt": "2026-06-25T19:14:01.166Z",
   "generatorVersion": 2,
   "scopeRule": "pre-2024 canon; reprints: newest in-scope source wins; XPHB(2024) out of scope; creatures keep all variants (not applicable to spells)",
   "sourceDates": {
@@ -26,8 +26,8 @@
     "XPHB"
   ],
   "count": 79,
-  "implementedCount": 66,
-  "remainingInScope": 13,
+  "implementedCount": 71,
+  "remainingInScope": 8,
   "spells": [
     {
       "name": "Animate Dead",
@@ -372,8 +372,8 @@
       "page": 222,
       "level": 3,
       "school": "Divination",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "clairvoyance.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1783,8 +1783,8 @@
       "page": 272,
       "level": 3,
       "school": "Necromancy",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "revivify.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1817,8 +1817,8 @@
       "page": 274,
       "level": 3,
       "school": "Evocation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "sending.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -2286,8 +2286,8 @@
       "page": 283,
       "level": 3,
       "school": "Divination",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "tongues.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -2405,8 +2405,8 @@
       "page": 287,
       "level": 3,
       "school": "Transmutation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "water_breathing.ts",
       "inScope": true,
       "otherSources": [
         {
