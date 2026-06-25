@@ -659,6 +659,26 @@ import {
   shouldCast as shouldCastWallOfFire,
   execute as executeWallOfFire,
 } from '../spells/wall_of_fire';
+import {
+  shouldCast as shouldCastWallOfForce,
+  execute as executeWallOfForce,
+} from '../spells/wall_of_force';
+import {
+  shouldCast as shouldCastWallOfIce,
+  execute as executeWallOfIce,
+} from '../spells/wall_of_ice';
+import {
+  shouldCast as shouldCastWallOfStone,
+  execute as executeWallOfStone,
+} from '../spells/wall_of_stone';
+import {
+  shouldCast as shouldCastMaze,
+  execute as executeMaze,
+} from '../spells/maze';
+import {
+  shouldCast as shouldCastMagicCircle,
+  execute as executeMagicCircle,
+} from '../spells/magic_circle';
 // Scrying: out-of-combat stub — shouldCast always returns false
 import { shouldCast as shouldCastScrying } from '../spells/scrying';
 import {
@@ -5235,6 +5255,51 @@ export function executePlannedAction(
       const wofTarget = wofTargetId ? bf.combatants.get(wofTargetId) ?? null : null;
       const wofLive = wofTarget && !wofTarget.isDead && !wofTarget.isUnconscious ? wofTarget : shouldCastWallOfFire(actor, bf);
       if (wofLive) executeWallOfFire(actor, wofLive, state);
+      break;
+    }
+
+    case 'wallOfForce': {
+      // Wall of Force — PHB p.285: 120 ft, NO save, conc — restrained (L5, v1: single-target capture).
+      const wofrcTargetId = plan.targetId;
+      const wofrcTarget = wofrcTargetId ? bf.combatants.get(wofrcTargetId) ?? null : null;
+      const wofrcLive = wofrcTarget && !wofrcTarget.isDead && !wofrcTarget.isUnconscious ? wofrcTarget : shouldCastWallOfForce(actor, bf);
+      if (wofrcLive) executeWallOfForce(actor, wofrcLive, state);
+      break;
+    }
+
+    case 'wallOfIce': {
+      // Wall of Ice — PHB p.285: 120 ft, DEX save 10d6 cold + conc damage_zone (L6, v1: single-target).
+      const woiTargetId = plan.targetId;
+      const woiTarget = woiTargetId ? bf.combatants.get(woiTargetId) ?? null : null;
+      const woiLive = woiTarget && !woiTarget.isDead && !woiTarget.isUnconscious ? woiTarget : shouldCastWallOfIce(actor, bf);
+      if (woiLive) executeWallOfIce(actor, woiLive, state);
+      break;
+    }
+
+    case 'wallOfStone': {
+      // Wall of Stone — PHB p.287: 120 ft, DEX save 10d6 bludgeoning, conc (L5, v1: single-target damage).
+      const wosTargetId = plan.targetId;
+      const wosTarget = wosTargetId ? bf.combatants.get(wosTargetId) ?? null : null;
+      const wosLive = wosTarget && !wosTarget.isDead && !wosTarget.isUnconscious ? wosTarget : shouldCastWallOfStone(actor, bf);
+      if (wosLive) executeWallOfStone(actor, wosLive, state);
+      break;
+    }
+
+    case 'maze': {
+      // Maze — PHB p.261: 60 ft, NO save, NO conc — removed for encounter (L8, v1: no escape action).
+      const mazeTargetId = plan.targetId;
+      const mazeTarget = mazeTargetId ? bf.combatants.get(mazeTargetId) ?? null : null;
+      const mazeLive = mazeTarget && !mazeTarget.isDead && !mazeTarget.isUnconscious ? mazeTarget : shouldCastMaze(actor, bf);
+      if (mazeLive) executeMaze(actor, mazeLive, state);
+      break;
+    }
+
+    case 'magicCircle': {
+      // Magic Circle — PHB p.256: 10 ft, NO save, conc — advantage_vs (L3, v1: single-target vs affected type).
+      const mcTargetId = plan.targetId;
+      const mcTarget = mcTargetId ? bf.combatants.get(mcTargetId) ?? null : null;
+      const mcLive = mcTarget && !mcTarget.isDead && !mcTarget.isUnconscious ? mcTarget : shouldCastMagicCircle(actor, bf);
+      if (mcLive) executeMagicCircle(actor, mcLive, state);
       break;
     }
 

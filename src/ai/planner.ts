@@ -197,6 +197,11 @@ import { shouldCast as shouldCastDimensionDoor } from '../spells/dimension_door'
 import { shouldCast as shouldCastFogCloud } from '../spells/fog_cloud';
 import { shouldCast as shouldCastDarkness } from '../spells/darkness';
 import { shouldCast as shouldCastWallOfFire } from '../spells/wall_of_fire';
+import { shouldCast as shouldCastWallOfForce } from '../spells/wall_of_force';
+import { shouldCast as shouldCastWallOfIce } from '../spells/wall_of_ice';
+import { shouldCast as shouldCastWallOfStone } from '../spells/wall_of_stone';
+import { shouldCast as shouldCastMaze } from '../spells/maze';
+import { shouldCast as shouldCastMagicCircle } from '../spells/magic_circle';
 import { shouldCast as shouldCastScrying } from '../spells/scrying';
 import { shouldShapechange } from '../engine/shapechange';
 // ── Session 62 RFC-VISION-AUDIO Phase 1: perception + detection helpers ──
@@ -4578,6 +4583,79 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
       plan.action = { type: 'wallOfFire', action: null, targetId: wofTarget.id, description: `${self.name} casts Wall of Fire at ${wofTarget.name}` };
       plan.targetId = wofTarget.id;
       plan.bonusAction = planBonusAction(self, wofTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- WALL OF ICE (L6, DEX save 10d6 cold + conc damage_zone) ---
+  // PHB p.285: 120 ft, concentration. v1: single-target zone (mirrors Wall of Fire).
+  // Stronger than Wall of Fire (10d6 vs 5d8 appear; 5d6 cold vs 5d8 fire).
+  // Priority: above Wall of Fire (higher slot = stronger; same target pattern).
+  if (!plan.action && self.actions.some(a => a.name === 'Wall of Ice')) {
+    const woiTarget = shouldCastWallOfIce(self, battlefield);
+    if (woiTarget) {
+      plan.action = { type: 'wallOfIce', action: null, targetId: woiTarget.id, description: `${self.name} casts Wall of Ice at ${woiTarget.name}` };
+      plan.targetId = woiTarget.id;
+      plan.bonusAction = planBonusAction(self, woiTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- WALL OF FORCE (L5, NO save, conc — restrained) ---
+  // PHB p.285: 120 ft, concentration. v1: single-target capture (sphere shape).
+  // No-save restrained — very strong vs melee threats. Priority: above the
+  // damage-dealing walls (no save = guaranteed effect).
+  if (!plan.action && self.actions.some(a => a.name === 'Wall of Force')) {
+    const wofrcTarget = shouldCastWallOfForce(self, battlefield);
+    if (wofrcTarget) {
+      plan.action = { type: 'wallOfForce', action: null, targetId: wofrcTarget.id, description: `${self.name} casts Wall of Force, enclosing ${wofrcTarget.name}` };
+      plan.targetId = wofrcTarget.id;
+      plan.bonusAction = planBonusAction(self, wofrcTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- WALL OF STONE (L5, DEX save 10d6 bludgeoning, conc) ---
+  // PHB p.287: 120 ft, concentration. v1: single-target damage (cover/LoS
+  // not modelled). Priority: below Wall of Force (this deals damage, WF
+  // applies no-save restrained — both L5; pick WF first).
+  if (!plan.action && self.actions.some(a => a.name === 'Wall of Stone')) {
+    const wosTarget = shouldCastWallOfStone(self, battlefield);
+    if (wosTarget) {
+      plan.action = { type: 'wallOfStone', action: null, targetId: wosTarget.id, description: `${self.name} casts Wall of Stone at ${wosTarget.name}` };
+      plan.targetId = wosTarget.id;
+      plan.bonusAction = planBonusAction(self, wosTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- MAZE (L8, NO save, NO conc — removed for encounter) ---
+  // PHB p.261: 60 ft, no concentration. v1: permanent removal for the
+  // encounter (no escape action). Priority: very high — a no-save removal
+  // at L8 ends the fight for one creature. Sits ABOVE the walls because
+  // it's stronger (no concentration slot consumed, guaranteed removal).
+  // Immune to Int ≤ 1 (vermin, oozes).
+  if (!plan.action && self.actions.some(a => a.name === 'Maze')) {
+    const mazeTarget = shouldCastMaze(self, battlefield);
+    if (mazeTarget) {
+      plan.action = { type: 'maze', action: null, targetId: mazeTarget.id, description: `${self.name} casts Maze at ${mazeTarget.name}` };
+      plan.targetId = mazeTarget.id;
+      plan.bonusAction = planBonusAction(self, mazeTarget, battlefield);
+      return plan;
+    }
+  }
+
+  // --- MAGIC CIRCLE (L3, NO save, conc — advantage_vs) ---
+  // PHB p.256: 10 ft, concentration. v1: single-target vs affected creature
+  // type (celestial/elemental/fey/fiend/undead). Priority: LOW — only useful
+  // vs affected types, and the 10-ft range is restrictive. Sits below the
+  // walls (which have 120-ft range and broader targets).
+  if (!plan.action && self.actions.some(a => a.name === 'Magic Circle')) {
+    const mcTarget = shouldCastMagicCircle(self, battlefield);
+    if (mcTarget) {
+      plan.action = { type: 'magicCircle', action: null, targetId: mcTarget.id, description: `${self.name} casts Magic Circle, trapping ${mcTarget.name}` };
+      plan.targetId = mcTarget.id;
+      plan.bonusAction = planBonusAction(self, mcTarget, battlefield);
       return plan;
     }
   }
