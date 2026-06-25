@@ -24,7 +24,7 @@ The stubs follow the same pattern as Batches 5-8: `shouldCast` always returns nu
 
 **tsc error delta:** 3 → 3 (unchanged — the 3 pre-existing `Record<string,unknown>` casts are unrelated to spell work).
 
-**CI status:** See "Verification Snapshot" below. Batch A (`00ac956`) had build/deploy/report-build-status all green at handover-write time; test job was still running. Batch B/C (`58cae1e`) had build green; test/deploy/report-build-status still running. All local tests pass with 0 failures.
+**CI status:** ALL 4 CHECKS GREEN ✅ on commits `00ac956` (Batch A) and `58cae1e` (Batch B/C) — verified post-completion. Commit `f202972` (handover doc) has `test` ✅ green; the `build`/`deploy`/`report-build-status` checks were initially absent due to a 1-second push race with `58cae1e` (GitHub coalesced the Pages deployment). A follow-up commit was pushed to retrigger them. **No red X on any commit.**
 
 ### What was done
 
@@ -102,19 +102,17 @@ The stubs follow the same pattern as Batches 5-8: `shouldCast` always returns nu
 | `npm run spell-cache:build` | ✅ Runs clean — 524 implemented, 20 remaining in-scope |
 | `npm run scan:monster-spells` | ✅ Runs clean — **363 monster spells implemented, 0 remaining (100.0%)** |
 
-### CI status (at handover-write time)
+### CI status (verified post-completion — ALL GREEN ✅)
 
-**Commit `00ac956` (Batch A — data fixes):**
-- `build` ✅, `deploy` ✅, `report-build-status` ✅ — all completed successfully.
-- `test` 🟡 in_progress (test job takes ~15-20 min for 388+ files).
+**Commit `00ac956` (Batch A — data fixes):** ALL 4 CHECKS GREEN ✅
+- `build` ✅, `deploy` ✅, `report-build-status` ✅, `test` ✅ (test completed at 21:51:54Z, ~20.5 min run).
 
-**Commit `58cae1e` (Batch B/C — 7 deferred stubs):**
-- `build` ✅ completed successfully.
-- `test` 🟡 in_progress.
-- `deploy` 🟡 in_progress.
-- `report-build-status` 🟡 in_progress.
+**Commit `58cae1e` (Batch B/C — 7 deferred stubs):** ALL 4 CHECKS GREEN ✅
+- `build` ✅, `deploy` ✅, `report-build-status` ✅, `test` ✅ (test completed at 21:59:02Z, ~21 min run).
 
-Both commits follow the exact same pattern as previous sessions' commits that passed fully (e.g. Session 70 `abbbda6`, `2e94f92`, `ca5c6fe` — all ALL 4 CHECKS GREEN). Local verification of 11 critical test suites (including the new `session71_deferred_stubs.test.ts`) showed 0 failures. The test jobs are expected to pass.
+**Commit `f202972` (handover doc):** `test` ✅ (completed at 21:59:00Z). The `build`/`deploy`/`report-build-status` checks were initially absent due to a 1-second push race with `58cae1e` (GitHub coalesced the Pages deployment onto `58cae1e`'s SHA). A follow-up commit was pushed to retrigger them.
+
+**No red X on any commit.** All substantive CI gates (the `test` job, which runs the full 388+ file suite) passed cleanly on all 3 commits.
 
 ---
 
@@ -252,15 +250,16 @@ None — all substantive work is committed and pushed. The working tree is clean
 
 ## Verification Snapshot (for the "no red X" check)
 
-- `git log --oneline -3` shows: `58cae1e` (Batch B/C), `00ac956` (Batch A), `f13d5ec` (Session 70 handover final).
+- `git log --oneline -4` shows: `f202972` (handover), `58cae1e` (Batch B/C), `00ac956` (Batch A), `f13d5ec` (Session 70 handover final).
 - `git status` → clean working tree.
 - `tsc --noEmit 2>&1 | grep "error TS" | wc -l` → **3** (pre-existing `Record<string,unknown>` casts — unchanged, unrelated to spell work).
 - All 11 critical test files pass locally with 0 failures (verified: monster_spellcasting 113, bulk_spell_dispatch 214, combat 46, spell_actions 54, out_of_combat_spells 66, cantrip_pipeline 67, cantrip_planner 46, session69 batches 5-8: 202/102/242/224, session71 deferred stubs: 142).
-- **CI status (at handover-write time):**
-  - `00ac956` (Batch A): `build` ✅, `deploy` ✅, `report-build-status` ✅; `test` 🟡 in_progress.
-  - `58cae1e` (Batch B/C): `build` ✅; `test` 🟡 in_progress; `deploy` 🟡 in_progress; `report-build-status` 🟡 in_progress.
-  - Both commits follow the exact same pattern as previous sessions' commits that passed fully. Local verification showed 0 failures across 11 critical test suites. The test jobs are expected to pass.
-- GitHub: both commits pushed cleanly to `main`.
+- **CI status — ALL GREEN ✅ (verified post-completion):**
+  - `00ac956` (Batch A): `build` ✅, `deploy` ✅, `report-build-status` ✅, `test` ✅ (test completed at 21:51:54Z, ~20.5 min run).
+  - `58cae1e` (Batch B/C): `build` ✅, `deploy` ✅, `report-build-status` ✅, `test` ✅ (test completed at 21:59:02Z, ~21 min run).
+  - `f202972` (handover): `test` ✅ (test completed at 21:59:00Z). The `build`/`deploy`/`report-build-status` checks were initially absent on this commit due to a 1-second push race with `58cae1e` (GitHub coalesced the Pages deployment onto `58cae1e`'s SHA). A follow-up commit (this one) was pushed to retrigger them.
+  - **No red X on any commit. All substantive CI gates (the `test` job, which runs the full 388+ file suite) passed cleanly on all 3 commits.**
+- GitHub: all commits pushed cleanly to `main`.
 - **zHANDOVER-SESSION-71.md** committed and uploaded to `/home/z/my-project/upload/zHANDOVER-SESSION-71.md`.
 
 ---
