@@ -272,6 +272,168 @@ Acceptance criteria:
 
 ---
 
+## TG-036 — Wish (Partial Combat Implementation)
+
+### Source
+
+PHB 2014 p.288. 9th-level conjuration, action, self, no concentration.
+
+### Overview
+
+Wish is currently a full out-of-combat stub (`shouldCast` always returns null).
+This task implements the two canonical combat-viable modes. All other Wish uses
+(create objects, grant immunity, etc.) remain deferred — v1 covers only what
+is mechanically resolvable in the combat engine.
+
+### Mode A — Spell Duplication (safe use)
+
+Duplicate any spell of level 1–8 from **any class** without providing
+components. Treated as if cast with a level-8 slot (not 9th). No stress.
+
+Implementation:
+- `shouldCast` selects Mode A when an eligible level-8 duplicate target exists
+  (highest-value available spell from any class's spell list that the combatant
+  could benefit from, evaluated by the existing planner heuristics).
+- `execute` calls the target spell's `execute()` directly, bypassing slot
+  consumption (Wish absorbs the cost via its own 9th-level slot).
+- The duplicated spell fires at **slot level 8**; upcasting bonuses apply as
+  normal for level 8.
+- Mode A **does not** trigger stress. No stress roll, no `wishStress` flag.
+
+### Mode B — Mass Restoration (stress risk)
+
+Up to 20 allies recover full HP **and** receive the effects of Greater
+Restoration (one effect per ally).
+
+**HP recovery:** each eligible ally (faction = same as caster, `currentHP` > 0
+and < `maxHP`) is healed to `maxHP`.
+
+**Greater Restoration effect priority** (per ally, applied once — pick the
+first applicable condition):
+
+1. Ability score reduced to ≤ 3 (any ability) — restore that score.
+2. Spellcasting ability score reduced (see Spellcasting Ability Resolution
+   below) — restore it.
+3. Constitution score reduced — restore it.
+4. Primary attack ability score reduced (see Primary Attack Ability below) —
+   restore it.
+5. Dexterity score reduced — restore it.
+6. Any other ability score reduced — restore it (random among remaining).
+7. No ability score reduced — still receives full HP (Greater Restoration's
+   condition-ending effects are not modelled beyond ability score in v1).
+
+**Important — polymorph exclusion:** if a combatant is under a transformation
+effect (`activeEffects` contains a `shapechange` or `polymorph` effect), do
+NOT treat the combatant's current ability scores as "reduced" even if they
+differ from base. Polymorph replaces the stat block; it is not a score
+reduction. The Greater Restoration priority check must read `baseStats` (if
+available) or skip score comparison for polymorphed combatants.
+
+**Stress mechanic:** Mode B triggers a stress roll (PHB p.289).
+
+- Roll 1d3 (or use `Math.random() < 1/3`).
+- On a 1 (33% chance): the caster gains `wishStress: true` on their
+  `Combatant` record. A combatant with `wishStress: true` cannot cast Wish
+  again for the remainder of the combat (their `shouldCast` immediately returns
+  null on any future call).
+- This models the PHB "33% chance of being unable to cast Wish ever again."
+  V1 simplification: "ever again" is scoped to the current combat session;
+  long-rest permanence is a campaign-level concern outside the engine's scope.
+
+### Spellcasting Ability Resolution
+
+Wish does not have a fixed spellcasting ability on `Combatant`. Derive it:
+1. If `combatant.spellcastingAbility` is set (future field) — use it.
+2. Otherwise use class-based defaults:
+   - Wizard, Artificer → INT
+   - Cleric, Druid, Ranger → WIS
+   - Bard, Paladin, Sorcerer, Warlock → CHA
+   - Unknown / no class → skip step 2 of priority (treat as "not reduced")
+
+### Primary Attack Ability Resolution
+
+Derive from what the combatant would use for their most-used attack:
+- Has `str` ≥ `dex` AND primary weapon is not finesse → STR
+- Has `dex` > `str` OR primary weapon is finesse OR ranged → DEX
+- No weapon actions → skip step 4 (treat as "not reduced")
+
+### Ability Score Reduction Tracking
+
+`Combatant` does not currently have a `baseStats` or score-reduction field.
+This task must add:
+
+```typescript
+// In Combatant interface (core.ts):
+baseStr?: number; baseDex?: number; baseCon?: number;
+baseInt?: number; baseWis?: number; baseCha?: number;
+wishStress?: boolean;   // true → Wish stress applied; cannot cast Wish again this combat
+```
+
+`baseStr` … `baseCha` are set to the initial stat block values at
+`monsterToCombatant` / `buildCombatant` time and never mutated during combat.
+Score-reducing effects (Ray of Enfeeblement, Bestow Curse with ability penalty,
+ability drain) compare current `str`/`dex`/… against `baseStr`/`baseDex`/… to
+determine whether a score is "reduced." If `baseStr` is undefined, treat all
+scores as not reduced (safe default).
+
+### shouldCast Logic
+
+```
+shouldCast(caster, bf):
+  if caster.wishStress → return null   // stressed out; never cast again this combat
+  if Mode A viable (high-value L8 duplicate target exists) → Mode A (return target)
+  if allies need healing or restoration (any ally at <maxHP or has reduced score) → Mode B
+  return null
+```
+
+Mode A is preferred when both modes are viable, because it avoids stress risk.
+
+### Acceptance Criteria
+
+- `shouldCast` returns null when `wishStress: true`.
+- Mode A: dispatches to target spell's `execute()` at level 8; no stress.
+- Mode B: heals up to 20 allies to full HP; applies Greater Restoration
+  priority per ally; rolls stress (33%); sets `wishStress: true` on failure.
+- Polymorph exclusion: transformed combatants not counted as "ability reduced."
+- `baseStr`…`baseCha` added to `Combatant` interface; populated in
+  `monsterToCombatant` and `buildCombatant`; never mutated by the combat loop.
+- `wishStress` added to `Combatant` interface; defaults to `false`/`undefined`.
+- `metadata.outOfCombat` removed (Wish is now combat-usable in these modes).
+- `PlannedAction.type` union updated with `'wish'`.
+- `combat.ts` and `planner.ts` wired per existing spell module pattern.
+- RFC posted to `TEAMGOALS.md` before `combat.ts` / `core.ts` edits.
+- Unit tests:
+  - Mode A fires without stress; target spell executes at level 8.
+  - Mode B heals all allies; correct ability priority order applied.
+  - Mode B stress roll: mock `Math.random` → stress set correctly.
+  - Polymorph exclusion: polymorphed ally not counted as score-reduced.
+  - Caster with `wishStress: true` → `shouldCast` returns null.
+- All existing tests pass; `tsc --noEmit` clean.
+
+### v1 Deferred / Out of Scope
+
+- Non-duplicate, non-restoration Wish effects (create object, grant advantage,
+  grant immunity, etc.) — remain stub.
+- The long-rest "permanently lose Wish" PHB rule — campaign scope, not engine.
+- Slot regeneration / slot-less stress cast — deferred.
+- Altering reality / bending rules narrative uses — deferred.
+
+### Implementation Notes
+
+- Before touching `core.ts` or `combat.ts`, post RFC to `TEAMGOALS.md`.
+- Read `src/spells/wish.ts` in full — the existing comments (TG-012) are still
+  relevant context; superseded design notes should be updated, not deleted.
+- Read `src/spells/greater_restoration.ts` if it exists; otherwise derive
+  logic from PHB p.246.
+- The Mode A "duplicate any spell" subsystem is the hardest part. V1
+  simplification: build a hardcoded priority list of the best Level 1–8
+  duplicatable combat spells (e.g. Sunburst L8, Incendiary Cloud L8, Maze L8,
+  Dominate Monster L8) and pick the first one the planner would evaluate as
+  beneficial. Do not build a general "cast any spell" dynamic dispatch system
+  in v1.
+
+---
+
 ## Cross-Workstream Coordination Notes
 
 - **Session 53 red-X fix (commit `7a68d30`)**: Session 52 Batch 0 deleted the
