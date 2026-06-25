@@ -182,6 +182,96 @@ Not started. Prerequisite groundwork is complete:
 
 ---
 
+## hadPrepTime — Precast System (New Feature)
+
+### Overview
+
+An optional per-combatant toggle `hadPrepTime: boolean`. When `true`, the
+combatant enters combat already under the effects of pre-cast buffs, simulating
+a character who had preparation time before the encounter (e.g. a Lich, a
+prepared PC, a dungeon boss). A secondary `simplifiedPrecast: boolean` toggle
+activates a small curated hardcoded list of safe spells instead of the full
+resolution algorithm.
+
+### Design Decisions (locked — do not revisit without explicit directive)
+
+- **Tier limits**: 4× tier-8h spells, 3× tier-1h, 2× tier-10m, 1× tier-1m;
+  no 1-round precasts.
+- **Casting order**: highest-duration tier first; duration deduction is
+  validated before committing each spell.
+- **Concentration**: max 1 concentration spell total across all precast tiers.
+- **Slot rules (precast only)**:
+  - Permanent / until-dispelled / until-destroyed → **no slot consumed**.
+  - Instantaneous spells with permanent lasting result (Find Familiar,
+    Goodberry) → **no slot consumed** (permanent benefit, rested).
+  - All other durations (8h+, 1h, 10m, 1m) → **consume slot normally**.
+- **Slot rules (mid-combat)**: ALL spells cost slots normally regardless of
+  duration. The "permanent = free" rule is precast-only.
+- **Slot regeneration** (Arcane Recovery, Natural Recovery, etc.): deferred to
+  Phase 2. Config must include `consumesSlot` boolean as the hook.
+- **Config location**: `src/ai/precastConfig.ts` — separate from spell modules.
+  Covers stubs and unimplemented spells; spell modules unchanged.
+- **Conflict avoidance**: engine will not precast a spell whose remaining
+  duration at combat start (after all subsequent casting-time deductions) would
+  be ≤ 0.
+
+### Tasks
+
+**TG-033** *(Core Engine — research, no implementation)*
+
+Precast candidate audit. Produce `docs/PRECAST-RESEARCH.md`.
+
+Full instructions: **`researchSpec1.md`** (repo root).
+
+Deliverable: structured candidate table + TypeScript schema proposal for
+`PRECAST_CONFIG`. No code changes. No `combat.ts`/`planner.ts` edits.
+
+Acceptance criteria:
+- `docs/PRECAST-RESEARCH.md` exists and follows the format in `researchSpec1.md`
+- All PHB implemented spells with duration ≥ 1 minute are classified
+- Simplified precast list (6-10 entries) confirmed with rationale
+- `PRECAST_CONFIG` TypeScript interface proposed
+- Edge cases documented (ally-targeting, creature-type-dependent, v1 no-ops)
+
+---
+
+**TG-034** *(Core Engine — blocked on TG-033)*
+
+Create `src/ai/precastConfig.ts` from the TG-033 research output.
+
+Acceptance criteria:
+- `PRECAST_CONFIG` map populated for all precastable spells
+- `DurationTier`, `CastingTimeTier`, `PrecastEntry` types exported
+- `tsc --noEmit` clean; all existing tests pass
+- No changes to `combat.ts`, `planner.ts`, or spell modules
+
+---
+
+**TG-035** *(Core Engine — blocked on TG-034)*
+
+Implement `hadPrepTime` precast engine.
+
+Acceptance criteria:
+- `Combatant` gains optional `hadPrepTime?: boolean` and
+  `simplifiedPrecast?: boolean` fields in `src/types/core.ts`
+- New `src/engine/precast.ts`: `applyPrecastEffects(combatant, state)` —
+  reads `PRECAST_CONFIG`, selects eligible spells, validates duration,
+  applies `ActiveEffect` entries, deducts slots
+- Called from `combat.ts` at combat initialization, before round 1
+- RFC posted to `TEAMGOALS.md` before `combat.ts` modification
+- Simplified precast path hardcoded, bypasses resolution algorithm
+- Unit tests: at minimum a Wizard-with-hadPrepTime gains Mage Armor effect
+  at round start; a caster with simplifiedPrecast gets expected effect list
+- All existing tests pass; `tsc --noEmit` clean
+
+---
+
+### Immediate Priority
+
+**TG-033** — research only. Read `researchSpec1.md` before starting.
+
+---
+
 ## Cross-Workstream Coordination Notes
 
 - **Session 53 red-X fix (commit `7a68d30`)**: Session 52 Batch 0 deleted the
