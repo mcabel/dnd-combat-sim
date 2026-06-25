@@ -2587,6 +2587,21 @@ export interface PlannedAction {
     | 'revivify'            // Revivify — PHB p.272: L3 Nec, touch, instant (1-action cast, out-of-combat)
     | 'arcaneEye'           // Arcane Eye — PHB p.214: L4 Div, 30 ft, conc 1 hr
     | 'trueSeeing'          // True Seeing — PHB p.284: L6 Div, touch, 1 hr
+    // ── Session 69 Batch 7: 12 more out-of-combat utility spells (stubs) ──
+    // All have shouldCast→null (never fire in combat). Modules exist so the
+    // monster-spell coverage report counts them as implemented.
+    | 'longstrider'              // Longstrider — PHB p.256: L1 Trans, touch, 1 hr
+    | 'waterWalk'                // Water Walk — PHB p.287: L3 Trans, 30 ft, 1 hr (ritual)
+    | 'gentleRepose'             // Gentle Repose — PHB p.245: L2 Nec, touch, 10 days (ritual)
+    | 'locateAnimalsOrPlants'    // Locate Animals or Plants — PHB p.256: L2 Div, self, instant (ritual)
+    | 'commune'                  // Commune — PHB p.223: L5 Div, self, 1-min cast (ritual)
+    | 'contactOtherPlane'        // Contact Other Plane — PHB p.226: L5 Div, self, 1-min cast (ritual)
+    | 'dream'                    // Dream — PHB p.236: L5 Ill, special, 1-min cast
+    | 'legendLore'               // Legend Lore — PHB p.254: L5 Div, self, 10-min cast
+    | 'awaken'                   // Awaken — PHB p.216: L5 Trans, touch, 8-hr cast
+    | 'heroesFeast'              // Heroes' Feast — PHB p.250: L6 Con, 30 ft, 10-min cast
+    | 'programmedIllusion'       // Programmed Illusion — PHB p.269: L6 Ill, 120 ft, permanent
+    | 'imprisonment'             // Imprisonment — PHB p.252: L9 Abj, 30 ft, 1-min cast
     | 'charmPerson'       // Charm Person — PHB p.221: 30 ft, WIS save or charmed, NO concentration (Session 27 TG-004: humanoid-only NOW enforced)
     | 'compelledDuel'     // Compelled Duel — PHB p.224: 30 ft, WIS save or frightened (taunt), concentration (movement-restriction simplified)
     | 'grease'            // Grease — PHB p.245: 60 ft, 10-ft radius AoE, DEX save or prone, NO concentration (persistent-terrain simplified)

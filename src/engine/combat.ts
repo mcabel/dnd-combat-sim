@@ -736,6 +736,20 @@ import { shouldCast as shouldCastAugury } from '../spells/augury';
 import { shouldCast as shouldCastRevivify } from '../spells/revivify';
 import { shouldCast as shouldCastArcaneEye } from '../spells/arcane_eye';
 import { shouldCast as shouldCastTrueSeeing } from '../spells/true_seeing';
+// ── Session 69 Batch 7: 12 more out-of-combat utility spells (stubs) ──
+// All shouldCast → null (never fire in combat). Safety-guard imports.
+import { shouldCast as shouldCastLongstrider } from '../spells/longstrider';
+import { shouldCast as shouldCastWaterWalk } from '../spells/water_walk';
+import { shouldCast as shouldCastGentleRepose } from '../spells/gentle_repose';
+import { shouldCast as shouldCastLocateAnimalsOrPlants } from '../spells/locate_animals_or_plants';
+import { shouldCast as shouldCastCommune } from '../spells/commune';
+import { shouldCast as shouldCastContactOtherPlane } from '../spells/contact_other_plane';
+import { shouldCast as shouldCastDream } from '../spells/dream';
+import { shouldCast as shouldCastLegendLore } from '../spells/legend_lore';
+import { shouldCast as shouldCastAwaken } from '../spells/awaken';
+import { shouldCast as shouldCastHeroesFeast } from '../spells/heroes_feast';
+import { shouldCast as shouldCastProgrammedIllusion } from '../spells/programmed_illusion';
+import { shouldCast as shouldCastImprisonment } from '../spells/imprisonment';
 import {
   shouldCast as shouldCastPlaneShift,
   execute as executePlaneShift,
@@ -5547,6 +5561,56 @@ export function executePlannedAction(
     }
     case 'trueSeeing': {
       if (shouldCastTrueSeeing(actor, bf)) { /* never fires in combat */ }
+      break;
+    }
+
+    // ── Session 69 Batch 7: 12 more out-of-combat utility spells (stubs) ──
+    case 'longstrider': {
+      if (shouldCastLongstrider(actor, bf)) { /* never fires in combat */ }
+      break;
+    }
+    case 'waterWalk': {
+      if (shouldCastWaterWalk(actor, bf)) { /* never fires in combat */ }
+      break;
+    }
+    case 'gentleRepose': {
+      if (shouldCastGentleRepose(actor, bf)) { /* never fires in combat */ }
+      break;
+    }
+    case 'locateAnimalsOrPlants': {
+      if (shouldCastLocateAnimalsOrPlants(actor, bf)) { /* never fires in combat */ }
+      break;
+    }
+    case 'commune': {
+      if (shouldCastCommune(actor, bf)) { /* never fires in combat */ }
+      break;
+    }
+    case 'contactOtherPlane': {
+      if (shouldCastContactOtherPlane(actor, bf)) { /* never fires in combat */ }
+      break;
+    }
+    case 'dream': {
+      if (shouldCastDream(actor, bf)) { /* never fires in combat */ }
+      break;
+    }
+    case 'legendLore': {
+      if (shouldCastLegendLore(actor, bf)) { /* never fires in combat */ }
+      break;
+    }
+    case 'awaken': {
+      if (shouldCastAwaken(actor, bf)) { /* never fires in combat */ }
+      break;
+    }
+    case 'heroesFeast': {
+      if (shouldCastHeroesFeast(actor, bf)) { /* never fires in combat */ }
+      break;
+    }
+    case 'programmedIllusion': {
+      if (shouldCastProgrammedIllusion(actor, bf)) { /* never fires in combat */ }
+      break;
+    }
+    case 'imprisonment': {
+      if (shouldCastImprisonment(actor, bf)) { /* never fires in combat */ }
       break;
     }
 

@@ -232,6 +232,20 @@ import { shouldCast as shouldCastAugury } from '../spells/augury';
 import { shouldCast as shouldCastRevivify } from '../spells/revivify';
 import { shouldCast as shouldCastArcaneEye } from '../spells/arcane_eye';
 import { shouldCast as shouldCastTrueSeeing } from '../spells/true_seeing';
+// ── Session 69 Batch 7: 12 more out-of-combat utility spells (stubs) ──
+// All shouldCast → null; safety-guard imports (never fire in combat).
+import { shouldCast as shouldCastLongstrider } from '../spells/longstrider';
+import { shouldCast as shouldCastWaterWalk } from '../spells/water_walk';
+import { shouldCast as shouldCastGentleRepose } from '../spells/gentle_repose';
+import { shouldCast as shouldCastLocateAnimalsOrPlants } from '../spells/locate_animals_or_plants';
+import { shouldCast as shouldCastCommune } from '../spells/commune';
+import { shouldCast as shouldCastContactOtherPlane } from '../spells/contact_other_plane';
+import { shouldCast as shouldCastDream } from '../spells/dream';
+import { shouldCast as shouldCastLegendLore } from '../spells/legend_lore';
+import { shouldCast as shouldCastAwaken } from '../spells/awaken';
+import { shouldCast as shouldCastHeroesFeast } from '../spells/heroes_feast';
+import { shouldCast as shouldCastProgrammedIllusion } from '../spells/programmed_illusion';
+import { shouldCast as shouldCastImprisonment } from '../spells/imprisonment';
 import { shouldCast as shouldCastPlaneShift } from '../spells/plane_shift';
 import { shouldCast as shouldCastTeleport } from '../spells/teleport';
 import { shouldCast as shouldCastAnimateDead } from '../spells/animate_dead';
@@ -4977,6 +4991,45 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
   }
   if (!plan.action && self.actions.some(a => a.name === 'True Seeing')) {
     if (shouldCastTrueSeeing(self, battlefield)) { /* never */ }
+  }
+
+  // ── Session 69 Batch 7: 12 more out-of-combat utility spells (stubs) ──
+  // All shouldCast → null; listed to prevent unknown-action fallthrough.
+  if (!plan.action && self.actions.some(a => a.name === 'Longstrider')) {
+    if (shouldCastLongstrider(self, battlefield)) { /* never */ }
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'Water Walk')) {
+    if (shouldCastWaterWalk(self, battlefield)) { /* never */ }
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'Gentle Repose')) {
+    if (shouldCastGentleRepose(self, battlefield)) { /* never */ }
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'Locate Animals or Plants')) {
+    if (shouldCastLocateAnimalsOrPlants(self, battlefield)) { /* never */ }
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'Commune')) {
+    if (shouldCastCommune(self, battlefield)) { /* never */ }
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'Contact Other Plane')) {
+    if (shouldCastContactOtherPlane(self, battlefield)) { /* never */ }
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'Dream')) {
+    if (shouldCastDream(self, battlefield)) { /* never */ }
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'Legend Lore')) {
+    if (shouldCastLegendLore(self, battlefield)) { /* never */ }
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'Awaken')) {
+    if (shouldCastAwaken(self, battlefield)) { /* never */ }
+  }
+  if (!plan.action && self.actions.some(a => a.name === "Heroes' Feast")) {
+    if (shouldCastHeroesFeast(self, battlefield)) { /* never */ }
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'Programmed Illusion')) {
+    if (shouldCastProgrammedIllusion(self, battlefield)) { /* never */ }
+  }
+  if (!plan.action && self.actions.some(a => a.name === 'Imprisonment')) {
+    if (shouldCastImprisonment(self, battlefield)) { /* never */ }
   }
 
   // --- 12CM. CHARM PERSON (WIS save or charmed, L1, NO conc) ---

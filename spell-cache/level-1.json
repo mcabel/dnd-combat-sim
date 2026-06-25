@@ -1,6 +1,6 @@
 {
   "level": 1,
-  "generatedAt": "2026-06-25T19:14:01.166Z",
+  "generatedAt": "2026-06-25T19:20:55.248Z",
   "generatorVersion": 2,
   "scopeRule": "pre-2024 canon; reprints: newest in-scope source wins; XPHB(2024) out of scope; creatures keep all variants (not applicable to spells)",
   "sourceDates": {
@@ -26,8 +26,8 @@
     "XPHB"
   ],
   "count": 82,
-  "implementedCount": 77,
-  "remainingInScope": 4,
+  "implementedCount": 78,
+  "remainingInScope": 3,
   "spells": [
     {
       "name": "Absorb Elements",
@@ -1814,8 +1814,8 @@
       "page": 256,
       "level": 1,
       "school": "Transmutation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "longstrider.ts",
       "inScope": true,
       "otherSources": [
         {

@@ -1,6 +1,6 @@
 {
   "level": 6,
-  "generatedAt": "2026-06-25T19:14:01.166Z",
+  "generatedAt": "2026-06-25T19:20:55.248Z",
   "generatorVersion": 2,
   "scopeRule": "pre-2024 canon; reprints: newest in-scope source wins; XPHB(2024) out of scope; creatures keep all variants (not applicable to spells)",
   "sourceDates": {
@@ -26,8 +26,8 @@
     "XPHB"
   ],
   "count": 51,
-  "implementedCount": 39,
-  "remainingInScope": 11,
+  "implementedCount": 41,
+  "remainingInScope": 9,
   "spells": [
     {
       "name": "Arcane Gate",
@@ -782,8 +782,8 @@
       "page": 250,
       "level": 6,
       "school": "Conjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "heroes_feast.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1162,8 +1162,8 @@
       "page": 269,
       "level": 6,
       "school": "Illusion",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "programmed_illusion.ts",
       "inScope": true,
       "otherSources": [
         {

@@ -1,6 +1,6 @@
 {
   "level": 5,
-  "generatedAt": "2026-06-25T19:14:01.166Z",
+  "generatedAt": "2026-06-25T19:20:55.248Z",
   "generatorVersion": 2,
   "scopeRule": "pre-2024 canon; reprints: newest in-scope source wins; XPHB(2024) out of scope; creatures keep all variants (not applicable to spells)",
   "sourceDates": {
@@ -26,8 +26,8 @@
     "XPHB"
   ],
   "count": 67,
-  "implementedCount": 51,
-  "remainingInScope": 13,
+  "implementedCount": 56,
+  "remainingInScope": 8,
   "spells": [
     {
       "name": "Alustriel's Mooncloak",
@@ -133,8 +133,8 @@
       "page": 216,
       "level": 5,
       "school": "Transmutation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "awaken.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -298,8 +298,8 @@
       "page": 223,
       "level": 5,
       "school": "Divination",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "commune.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -465,8 +465,8 @@
       "page": 226,
       "level": 5,
       "school": "Divination",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "contact_other_plane.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -769,8 +769,8 @@
       "page": 236,
       "level": 5,
       "school": "Illusion",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "dream.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1167,8 +1167,8 @@
       "page": 254,
       "level": 5,
       "school": "Divination",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "legend_lore.ts",
       "inScope": true,
       "otherSources": [
         {

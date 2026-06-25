@@ -1,6 +1,6 @@
 {
   "level": 3,
-  "generatedAt": "2026-06-25T19:14:01.166Z",
+  "generatedAt": "2026-06-25T19:20:55.248Z",
   "generatorVersion": 2,
   "scopeRule": "pre-2024 canon; reprints: newest in-scope source wins; XPHB(2024) out of scope; creatures keep all variants (not applicable to spells)",
   "sourceDates": {
@@ -26,8 +26,8 @@
     "XPHB"
   ],
   "count": 79,
-  "implementedCount": 71,
-  "remainingInScope": 8,
+  "implementedCount": 72,
+  "remainingInScope": 7,
   "spells": [
     {
       "name": "Animate Dead",
@@ -2441,8 +2441,8 @@
       "page": 287,
       "level": 3,
       "school": "Transmutation",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "water_walk.ts",
       "inScope": true,
       "otherSources": [
         {

@@ -1,6 +1,6 @@
 {
   "level": 2,
-  "generatedAt": "2026-06-25T19:14:01.166Z",
+  "generatedAt": "2026-06-25T19:20:55.248Z",
   "generatorVersion": 2,
   "scopeRule": "pre-2024 canon; reprints: newest in-scope source wins; XPHB(2024) out of scope; creatures keep all variants (not applicable to spells)",
   "sourceDates": {
@@ -26,8 +26,8 @@
     "XPHB"
   ],
   "count": 94,
-  "implementedCount": 89,
-  "remainingInScope": 3,
+  "implementedCount": 91,
+  "remainingInScope": 1,
   "spells": [
     {
       "name": "Aganazzar's Scorcher",
@@ -1210,8 +1210,8 @@
       "page": 245,
       "level": 2,
       "school": "Necromancy",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "gentle_repose.ts",
       "inScope": true,
       "otherSources": [
         {
@@ -1647,8 +1647,8 @@
       "page": 256,
       "level": 2,
       "school": "Divination",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "locate_animals_or_plants.ts",
       "inScope": true,
       "otherSources": [
         {

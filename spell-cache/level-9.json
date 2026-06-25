@@ -1,6 +1,6 @@
 {
   "level": 9,
-  "generatedAt": "2026-06-25T19:14:01.166Z",
+  "generatedAt": "2026-06-25T19:20:55.248Z",
   "generatorVersion": 2,
   "scopeRule": "pre-2024 canon; reprints: newest in-scope source wins; XPHB(2024) out of scope; creatures keep all variants (not applicable to spells)",
   "sourceDates": {
@@ -26,8 +26,8 @@
     "XPHB"
   ],
   "count": 22,
-  "implementedCount": 16,
-  "remainingInScope": 6,
+  "implementedCount": 17,
+  "remainingInScope": 5,
   "spells": [
     {
       "name": "Astral Projection",
@@ -177,8 +177,8 @@
       "page": 252,
       "level": 9,
       "school": "Abjuration",
-      "implemented": false,
-      "implementedModule": null,
+      "implemented": true,
+      "implementedModule": "imprisonment.ts",
       "inScope": true,
       "otherSources": [
         {
