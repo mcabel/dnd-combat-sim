@@ -205,6 +205,8 @@ import {
   countHiddenEnemies,
   countTargetableEnemies,
   canTargetWithSpell,
+  requiresVisibleTarget,
+  countVisiblyDetectedEnemies,
 } from '../engine/perception';
 import { shouldCast as shouldCastCharmPerson } from '../spells/charm_person';
 import { shouldCast as shouldCastCompelledDuel } from '../spells/compelled_duel';
@@ -5277,9 +5279,19 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
   // (not 262 times inside the loop). Most combatants have 0–10 spell
   // actions, so the Set lookup is O(1) per spell instead of O(N actions).
   if (!plan.action) {
+    // ── RFC-VISION-AUDIO Phase 3 Q5: precompute visible-target gating ──
+    // If the caster has no visibly detected enemies, skip all spells that
+    // require "a creature you can see". This prevents the planner from
+    // selecting spells like Hold Person when all enemies are invisible.
+    // The caster can still pick non-targeted spells (self-buffs, AoE, etc.)
+    // or fall through to attacks (at disadvantage) / dash / dodge.
+    const hasVisibleEnemy = countVisiblyDetectedEnemies(self, battlefield) > 0;
+
     const actionNames = new Set(self.actions.map(a => a.name));
     for (const desc of GENERIC_SPELL_LIST) {
       if (!actionNames.has(desc.name)) continue;
+      // ── RFC-VISION-AUDIO Phase 3 Q5: skip visible-target spells ──
+      if (!hasVisibleEnemy && requiresVisibleTarget(desc.name)) continue;
       if (desc.shouldCast(self, battlefield)) {
         plan.action = {
           type: 'genericSpell',

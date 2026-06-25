@@ -34,6 +34,7 @@
 import { Combatant, Battlefield, Action, PlannedAction, DamageType, AbilityScore } from '../types/core';
 import { chebyshev3D } from '../engine/movement';
 import { composeBiases, collectCantripBiases } from './pattern_bias';
+import { requiresVisibleTarget } from '../engine/perception';
 
 // ---- Spell Tags (RFC §4.1) ----------------------------------
 
@@ -496,6 +497,7 @@ function findBestCantripTarget(
   self: Combatant,
   bf: Battlefield,
   rangeFt: number,
+  requiresVisible: boolean = false,
 ): Combatant | null {
   let best: Combatant | null = null;
   let bestScore = -Infinity;
@@ -513,6 +515,20 @@ function findBestCantripTarget(
     // (Phase 1 Vision/Audio: 'visible' or 'position-known' = targetable.)
     const detection = self.perception?.detection?.get(c.id);
     if (detection === 'hidden' || detection === 'unknown') continue;
+
+    // ── RFC-VISION-AUDIO Phase 3 Q5: visible-target spell gating ──
+    // If this cantrip requires "a creature you can see", skip enemies
+    // that aren't visually detected (position-known but not visible).
+    // Legacy fallback: if detection is undefined (no perception map),
+    // treat the enemy as visible unless they have 'hidden'/'invisible'.
+    if (requiresVisible) {
+      if (detection === undefined) {
+        // Legacy combatant — fall back to condition check
+        if (c.conditions.has('hidden') || c.conditions.has('invisible')) continue;
+      } else if (detection !== 'visible') {
+        continue;
+      }
+    }
 
     // Score: prefer low-HP targets (finisher), then nearest.
     // Lower HP = higher score. Use negative HP so max() picks lowest HP.
@@ -587,7 +603,10 @@ export function selectMonsterSpell(
     if (!tmpl) continue;  // Doubt #1/#6: skip unimplemented + utility cantrips
 
     // Find the best target in range for this cantrip.
-    const target = findBestCantripTarget(self, bf, tmpl.rangeFt);
+    // ── RFC-VISION-AUDIO Phase 3 Q5: visible-target gating ──
+    // If this cantrip requires "a creature you can see", only consider
+    // visually detected enemies as targets.
+    const target = findBestCantripTarget(self, bf, tmpl.rangeFt, requiresVisibleTarget(tmpl.name));
     if (!target) continue;  // no target in range → skip this cantrip
 
     // Compute average damage (for finisher bonus + scoring).
