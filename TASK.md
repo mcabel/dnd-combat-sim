@@ -434,6 +434,132 @@ Mode A is preferred when both modes are viable, because it avoids stress risk.
 
 ---
 
+## Upcasting & Spell-Level Interaction Workstream (RFC-UPCASTING.md)
+
+> Full design, rules reference, gap analysis, and per-file change list in
+> `docs/RFC-UPCASTING.md`. Read that document before starting any phase.
+> Phases are ordered by architectural dependency — do not skip ahead.
+
+### Active Objective
+
+**TG-033: Implement the upcasting and spell-level interaction system.**  
+Six phased sub-tasks. Phases 1–3 are structural groundwork + per-spell fixes.  
+Phases 4–5 implement Globe of Invulnerability and AI penetration logic.  
+Phase 6 (cantrip scaling) is independent and can run concurrently.
+
+### Phases
+
+**TG-033-P1 — `castSlotLevel` on `PlannedAction` (structural)**
+
+- Add `castSlotLevel?: number` to `PlannedAction` in `src/types/core.ts`
+- Add `getLowestAvailableSlot(caster, minLevel): number | null` to `src/ai/resources.ts`
+- Update `getSpellInfoFromPlan()` in `src/engine/combat.ts` to read `castSlotLevel ?? action.slotLevel ?? 1` instead of defaulting to 1
+- Update every bespoke spell planner branch in `src/ai/planner.ts` to set `castSlotLevel` using `getLowestAvailableSlot`
+- Test: Counterspell now sees correct level when Fireball is planned at L5
+- Risk: LOW — no behavior change until planner branches set the field
+
+**TG-033-P2 — `sourceSlotLevel` on `ActiveEffect` (structural)**
+
+- Add `sourceSlotLevel?: number` to `ActiveEffect` in `src/types/core.ts`
+- Add `sourceSlotLevel` param (default 0) to `applySpellEffect()` in `src/engine/spell_effects.ts`; store it on the created effect
+- Update `dispel_magic.ts` to use `effect.sourceSlotLevel` for DC (`10 + sourceSlotLevel`, fallback DC 13); flip `dispelMagicSpellLevelTrackingV1Implemented` to `true`
+- Test: effect with `sourceSlotLevel: 5` → Dispel Magic uses DC 15; legacy effect (undefined) → DC 13
+- Risk: LOW — backward-compat (`undefined` treated as 0 in all checks)
+
+**TG-033-P3 — Upcast damage scaling for ~18 bespoke damage spells**
+
+Depends on: TG-033-P1 (so `castSlotLevel` is available on plans).  
+For each spell: capture the return value of `consumeSpellSlot()` and feed it
+into the damage/target/dart formula. Flip `xxxUpcastV1Implemented` to `true`.
+
+Commit as 5 sub-batches (one commit each):
+
+- **P3a:** `fireball`, `lightning_bolt`, `shatter`, `thunderwave`
+- **P3b:** `dissonant_whispers`, `inflict_wounds`, `guiding_bolt`, `burning_hands`
+- **P3c:** `scorching_ray`, Magic Missile dart count (`combat.ts`), `sleep`, `aid`, `blindness_deafness`
+- **P3d:** `cure_wounds`, `healing_word`, `spiritual_weapon`
+- **P3e:** `hunger_of_hadar`, `mind_spike`, `sunburst`
+
+Upcast formulas (canonical PHB 2014 "At Higher Levels"):
+
+| Spell (base level) | Formula |
+|---|---|
+| Fireball (L3) | `diceCount = 8 + max(0, slot − 3)` d6 fire |
+| Lightning Bolt (L3) | `diceCount = 8 + max(0, slot − 3)` d6 lightning |
+| Shatter (L2) | `diceCount = 3 + max(0, slot − 2)` d8 thunder |
+| Thunderwave (L1) | `diceCount = 2 + max(0, slot − 1)` d8 thunder |
+| Dissonant Whispers (L1) | `diceCount = 3 + max(0, slot − 1)` d6 psychic |
+| Inflict Wounds (L1) | `diceCount = 3 + max(0, slot − 1)` d10 necrotic |
+| Guiding Bolt (L1) | `diceCount = 4 + max(0, slot − 1)` d6 radiant |
+| Burning Hands (L1) | `diceCount = 3 + max(0, slot − 1)` d6 fire |
+| Scorching Ray (L2) | `rayCount = 3 + max(0, slot − 2)` |
+| Magic Missile (L1) | `dartCount = 3 + max(0, slot − 1)` |
+| Sleep (L1) | `poolDice = 5 + 2 × max(0, slot − 1)` d8 HP budget |
+| Aid (L2) | `hpGain = 5 × (1 + max(0, slot − 2))` per target |
+| Blindness/Deafness (L2) | `targetCount = 1 + max(0, slot − 2)` |
+| Cure Wounds (L1) | `diceCount = 1 + max(0, slot − 1)` d8 + mod |
+| Healing Word (L1) | `diceCount = 1 + max(0, slot − 1)` d4 + mod |
+| Spiritual Weapon (L2) | `dieCount = 1 + floor(max(0, slot − 2) / 2)` d8 (every 2 levels) |
+| Hunger of Hadar (L3) | `dieCount = 2 + max(0, slot − 3)` each for cold and acid |
+| Mind Spike (L2, XGE) | `diceCount = 3 + max(0, slot − 2)` d8 psychic |
+| Sunburst (L8, XGE) | `diceCount = 12 + 2 × max(0, slot − 8)` d6 radiant |
+
+**TG-033-P4 — Globe of Invulnerability (real implementation)**
+
+Depends on: TG-033-P1 (castSlotLevel), TG-033-P2 (sourceSlotLevel / isProtectedByGoI).
+
+- Replace the forward-compat stub in `src/spells/globe_of_invulnerability.ts`:
+  - Consume L6+ slot; compute `blockThreshold = 5 + max(0, slotLevel − 6)`
+  - Store threshold accessible to combat.ts (via `ActiveEffect` with `effectType: 'spell_shield'` and `payload.blockThreshold` recommended; or `(caster as any)._globeOfInvulnerabilityThreshold` for a faster v1 path — see RFC §4.1)
+  - Start concentration; cleanup removes threshold on concentration break
+- Add `isProtectedByGoI(target, castLevel): boolean` to `src/engine/spell_effects.ts`
+- Add GoI blocking check in `src/engine/combat.ts` at the pre-dispatch point (after Counterspell trigger, before spell executes): if target is GoI-protected and castLevel ≤ threshold → consume slot, log block, skip execution
+- Handle AoE: exclude GoI-protected targets from target list before damage loop (spell still fires; protected targets are skipped)
+- v1 scope: GoI protects only the caster (radius check deferred); document via `globeOfInvulnerabilityRadiusV1Simplified: true`
+- Cantrips (castLevel = 0) are NEVER blocked — `0 ≤ threshold` would be true but cantrips are level 0 and explicitly excluded per PHB p.245
+- Tests: GoI L6 blocks Fireball at L3/L4/L5; does NOT block Fireball at L6; GoI L7 blocks up to L6; slot consumed even when blocked; concentration break clears GoI; cantrip never blocked
+
+**TG-033-P5 — AI penetration-motivated upcasting**
+
+Depends on: TG-033-P1, TG-033-P4.
+
+- Add `selectCastSlot(caster, baseLevel, target): number | null` to `src/ai/planner.ts`:
+  reads GoI threshold on target; returns the minimum slot that either (a) meets baseLevel with no obstruction, or (b) penetrates the blocking threshold; returns null if impossible
+- Replace `getLowestAvailableSlot(self, baseLevel)` calls in each bespoke damage-spell planner branch with `selectCastSlot(self, baseLevel, primaryTarget)`
+- If `selectCastSlot` returns null (target is GoI-protected and no penetrating slot available), the planner branch returns early (falls through to next option — cantrip / weapon attack)
+- Tests: AI with GoI-protected target and available L6 slot → plans Fireball at L6; with only L3 → skips Fireball; without GoI → plans Fireball at L3
+
+**TG-033-P6 — Cantrip caster-level damage scaling (independent)**
+
+No dependency on P1–P5. Can run in any session.
+
+- Add `cantripTier(caster): 0 | 1 | 2 | 3` to `src/engine/utils.ts`:
+  reads `monsterSpellcasting.spellcasterLevel ?? caster.level ?? 1`; returns 0/1/2/3 at breakpoints 1/5/11/17
+- Apply `+ cantripTier(caster)` to die count in each cantrip module:
+  `fire_bolt`, `ray_of_frost`, `chill_touch`, `poison_spray`, `toll_the_dead`, `sacred_flame`, `shocking_grasp`, `acid_splash`, `vicious_mockery`, `thunderclap`, `green_flame_blade`, `booming_blade`, `mind_sliver`
+- Eldritch Blast: +1 beam per tier (2/3/4 beams at levels 5/11/17). Requires multi-attack loop in combat dispatch — may be its own sub-commit
+- Tests: L5 caster → Fire Bolt 2d10; L11 caster → 3d10; L1 monster with `spellcasterLevel: 11` → 3 dice; cantrip is still level 0 for all GoI/Counterspell/Dispel interactions
+
+### Acceptance Criteria (full system)
+
+- `tsc --noEmit` clean throughout
+- All existing tests pass after each phase
+- Counterspell sees correct spell level for upcast bespoke spells (P1)
+- Dispel Magic uses accurate DC from `sourceSlotLevel` (P2)
+- Each listed damage spell produces upcast damage at slot+2 (P3)
+- GoI blocks correct spell levels; penetration works (P4)
+- AI upcasts into GoI when a penetrating slot is available (P5)
+- Level-5 caster deals 2× die count with cantrips (P6)
+
+### Notes
+
+- Full design rationale, interaction matrix, and per-file change list: `docs/RFC-UPCASTING.md`
+- Cantrips are ALWAYS level 0 for interaction purposes (GoI, Counterspell, Dispel Magic). Caster-level scaling (P6) is a separate mechanism that does NOT change the interaction level.
+- Hellish Rebuke, Invisibility, Protection from Energy, all Summon X spells already implement upcast correctly — use them as reference patterns.
+- Counterspell is the gold standard for slot-vs-spell-level interaction — read `src/spells/counterspell.ts` before implementing GoI blocking.
+
+---
+
 ## Cross-Workstream Coordination Notes
 
 - **Session 53 red-X fix (commit `7a68d30`)**: Session 52 Batch 0 deleted the
