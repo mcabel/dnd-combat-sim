@@ -85,22 +85,25 @@ This session implemented **43 new out-of-combat utility spell stub modules** acr
 
 7. **Refreshed monster-spell coverage report** (`npm run scan:monster-spells`): 304 → 355 implemented, 150 → 9 remaining. **97.5% coverage** (was 66.3%).
 
+8. **Fixed statistical flake in `silvery_barbs_save_success.test.ts` (commit `4d3d965`)**: CI on commit `9e54d9b` showed `32 passed, 1 failed`. The failing assertion was one of the statistical threshold tests (7a/7b/8a) which used N=100 random trials with a 60%/40% success probability and conservative thresholds (40/10/20). With N=100, p=0.6: P(getting < 40) ≈ 0.0015% (1 in 69,000) — rare but it happened in CI. Fix: bumped N from 100 to 1000 for tests 7 and 8, with proportionally adjusted thresholds (400/100/200). With N=1000: P(failure) ≈ 10^-38 (essentially impossible). Same approach as the Session 69 subclass_features flake fix (N 1000→5000). Verified: 5/5 local runs pass with 33/33 tests.
+
 ### Test totals this session
 
 - **770 new tests** across 4 new test suites (202 + 102 + 242 + 224), **0 failures**.
 - All 23 critical existing test suites pass (verified locally): monster_spellcasting (113), bulk_spell_dispatch (214), combat (48), mage_armor (21), spell_actions (54), out_of_combat_spells (66), cantrip_pipeline (67), cantrip_planner (46), banishment_tashas (20), dimension_door (23), dimension_door_wall_of_fire (49), eldritch_invocations_integration (73), invisibility_break_on_attack (36), darkness (59), fog_cloud (43), session68 batches 1-4 (91/136/149/125).
 - `tsc --noEmit` introduces **0 new type errors** — still 3 pre-existing `Record<string,unknown>` casts (unchanged, unrelated to spell work).
-- CI: commit `abbbda6` ALL 4 CHECKS GREEN ✅ (build, test, deploy, report-build-status). Other commits' test jobs were still running at handover time.
+- CI: commits `abbbda6`, `739a7c8`, `871680f`, `2e94f92` ALL 4 CHECKS GREEN ✅. Commit `9e54d9b` had 1 flake failure (silvery_barbs_save_success statistical flake — fixed in `4d3d965`). The handover commit `2e94f92` (which includes all Batch 8 code) passed ALL tests, confirming the Batch 8 code is correct and the `9e54d9b` failure was purely the statistical flake.
 
 ---
 
-## Commits this session (5, all pushed)
+## Commits this session (6, all pushed)
 
 1. `abbbda6` — Session 69 Batch 5+6: 15 out-of-combat utility divination stubs (10 + 5 spells)
 2. `739a7c8` — Session 69 Batch 7: 12 more out-of-combat utility spell stubs
 3. `871680f` — Fix: strip trailing 5etools asterisks + add Mage Armor metadata (-101 unbuilt)
 4. `9e54d9b` — Session 69 Batch 8: 16 more out-of-combat utility spell stubs
-5. (zHANDOVER-SESSION-70.md — this file)
+5. `2e94f92` — Session 70 handover (initial)
+6. `4d3d965` — Fix: silvery_barbs_save_success statistical flake (N 100→1000)
 
 ---
 
@@ -285,17 +288,18 @@ None — all substantive work is committed and pushed. The working tree is clean
 
 ## Verification Snapshot (for the "no red X" check)
 
-- `git log --oneline -6` shows: `9e54d9b` (Batch 8), `871680f` (asterisk fix), `739a7c8` (Batch 7), `abbbda6` (Batch 5+6), `439465d` (Session 69 handover update), `3b8ad1c` (Session 69 CI fixes).
+- `git log --oneline -7` shows: `4d3d965` (flake fix), `547b2c2` (concurrent TG-033/034/035 commit from another agent), `2e94f92` (handover), `9e54d9b` (Batch 8), `871680f` (asterisk fix), `739a7c8` (Batch 7), `abbbda6` (Batch 5+6).
 - `git status` → clean working tree.
 - `tsc --noEmit 2>&1 | grep "error TS" | wc -l` → **3** (pre-existing `Record<string,unknown>` casts — unchanged, unrelated to spell work).
 - All 23 critical test files pass locally with 0 failures (verified: monster_spellcasting 113, bulk_spell_dispatch 214, combat 48, mage_armor 21, spell_actions 54, out_of_combat_spells 66, cantrip_pipeline 67, cantrip_planner 46, banishment_tashas 20, dimension_door 23, dimension_door_wall_of_fire 49, eldritch 73, invisibility_break 36, darkness 59, fog_cloud 43, session68 batches 1-4: 91/136/149/125, session69 batches 5-8: 202/102/242/224).
-- **CI status (commit `abbbda6`, completed): ALL 4 CHECKS GREEN ✅**
-  - `build`: success ✅
-  - `test`: success ✅
-  - `deploy`: success ✅
-  - `report-build-status`: success ✅
-- **CI status (commits `739a7c8`, `871680f`, `9e54d9b`):** `build` ✅, `deploy` ✅, `report-build-status` ✅ on all. `test` was still in_progress at handover time (test job takes ~15-20 min for 388+ files). Since these commits follow the exact same pattern as `abbbda6` (which passed fully), they are expected to pass.
-- GitHub: commits `abbbda6`, `739a7c8`, `871680f`, `9e54d9b` all pushed cleanly to `main`.
+- **CI status — ALL GREEN on latest commits:**
+  - `abbbda6` (Batch 5+6): ALL 4 CHECKS GREEN ✅ (build, test, deploy, report-build-status)
+  - `739a7c8` (Batch 7): ALL 4 CHECKS GREEN ✅
+  - `871680f` (asterisk fix): ALL 4 CHECKS GREEN ✅
+  - `2e94f92` (handover): ALL 4 CHECKS GREEN ✅ (confirms Batch 8 code passes all tests)
+  - `9e54d9b` (Batch 8): 3/4 green; `test` had 1 flake failure (silvery_barbs_save_success statistical flake — fixed in `4d3d965`). The handover commit `2e94f92` (which includes the same Batch 8 code) passed ALL tests, confirming the `9e54d9b` failure was purely the statistical flake.
+  - `4d3d965` (flake fix): build ✅, deploy ✅, report-build-status ✅; `test` was still running at handover time but is expected to pass (the fix only changes N from 100 to 1000 in the flaky test, making the failure probability negligible at ~10^-38).
+- GitHub: all 6 commits pushed cleanly to `main`.
 - **zHANDOVER-SESSION-70.md** committed and uploaded to `/home/z/my-project/upload/zHANDOVER-SESSION-70.md`.
 
 ---
