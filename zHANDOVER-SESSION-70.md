@@ -87,6 +87,8 @@ This session implemented **43 new out-of-combat utility spell stub modules** acr
 
 8. **Fixed statistical flake in `silvery_barbs_save_success.test.ts` (commit `4d3d965`)**: CI on commit `9e54d9b` showed `32 passed, 1 failed`. The failing assertion was one of the statistical threshold tests (7a/7b/8a) which used N=100 random trials with a 60%/40% success probability and conservative thresholds (40/10/20). With N=100, p=0.6: P(getting < 40) ≈ 0.0015% (1 in 69,000) — rare but it happened in CI. Fix: bumped N from 100 to 1000 for tests 7 and 8, with proportionally adjusted thresholds (400/100/200). With N=1000: P(failure) ≈ 10^-38 (essentially impossible). Same approach as the Session 69 subclass_features flake fix (N 1000→5000). Verified: 5/5 local runs pass with 33/33 tests.
 
+9. **Fixed nat-20 flake in `eldritch_invocations.test.ts` test #12 (commit `ca5c6fe`)**: CI on commit `8d7be9e` showed `48 passed, 2 failed` in eldritch_invocations. Test #12 (Lance of Lethargy — EB miss -> no slow) used `ac: 30` + `hitBonus: -100` to "guarantee" a miss, but per PHB p.194 a natural 20 always hits regardless of AC/modifiers. With ~5% nat-20 probability, the "guaranteed miss" actually hit ~5% of the time, causing assertions 12a and 12b to flake. Fix: use `resolveAttack`'s `isCritOverride=false` parameter (5th arg) to short-circuit the hit check for a deterministic miss. This mirrors the pattern already used by test #11 in the same file. Verified: 25/25 stress runs pass (was ~5-10% flake rate before).
+
 ### Test totals this session
 
 - **770 new tests** across 4 new test suites (202 + 102 + 242 + 224), **0 failures**.
@@ -96,7 +98,7 @@ This session implemented **43 new out-of-combat utility spell stub modules** acr
 
 ---
 
-## Commits this session (6, all pushed)
+## Commits this session (7, all pushed)
 
 1. `abbbda6` — Session 69 Batch 5+6: 15 out-of-combat utility divination stubs (10 + 5 spells)
 2. `739a7c8` — Session 69 Batch 7: 12 more out-of-combat utility spell stubs
@@ -104,6 +106,7 @@ This session implemented **43 new out-of-combat utility spell stub modules** acr
 4. `9e54d9b` — Session 69 Batch 8: 16 more out-of-combat utility spell stubs
 5. `2e94f92` — Session 70 handover (initial)
 6. `4d3d965` — Fix: silvery_barbs_save_success statistical flake (N 100→1000)
+7. `ca5c6fe` — Fix: eldritch_invocations test #12 nat-20 flake (force miss via isCritOverride=false)
 
 ---
 
@@ -292,14 +295,17 @@ None — all substantive work is committed and pushed. The working tree is clean
 - `git status` → clean working tree.
 - `tsc --noEmit 2>&1 | grep "error TS" | wc -l` → **3** (pre-existing `Record<string,unknown>` casts — unchanged, unrelated to spell work).
 - All 23 critical test files pass locally with 0 failures (verified: monster_spellcasting 113, bulk_spell_dispatch 214, combat 48, mage_armor 21, spell_actions 54, out_of_combat_spells 66, cantrip_pipeline 67, cantrip_planner 46, banishment_tashas 20, dimension_door 23, dimension_door_wall_of_fire 49, eldritch 73, invisibility_break 36, darkness 59, fog_cloud 43, session68 batches 1-4: 91/136/149/125, session69 batches 5-8: 202/102/242/224).
-- **CI status — ALL GREEN on latest commits:**
-  - `abbbda6` (Batch 5+6): ALL 4 CHECKS GREEN ✅ (build, test, deploy, report-build-status)
+- **CI status — ALL GREEN on latest commit `ca5c6fe`:**
+  - `abbbda6` (Batch 5+6): ALL 4 CHECKS GREEN ✅
   - `739a7c8` (Batch 7): ALL 4 CHECKS GREEN ✅
   - `871680f` (asterisk fix): ALL 4 CHECKS GREEN ✅
   - `2e94f92` (handover): ALL 4 CHECKS GREEN ✅ (confirms Batch 8 code passes all tests)
-  - `9e54d9b` (Batch 8): 3/4 green; `test` had 1 flake failure (silvery_barbs_save_success statistical flake — fixed in `4d3d965`). The handover commit `2e94f92` (which includes the same Batch 8 code) passed ALL tests, confirming the `9e54d9b` failure was purely the statistical flake.
-  - `4d3d965` (flake fix): build ✅, deploy ✅, report-build-status ✅; `test` was still running at handover time but is expected to pass (the fix only changes N from 100 to 1000 in the flaky test, making the failure probability negligible at ~10^-38).
-- GitHub: all 6 commits pushed cleanly to `main`.
+  - `9e54d9b` (Batch 8): `test` had 1 flake failure (silvery_barbs statistical flake — fixed in `4d3d965`)
+  - `4d3d965` (silvery_barbs flake fix): build ✅, deploy ✅, report-build-status ✅; `test` FAILED — but this was the **eldritch_invocations nat-20 flake** (still latent at this commit, only fixed later in `ca5c6fe`). The silvery_barbs fix itself is correct (its own test passes).
+  - `8d7be9e` (handover update): `test` had 1 flake failure (eldritch_invocations nat-20 flake — fixed in `ca5c6fe`)
+  - `ca5c6fe` (eldritch flake fix): **ALL 4 CHECKS GREEN ✅** (confirmed — test passed; with both latent flakes now fixed, the suite is fully green)
+  - Both flake fixes address **pre-existing latent test issues** (not caused by Batch 5-8 work). They happened to trigger during this session's CI runs. The latest commit `ca5c6fe` (containing both fixes) is fully green.
+- GitHub: all 7 commits pushed cleanly to `main`.
 - **zHANDOVER-SESSION-70.md** committed and uploaded to `/home/z/my-project/upload/zHANDOVER-SESSION-70.md`.
 
 ---
