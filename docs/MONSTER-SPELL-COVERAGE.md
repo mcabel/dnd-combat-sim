@@ -1,6 +1,6 @@
 # Monster Spell Coverage Report
 
-Generated: `2026-06-25T19:33:40.178Z`
+Generated: `2026-06-25T21:30:19.663Z`
 Source: 2401 bestiary entries from `bestiaryData/`, scanned via `scripts/scan_monster_spells.ts`.
 
 > **Purpose:** This report guides which spell modules to build next for the
@@ -15,11 +15,11 @@ Source: 2401 bestiary entries from `bestiaryData/`, scanned via `scripts/scan_mo
 | Metric | Value |
 |--------|-------|
 | Total creatures in bestiary | 2401 |
-| Creatures with `monsterSpellcasting` | 775 (32.3%) |
-| Total spell references (incl. duplicates) | 6136 |
-| Unique spells referenced | 364 |
-| ├─ Already implemented | 355 (97.5%) |
-| └─ NOT yet implemented | 9 (2.5%) |
+| Creatures with `monsterSpellcasting` | 774 (32.2%) |
+| Total spell references (incl. duplicates) | 6128 |
+| Unique spells referenced | 363 |
+| ├─ Already implemented | 356 (98.1%) |
+| └─ NOT yet implemented | 7 (1.9%) |
 
 ## Top 50 Unbuilt Spells (by creature frequency)
 
@@ -31,13 +31,11 @@ spell at multiple slot levels — counted separately), and a few example creatur
 |------|-------|-------------|------------|-------------------|-------|
 | 1 | Protection from Evil and Good | 27 | 27 | Heralds of Dust Exorcist, Hollyphant, Skull Lasher of Myrkul | `PHB` · Abjuration · levels: atWill/daily,L1 |
 | 2 | Dispel Evil and Good | 15 | 15 | Heralds of Dust Exorcist, Omin Dran, Kostchtchie | `PHB` · Abjuration · levels: atWill/daily,L5 |
-| 3 | [object Object] | 5 | 8 | Zodar, Lichen Lich, Master Sage | levels: atWill/daily |
-| 4 | Wind Wall | 3 | 3 | Frost Druid, Triton Master of Waves, Asharra | `PHB` · Evocation · levels: atWill/daily,L3 |
-| 5 | Prismatic Wall | 2 | 2 | Ekengarik, Niv-Mizzet | `PHB` · Abjuration · levels: atWill/daily,L9 |
-| 6 | Wall of Thorns | 2 | 2 | Conclave Dryad, Druid of the Old Ways | `PHB` · Conjuration · levels: atWill/daily,L6 |
-| 7 | Otiluke's Freezing Sphere (45 ({@damage 13d6}) Damage) | 1 | 1 | Cryonax | levels: atWill/daily |
-| 8 | Shapechange | 1 | 1 | Hollyphant | `PHB` · Transmutation · levels: atWill/daily |
-| 9 | Thunder Step | 1 | 1 | Malivar | `XGE` · Conjuration · levels: L3 |
+| 3 | Wind Wall | 3 | 3 | Frost Druid, Triton Master of Waves, Asharra | `PHB` · Evocation · levels: atWill/daily,L3 |
+| 4 | Prismatic Wall | 2 | 2 | Ekengarik, Niv-Mizzet | `PHB` · Abjuration · levels: atWill/daily,L9 |
+| 5 | Wall of Thorns | 2 | 2 | Conclave Dryad, Druid of the Old Ways | `PHB` · Conjuration · levels: atWill/daily,L6 |
+| 6 | Shapechange | 1 | 1 | Hollyphant | `PHB` · Transmutation · levels: atWill/daily |
+| 7 | Thunder Step | 1 | 1 | Malivar | `XGE` · Conjuration · levels: L3 |
 
 ## Full Unbuilt Spells List (all)
 
@@ -45,19 +43,17 @@ spell at multiple slot levels — counted separately), and a few example creatur
 |------|-------|-------------|------------|
 | 1 | Protection from Evil and Good | 27 | 27 |
 | 2 | Dispel Evil and Good | 15 | 15 |
-| 3 | [object Object] | 5 | 8 |
-| 4 | Wind Wall | 3 | 3 |
-| 5 | Prismatic Wall | 2 | 2 |
-| 6 | Wall of Thorns | 2 | 2 |
-| 7 | Otiluke's Freezing Sphere (45 ({@damage 13d6}) Damage) | 1 | 1 |
-| 8 | Shapechange | 1 | 1 |
-| 9 | Thunder Step | 1 | 1 |
+| 3 | Wind Wall | 3 | 3 |
+| 4 | Prismatic Wall | 2 | 2 |
+| 5 | Wall of Thorns | 2 | 2 |
+| 6 | Shapechange | 1 | 1 |
+| 7 | Thunder Step | 1 | 1 |
 
 ## Implemented Spells (already built — summary)
 
 | Level | Implemented count |
 |-------|-------------------|
-| unknown | 43 |
+| unknown | 44 |
 | 0 | 34 |
 | 1 | 59 |
 | 2 | 62 |

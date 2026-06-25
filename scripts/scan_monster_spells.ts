@@ -97,8 +97,24 @@ function loadSpellCache(): Map<string, SpellCacheEntry> {
 function normalize(raw: string): string {
   return raw
     .trim()
-    // strip trailing parentheticals like "(self only)" or "(as an action)"
-    .replace(/\s*\([^)]*\)\s*$/, '')
+    // Strip ALL 5etools {@tag value|metadata} annotations, keeping only the
+    // inner `value`. This is broader than the inline `{@spell ...}` strip
+    // because parentheticals can contain OTHER tags too — e.g. the bestiary
+    // entry "Otiluke's Freezing Sphere (45 ({@damage 13d6}) Damage)" has an
+    // inner {@damage 13d6} that must be reduced to "13d6" before the outer
+    // paren is stripped, otherwise the outer-paren regex would fail to match
+    // the literal `}` characters. (Session 71 fix — generalizes the Session 69
+    // {@spell}-only strip to all {@tag} variants.)
+    .replace(/\{@\w+\s+([^}|]+)(?:\|[^}]*)?\}/g, '$1')
+    // Strip trailing parentheticals like "(self only)" or "(as an action)".
+    // Handles ONE level of nesting (e.g. "(45 (13d6) damage)" — the outer
+    // paren wraps an inner paren). Applied iteratively to handle multiple
+    // trailing parentheticals, e.g. "Foo (a) (b)" → "Foo". (Session 71 fix —
+    // the old [^)]* regex broke on nested parens like the Otiluke's entry,
+    // leaving the spell unmatched against the cache and incorrectly counted
+    // as "unbuilt".)
+    .replace(/\s*\((\([^()]*\)|[^()]*)*\)\s*$/, '')
+    .replace(/\s*\((\([^()]*\)|[^()]*)*\)\s*$/, '')
     // strip trailing 5etools cross-reference asterisks (e.g. "Mirror Image*",
     // "acid splash *"). The * marks spells sourced from a different book
     // than the monster's source — it's a metadata marker, not part of the
@@ -154,7 +170,13 @@ function main(): void {
     // atWill
     if (Array.isArray(s.will)) {
       for (const sp of s.will) {
-        const name = normalize(String(sp).replace(/\{@spell\s+([^}|]+)(?:\|[^}]*)?\}/i, '$1').trim());
+        // Session 71 fix: skip non-string entries. A small number of bestiary
+        // entries have an object instead of a string for a spell (5etools data
+        // bug) — without this guard, String(sp) produces "[object Object]"
+        // which pollutes the unbuilt list with a phantom "[object Object]"
+        // spell (5 creature-refs in the v0.1 bestiary).
+        if (typeof sp !== 'string') continue;
+        const name = normalize(sp.replace(/\{@spell\s+([^}|]+)(?:\|[^}]*)?\}/i, '$1').trim());
         if (!name) continue;
         refs.push({ spellName: name, creatureName, source, bucket: 'atWill', level: -1 });
         hasAny = true;
@@ -166,7 +188,9 @@ function main(): void {
       for (const spells of Object.values(s.daily) as any[]) {
         if (!Array.isArray(spells)) continue;
         for (const sp of spells) {
-          const name = normalize(String(sp).replace(/\{@spell\s+([^}|]+)(?:\|[^}]*)?\}/i, '$1').trim());
+          // Session 71 fix: skip non-string entries (see atWill comment above).
+          if (typeof sp !== 'string') continue;
+          const name = normalize(sp.replace(/\{@spell\s+([^}|]+)(?:\|[^}]*)?\}/i, '$1').trim());
           if (!name) continue;
           refs.push({ spellName: name, creatureName, source, bucket: 'daily', level: -1 });
           hasAny = true;
@@ -181,7 +205,9 @@ function main(): void {
         if (isNaN(lvl) || lvl < 0 || lvl > 9) continue;
         if (!ld || !Array.isArray(ld.spells)) continue;
         for (const sp of ld.spells) {
-          const name = normalize(String(sp).replace(/\{@spell\s+([^}|]+)(?:\|[^}]*)?\}/i, '$1').trim());
+          // Session 71 fix: skip non-string entries (see atWill comment above).
+          if (typeof sp !== 'string') continue;
+          const name = normalize(sp.replace(/\{@spell\s+([^}|]+)(?:\|[^}]*)?\}/i, '$1').trim());
           if (!name) continue;
           refs.push({ spellName: name, creatureName, source, bucket: 'slot', level: lvl });
           hasAny = true;
