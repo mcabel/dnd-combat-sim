@@ -3101,6 +3101,11 @@ async function run() {
   console.log('─'.repeat(50));
   console.log(`Results: ${passed} passed, ${failed} failed`);
   if (failed > 0) process.exit(1);
+  // Explicit exit — the Express app's event loop may keep the process alive
+  // (lingering connections, internal timers) even after srv.close(). Without
+  // this, ts-node hangs indefinitely after the test passes, causing the
+  // parallel test runner's timeout to fire.
+  process.exit(0);
 }
 
 run().catch(err => { console.error(err); process.exit(1); });

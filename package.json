@@ -6,6 +6,9 @@
   "scripts": {
     "build": "tsc",
     "test:parser": "ts-node src/test/parser.test.ts",
+    "test": "ts-node --transpile-only scripts/run_tests.ts",
+    "test:chunk": "ts-node --transpile-only scripts/run_tests.ts --chunk",
+    "test:json": "ts-node --transpile-only scripts/run_tests.ts --json",
     "spell-cache:build": "ts-node --transpile-only scripts/spell-cache/build.ts",
     "spell-cache:pick": "ts-node --transpile-only scripts/spell-cache/pick.ts",
     "spell-cache:show": "ts-node --transpile-only scripts/spell-cache/show.ts",

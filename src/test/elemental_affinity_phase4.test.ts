@@ -329,9 +329,11 @@ console.log('\n--- 4. Create Bonfire + cold ancestry → no EA ---');
 
   executeCreateBonfire(sorc, enemy, state);
 
-  // 1d8 fire, max = 8. No +3 (cold ancestry, fire spell).
+  // Create Bonfire is a cantrip (slotLevel 0). At Sorcerer 6, cantrip scaling
+  // (RFC-UPCASTING Phase 6) gives 2d8 (tier 1, levels 5-10). Max = 16.
+  // No +3 EA (cold ancestry, fire spell). Threshold ≤ 16 (was ≤ 8 pre-Session 72).
   const dmg = firstDmgValue(state);
-  assert('4. damage ≤ 8 (no EA)', dmg !== undefined && dmg <= 8, `got ${dmg}`);
+  assert('4. damage ≤ 16 (no EA, 2d8 cantrip scaling at level 6)', dmg !== undefined && dmg <= 16, `got ${dmg}`);
   console.log(`    Create Bonfire damage (no EA): ${dmg}`);
 }
 
