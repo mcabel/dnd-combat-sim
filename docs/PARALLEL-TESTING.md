@@ -188,9 +188,57 @@ npx ts-node --transpile-only scripts/run_tests.ts --json --chunk 3 --total 6
 **Status:** One flaky test fixed in Session 74 (Create Bonfire threshold ≤8 → ≤16). Others may exist — the parallel runner makes them surface faster.
 
 ### Weakness 3: Machine overload when running 6 chunks locally
-**Impact:** Running 6 chunks × 4 parallel = 24 concurrent ts-node processes on a 4-core machine causes node crashes (`trap int3`).
-**Mitigation:** Documented: locally, run ONE chunk at a time (default behavior). The 6-chunk parallelism is for CI matrix (separate 2-core runners).
-**Status:** Mitigated by documentation + sensible defaults.
+**Impact:** Running 6 chunks × 4 parallel = 24 concurrent ts-node processes on a 4-core machine causes node crashes (`trap int3`) AND false-positive test failures (tests that pass when run individually but "crash" under load).
+**Empirical data (Session 75):** 6 chunks × `parallel=3` = 18 processes → 2-3 false-positive "CRASH" failures per run (e.g., `dispel_magic.test.ts`, `healing_spirit.test.ts` both passed 3/3 when run individually but crashed under 6-way load).
+**Mitigation:** Locally, run ONE chunk at a time (default behavior). The 6-chunk parallelism is for CI matrix (separate 2-core runners with no oversubscription). For subagent-based diagnosis, use ≤4 subagents with `--parallel 1` each (see "Local vs CI Parallelism" below).
+**Status:** Mitigated by documentation + sensible defaults + the guidance table below.
+
+---
+
+## Local vs CI Parallelism (CRITICAL — read before launching subagents)
+
+The number of parallel test runs that's safe depends on whether you're on the
+local dev machine (4 cores, shared) or CI (separate runners, isolated).
+
+### The problem with 6-way locally
+
+| Scenario | Processes on 4 cores | Result |
+|----------|---------------------|--------|
+| 6 chunks × `parallel=4` | 24 | 💥 Crashes (`trap int3`), OOM kills, ALL chunks fail |
+| 6 chunks × `parallel=3` | 18 | ⚠️ 2-3 false-positive "CRASH" failures per run (pass on re-run) |
+| 1 chunk × `parallel=4` | 4 | ✅ Clean, ~70s per chunk |
+| 1 chunk × `parallel=3` | 3 | ✅ Cleanest, never crashes |
+| CI: 6 chunks on separate runners | 3 per runner | ✅ Clean (isolated machines) |
+
+**Why 6-way is slower despite theoretical speedup:**
+1. Each false crash costs ~2 min to diagnose (re-run, confirm it passes)
+2. 2-3 false crashes per 6-way run = 4-6 min of re-diagnosis
+3. 6-way theoretical speedup over 4-way: ~33% (e.g., 5 min → 3.5 min)
+4. **Net: 6-way is SLOWER** (3.5 min + 5 min diagnosis = 8.5 min vs 5 min clean for 4-way)
+
+### Recommended parallelism by context
+
+| Context | Optimal | Why |
+|---------|---------|-----|
+| **CI matrix** | **6 chunks** | Separate runners, no oversubscription, ~3-4 min total |
+| **Local `npm test`** (single run) | **`--parallel 4`** (default) | 4 processes on 4 cores = clean, ~5 min |
+| **Subagent failure diagnosis** | **4 subagents max**, each `--parallel 1` | 4 processes total, safest for reliability |
+
+### The one rule to remember
+
+> **Never launch more than 4 concurrent `ts-node` processes on the local dev machine.**
+>
+> - `npm test` → 4 (default, single worker pool)
+> - Subagents → 4 × `--parallel 1` = 4 total
+> - CI → 6 chunks on separate runners (not your concern locally)
+
+If the machine had 8+ cores, 6 subagents would be fine. The constraint is
+**physical cores**, not the chunk count. The script defaults to
+`min(os.cpus(), 6)` for single-run mode — that's correct. The issue is only
+when launching **multiple parallel single-run instances** (which is what
+multiple subagents do).
+
+---
 
 ### Weakness 4: Hidden test files outside `src/test/*.test.ts`
 **Impact:** Tests in other directories (e.g., `src/spells/foo.test.ts`) won't be discovered.
@@ -219,10 +267,14 @@ npx ts-node --transpile-only scripts/run_tests.ts --json --chunk 3 --total 6
 5. Once green, push
 
 ### For parallel failure diagnosis (advanced):
-1. Launch 6 subagents (via Task tool), one per chunk
-2. Each subagent runs: `npx ts-node --transpile-only scripts/run_tests.ts --json --chunk N --total 6`
+1. Launch **at most 4 subagents** (via Task tool), one per chunk (see §"Local vs CI Parallelism" below for why 4, not 6)
+2. Each subagent runs: `npx ts-node --transpile-only scripts/run_tests.ts --json --chunk N --total 6 --parallel 1`
 3. Each subagent parses the JSON, reads failed test files, proposes fixes
 4. Orchestrator aggregates fixes and commits once
+
+> **CRITICAL:** Each subagent MUST use `--parallel 1` (not the default). Running
+> 4 subagents × `--parallel 4` = 16 concurrent processes on a 4-core machine =
+> crashes. One process per subagent = 4 total = safe.
 
 ---
 
@@ -240,3 +292,4 @@ npx ts-node --transpile-only scripts/run_tests.ts --json --chunk 3 --total 6
 ## Change Log
 
 - **Session 74 (2026-06-26):** Initial implementation. Script + CI matrix + this doc. Fixed pre-existing flaky test (`elemental_affinity_phase4.test.ts` test 4: Create Bonfire threshold ≤8 → ≤16 for 2d8 cantrip scaling at level 6).
+- **Session 75 (2026-06-26):** Added "Local vs CI Parallelism" section with empirical data. Documented that 6 subagents locally causes false-positive crashes (24 processes on 4 cores). New guidance: CI=6 chunks, local `npm test`=`--parallel 4`, subagents=4 max × `--parallel 1`. Updated "For parallel failure diagnosis" to mandate `--parallel 1` per subagent.
