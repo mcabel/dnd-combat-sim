@@ -99,7 +99,7 @@ function makeSwordAction(hitBonus = 5, dmgBonus = 3): Action {
     damageType: 'slashing',
     saveDC: null, saveAbility: null,
     isAoE: false, isControl: false, requiresConcentration: false,
-    slotLevel: 0, legendaryCost: 0, description: 'Longsword attack',
+    slotLevel: 0, noCantripScaling: true, legendaryCost: 0, description: 'Longsword attack',
   };
 }
 
@@ -367,7 +367,7 @@ console.log('\n--- Section 7: Absorb Elements reactive trigger ---');
     damageType: 'fire',
     saveDC: null, saveAbility: null,
     isAoE: false, isControl: false, requiresConcentration: false,
-    slotLevel: 0, legendaryCost: 0, description: 'Fire Bite',
+    slotLevel: 0, noCantripScaling: true, legendaryCost: 0, description: 'Fire Bite',
   };
   const attacker = makeCombatant('attacker', {
     faction: 'enemy',
@@ -429,7 +429,7 @@ console.log('\n--- Section 8: Absorb Elements rider consumed on next melee hit -
     damageType: 'fire',
     saveDC: null, saveAbility: null,
     isAoE: false, isControl: false, requiresConcentration: false,
-    slotLevel: 0, legendaryCost: 0, description: 'Fire Bite',
+    slotLevel: 0, noCantripScaling: true, legendaryCost: 0, description: 'Fire Bite',
   };
   const attacker = makeCombatant('attacker', {
     faction: 'enemy',
@@ -505,7 +505,7 @@ console.log('\n--- Section 9: Absorb Elements damage-type gating ---');
     damageType: 'slashing',
     saveDC: null, saveAbility: null,
     isAoE: false, isControl: false, requiresConcentration: false,
-    slotLevel: 0, legendaryCost: 0, description: 'Slash',
+    slotLevel: 0, noCantripScaling: true, legendaryCost: 0, description: 'Slash',
   };
   const attacker = makeCombatant('attacker', {
     faction: 'enemy',
@@ -544,7 +544,7 @@ console.log('\n--- Section 10: Hellish Rebuke reactive trigger ---');
     damageType: 'slashing',
     saveDC: null, saveAbility: null,
     isAoE: false, isControl: false, requiresConcentration: false,
-    slotLevel: 0, legendaryCost: 0, description: 'Slash',
+    slotLevel: 0, noCantripScaling: true, legendaryCost: 0, description: 'Slash',
   };
   const attacker = makeCombatant('attacker', {
     faction: 'enemy',
@@ -607,7 +607,7 @@ console.log('\n--- Section 11: Hellish Rebuke range gating ---');
     damageType: 'slashing',
     saveDC: null, saveAbility: null,
     isAoE: false, isControl: false, requiresConcentration: false,
-    slotLevel: 0, legendaryCost: 0, description: 'Slash',
+    slotLevel: 0, noCantripScaling: true, legendaryCost: 0, description: 'Slash',
   };
   // Attacker 70 ft away (14 cells) — outside Hellish Rebuke's 60 ft range.
   // But melee attacks require adjacency... so use a ranged attack instead.
@@ -619,7 +619,7 @@ console.log('\n--- Section 11: Hellish Rebuke range gating ---');
     damageType: 'piercing',
     saveDC: null, saveAbility: null,
     isAoE: false, isControl: false, requiresConcentration: false,
-    slotLevel: 0, legendaryCost: 0, description: 'Longshot',
+    slotLevel: 0, noCantripScaling: true, legendaryCost: 0, description: 'Longshot',
   };
   const attacker = makeCombatant('attacker', {
     faction: 'enemy',
@@ -706,7 +706,7 @@ console.log('\n--- Section 13: Budget interaction — one reaction per round ---
     damageType: 'fire',
     saveDC: null, saveAbility: null,
     isAoE: false, isControl: false, requiresConcentration: false,
-    slotLevel: 0, legendaryCost: 0, description: 'Fire Bite',
+    slotLevel: 0, noCantripScaling: true, legendaryCost: 0, description: 'Fire Bite',
   };
   const slashAttack: Action = {
     name: 'Slash', costType: 'action', attackType: 'melee',
@@ -716,7 +716,7 @@ console.log('\n--- Section 13: Budget interaction — one reaction per round ---
     damageType: 'slashing',
     saveDC: null, saveAbility: null,
     isAoE: false, isControl: false, requiresConcentration: false,
-    slotLevel: 0, legendaryCost: 0, description: 'Slash',
+    slotLevel: 0, noCantripScaling: true, legendaryCost: 0, description: 'Slash',
   };
   const attacker = makeCombatant('attacker', {
     faction: 'enemy',

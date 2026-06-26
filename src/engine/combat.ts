@@ -1482,8 +1482,10 @@ export function resolveAttack(
       // ── RFC-UPCASTING Phase 6: Cantrip damage scaling (PHB p.201) ──
       // Cantrips (slotLevel === 0) scale damage dice at caster levels 5/11/17.
       // Exception: some cantrips have flat damage (noCantripScaling=true).
+      // Handle both new (count/sides) and legacy (dieCount/dieSides) formats.
+      const _ctTier = cantripTier(attacker);
       const cantripDmgExpr = action.slotLevel === 0 && !action.noCantripScaling
-        ? { ...action.damage, count: 1 + cantripTier(attacker) }
+        ? { ...action.damage, count: 1 + _ctTier, dieCount: 1 + _ctTier }
         : action.damage;
       // Session 47 Task #29-follow-up-5: Elemental Affinity (Draconic Sorcerer 6)
       // adds CHA mod to damage of spells matching the sorcerer's ancestry type.
@@ -1542,8 +1544,9 @@ export function resolveAttack(
   if (action.hitBonus === null) {
     if (action.damage) {
       // ── RFC-UPCASTING Phase 6: Cantrip damage scaling (PHB p.201) ──
+      const _ctTier2 = cantripTier(attacker);
       const cantripDmgExpr = action.slotLevel === 0 && !action.noCantripScaling
-        ? { ...action.damage, count: 1 + cantripTier(attacker) }
+        ? { ...action.damage, count: 1 + _ctTier2, dieCount: 1 + _ctTier2 }
         : action.damage;
       // Session 47: Elemental Affinity bonus for auto-hit spells.
       const dmg = rollDamage(cantripDmgExpr, false) + elementalAffinityBonus(attacker, action.damageType);
@@ -1982,8 +1985,10 @@ export function resolveAttack(
     // ── RFC-UPCASTING Phase 6: Cantrip damage scaling (PHB p.201) ──
     // Cantrips (slotLevel === 0) scale damage dice at caster levels 5/11/17.
     // Exception: some cantrips have flat damage (noCantripScaling=true).
+    // Handle both new (count/sides) and legacy (dieCount/dieSides) formats.
+    const _ctTier3 = cantripTier(attacker);
     const cantripDmgExpr = action.slotLevel === 0 && !action.noCantripScaling
-      ? { ...action.damage, count: 1 + cantripTier(attacker) }
+      ? { ...action.damage, count: 1 + _ctTier3, dieCount: 1 + _ctTier3 }
       : action.damage;
     let dmg = rollDamage(cantripDmgExpr, isCrit);
 
