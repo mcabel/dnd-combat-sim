@@ -134,15 +134,18 @@ Also updated `spellHealPlan()` in `resources.ts` for upcast healing dice.
 
 ---
 
-## Commits this session (5, all pushed)
+## Commits this session (8, all pushed)
 
 1. `dd46b16` — RFC-UPCASTING Phase 1+2: add castSlotLevel to PlannedAction, sourceSlotLevel to ActiveEffect, getLowestAvailableSlot helper, fix getSpellInfoFromPlan
 2. `59a819b` — RFC-UPCASTING Phase 3: upcast damage/healing scaling for 19 bespoke spells + planner castSlotLevel
 3. `09c712d` — RFC-UPCASTING Phase 4+5+6: Globe of Invulnerability, selectCastSlot, cantrip scaling
 4. `7dbd87a` — RFC-UPCASTING: session72 upcasting system test (77 tests, 0 failures)
 5. `38de89d` — RFC-UPCASTING Phase 2 follow-up: Dispel Magic accurate DC using sourceSlotLevel
+6. `74749ad` — Session 72 handover: RFC-UPCASTING all 6 phases complete
+7. `4ebbe6e` — Fix: green_flame_blade test rollSplashDamage tier arg + noCantripScaling flag for flat-damage cantrips
+8. `593ca00` — Fix: cantrip scaling handles legacy dieCount/dieSides format + noCantripScaling for test actions
 
-**Latest commit `38de89d`.**
+**Latest commit `593ca00` is ALL CHECKS GREEN ✅** (CI completed successfully). No red X on any commit from the final fix forward.
 
 ---
 
@@ -217,6 +220,14 @@ Rather than modifying each of the 19+ cantrip modules individually, cantrip scal
 ### Eldritch Blast v1 simplification
 
 Eldritch Blast multi-beam (2/3/4 beams at levels 5/11/17, each an independent attack roll) is deferred. v1 treats it as scaled damage dice like other cantrips. Documented via `eldritchBlastMultiBeamV1Deferred: true`.
+
+### noCantripScaling flag on Action
+
+Some cantrips have flat damage that never scales with caster level (e.g. Magic Stone XGE p.160: always 1d6+mod). The `noCantripScaling?: boolean` field on `Action` exempts these from `cantripTier()`-based scaling in `resolveAttack()`. Default is `false` (all cantrips scale). This was discovered when CI revealed that Magic Stone (a flat-damage cantrip) was incorrectly receiving tier scaling, and test actions with `slotLevel: 0` but old `dieSides`/`dieCount` format were also being incorrectly scaled.
+
+### Legacy DiceExpression format compatibility
+
+The cantrip scaling code in `resolveAttack()` sets both `count` AND `dieCount` when overriding damage, so it works with both the new (`count`/`sides`) and legacy (`dieCount`/`dieSides`) `DiceExpression` formats. Many test files use the old format with `as any` casts. Without setting `dieCount`, the old-format tests would get 0 damage (since `rollDamage` reads `dieCount` not `count` for the old format), causing Absorb Elements and Hellish Rebuke to never trigger.
 
 ---
 
@@ -308,11 +319,14 @@ None — all substantive work is committed and pushed. The working tree is clean
 
 ## Verification Snapshot
 
-- `git log --oneline -5` shows: `38de89d`, `7dbd87a`, `09c712d`, `59a819b`, `dd46b16`
+- `git log --oneline -8` shows: `593ca00`, `4ebbe6e`, `74749ad`, `38de89d`, `7dbd87a`, `09c712d`, `59a819b`, `dd46b16`
 - `git status` → clean working tree
 - `tsc --noEmit 2>&1 | grep "error TS" | wc -l` → **3** (pre-existing, unchanged)
-- All 12 critical test files pass locally with 0 failures
-- **zHANDOVER-SESSION-72.md** committed and uploaded to `/home/z/my-project/upload/zHANDOVER-SESSION-72.md`
+- All critical test files pass locally with 0 failures
+- **CI status — ALL GREEN ✅ on latest commit `593ca00`** (Test Suite: success)
+- Intermediate commits (dd46b16 through 4ebbe6e) had CI failures from incremental development — all fixed in 593ca00
+- **No red X on the latest commit (`593ca00`).**
+- **zHANDOVER-SESSION-72.md** uploaded to `/home/z/my-project/upload/zHANDOVER-SESSION-72.md`
 
 ---
 
