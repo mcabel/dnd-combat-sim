@@ -49,6 +49,7 @@ import { rollSaveReactable, CombatEvent, EngineState } from '../engine/combat';
 import { rollDie, applyDamageWithTempHP, elementalAffinityBonus } from '../engine/utils';
 import { inConeFt, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
+import { filterGoIProtectedTargets } from '../engine/spell_effects';
 
 // ---- Constants ----------------------------------------------
 
@@ -198,14 +199,21 @@ export function execute(
     inConeFt(caster.pos, aimTarget.pos, t.pos, CONE_HALF_ANGLE_DEG, CONE_RANGE_FT),
   );
 
-  consumeSpellSlot(caster, 5);
+  const slotLevel = consumeSpellSlot(caster, 5) ?? 5;
+
+  // Session 79: exclude targets protected by Globe of Invulnerability from
+  // this AoE. PHB p.245: "the spell has no effect on them." The spell still
+  // fires (slot already consumed above); protected targets are simply
+  // skipped in the damage loop.
+  const effectiveTargets = filterGoIProtectedTargets(inCone, slotLevel, caster.id);
+  const excludedCount = inCone.length - effectiveTargets.length;
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Cone of Cold (DC ${saveDC} CON, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}) — ${inCone.length} creature${inCone.length !== 1 ? 's' : ''} in cone!`,
+    `${caster.name} casts Cone of Cold (DC ${saveDC} CON, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}) — ${effectiveTargets.length} creature${effectiveTargets.length !== 1 ? 's' : ''} in cone${excludedCount > 0 ? ` (${excludedCount} excluded by Globe of Invulnerability)` : ''}!`,
   );
 
-  for (const target of inCone) {
+  for (const target of effectiveTargets) {
     if (target.isDead || target.isUnconscious) continue;
 
     const save = rollSaveReactable(state, caster, target, 'con', saveDC);

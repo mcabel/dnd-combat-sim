@@ -38,7 +38,7 @@
 
 import { Combatant, Battlefield } from '../types/core';
 import { rollSaveReactable, CombatEvent, EngineState } from '../engine/combat';
-import { applySpellEffect, removeEffectsFromCaster } from '../engine/spell_effects';
+import { applySpellEffect, removeEffectsFromCaster, isProtectedByGoI } from '../engine/spell_effects';
 import { startConcentration, rollDie, applyDamageWithTempHP } from '../engine/utils';
 import { chebyshev3D } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
@@ -84,7 +84,7 @@ export function shouldCast(caster: Combatant, bf: Battlefield): Combatant | null
 export function execute(caster: Combatant, target: Combatant, state: EngineState): void {
   const action = caster.actions.find(a => a.name === 'Wall of Ice');
   const saveDC = action?.saveDC ?? 16;
-  consumeSpellSlot(caster, 6);
+  const slotLevel = consumeSpellSlot(caster, 6) ?? 6;
 
   // Drop stale concentration before starting new
   if (caster.concentration?.active) {
@@ -97,26 +97,47 @@ export function execute(caster: Combatant, target: Combatant, state: EngineState
 
   if (target.isDead || target.isUnconscious) return;
 
-  // On-appear damage: DEX save, 10d6 cold (half on success)
-  const appearSave = rollSaveReactable(state, caster, target, 'dex', saveDC);
-  const appearDmg = rollColdDamage(10);
-  const finalDmg = appearSave.success ? Math.floor(appearDmg / 2) : appearDmg;
+  // Session 79 (GoI AoE exclusion follow-up): PHB p.245: "the spell has no
+  // effect on them." The spell still fires (slot already consumed above).
+  // For persistent damage zones, the damage_zone EFFECT is applied to the
+  // target (so it can tick later if GoI expires), but the ON-CAST (on-appear)
+  // damage is skipped if the target is GoI-protected. The caster's own GoI
+  // does NOT block their own spell (PHB p.245: "cast from outside the barrier").
+  const goiBlocked = target.id !== caster.id && isProtectedByGoI(target, slotLevel);
 
-  emit(state, appearSave.success ? 'save_success' : 'save_fail', caster.id,
-    `${target.name} ${appearSave.success ? 'succeeds on' : 'fails'} DC ${saveDC} DEX save vs Wall of Ice — takes ${finalDmg} cold (rolled ${appearDmg}${appearSave.success ? ', halved' : ''})`,
-    target.id, appearSave.roll);
+  // On-appear damage: DEX save, 10d6 cold (half on success). Skipped if GoI-protected.
+  if (!goiBlocked) {
+    const appearSave = rollSaveReactable(state, caster, target, 'dex', saveDC);
+    const appearDmg = rollColdDamage(10);
+    const finalDmg = appearSave.success ? Math.floor(appearDmg / 2) : appearDmg;
 
-  const dealtOnAppear = applyDamageWithTempHP(target, finalDmg, 'cold');
-  emit(state, 'damage', caster.id,
-    `Wall of Ice deals ${dealtOnAppear} cold to ${target.name} (appears)`, target.id, dealtOnAppear);
+    emit(state, appearSave.success ? 'save_success' : 'save_fail', caster.id,
+      `${target.name} ${appearSave.success ? 'succeeds on' : 'fails'} DC ${saveDC} DEX save vs Wall of Ice — takes ${finalDmg} cold (rolled ${appearDmg}${appearSave.success ? ', halved' : ''})`,
+      target.id, appearSave.roll);
+
+    const dealtOnAppear = applyDamageWithTempHP(target, finalDmg, 'cold');
+    emit(state, 'damage', caster.id,
+      `Wall of Ice deals ${dealtOnAppear} cold to ${target.name} (appears)`, target.id, dealtOnAppear);
+  } else {
+    emit(state, 'damage', caster.id,
+      `${target.name} is protected by Globe of Invulnerability — on-cast damage negated (persistent effect still applied, will tick when GoI expires).`,
+      target.id, 0);
+  }
 
   if (target.isDead || target.isUnconscious) return;
 
-  // Ongoing: damage_zone with DEX save half each tick (5d6 cold per PHB)
+  // Ongoing: damage_zone with DEX save half each tick (5d6 cold per PHB).
+  //
+  // ALWAYS applied (even to GoI-protected targets) so the spell can start
+  // ticking if GoI expires later. sourceSlotLevel is set so the combat.ts
+  // damage_zone tick loop can re-check GoI protection on each per-turn
+  // tick (PHB p.245: the spell continues to have no effect on GoI-
+  // protected creatures for as long as GoI is active).
   applySpellEffect(target, {
     casterId: caster.id,
     spellName: 'Wall of Ice',
     effectType: 'damage_zone',
+    sourceSlotLevel: slotLevel,
     payload: {
       dieCount: 5,
       dieSides: 6,

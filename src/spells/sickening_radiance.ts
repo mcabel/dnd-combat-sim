@@ -47,7 +47,7 @@ import { rollSaveReactable, CombatEvent, EngineState } from '../engine/combat';
 import { rollDie, applyDamageWithTempHP, startConcentration } from '../engine/utils';
 import { chebyshev3D, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
-import { applySpellEffect, removeEffectsFromCaster } from '../engine/spell_effects';
+import { applySpellEffect, removeEffectsFromCaster, filterGoIProtectedTargets, isProtectedByGoI } from '../engine/spell_effects';
 
 export const metadata = {
   name: 'Sickening Radiance',
@@ -108,13 +108,24 @@ export function execute(caster: Combatant, targets: Combatant[], state: EngineSt
   const action = caster.actions.find(a => a.name === 'Sickening Radiance');
   const saveDC = action?.saveDC ?? 15;
 
-  consumeSpellSlot(caster, 4);
+  const slotLevel = consumeSpellSlot(caster, 4) ?? 4;
   if (caster.concentration?.active) removeEffectsFromCaster(caster.id, state.battlefield);
   startConcentration(caster, 'Sickening Radiance');
 
+  // Session 79 (GoI AoE exclusion follow-up): PHB p.245: "the spell has no
+  // effect on them." This applies to ALL spell effects, not just damage —
+  // Sickening Radiance's on-cast radiant damage + exhaustion are also blocked.
+  // The spell still fires (slot already consumed above); protected targets
+  // are simply skipped in the on-cast loop. The persistent terrain_zone on
+  // the caster is still applied (so it can tick later if GoI expires); the
+  // combat.ts terrain_zone tick loop re-checks GoI on each per-turn tick
+  // using the zone's sourceSlotLevel.
+  const effectiveTargets = filterGoIProtectedTargets(targets, slotLevel, caster.id);
+  const excludedCount = targets.length - effectiveTargets.length;
+
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Sickening Radiance! (DC ${saveDC} CON, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}, ${metadata.aoeRadiusFt}-ft radius AoE + exhaustion on fail, concentration) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} caught!`,
+    `${caster.name} casts Sickening Radiance! (DC ${saveDC} CON, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}, ${metadata.aoeRadiusFt}-ft radius AoE + exhaustion on fail, concentration) — ${effectiveTargets.length} creature${effectiveTargets.length !== 1 ? 's' : ''} caught${excludedCount > 0 ? ` (${excludedCount} excluded by Globe of Invulnerability)` : ''}!`,
   );
 
   // Find the center (highest-threat enemy) for the terrain zone position
@@ -128,11 +139,15 @@ export function execute(caster: Combatant, targets: Combatant[], state: EngineSt
   // This marks a persistent 30-ft radius zone at the center position.
   // Creatures starting their turn in the zone get poisoned (secondary effect)
   // AND gain 1 level of exhaustion (XGE p.164 canon).
+  //
+  // Session 79: sourceSlotLevel is set so the terrain_zone tick in combat.ts
+  // can re-check GoI protection on each per-turn tick.
   if (center) {
     applySpellEffect(caster, {
       casterId: caster.id,
       spellName: 'Sickening Radiance',
       effectType: 'terrain_zone',
+      sourceSlotLevel: slotLevel,
       payload: {
         terrainSaveAbility: 'con' as const,
         terrainCondition: 'poisoned' as Condition,
@@ -145,7 +160,7 @@ export function execute(caster: Combatant, targets: Combatant[], state: EngineSt
     });
   }
 
-  for (const target of targets) {
+  for (const target of effectiveTargets) {
     if (target.isDead || target.isUnconscious) continue;
 
     const save = rollSaveReactable(state, caster, target, 'con', saveDC);

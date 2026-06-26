@@ -80,7 +80,7 @@ import { rollSaveReactable, CombatEvent, EngineState } from '../engine/combat';
 import { rollDie, applyDamageWithTempHP, startConcentration, elementalAffinityBonus } from '../engine/utils';
 import { chebyshev3D, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
-import { applySpellEffect, removeEffectsFromCaster } from '../engine/spell_effects';
+import { applySpellEffect, removeEffectsFromCaster, isProtectedByGoI } from '../engine/spell_effects';
 
 // ---- Metadata -----------------------------------------------
 
@@ -218,7 +218,7 @@ export function execute(
   const action = caster.actions.find(a => a.name === 'Cloudkill');
   const saveDC = action?.saveDC ?? 13;
 
-  consumeSpellSlot(caster, 5);
+  const slotLevel = consumeSpellSlot(caster, 5) ?? 5;
   if (caster.concentration?.active) removeEffectsFromCaster(caster.id, state.battlefield);
   startConcentration(caster, 'Cloudkill');
 
@@ -230,34 +230,58 @@ export function execute(
   for (const target of targets) {
     if (target.isDead || target.isUnconscious) continue;
 
-    const save = rollSaveReactable(state, caster, target, 'con', saveDC);
-    // Session 50 Task #29-follow-up-5c-3: Elemental Affinity (Draconic
-    // Sorcerer 6) adds CHA mod to the poison damage if the caster's
-    // ancestry is poison. The bonus is added once to the total damage
-    // roll (before save halving).
-    const eaBonus = elementalAffinityBonus(caster, metadata.damageType);
-    const fullDmg = rollDamage() + eaBonus;
-    const dmg = save.success ? Math.floor(fullDmg / 2) : fullDmg;
-    const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);
+    // Session 79 (GoI AoE exclusion follow-up): PHB p.245: "the spell has no
+    // effect on them." The spell still fires (slot already consumed above).
+    // For persistent damage zones, the damage_zone EFFECT is applied to ALL
+    // targets in range (so it can tick later if GoI expires), but the ON-CAST
+    // damage is skipped for GoI-protected targets. The caster's own GoI does
+    // NOT block their own spell (PHB p.245: "cast from outside the barrier").
+    const goiBlocked = target.id !== caster.id && isProtectedByGoI(target, slotLevel);
 
-    emit(
-      state,
-      save.success ? 'save_success' : 'save_fail',
-      caster.id,
-      `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} CON save vs Cloudkill (rolled ${save.total}) — ${dealt} ${metadata.damageType} damage (${metadata.dieCount}d${metadata.dieSides}=${fullDmg}${save.success ? ', halved' : ''})`,
-      target.id, save.roll,
-    );
-    emit(
-      state, 'damage', caster.id,
-      `Cloudkill: ${target.name} takes ${dealt} ${metadata.damageType} damage`,
-      target.id, dealt,
-    );
+    // 1. Immediate on-cast damage: CON save for half.
+    //    Skipped if the target is GoI-protected (PHB p.245: "no effect on them").
+    if (!goiBlocked) {
+      const save = rollSaveReactable(state, caster, target, 'con', saveDC);
+      // Session 50 Task #29-follow-up-5c-3: Elemental Affinity (Draconic
+      // Sorcerer 6) adds CHA mod to the poison damage if the caster's
+      // ancestry is poison. The bonus is added once to the total damage
+      // roll (before save halving).
+      const eaBonus = elementalAffinityBonus(caster, metadata.damageType);
+      const fullDmg = rollDamage() + eaBonus;
+      const dmg = save.success ? Math.floor(fullDmg / 2) : fullDmg;
+      const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);
 
-    // Persistent damage_zone — start-of-turn tick rolls CON save for half.
+      emit(
+        state,
+        save.success ? 'save_success' : 'save_fail',
+        caster.id,
+        `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} CON save vs Cloudkill (rolled ${save.total}) — ${dealt} ${metadata.damageType} damage (${metadata.dieCount}d${metadata.dieSides}=${fullDmg}${save.success ? ', halved' : ''})`,
+        target.id, save.roll,
+      );
+      emit(
+        state, 'damage', caster.id,
+        `Cloudkill: ${target.name} takes ${dealt} ${metadata.damageType} damage`,
+        target.id, dealt,
+      );
+    } else {
+      emit(
+        state, 'damage', caster.id,
+        `${target.name} is protected by Globe of Invulnerability — on-cast damage negated (persistent effect still applied, will tick when GoI expires).`,
+        target.id, 0,
+      );
+    }
+
+    // 2. Persistent damage_zone — start-of-turn tick rolls CON save for half.
+    //    ALWAYS applied (even to GoI-protected targets) so the spell can start
+    //    ticking if GoI expires later. sourceSlotLevel is set so the combat.ts
+    //    damage_zone tick loop can re-check GoI protection on each per-turn
+    //    tick (PHB p.245: the spell continues to have no effect on GoI-
+    //    protected creatures for as long as GoI is active).
     applySpellEffect(target, {
       casterId: caster.id,
       spellName: 'Cloudkill',
       effectType: 'damage_zone',
+      sourceSlotLevel: slotLevel,
       payload: {
         dieCount: metadata.dieCount,
         dieSides: metadata.dieSides,

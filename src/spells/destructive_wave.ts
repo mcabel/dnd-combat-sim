@@ -53,7 +53,7 @@ import { rollSaveReactable, CombatEvent, EngineState } from '../engine/combat';
 import { rollDie, applyDamageWithTempHP } from '../engine/utils';
 import { chebyshev3D, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
-import { applySpellEffect } from '../engine/spell_effects';
+import { applySpellEffect, filterGoIProtectedTargets } from '../engine/spell_effects';
 
 export const metadata = {
   name: 'Destructive Wave',
@@ -99,14 +99,21 @@ export function execute(caster: Combatant, targets: Combatant[], state: EngineSt
   const action = caster.actions.find(a => a.name === 'Destructive Wave');
   const saveDC = action?.saveDC ?? 15;
 
-  consumeSpellSlot(caster, 5);
+  const slotLevel = consumeSpellSlot(caster, 5) ?? 5;
+
+  // Session 79 (GoI AoE exclusion): exclude targets protected by Globe of
+  // Invulnerability. PHB p.245: "the spell has no effect on them." The spell
+  // still fires (slot already consumed above); protected targets are simply
+  // skipped in the damage loop (and thus also skip the prone rider).
+  const effectiveTargets = filterGoIProtectedTargets(targets, slotLevel, caster.id);
+  const excludedCount = targets.length - effectiveTargets.length;
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Destructive Wave! (DC ${saveDC} CON, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}, ${metadata.aoeRadiusFt}-ft radius self-centred AoE + prone on fail) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} caught!`,
+    `${caster.name} casts Destructive Wave! (DC ${saveDC} CON, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}, ${metadata.aoeRadiusFt}-ft radius self-centred AoE + prone on fail) — ${effectiveTargets.length} creature${effectiveTargets.length !== 1 ? 's' : ''} caught${excludedCount > 0 ? ` (${excludedCount} excluded by Globe of Invulnerability)` : ''}!`,
   );
 
-  for (const target of targets) {
+  for (const target of effectiveTargets) {
     if (target.isDead || target.isUnconscious) continue;
 
     const save = rollSaveReactable(state, caster, target, 'con', saveDC);

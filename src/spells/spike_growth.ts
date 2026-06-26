@@ -60,7 +60,7 @@
 
 import { Combatant, Battlefield } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
-import { applySpellEffect, removeEffectsFromCaster, applyTerrainDifficulty } from '../engine/spell_effects';
+import { applySpellEffect, removeEffectsFromCaster, applyTerrainDifficulty, isProtectedByGoI } from '../engine/spell_effects';
 import { startConcentration, rollDie } from '../engine/utils';
 import { chebyshev3D } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
@@ -199,7 +199,7 @@ export function execute(
   target: Combatant,
   state: EngineState,
 ): void {
-  consumeSpellSlot(caster, 2);
+  const slotLevel = consumeSpellSlot(caster, 2) ?? 2;
 
   if (caster.concentration?.active) {
     removeEffectsFromCaster(caster.id, state.battlefield);
@@ -214,15 +214,36 @@ export function execute(
 
   if (target.isDead || target.isUnconscious) return;
 
+  // Session 79 (GoI AoE exclusion follow-up): PHB p.245: "the spell has no
+  // effect on them." Spike Growth has NO on-cast damage (PHB p.277: damage
+  // is triggered by movement into/within the area, modelled in v1 as a
+  // start-of-turn damage_zone tick). The persistent terrain_zone + damage_zone
+  // ARE still applied to the target (so they can tick later if GoI expires);
+  // the combat.ts tick loops re-check GoI on each per-turn tick using the
+  // zones' sourceSlotLevel. The caster's own GoI does NOT block their own
+  // spell (PHB p.245: "cast from outside the barrier").
+  const goiBlocked = target.id !== caster.id && isProtectedByGoI(target, slotLevel);
+  if (goiBlocked) {
+    emit(
+      state, 'damage', caster.id,
+      `${target.name} is protected by Globe of Invulnerability — Spike Growth persistent effect suppressed while GoI is active (will tick when GoI expires).`,
+      target.id, 0,
+    );
+  }
+
   // Apply terrain_zone effect on the CASTER for difficult terrain.
   // PHB p.277: "The area becomes difficult terrain."
   // No terrainCondition/terrainSaveAbility — the terrain zone only marks cells
   // as difficult terrain; the save-or-condition mechanic does not apply.
   // The damage is handled separately by the damage_zone effect on the target.
+  //
+  // Session 79: sourceSlotLevel is set so the terrain_zone tick in combat.ts
+  // can re-check GoI protection on each per-turn tick.
   const terrainEffect = applySpellEffect(caster, {
     casterId: caster.id,
     spellName: 'Spike Growth',
     effectType: 'terrain_zone',
+    sourceSlotLevel: slotLevel,
     payload: {
       terrainRadiusFt: 20,
       terrainCenterX: target.pos.x,
@@ -236,10 +257,17 @@ export function execute(
 
   // Apply damage_zone effect on the TARGET for persistent start-of-turn damage.
   // NO saveDC / saveAbility — the damage is automatic (no save per PHB p.277).
+  //
+  // ALWAYS applied (even to GoI-protected targets) so the spell can start
+  // ticking if GoI expires later. sourceSlotLevel is set so the combat.ts
+  // damage_zone tick loop can re-check GoI protection on each per-turn
+  // tick (PHB p.245: the spell continues to have no effect on GoI-
+  // protected creatures for as long as GoI is active).
   applySpellEffect(target, {
     casterId: caster.id,
     spellName: 'Spike Growth',
     effectType: 'damage_zone',
+    sourceSlotLevel: slotLevel,
     payload: {
       dieCount: metadata.dieCount,
       dieSides: metadata.dieSides,

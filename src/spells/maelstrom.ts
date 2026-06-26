@@ -53,7 +53,7 @@ import { rollSaveReactable, CombatEvent, EngineState } from '../engine/combat';
 import { rollDie, applyDamageWithTempHP, startConcentration } from '../engine/utils';
 import { chebyshev3D, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
-import { applySpellEffect, removeEffectsFromCaster } from '../engine/spell_effects';
+import { applySpellEffect, removeEffectsFromCaster, filterGoIProtectedTargets, isProtectedByGoI } from '../engine/spell_effects';
 
 export const metadata = {
   name: 'Maelstrom',
@@ -115,13 +115,24 @@ export function execute(caster: Combatant, targets: Combatant[], state: EngineSt
   const action = caster.actions.find(a => a.name === 'Maelstrom');
   const saveDC = action?.saveDC ?? 15;
 
-  consumeSpellSlot(caster, 5);
+  const slotLevel = consumeSpellSlot(caster, 5) ?? 5;
   if (caster.concentration?.active) removeEffectsFromCaster(caster.id, state.battlefield);
   startConcentration(caster, 'Maelstrom');
 
+  // Session 79 (GoI AoE exclusion follow-up): PHB p.245: "the spell has no
+  // effect on them." This applies to ALL spell effects, not just damage —
+  // Maelstrom's on-cast damage + restrained are also blocked. The spell
+  // still fires (slot already consumed above); protected targets are
+  // skipped in the on-cast loop. The persistent damage_zone IS still
+  // applied to GoI-protected targets (so it can tick later if GoI expires);
+  // the combat.ts damage_zone tick loop re-checks GoI on each per-turn tick
+  // using the zone's sourceSlotLevel.
+  const effectiveTargets = filterGoIProtectedTargets(targets, slotLevel, caster.id);
+  const excludedCount = targets.length - effectiveTargets.length;
+
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Maelstrom! (DC ${saveDC} DEX, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}, ${metadata.aoeRadiusFt}-ft radius AoE + restrained on fail, concentration) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} caught!`,
+    `${caster.name} casts Maelstrom! (DC ${saveDC} DEX, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}, ${metadata.aoeRadiusFt}-ft radius AoE + restrained on fail, concentration) — ${effectiveTargets.length} creature${effectiveTargets.length !== 1 ? 's' : ''} caught${excludedCount > 0 ? ` (${excludedCount} excluded by Globe of Invulnerability)` : ''}!`,
   );
 
   // Find the center (highest-threat enemy) for the terrain zone position
@@ -133,11 +144,15 @@ export function execute(caster: Combatant, targets: Combatant[], state: EngineSt
 
   // Apply terrain_zone effect on the CASTER (concentration)
   // This marks a persistent 20-ft radius zone at the center position
+  //
+  // Session 79: sourceSlotLevel is set so the terrain_zone tick in combat.ts
+  // can re-check GoI protection on each per-turn tick.
   if (center) {
     applySpellEffect(caster, {
       casterId: caster.id,
       spellName: 'Maelstrom',
       effectType: 'terrain_zone',
+      sourceSlotLevel: slotLevel,
       payload: {
         terrainSaveAbility: 'dex' as const,
         terrainCondition: 'restrained' as Condition,
@@ -150,39 +165,58 @@ export function execute(caster: Combatant, targets: Combatant[], state: EngineSt
     });
   }
 
+  // Loop over ALL targets (not effectiveTargets) so the persistent
+  // damage_zone is applied even to GoI-protected targets (will tick when
+  // GoI expires). The on-cast damage + restrained is skipped for GoI-
+  // protected targets via a per-target isProtectedByGoI check (Pattern B).
   for (const target of targets) {
     if (target.isDead || target.isUnconscious) continue;
 
-    const save = rollSaveReactable(state, caster, target, 'dex', saveDC);
-    const fullDmg = rollDamage();
-    const dmg = save.success ? Math.floor(fullDmg / 2) : fullDmg;
-    const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);
+    const goiBlocked = target.id !== caster.id && isProtectedByGoI(target, slotLevel);
 
-    emit(
-      state,
-      save.success ? 'save_success' : 'save_fail',
-      caster.id,
-      `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} DEX save vs Maelstrom (rolled ${save.total}) — ${dealt} ${metadata.damageType} damage (${metadata.dieCount}d${metadata.dieSides}=${fullDmg}${save.success ? ', halved' : ''})${save.success ? '' : ' + RESTRAINED'}`,
-      target.id, save.roll,
-    );
-    emit(state, 'damage', caster.id, `Maelstrom: ${target.name} takes ${dealt} ${metadata.damageType} damage`, target.id, dealt);
+    if (!goiBlocked) {
+      const save = rollSaveReactable(state, caster, target, 'dex', saveDC);
+      const fullDmg = rollDamage();
+      const dmg = save.success ? Math.floor(fullDmg / 2) : fullDmg;
+      const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);
 
-    if (!save.success && !target.conditions.has('restrained')) {
-      applySpellEffect(target, {
-        casterId: caster.id,
-        spellName: 'Maelstrom',
-        effectType: 'condition_apply',
-        payload: { condition: 'restrained' },
-        sourceIsConcentration: true,    // v2: concentration-sourced
-      });
-      emit(state, 'condition_add', caster.id, `${target.name} is caught in the MAELSTROM and restrained! (speed 0, attacks vs them have advantage, their attacks have disadvantage)`, target.id);
+      emit(
+        state,
+        save.success ? 'save_success' : 'save_fail',
+        caster.id,
+        `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} DEX save vs Maelstrom (rolled ${save.total}) — ${dealt} ${metadata.damageType} damage (${metadata.dieCount}d${metadata.dieSides}=${fullDmg}${save.success ? ', halved' : ''})${save.success ? '' : ' + RESTRAINED'}`,
+        target.id, save.roll,
+      );
+      emit(state, 'damage', caster.id, `Maelstrom: ${target.name} takes ${dealt} ${metadata.damageType} damage`, target.id, dealt);
+
+      if (!save.success && !target.conditions.has('restrained')) {
+        applySpellEffect(target, {
+          casterId: caster.id,
+          spellName: 'Maelstrom',
+          effectType: 'condition_apply',
+          payload: { condition: 'restrained' },
+          sourceIsConcentration: true,    // v2: concentration-sourced
+        });
+        emit(state, 'condition_add', caster.id, `${target.name} is caught in the MAELSTROM and restrained! (speed 0, attacks vs them have advantage, their attacks have disadvantage)`, target.id);
+      }
+    } else {
+      emit(state, 'damage', caster.id,
+        `${target.name} is protected by Globe of Invulnerability — on-cast damage + restrained negated (persistent damage_zone still applied, will tick when GoI expires).`,
+        target.id, 0);
     }
 
     // Persistent damage_zone — start-of-turn tick rolls DEX save for half.
+    //
+    // ALWAYS applied (even to GoI-protected targets) so the spell can start
+    // ticking if GoI expires later. sourceSlotLevel is set so the combat.ts
+    // damage_zone tick loop can re-check GoI protection on each per-turn
+    // tick (PHB p.245: the spell continues to have no effect on GoI-
+    // protected creatures for as long as GoI is active).
     applySpellEffect(target, {
       casterId: caster.id,
       spellName: 'Maelstrom',
       effectType: 'damage_zone',
+      sourceSlotLevel: slotLevel,
       payload: {
         dieCount: metadata.dieCount,
         dieSides: metadata.dieSides,

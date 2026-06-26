@@ -44,7 +44,7 @@
 
 import { Combatant, Battlefield, DamageType } from '../types/core';
 import { rollSaveReactable, CombatEvent, EngineState } from '../engine/combat';
-import { applySpellEffect, removeEffectsFromCaster } from '../engine/spell_effects';
+import { applySpellEffect, removeEffectsFromCaster, filterGoIProtectedTargets } from '../engine/spell_effects';
 import { startConcentration, rollDie, applyDamageWithTempHP } from '../engine/utils';
 import { inConeFt, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
@@ -168,19 +168,26 @@ export function execute(
   const action = caster.actions.find(a => a.name === 'Whirlwind');
   const saveDC = action?.saveDC ?? 13;
 
-  consumeSpellSlot(caster, 7);
+  const slotLevel = consumeSpellSlot(caster, 7) ?? 7;
 
   if (caster.concentration?.active) {
     removeEffectsFromCaster(caster.id, state.battlefield);
   }
   startConcentration(caster, 'Whirlwind');
 
+  // Session 79: exclude targets protected by Globe of Invulnerability from
+  // this AoE. PHB p.245: "the spell has no effect on them." The spell still
+  // fires (slot already consumed above); protected targets are simply
+  // skipped in the damage loop.
+  const effectiveTargets = filterGoIProtectedTargets(targets, slotLevel, caster.id);
+  const excludedCount = targets.length - effectiveTargets.length;
+
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Whirlwind! (DC ${saveDC} CON, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType} + restrained on fail, ${CONE_RANGE_FT}-ft cone, concentration) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} caught!`,
+    `${caster.name} casts Whirlwind! (DC ${saveDC} CON, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType} + restrained on fail, ${CONE_RANGE_FT}-ft cone, concentration) — ${effectiveTargets.length} creature${effectiveTargets.length !== 1 ? 's' : ''} caught${excludedCount > 0 ? ` (${excludedCount} excluded by Globe of Invulnerability)` : ''}!`,
   );
 
-  for (const target of targets) {
+  for (const target of effectiveTargets) {
     if (target.isDead || target.isUnconscious) continue;
 
     const save = rollSaveReactable(state, caster, target, 'con', saveDC);

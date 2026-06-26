@@ -39,7 +39,7 @@ import { rollSaveReactable, CombatEvent, EngineState } from '../engine/combat';
 import { rollDie, applyDamageWithTempHP } from '../engine/utils';
 import { inLineFt, chebyshev3D, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
-import { applySpellEffect } from '../engine/spell_effects';
+import { applySpellEffect, filterGoIProtectedTargets } from '../engine/spell_effects';
 
 export const metadata = {
   name: 'Sunbeam',
@@ -101,14 +101,21 @@ export function execute(caster: Combatant, targets: Combatant[], state: EngineSt
   const action = caster.actions.find(a => a.name === 'Sunbeam');
   const saveDC = action?.saveDC ?? 15;
 
-  consumeSpellSlot(caster, 6);
+  const slotLevel = consumeSpellSlot(caster, 6) ?? 6;
+
+  // Session 79: exclude targets protected by Globe of Invulnerability from
+  // this AoE. PHB p.245: "the spell has no effect on them." The spell still
+  // fires (slot already consumed above); protected targets are simply
+  // skipped in the damage loop.
+  const effectiveTargets = filterGoIProtectedTargets(targets, slotLevel, caster.id);
+  const excludedCount = targets.length - effectiveTargets.length;
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Sunbeam! (DC ${saveDC} CON, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}, ${metadata.lineLengthFt}-ft × ${metadata.lineWidthFt}-ft line + blinded on fail) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} caught!`,
+    `${caster.name} casts Sunbeam! (DC ${saveDC} CON, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}, ${metadata.lineLengthFt}-ft × ${metadata.lineWidthFt}-ft line + blinded on fail) — ${effectiveTargets.length} creature${effectiveTargets.length !== 1 ? 's' : ''} caught${excludedCount > 0 ? ` (${excludedCount} excluded by Globe of Invulnerability)` : ''}!`,
   );
 
-  for (const target of targets) {
+  for (const target of effectiveTargets) {
     if (target.isDead || target.isUnconscious) continue;
 
     const save = rollSaveReactable(state, caster, target, 'con', saveDC);

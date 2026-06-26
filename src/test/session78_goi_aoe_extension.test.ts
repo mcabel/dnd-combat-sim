@@ -605,8 +605,11 @@ console.log('\n=== Phase 6 — Metadata flags ===\n');
 {
   const goiMeta = require('../spells/globe_of_invulnerability').metadata;
 
-  eq('6a. globeOfInvulnerabilityAoEV1Simplified still true (partial)', goiMeta.globeOfInvulnerabilityAoEV1Simplified, true);
-  eq('6b. globeOfInvulnerabilityAoEPartialV1Implemented still true', goiMeta.globeOfInvulnerabilityAoEPartialV1Implemented, true);
+  // Session 79 update: all ~53 damage AoE spells now covered.
+  // globeOfInvulnerabilityAoEV1Simplified flipped to false (complete).
+  // globeOfInvulnerabilityAoEPartialV1Implemented removed (no longer partial).
+  eq('6a. globeOfInvulnerabilityAoEV1Simplified now false (complete in Session 79)', goiMeta.globeOfInvulnerabilityAoEV1Simplified, false);
+  eq('6b. globeOfInvulnerabilityAoEPartialV1Implemented removed (no longer partial)', goiMeta.globeOfInvulnerabilityAoEPartialV1Implemented, undefined);
 
   // Verify all 12 newly-covered spells import filterGoIProtectedTargets or isProtectedByGoI
   const aohMeta = require('../spells/arms_of_hadar').metadata;

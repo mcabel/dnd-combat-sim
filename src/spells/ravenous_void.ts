@@ -43,6 +43,7 @@ import { CombatEvent, EngineState } from '../engine/combat';
 import { rollDie, applyDamageWithTempHP } from '../engine/utils';
 import { chebyshev3D, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
+import { filterGoIProtectedTargets } from '../engine/spell_effects';
 
 export const metadata = {
   name: 'Ravenous Void',
@@ -97,14 +98,21 @@ export function shouldCast(caster: Combatant, bf: Battlefield): Combatant[] | nu
 }
 
 export function execute(caster: Combatant, targets: Combatant[], state: EngineState): void {
-  consumeSpellSlot(caster, 9);
+  const slotLevel = consumeSpellSlot(caster, 9) ?? 9;
+
+  // Session 79 (GoI AoE exclusion): exclude targets protected by Globe of
+  // Invulnerability. PHB p.245: "the spell has no effect on them." The spell
+  // still fires (slot already consumed above); protected targets are simply
+  // skipped in the damage loop.
+  const effectiveTargets = filterGoIProtectedTargets(targets, slotLevel, caster.id);
+  const excludedCount = targets.length - effectiveTargets.length;
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Ravenous Void! (AUTO-HIT — no save; ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}, ${metadata.aoeRadiusFt}-ft radius AoE) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} caught!`,
+    `${caster.name} casts Ravenous Void! (AUTO-HIT — no save; ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}, ${metadata.aoeRadiusFt}-ft radius AoE) — ${effectiveTargets.length} creature${effectiveTargets.length !== 1 ? 's' : ''} caught${excludedCount > 0 ? ` (${excludedCount} excluded by Globe of Invulnerability)` : ''}!`,
   );
 
-  for (const target of targets) {
+  for (const target of effectiveTargets) {
     if (target.isDead || target.isUnconscious) continue;
 
     // Auto-hit: no save, just apply 5d10 force.

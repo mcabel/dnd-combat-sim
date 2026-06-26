@@ -55,7 +55,7 @@
 
 import { Combatant, Battlefield } from '../types/core';
 import { rollSaveReactable, CombatEvent, EngineState } from '../engine/combat';
-import { applySpellEffect, removeEffectsFromCaster } from '../engine/spell_effects';
+import { applySpellEffect, removeEffectsFromCaster, isProtectedByGoI } from '../engine/spell_effects';
 import { startConcentration, rollDie, applyDamageWithTempHP } from '../engine/utils';
 import { chebyshev3D } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
@@ -188,7 +188,7 @@ export function execute(
   const action = caster.actions.find(a => a.name === 'Moonbeam');
   const saveDC = action?.saveDC ?? 13;
 
-  consumeSpellSlot(caster, 2);
+  const slotLevel = consumeSpellSlot(caster, 2) ?? 2;
 
   if (caster.concentration?.active) {
     removeEffectsFromCaster(caster.id, state.battlefield);
@@ -203,30 +203,53 @@ export function execute(
 
   if (target.isDead || target.isUnconscious) return;
 
-  // On-cast damage: CON save for half.
-  const save = rollSaveReactable(state, caster, target, 'con', saveDC);
-  const fullDmg = rollDamage();
-  const dmg = save.success ? Math.floor(fullDmg / 2) : fullDmg;
-  const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);
+  // Session 79 (GoI AoE exclusion follow-up): PHB p.245: "the spell has no
+  // effect on them." The spell still fires (slot already consumed above).
+  // For persistent damage zones, the damage_zone EFFECT is applied to the
+  // target (so it can tick later if GoI expires), but the ON-CAST damage is
+  // skipped if the target is GoI-protected. The caster's own GoI does NOT
+  // block their own spell (PHB p.245: "cast from outside the barrier").
+  const goiBlocked = target.id !== caster.id && isProtectedByGoI(target, slotLevel);
 
-  emit(
-    state,
-    save.success ? 'save_success' : 'save_fail',
-    caster.id,
-    `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} CON save vs Moonbeam (rolled ${save.total}) — ${dealt} ${metadata.damageType} damage (${metadata.dieCount}d${metadata.dieSides}=${fullDmg}${save.success ? ', halved' : ''})`,
-    target.id, save.roll,
-  );
-  emit(
-    state, 'damage', caster.id,
-    `${target.name} takes ${dealt} ${metadata.damageType} damage from Moonbeam (on cast)`,
-    target.id, dealt,
-  );
+  // On-cast damage: CON save for half. Skipped if GoI-protected.
+  if (!goiBlocked) {
+    const save = rollSaveReactable(state, caster, target, 'con', saveDC);
+    const fullDmg = rollDamage();
+    const dmg = save.success ? Math.floor(fullDmg / 2) : fullDmg;
+    const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);
+
+    emit(
+      state,
+      save.success ? 'save_success' : 'save_fail',
+      caster.id,
+      `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} CON save vs Moonbeam (rolled ${save.total}) — ${dealt} ${metadata.damageType} damage (${metadata.dieCount}d${metadata.dieSides}=${fullDmg}${save.success ? ', halved' : ''})`,
+      target.id, save.roll,
+    );
+    emit(
+      state, 'damage', caster.id,
+      `${target.name} takes ${dealt} ${metadata.damageType} damage from Moonbeam (on cast)`,
+      target.id, dealt,
+    );
+  } else {
+    emit(
+      state, 'damage', caster.id,
+      `${target.name} is protected by Globe of Invulnerability — on-cast damage negated (persistent effect still applied, will tick when GoI expires).`,
+      target.id, 0,
+    );
+  }
 
   // Persistent damage_zone — start-of-turn tick rolls CON save for half.
+  //
+  // ALWAYS applied (even to GoI-protected targets) so the spell can start
+  // ticking if GoI expires later. sourceSlotLevel is set so the combat.ts
+  // damage_zone tick loop can re-check GoI protection on each per-turn
+  // tick (PHB p.245: the spell continues to have no effect on GoI-
+  // protected creatures for as long as GoI is active).
   applySpellEffect(target, {
     casterId: caster.id,
     spellName: 'Moonbeam',
     effectType: 'damage_zone',
+    sourceSlotLevel: slotLevel,
     payload: {
       dieCount: metadata.dieCount,
       dieSides: metadata.dieSides,

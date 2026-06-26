@@ -938,6 +938,21 @@ export function isProtectedByGoI(target: Combatant, castLevel: number): boolean 
  * on-cast damage is skipped. The combat.ts damage_zone tick loop re-checks
  * GoI on each per-turn tick using the zone's sourceSlotLevel.
  *
+ * Session 79: extended to 36 more spells — ALL remaining damage AoE spells
+ * now covered. Pattern A (instantaneous, 23 spells): chain_lightning,
+ * circle_of_death, cone_of_cold, dark_star, destructive_wave, earth_tremor,
+ * earthquake, erupting_earth, fire_storm, flame_strike, frost_fingers,
+ * gravity_fissure, gravity_sinkhole, incendiary_cloud, maddening_darkness,
+ * magnify_gravity, pulse_wave, ravenous_void, spray_of_cards, storm_sphere,
+ * sunbeam, synaptic_static, weird, whirlwind. Pattern B (persistent
+ * damage_zone, 6 spells): cloudkill, death_armor, dust_devil, insect_plague,
+ * storm_of_vengeance. Pattern B terrain_zone (3 spells):
+ * evards_black_tentacles, maelstrom, sickening_radiance. Pattern B
+ * single-target persistent (4 spells): moonbeam, spike_growth, wall_of_fire,
+ * wall_of_ice. With this, `globeOfInvulnerabilityAoEV1Simplified` is flipped
+ * to `false` and `globeOfInvulnerabilityAoEPartialV1Implemented` is removed —
+ * GoI AoE exclusion is now complete (v1).
+ *
  * @param targets   Candidate targets in the AoE
  * @param castLevel The actual spell slot level consumed (e.g. 3 for L3 Fireball).
  *                  Pass 0 for cantrips — cantrips are never blocked by GoI

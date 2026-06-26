@@ -61,7 +61,7 @@ import { rollSaveReactable, CombatEvent, EngineState } from '../engine/combat';
 import { rollDie, applyDamageWithTempHP } from '../engine/utils';
 import { inConeFt, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
-import { applySpellEffect } from '../engine/spell_effects';
+import { applySpellEffect, filterGoIProtectedTargets } from '../engine/spell_effects';
 
 // ---- Constants ----------------------------------------------
 
@@ -206,14 +206,21 @@ export function execute(
   const action = caster.actions.find(a => a.name === 'Spray of Cards');
   const saveDC = action?.saveDC ?? 13;
 
-  consumeSpellSlot(caster, 2);
+  const slotLevel = consumeSpellSlot(caster, 2) ?? 2;
+
+  // Session 79: exclude targets protected by Globe of Invulnerability from
+  // this AoE. PHB p.245: "the spell has no effect on them." The spell still
+  // fires (slot already consumed above); protected targets are simply
+  // skipped in the damage loop.
+  const effectiveTargets = filterGoIProtectedTargets(targets, slotLevel, caster.id);
+  const excludedCount = targets.length - effectiveTargets.length;
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Spray of Cards! (DC ${saveDC} DEX, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}, ${CONE_RANGE_FT}-ft cone + blinded on fail) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} caught!`,
+    `${caster.name} casts Spray of Cards! (DC ${saveDC} DEX, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}, ${CONE_RANGE_FT}-ft cone + blinded on fail) — ${effectiveTargets.length} creature${effectiveTargets.length !== 1 ? 's' : ''} caught${excludedCount > 0 ? ` (${excludedCount} excluded by Globe of Invulnerability)` : ''}!`,
   );
 
-  for (const target of targets) {
+  for (const target of effectiveTargets) {
     if (target.isDead || target.isUnconscious) continue;
 
     const save = rollSaveReactable(state, caster, target, 'dex', saveDC);

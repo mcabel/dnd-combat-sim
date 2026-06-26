@@ -31,6 +31,7 @@ import { CombatEvent, EngineState } from '../engine/combat';
 import { rollDie, applyDamageWithTempHP, elementalAffinityBonus } from '../engine/utils';
 import { chebyshev3D, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
+import { filterGoIProtectedTargets } from '../engine/spell_effects';
 
 export const metadata = {
   name: 'Chain Lightning',
@@ -98,17 +99,27 @@ export function shouldCast(caster: Combatant, bf: Battlefield): Combatant[] | nu
 }
 
 export function execute(caster: Combatant, targets: Combatant[], state: EngineState): void {
-  consumeSpellSlot(caster, 6);
+  const slotLevel = consumeSpellSlot(caster, 6) ?? 6;
+
+  // Session 79 (GoI AoE exclusion): exclude targets protected by Globe of
+  // Invulnerability. PHB p.245: "the spell has no effect on them." The spell
+  // still fires (slot already consumed above); protected targets are simply
+  // skipped. The original target indexing is preserved so the primary vs.
+  // arc labels stay aligned (skip excluded targets inside the indexed loop).
+  const effectiveTargets = filterGoIProtectedTargets(targets, slotLevel, caster.id);
+  const excludedCount = targets.length - effectiveTargets.length;
+  const effectiveIds = new Set(effectiveTargets.map(t => t.id));
 
   const primary = targets[0];
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Chain Lightning at ${primary?.name ?? 'nothing'}! (AUTO-HIT — ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType} to ${targets.length} target${targets.length !== 1 ? 's' : ''})`,
+    `${caster.name} casts Chain Lightning at ${primary?.name ?? 'nothing'}! (AUTO-HIT — ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType} to ${effectiveTargets.length} target${effectiveTargets.length !== 1 ? 's' : ''}${excludedCount > 0 ? ` (${excludedCount} excluded by Globe of Invulnerability)` : ''})`,
   );
 
   for (let i = 0; i < targets.length; i++) {
     const target = targets[i];
     if (!target || target.isDead || target.isUnconscious) continue;
+    if (!effectiveIds.has(target.id)) continue; // excluded by GoI
 
     // Session 49 Task #29-follow-up-5c-2: Elemental Affinity (Draconic
     // Sorcerer 6) adds +CHA mod per target — auto-hit so no save halving;

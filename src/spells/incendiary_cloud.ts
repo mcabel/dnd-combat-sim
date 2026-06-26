@@ -28,6 +28,7 @@ import { rollSaveReactable, CombatEvent, EngineState } from '../engine/combat';
 import { rollDie, applyDamageWithTempHP, elementalAffinityBonus } from '../engine/utils';
 import { chebyshev3D, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
+import { isProtectedByGoI, filterGoIProtectedTargets } from '../engine/spell_effects';
 
 export const metadata = {
   name: 'Incendiary Cloud',
@@ -86,37 +87,56 @@ export function execute(caster: Combatant, targets: Combatant[], state: EngineSt
   const action = caster.actions.find(a => a.name === 'Incendiary Cloud');
   const saveDC = action?.saveDC ?? 15;
 
-  consumeSpellSlot(caster, 8);
+  const slotLevel = consumeSpellSlot(caster, 8) ?? 8;
+
+  // Session 79 (GoI AoE exclusion): PHB p.245: "the spell has no effect on them."
+  // Incendiary Cloud is a v1 one-shot AoE (no persistent damage_zone — see
+  // metadata.incendiaryCloudMovingV1Simplified), so GoI-protected targets are
+  // simply skipped (no future-tick re-check needed). The slot is still consumed.
+  const effectiveTargets = filterGoIProtectedTargets(targets, slotLevel, caster.id);
+  const excludedCount = targets.length - effectiveTargets.length;
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Incendiary Cloud! (DC ${saveDC} DEX, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}, ${metadata.aoeRadiusFt}-ft radius AoE) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} caught!`,
+    `${caster.name} casts Incendiary Cloud! (DC ${saveDC} DEX, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}, ${metadata.aoeRadiusFt}-ft radius AoE) — ${effectiveTargets.length} creature${effectiveTargets.length !== 1 ? 's' : ''} caught${excludedCount > 0 ? ` (${excludedCount} excluded by Globe of Invulnerability)` : ''}`,
   );
 
   for (const target of targets) {
     if (target.isDead || target.isUnconscious) continue;
 
-    const save = rollSaveReactable(state, caster, target, 'dex', saveDC);
-    // Session 51 Task #29-follow-up-5c-4: Elemental Affinity (Draconic
-    // Sorcerer 6) adds CHA mod to the fire damage if the caster's ancestry
-    // is fire. The bonus is added BEFORE save halving (so it IS halved on
-    // save success — consistent with the v1 model where the bonus is part
-    // of the total damage roll). The bonus is added once per target's
-    // damage roll (multi-target spells apply EA to each target
-    // independently — each target is its own roll).
-    const eaBonus = elementalAffinityBonus(caster, metadata.damageType);
-    const fullDmg = rollDamage() + eaBonus;
-    const dmg = save.success ? Math.floor(fullDmg / 2) : fullDmg;
-    const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);
+    // Session 79: per-target GoI check. The caster's own GoI does NOT block
+    // their own spell (PHB p.245: "cast from outside the barrier").
+    const goiBlocked = target.id !== caster.id && isProtectedByGoI(target, slotLevel);
 
-    emit(
-      state,
-      save.success ? 'save_success' : 'save_fail',
-      caster.id,
-      `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} DEX save vs Incendiary Cloud (rolled ${save.total}) — ${dealt} ${metadata.damageType} damage (${metadata.dieCount}d${metadata.dieSides}=${fullDmg}${eaBonus > 0 ? ` + ${eaBonus} EA` : ''}${save.success ? ', halved' : ''})`,
-      target.id, save.roll,
-    );
-    emit(state, 'damage', caster.id, `Incendiary Cloud: ${target.name} takes ${dealt} ${metadata.damageType} damage`, target.id, dealt);
+    if (!goiBlocked) {
+      const save = rollSaveReactable(state, caster, target, 'dex', saveDC);
+      // Session 51 Task #29-follow-up-5c-4: Elemental Affinity (Draconic
+      // Sorcerer 6) adds CHA mod to the fire damage if the caster's ancestry
+      // is fire. The bonus is added BEFORE save halving (so it IS halved on
+      // save success — consistent with the v1 model where the bonus is part
+      // of the total damage roll). The bonus is added once per target's
+      // damage roll (multi-target spells apply EA to each target
+      // independently — each target is its own roll).
+      const eaBonus = elementalAffinityBonus(caster, metadata.damageType);
+      const fullDmg = rollDamage() + eaBonus;
+      const dmg = save.success ? Math.floor(fullDmg / 2) : fullDmg;
+      const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);
+
+      emit(
+        state,
+        save.success ? 'save_success' : 'save_fail',
+        caster.id,
+        `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} DEX save vs Incendiary Cloud (rolled ${save.total}) — ${dealt} ${metadata.damageType} damage (${metadata.dieCount}d${metadata.dieSides}=${fullDmg}${eaBonus > 0 ? ` + ${eaBonus} EA` : ''}${save.success ? ', halved' : ''})`,
+        target.id, save.roll,
+      );
+      emit(state, 'damage', caster.id, `Incendiary Cloud: ${target.name} takes ${dealt} ${metadata.damageType} damage`, target.id, dealt);
+    } else {
+      emit(
+        state, 'damage', caster.id,
+        `${target.name} is protected by Globe of Invulnerability — Incendiary Cloud damage negated.`,
+        target.id, 0,
+      );
+    }
   }
 }
 

@@ -53,7 +53,7 @@
 
 import { Combatant, Battlefield, DamageType, Vec3 } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
-import { applySpellEffect, removeEffectsFromCaster } from '../engine/spell_effects';
+import { applySpellEffect, removeEffectsFromCaster, isProtectedByGoI } from '../engine/spell_effects';
 import { startConcentration, rollDie, applyDamageWithTempHP } from '../engine/utils';
 import { chebyshev3D } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
@@ -207,7 +207,7 @@ export function execute(
   targets: Combatant[],
   state: EngineState,
 ): void {
-  consumeSpellSlot(caster, 9);
+  const slotLevel = consumeSpellSlot(caster, 9) ?? 9;
 
   if (caster.concentration?.active) {
     removeEffectsFromCaster(caster.id, state.battlefield);
@@ -223,22 +223,45 @@ export function execute(
   for (const target of targets) {
     if (target.isDead || target.isUnconscious) continue;
 
+    // Session 79 (GoI AoE exclusion follow-up): PHB p.245: "the spell has no
+    // effect on them." The spell still fires (slot already consumed above).
+    // For persistent damage zones, the damage_zone EFFECT is applied to ALL
+    // targets in range (so it can tick later if GoI expires), but the ON-CAST
+    // damage is skipped for GoI-protected targets. The caster's own GoI does
+    // NOT block their own spell (PHB p.245: "cast from outside the barrier").
+    const goiBlocked = target.id !== caster.id && isProtectedByGoI(target, slotLevel);
+
     // 1. Immediate on-cast damage: 2d6 thunder + 6d6 lightning (no save).
-    const thunderDmg = rollThunderDamage();
-    const lightningDmg = rollLightningDamage();
-    const dealtThunder = applyDamageWithTempHP(target, thunderDmg, metadata.thunderDamageType);
-    const dealtLightning = applyDamageWithTempHP(target, lightningDmg, metadata.lightningDamageType);
-    emit(
-      state, 'damage', caster.id,
-      `${target.name} takes ${dealtThunder} ${metadata.thunderDamageType} + ${dealtLightning} ${metadata.lightningDamageType} damage from Storm of Vengeance (on cast: ${metadata.thunderDieCount}d${metadata.thunderDieSides}=${thunderDmg} + ${metadata.lightningDieCount}d${metadata.lightningDieSides}=${lightningDmg})`,
-      target.id, dealtThunder + dealtLightning,
-    );
+    //    Skipped if the target is GoI-protected (PHB p.245: "no effect on them").
+    if (!goiBlocked) {
+      const thunderDmg = rollThunderDamage();
+      const lightningDmg = rollLightningDamage();
+      const dealtThunder = applyDamageWithTempHP(target, thunderDmg, metadata.thunderDamageType);
+      const dealtLightning = applyDamageWithTempHP(target, lightningDmg, metadata.lightningDamageType);
+      emit(
+        state, 'damage', caster.id,
+        `${target.name} takes ${dealtThunder} ${metadata.thunderDamageType} + ${dealtLightning} ${metadata.lightningDamageType} damage from Storm of Vengeance (on cast: ${metadata.thunderDieCount}d${metadata.thunderDieSides}=${thunderDmg} + ${metadata.lightningDieCount}d${metadata.lightningDieSides}=${lightningDmg})`,
+        target.id, dealtThunder + dealtLightning,
+      );
+    } else {
+      emit(
+        state, 'damage', caster.id,
+        `${target.name} is protected by Globe of Invulnerability — on-cast damage negated (persistent effect still applied, will tick when GoI expires).`,
+        target.id, 0,
+      );
+    }
 
     // 2. Apply TWO damage_zone effects for persistent start-of-turn damage.
+    //    ALWAYS applied (even to GoI-protected targets) so the spell can start
+    //    ticking if GoI expires later. sourceSlotLevel is set so the combat.ts
+    //    damage_zone tick loop can re-check GoI protection on each per-turn
+    //    tick (PHB p.245: the spell continues to have no effect on GoI-
+    //    protected creatures for as long as GoI is active).
     applySpellEffect(target, {
       casterId: caster.id,
       spellName: 'Storm of Vengeance',
       effectType: 'damage_zone',
+      sourceSlotLevel: slotLevel,
       payload: {
         dieCount: metadata.thunderDieCount,
         dieSides: metadata.thunderDieSides,
@@ -250,6 +273,7 @@ export function execute(
       casterId: caster.id,
       spellName: 'Storm of Vengeance',
       effectType: 'damage_zone',
+      sourceSlotLevel: slotLevel,
       payload: {
         dieCount: metadata.lightningDieCount,
         dieSides: metadata.lightningDieSides,
