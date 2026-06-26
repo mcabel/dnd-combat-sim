@@ -114,7 +114,7 @@ export function execute(caster: Combatant, targets: Combatant[], state: EngineSt
   // fires (slot already consumed above); protected targets are simply
   // skipped in the damage loop. Both fire and radiant damage are skipped
   // (GoI blocks ALL spell effects, not just one damage type).
-  const effectiveTargets = filterGoIProtectedTargets(targets, slotLevel, caster.id);
+  const effectiveTargets = filterGoIProtectedTargets(targets, slotLevel, caster.id, state.battlefield);
   const excludedCount = targets.length - effectiveTargets.length;
 
   emit(

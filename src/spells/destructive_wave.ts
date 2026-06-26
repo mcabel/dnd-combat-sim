@@ -105,7 +105,7 @@ export function execute(caster: Combatant, targets: Combatant[], state: EngineSt
   // Invulnerability. PHB p.245: "the spell has no effect on them." The spell
   // still fires (slot already consumed above); protected targets are simply
   // skipped in the damage loop (and thus also skip the prone rider).
-  const effectiveTargets = filterGoIProtectedTargets(targets, slotLevel, caster.id);
+  const effectiveTargets = filterGoIProtectedTargets(targets, slotLevel, caster.id, state.battlefield);
   const excludedCount = targets.length - effectiveTargets.length;
 
   emit(

@@ -894,24 +894,51 @@ export function getExhaustionLevel(c: Combatant): number {
 // ---- Globe of Invulnerability (PHB p.245) ─────────────────
 
 /**
- * Returns true if `target` has an active Globe of Invulnerability effect
- * that blocks spells cast at `castLevel`.
+ * Returns true if `target` is protected by Globe of Invulnerability (PHB p.245).
  *
- * PHB p.245: Any spell of 5th level or lower cast from outside the barrier
- * can't affect creatures or objects within it. The slot is still consumed.
- * Cantrips (level 0) are NOT blocked by GoI.
+ * PHB p.245: "An immobile, faintly shimmering barrier springs into existence
+ * in a 10-foot radius around you... Any spell of 5th level or lower cast
+ * from outside the barrier can't affect creatures or objects within it."
  *
  * Upcast: L6→blocks ≤5, L7→blocks ≤6, L8→blocks ≤7, L9→blocks ≤8.
+ * Cantrips (level 0) are NOT blocked by GoI.
  *
- * v1: applies only to the GoI caster (not 10-ft radius allies — deferred).
+ * Session 80: Now checks both the target's own GoI AND any nearby GoI
+ * caster within 10 ft (Chebyshev 3D). The `bf` parameter enables spatial
+ * queries; if omitted, falls back to self-only check (backward compat for
+ * tests that don't pass a battlefield).
  */
-export function isProtectedByGoI(target: Combatant, castLevel: number): boolean {
-  if (!target.activeEffects) return false;
-  return target.activeEffects.some(eff =>
+export function isProtectedByGoI(target: Combatant, castLevel: number, bf?: Battlefield): boolean {
+  if (castLevel <= 0) return false;  // cantrips never blocked
+  // 1) Target's own GoI effect
+  if (target.activeEffects?.some(eff =>
     eff.effectType === 'spell_shield' &&
     eff.spellName === 'Globe of Invulnerability' &&
     castLevel <= (eff.payload.blockThreshold ?? 0)
-  );
+  )) return true;
+
+  // 2) Any nearby GoI caster within 10 ft (PHB p.245: 10-ft radius)
+  if (bf) {
+    for (const c of bf.combatants.values()) {
+      if (c.isDead || c.isUnconscious) continue;
+      if (c.id === target.id) continue;  // already checked above
+      // Does this combatant have an active GoI?
+      const goiEff = c.activeEffects?.find(eff =>
+        eff.effectType === 'spell_shield' &&
+        eff.spellName === 'Globe of Invulnerability' &&
+        castLevel <= (eff.payload.blockThreshold ?? 0)
+      );
+      if (!goiEff) continue;
+      // Is the target within 10 ft of this GoI caster? (Chebyshev 3D)
+      // 10 ft = 2 squares (each square = 5 ft)
+      const dx = Math.abs(target.pos.x - c.pos.x);
+      const dy = Math.abs(target.pos.y - c.pos.y);
+      const dz = Math.abs(target.pos.z - c.pos.z);
+      const chebyshev = Math.max(dx, dy, dz);
+      if (chebyshev <= 2) return true;  // within 10-ft radius
+    }
+  }
+  return false;
 }
 
 /**
@@ -960,12 +987,18 @@ export function isProtectedByGoI(target: Combatant, castLevel: number): boolean 
  * @param casterId  The casting combatant's ID. PHB p.245: spells cast from
  *                  outside the barrier are blocked; the GoI caster is at the
  *                  center, so their own spells are NOT blocked.
+ * @param bf        The battlefield (optional). If provided, enables 10-ft radius
+ *                  ally protection — any target within 10 ft of a GoI caster
+ *                  (including the GoI caster itself) is also protected.
+ *                  If omitted, only the target's own GoI effect is checked
+ *                  (backward compat).
  * @returns Filtered target list (GoI-protected targets removed).
  */
 export function filterGoIProtectedTargets(
   targets: Combatant[],
   castLevel: number,
   casterId: string,
+  bf?: Battlefield,
 ): Combatant[] {
   // PHB p.245: cantrips (level 0) are never blocked by GoI.
   if (castLevel <= 0) return targets;
@@ -973,6 +1006,6 @@ export function filterGoIProtectedTargets(
     // PHB p.245: "cast from outside the barrier" — the GoI caster is at the
     // center of the barrier, so their own spells are NOT blocked.
     if (t.id === casterId) return true;
-    return !isProtectedByGoI(t, castLevel);
+    return !isProtectedByGoI(t, castLevel, bf);
   });
 }

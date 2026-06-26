@@ -2042,9 +2042,10 @@ export function resolveAttack(
     }
 
     // Sneak Attack: check and apply if eligible (Rogue with finesse/ranged weapon)
+    // PHB p.96: ally must be within 5 ft of the target (adjacent = Chebyshev 3D ≤ 1)
     const allyAdjToTarget = [...bf.combatants.values()].some(c =>
       c.faction === attacker.faction && c.id !== attacker.id && !c.isDead &&
-      Math.max(Math.abs(c.pos.x - target.pos.x), Math.abs(c.pos.y - target.pos.y)) <= 1
+      Math.max(Math.abs(c.pos.x - target.pos.x), Math.abs(c.pos.y - target.pos.y), Math.abs(c.pos.z - target.pos.z)) <= 1
     );
     if (canSneakAttack(attacker, action, advantage, disadvantage, allyAdjToTarget)) {
       const saDice = sneakAttackDice(1); // level 1 = 1d6; TODO: track rogue level
@@ -3078,7 +3079,7 @@ export function executePlannedAction(
     const goiTarget = bf.combatants.get(plan.targetId);
     // PHB p.245: only blocks spells cast from outside the barrier.
     // The GoI caster is at the center, so their own spells are NOT blocked.
-    if (goiTarget && goiTarget.id !== actor.id && isProtectedByGoI(goiTarget, spellInfo.level)) {
+    if (goiTarget && goiTarget.id !== actor.id && isProtectedByGoI(goiTarget, spellInfo.level, bf)) {
       // PHB p.245: the blocked spell's slot is consumed but has no effect.
       consumeSpellSlot(actor, spellInfo.level);
       actor.budget.actionUsed = true;
@@ -6547,7 +6548,7 @@ export function runCombat(
           // The caster's own GoI does NOT block their own spell (PHB p.245:
           // "cast from outside the barrier" — the GoI caster is at the center).
           const zoneSlotLevel = zone.sourceSlotLevel ?? 0;
-          if (zoneSlotLevel > 0 && actor.id !== zone.casterId && isProtectedByGoI(actor, zoneSlotLevel)) {
+          if (zoneSlotLevel > 0 && actor.id !== zone.casterId && isProtectedByGoI(actor, zoneSlotLevel, state.battlefield)) {
             log(state, 'damage', zone.casterId,
               `${actor.name} is protected by Globe of Invulnerability — ${zone.spellName} start-of-turn damage negated (L${zoneSlotLevel} ≤ GoI threshold).`,
               actor.id, 0);

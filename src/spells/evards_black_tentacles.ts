@@ -147,7 +147,7 @@ export function execute(caster: Combatant, targets: Combatant[], state: EngineSt
   // applied to GoI-protected targets (so it can tick later if GoI expires);
   // the combat.ts damage_zone tick loop re-checks GoI on each per-turn tick
   // using the zone's sourceSlotLevel.
-  const effectiveTargets = filterGoIProtectedTargets(targets, slotLevel, caster.id);
+  const effectiveTargets = filterGoIProtectedTargets(targets, slotLevel, caster.id, state.battlefield);
   const excludedCount = targets.length - effectiveTargets.length;
 
   emit(state, 'action', caster.id,
@@ -192,7 +192,7 @@ export function execute(caster: Combatant, targets: Combatant[], state: EngineSt
   for (const target of targets) {
     if (target.isDead || target.isUnconscious) continue;
 
-    const goiBlocked = target.id !== caster.id && isProtectedByGoI(target, slotLevel);
+    const goiBlocked = target.id !== caster.id && isProtectedByGoI(target, slotLevel, state.battlefield);
 
     if (!goiBlocked) {
       const save = rollSaveReactable(state, caster, target, 'dex', saveDC);

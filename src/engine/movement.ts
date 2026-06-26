@@ -501,6 +501,22 @@ export function livingAlliesOf(c: Combatant, bf: Battlefield): Combatant[] {
   );
 }
 
+// ---- Radius query helpers -----------------------------------
+
+/**
+ * Return all living combatants within `radiusFt` feet of `pos` (Chebyshev 3D).
+ * Used for spatial queries like "all creatures within a 10-ft radius of X".
+ */
+export function combatantsWithinRadiusFt(
+  pos: Vec3,
+  radiusFt: number,
+  bf: Battlefield,
+): Combatant[] {
+  return [...bf.combatants.values()].filter(
+    c => !c.isDead && !c.isUnconscious && distanceFt(pos, c.pos) <= radiusFt
+  );
+}
+
 // ---- Utility ------------------------------------------------
 
 export function posKey(p: Vec3): string {

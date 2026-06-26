@@ -134,7 +134,7 @@ export function execute(
   // Globe of Invulnerability from this AoE. PHB p.245: "the spell has no
   // effect on them." The spell still fires (slot already consumed above);
   // protected targets are simply skipped in the damage loop.
-  const effectiveTargets = filterGoIProtectedTargets(targets, slotLevel, caster.id);
+  const effectiveTargets = filterGoIProtectedTargets(targets, slotLevel, caster.id, state.battlefield);
   const excludedCount = targets.length - effectiveTargets.length;
 
   emit(

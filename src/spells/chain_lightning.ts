@@ -106,7 +106,7 @@ export function execute(caster: Combatant, targets: Combatant[], state: EngineSt
   // still fires (slot already consumed above); protected targets are simply
   // skipped. The original target indexing is preserved so the primary vs.
   // arc labels stay aligned (skip excluded targets inside the indexed loop).
-  const effectiveTargets = filterGoIProtectedTargets(targets, slotLevel, caster.id);
+  const effectiveTargets = filterGoIProtectedTargets(targets, slotLevel, caster.id, state.battlefield);
   const excludedCount = targets.length - effectiveTargets.length;
   const effectiveIds = new Set(effectiveTargets.map(t => t.id));
 

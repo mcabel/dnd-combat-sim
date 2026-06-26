@@ -1449,11 +1449,27 @@ export function consumeBardicInspiration(c: Combatant): number {
 
 /**
  * Check if a Rogue can apply Sneak Attack on this attack.
- * Requirements (SAC v2.7):
+ * Requirements (PHB p.96, SAC v2.7):
  * - Weapon must be finesse or ranged
  * - Must have advantage on the attack OR an ally within 5ft of target
  * - Must not have disadvantage
  * - Only once per turn
+ *
+ * PHB p.173: "If circumstances cause a roll to have both advantage and
+ * disadvantage, you are considered to have neither of them." When both
+ * cancel, you don't have advantage (so the advantage route is unavailable)
+ * but you also don't have disadvantage (so the ally-adjacent route IS
+ * available per PHB p.96: "You don't need advantage on the attack roll
+ * if another enemy of the target is within 5 feet of it... and you don't
+ * have disadvantage on the attack roll").
+ *
+ * Session 80: Fixed the interaction of advantage+disadvantage cancellation
+ * with Sneak Attack. Previously, when both advantage and disadvantage were
+ * present, the raw `hasAdvantage` flag allowed Sneak Attack via the
+ * advantage route even though the net result was a straight roll (neither
+ * advantage nor disadvantage per PHB p.173). Now correctly uses net
+ * advantage/disadvantage: net advantage → SA via advantage route; net
+ * disadvantage → no SA; net neither → SA via ally-adjacent route only.
  */
 export function canSneakAttack(
   rogue: Combatant,
@@ -1473,9 +1489,18 @@ export function canSneakAttack(
      'whip','scimitar'].some(w => action.name.toLowerCase().includes(w));
 
   if (!isFinesseOrRanged) return false;
-  if (hasDisadvantage && !hasAdvantage) return false; // disadvantage blocks SA even with ally
-  if (hasAdvantage) return true;
-  if (allyAdjacentToTarget) return true;
+
+  // PHB p.173: advantage and disadvantage cancel — you have "neither".
+  // Compute NET advantage/disadvantage for Sneak Attack eligibility.
+  const netAdvantage = hasAdvantage && !hasDisadvantage;
+  const netDisadvantage = hasDisadvantage && !hasAdvantage;
+
+  // PHB p.96: "You don't need advantage... if another enemy of the target
+  // is within 5 feet of it, that enemy isn't incapacitated, and you don't
+  // have disadvantage on the attack roll."
+  if (netDisadvantage) return false;  // disadvantage blocks SA even with ally
+  if (netAdvantage) return true;      // advantage enables SA
+  if (allyAdjacentToTarget) return true;  // no disadvantage + ally adjacent → SA
   return false;
 }
 

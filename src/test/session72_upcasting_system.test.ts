@@ -502,12 +502,13 @@ console.log('\n=== Phase 4 — Globe of Invulnerability ===\n');
         payload: { blockThreshold: 5 },
       }],
     });
-    // isProtectedByGoI checks: castLevel <= blockThreshold
-    // 0 <= 5 is true, but the combat engine also checks `spellInfo.level > 0`
-    // before calling isProtectedByGoI. So the function itself returns true for
-    // level 0, but the engine won't block cantrips because it only calls
-    // isProtectedByGoI when level > 0.
-    eq('isProtectedByGoI returns true for level 0 (engine guards on level > 0)', isProtectedByGoI(target, 0), true);
+    // isProtectedByGoI now explicitly returns false for cantrips (level 0).
+    // PHB p.245: "Any spell of 5th level or lower" — cantrips are level 0,
+    // which is "5th level or lower", but the PHB intent is that GoI blocks
+    // leveled spells only. The function now returns false for level 0 directly.
+    // Session 80: the early-return `if (castLevel <= 0) return false;` makes
+    // this explicit rather than relying on the engine to guard.
+    eq('isProtectedByGoI returns false for level 0 (cantrips never blocked by GoI)', isProtectedByGoI(target, 0), false);
     // The actual GoI engine guard: only checks when spellInfo.level > 0
     // So cantrips pass through — this is the intended behavior.
   }

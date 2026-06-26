@@ -93,7 +93,7 @@ export function execute(caster: Combatant, targets: Combatant[], state: EngineSt
   // Incendiary Cloud is a v1 one-shot AoE (no persistent damage_zone — see
   // metadata.incendiaryCloudMovingV1Simplified), so GoI-protected targets are
   // simply skipped (no future-tick re-check needed). The slot is still consumed.
-  const effectiveTargets = filterGoIProtectedTargets(targets, slotLevel, caster.id);
+  const effectiveTargets = filterGoIProtectedTargets(targets, slotLevel, caster.id, state.battlefield);
   const excludedCount = targets.length - effectiveTargets.length;
 
   emit(
@@ -106,7 +106,7 @@ export function execute(caster: Combatant, targets: Combatant[], state: EngineSt
 
     // Session 79: per-target GoI check. The caster's own GoI does NOT block
     // their own spell (PHB p.245: "cast from outside the barrier").
-    const goiBlocked = target.id !== caster.id && isProtectedByGoI(target, slotLevel);
+    const goiBlocked = target.id !== caster.id && isProtectedByGoI(target, slotLevel, state.battlefield);
 
     if (!goiBlocked) {
       const save = rollSaveReactable(state, caster, target, 'dex', saveDC);

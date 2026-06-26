@@ -231,7 +231,7 @@ export function execute(
   // target (so it can tick later if GoI expires), but the ON-CAST damage is
   // skipped if the target is GoI-protected. The caster's own GoI does NOT
   // block their own spell (PHB p.245: "cast from outside the barrier").
-  const goiBlocked = target.id !== caster.id && isProtectedByGoI(target, slotLevel);
+  const goiBlocked = target.id !== caster.id && isProtectedByGoI(target, slotLevel, state.battlefield);
 
   // 1. Immediate damage on cast (the "enters the area for the first
   //    time on a turn" trigger — the target is in the area when the

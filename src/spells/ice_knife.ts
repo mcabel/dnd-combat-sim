@@ -306,7 +306,7 @@ export function execute(
   // no effect on them." The piercing attack-roll on the primary target is
   // a separate mechanic (handled by combat.ts's single-target GoI block);
   // this filter only applies to the AoE cold damage.
-  const liveExplosion = filterGoIProtectedTargets(liveExplosionRaw, slotLevel, caster.id);
+  const liveExplosion = filterGoIProtectedTargets(liveExplosionRaw, slotLevel, caster.id, state.battlefield);
   const excludedCount = liveExplosionRaw.length - liveExplosion.length;
 
   if (liveExplosion.length === 0) {

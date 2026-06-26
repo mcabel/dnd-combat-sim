@@ -133,7 +133,7 @@ export function execute(
   // effect on them." The spell still fires (slot already consumed above);
   // protected targets are simply skipped in the damage loop (no damage,
   // no push — Thunderwave's full effect is negated per PHB p.245).
-  const effectiveTargets = filterGoIProtectedTargets(targets, slotLevel, caster.id);
+  const effectiveTargets = filterGoIProtectedTargets(targets, slotLevel, caster.id, state.battlefield);
   const excludedCount = targets.length - effectiveTargets.length;
 
   emit(

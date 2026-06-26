@@ -89,7 +89,7 @@ export function execute(caster: Combatant, targets: Combatant[], state: EngineSt
   // fires (slot already consumed above); protected targets are simply
   // skipped in the damage loop. Earthquake is auto-hit (no save), but GoI
   // still blocks the damage.
-  const effectiveTargets = filterGoIProtectedTargets(targets, slotLevel, caster.id);
+  const effectiveTargets = filterGoIProtectedTargets(targets, slotLevel, caster.id, state.battlefield);
   const excludedCount = targets.length - effectiveTargets.length;
 
   emit(

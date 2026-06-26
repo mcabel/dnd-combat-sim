@@ -170,8 +170,10 @@ console.log('\n=== Phase 1 — Pattern A: Instantaneous AoE on-cast exclusion ==
     faction: 'enemy', pos: { x: 1, y: 0, z: 0 },
     activeEffects: [makeGoIEffect(6, 7)],  // L7 GoI blocks ≤6
   });
+  // exposed at (4,0,0): Chebyshev 3 from GoI holder at (1,0,0) → outside GoI radius
+  // Circle of Death has 60ft radius → well within AoE
   const eExp = makeCombatant('e_exp', {
-    faction: 'enemy', pos: { x: 2, y: 0, z: 0 },
+    faction: 'enemy', pos: { x: 4, y: 0, z: 0 },
   });
   const bf = makeBF([caster, eProt, eExp]);
   const state = makeState(bf);
@@ -197,8 +199,10 @@ console.log('\n=== Phase 1 — Pattern A: Instantaneous AoE on-cast exclusion ==
     faction: 'enemy', pos: { x: 1, y: 0, z: 0 },
     activeEffects: [makeGoIEffect(5)],
   });
+  // exposed at (5,0,0): Chebyshev 4 from GoI holder at (1,0,0) → outside GoI radius
+  // Within 60ft cone aimed at eProt (1,0,0) from caster (0,0,0) — directly on axis
   const eExp = makeCombatant('e_exp', {
-    faction: 'enemy', pos: { x: 2, y: 0, z: 0 },
+    faction: 'enemy', pos: { x: 5, y: 0, z: 0 },
   });
   const bf = makeBF([caster, eProt, eExp]);
   const state = makeState(bf);
@@ -223,8 +227,9 @@ console.log('\n=== Phase 1 — Pattern A: Instantaneous AoE on-cast exclusion ==
     faction: 'enemy', pos: { x: 1, y: 0, z: 0 },
     activeEffects: [makeGoIEffect(6, 7)],  // L7 GoI blocks ≤6
   });
+  // exposed at (4,0,0): Chebyshev 3 from GoI holder at (1,0,0) → outside GoI radius
   const eExp = makeCombatant('e_exp', {
-    faction: 'enemy', pos: { x: 2, y: 0, z: 0 },
+    faction: 'enemy', pos: { x: 4, y: 0, z: 0 },
   });
   const bf = makeBF([caster, eProt, eExp]);
   const state = makeState(bf);
@@ -251,8 +256,9 @@ console.log('\n=== Phase 1 — Pattern A: Instantaneous AoE on-cast exclusion ==
     faction: 'enemy', pos: { x: 1, y: 0, z: 0 },
     activeEffects: [makeGoIEffect(8, 9)],  // L9 GoI blocks ≤8
   });
+  // exposed at (4,0,0): Chebyshev 3 from GoI holder at (1,0,0) → outside GoI radius
   const eExp = makeCombatant('e_exp', {
-    faction: 'enemy', pos: { x: 2, y: 0, z: 0 },
+    faction: 'enemy', pos: { x: 4, y: 0, z: 0 },
   });
   const bf = makeBF([caster, eProt, eExp]);
   const state = makeState(bf);
@@ -276,8 +282,9 @@ console.log('\n=== Phase 1 — Pattern A: Instantaneous AoE on-cast exclusion ==
     faction: 'enemy', pos: { x: 1, y: 0, z: 0 },
     activeEffects: [makeGoIEffect(5)],
   });
+  // exposed at (4,0,0): Chebyshev 3 from GoI holder at (1,0,0) → outside GoI radius
   const eExp = makeCombatant('e_exp', {
-    faction: 'enemy', pos: { x: 2, y: 0, z: 0 },
+    faction: 'enemy', pos: { x: 4, y: 0, z: 0 },
   });
   const bf = makeBF([caster, eProt, eExp]);
   const state = makeState(bf);
@@ -307,8 +314,10 @@ console.log('\n=== Phase 2 — Pattern B: Persistent damage_zone ===\n');
     faction: 'enemy', pos: { x: 1, y: 0, z: 0 },
     activeEffects: [makeGoIEffect(5)],
   });
+  // exposed at (4,0,0): Chebyshev 3 from GoI holder at (1,0,0) → outside GoI radius
+  // Cloudkill 20ft radius → well within AoE from center at (1,0,0)
   const eExp = makeCombatant('e_exp', {
-    faction: 'enemy', pos: { x: 2, y: 0, z: 0 },
+    faction: 'enemy', pos: { x: 4, y: 0, z: 0 },
   });
   const bf = makeBF([caster, eProt, eExp]);
   const state = makeState(bf);
@@ -377,8 +386,10 @@ console.log('\n=== Phase 3 — Pattern B: terrain_zone spells ===\n');
     faction: 'enemy', pos: { x: 1, y: 0, z: 0 },
     activeEffects: [makeGoIEffect(5)],
   });
+  // exposed at (4,0,0): Chebyshev 3 from GoI holder at (1,0,0) → outside GoI radius
+  // Evard's 20ft square → within AoE
   const eExp = makeCombatant('e_exp', {
-    faction: 'enemy', pos: { x: 2, y: 0, z: 0 },
+    faction: 'enemy', pos: { x: 4, y: 0, z: 0 },
   });
   const bf = makeBF([caster, eProt, eExp]);
   const state = makeState(bf);
@@ -415,8 +426,10 @@ console.log('\n=== Phase 3 — Pattern B: terrain_zone spells ===\n');
     faction: 'enemy', pos: { x: 1, y: 0, z: 0 },
     activeEffects: [makeGoIEffect(5)],
   });
+  // exposed at (4,0,0): Chebyshev 3 from GoI holder at (1,0,0) → outside GoI radius
+  // Sickening Radiance 30ft radius → well within AoE
   const eExp = makeCombatant('e_exp', {
-    faction: 'enemy', pos: { x: 2, y: 0, z: 0 },
+    faction: 'enemy', pos: { x: 4, y: 0, z: 0 },
   });
   const bf = makeBF([caster, eProt, eExp]);
   const state = makeState(bf);
@@ -570,8 +583,10 @@ console.log('\n=== Phase 7 — Caster self-exclusion ===\n');
     cha: 20,
     activeEffects: [makeGoIEffect(6, 7)],  // caster has own GoI at L7
   });
+  // enemy at (3,0,0): Chebyshev 3 from caster at (0,0,0) → outside GoI radius
+  // Circle of Death 60ft radius → well within AoE
   const enemy = makeCombatant('enemy', {
-    faction: 'enemy', pos: { x: 1, y: 0, z: 0 },
+    faction: 'enemy', pos: { x: 3, y: 0, z: 0 },
   });
   const bf = makeBF([caster, enemy]);
   const state = makeState(bf);

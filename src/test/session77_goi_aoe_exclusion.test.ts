@@ -254,8 +254,10 @@ console.log('\n=== Phase 2 — Fireball AoE exclusion ===\n');
     maxHP: 1000, currentHP: 1000,
     activeEffects: [makeGoIEffect(5)],
   });
+  // Session 80: enemyExposed must be > 10ft (2 squares Chebyshev) from
+  // any GoI caster, or the 10-ft radius ally protection will also shield it.
   const enemyExposed = makeCombatant('e_exposed', {
-    faction: 'enemy', dex: 1, pos: { x: 2, y: 0, z: 0 },
+    faction: 'enemy', dex: 1, pos: { x: 5, y: 0, z: 0 },
     maxHP: 1000, currentHP: 1000,
   });
   const bf = makeBF([caster, enemyProtected, enemyExposed]);
@@ -296,8 +298,9 @@ console.log('\n=== Phase 2 — Fireball AoE exclusion ===\n');
     maxHP: 1000, currentHP: 1000,
     activeEffects: [makeGoIEffect(5)],
   });
+  // Session 80: enemyExposed must be > 10ft from GoI caster for radius test
   const enemyExposed = makeCombatant('e_exposed', {
-    faction: 'enemy', dex: 1, pos: { x: 2, y: 0, z: 0 },
+    faction: 'enemy', dex: 1, pos: { x: 5, y: 0, z: 0 },
     maxHP: 1000, currentHP: 1000,
   });
   const bf = makeBF([caster, enemyProtected, enemyExposed]);
@@ -371,8 +374,9 @@ console.log('\n=== Phase 3 — Lightning Bolt AoE exclusion ===\n');
     maxHP: 1000, currentHP: 1000,
     activeEffects: [makeGoIEffect(5)],
   });
+  // Session 80: enemyExposed must be > 10ft from GoI caster for radius test
   const enemyExposed = makeCombatant('e_exposed', {
-    faction: 'enemy', dex: 1, pos: { x: 2, y: 0, z: 0 },
+    faction: 'enemy', dex: 1, pos: { x: 5, y: 0, z: 0 },
     maxHP: 1000, currentHP: 1000,
   });
   const bf = makeBF([caster, enemyProtected, enemyExposed]);
@@ -406,8 +410,9 @@ console.log('\n=== Phase 4 — Shatter AoE exclusion ===\n');
     maxHP: 1000, currentHP: 1000,
     activeEffects: [makeGoIEffect(5)],
   });
+  // Session 80: enemyExposed must be > 10ft from GoI caster for radius test
   const enemyExposed = makeCombatant('e_exposed', {
-    faction: 'enemy', dex: 1, con: 1, pos: { x: 2, y: 0, z: 0 },
+    faction: 'enemy', dex: 1, con: 1, pos: { x: 5, y: 0, z: 0 },
     maxHP: 1000, currentHP: 1000,
   });
   const bf = makeBF([caster, enemyProtected, enemyExposed]);
@@ -442,8 +447,9 @@ console.log('\n=== Phase 5 — Thunderwave AoE exclusion (damage + push) ===\n')
     maxHP: 1000, currentHP: 1000,
     activeEffects: [makeGoIEffect(5)],
   });
+  // Session 80: enemyExposed must be > 10ft from GoI caster for radius test
   const enemyExposed = makeCombatant('e_exposed', {
-    faction: 'enemy', dex: 1, con: 1, pos: { x: 2, y: 0, z: 0 },
+    faction: 'enemy', dex: 1, con: 1, pos: { x: 5, y: 0, z: 0 },
     maxHP: 1000, currentHP: 1000,
   });
   const bf = makeBF([caster, enemyProtected, enemyExposed]);
@@ -472,13 +478,17 @@ console.log('\n=== Phase 5 — Thunderwave AoE exclusion (damage + push) ===\n')
 console.log('\n=== Phase 6 — Burning Hands AoE exclusion ===\n');
 
 {
-  // 6a. Burning Hands vs GoI-protected target: only exposed takes damage
-  //     Burning Hands filters to inCone first, then we apply GoI exclusion.
+  // 6a. Burning Hands vs GoI-protected target: protected enemy takes 0 damage.
+  //     Session 80: With 10-ft GoI radius, the 15-ft cone geometry makes it
+  //     impossible to have an "exposed" enemy within the cone AND outside the
+  //     GoI radius (the GoI caster at 1 square from spell caster means all
+  //     cone targets within 3 squares are ≤2 squares from the GoI caster).
+  //     Split into two sub-tests: (a) GoI blocks, (b) no-GoI takes damage.
   const caster = makeCombatant('wiz', {
     faction: 'party',
     pos: { x: 0, y: 0, z: 0 },
     actions: [BURNING_HANDS_ACTION],
-    resources: withSlots({ 1: { max: 2, remaining: 2 } }),
+    resources: withSlots({ 1: { max: 4, remaining: 4 } }),
     int: 20,
   });
   const enemyProtected = makeCombatant('e_protected', {
@@ -486,19 +496,35 @@ console.log('\n=== Phase 6 — Burning Hands AoE exclusion ===\n');
     maxHP: 1000, currentHP: 1000,
     activeEffects: [makeGoIEffect(5)],
   });
-  const enemyExposed = makeCombatant('e_exposed', {
-    faction: 'enemy', dex: 1, pos: { x: 2, y: 0, z: 0 },
-    maxHP: 1000, currentHP: 1000,
-  });
-  const bf = makeBF([caster, enemyProtected, enemyExposed]);
+  const bf = makeBF([caster, enemyProtected]);
   const state = makeState(bf);
   const hpProtectedBefore = enemyProtected.currentHP;
-  const hpExposedBefore = enemyExposed.currentHP;
 
-  bhExecute(caster, [enemyProtected, enemyExposed], state);
+  bhExecute(caster, [enemyProtected], state);
 
   eq('6a. GoI-protected enemy takes 0 damage from Burning Hands', hpProtectedBefore - enemyProtected.currentHP, 0);
-  assert('6a. Exposed enemy takes damage from Burning Hands', (hpExposedBefore - enemyExposed.currentHP) > 0);
+}
+
+{
+  // 6b. Burning Hands vs non-GoI target: takes damage normally.
+  const caster = makeCombatant('wiz2', {
+    faction: 'party',
+    pos: { x: 0, y: 0, z: 0 },
+    actions: [BURNING_HANDS_ACTION],
+    resources: withSlots({ 1: { max: 2, remaining: 2 } }),
+    int: 20,
+  });
+  const enemyNoGoI = makeCombatant('e_nogoi', {
+    faction: 'enemy', dex: 1, pos: { x: 1, y: 0, z: 0 },
+    maxHP: 1000, currentHP: 1000,
+  });
+  const bf = makeBF([caster, enemyNoGoI]);
+  const state = makeState(bf);
+  const hpBefore = enemyNoGoI.currentHP;
+
+  bhExecute(caster, [enemyNoGoI], state);
+
+  assert('6b. Non-GoI enemy takes damage from Burning Hands', (hpBefore - enemyNoGoI.currentHP) > 0);
 }
 
 // ============================================================
@@ -540,8 +566,9 @@ console.log('\n=== Phase 8 — Edge cases ===\n');
     int: 20,
     activeEffects: [makeGoIEffect(5)],
   });
+  // Session 80: enemy must be > 10ft from GoI caster for radius test
   const enemy = makeCombatant('e1', {
-    faction: 'enemy', dex: 1, pos: { x: 1, y: 0, z: 0 },
+    faction: 'enemy', dex: 1, pos: { x: 5, y: 0, z: 0 },
     maxHP: 1000, currentHP: 1000,
   });
   const bf = makeBF([caster, enemy]);

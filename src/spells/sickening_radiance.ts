@@ -120,7 +120,7 @@ export function execute(caster: Combatant, targets: Combatant[], state: EngineSt
   // the caster is still applied (so it can tick later if GoI expires); the
   // combat.ts terrain_zone tick loop re-checks GoI on each per-turn tick
   // using the zone's sourceSlotLevel.
-  const effectiveTargets = filterGoIProtectedTargets(targets, slotLevel, caster.id);
+  const effectiveTargets = filterGoIProtectedTargets(targets, slotLevel, caster.id, state.battlefield);
   const excludedCount = targets.length - effectiveTargets.length;
 
   emit(

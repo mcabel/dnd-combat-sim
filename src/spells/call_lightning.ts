@@ -207,7 +207,7 @@ export function execute(
   // targets in range (so it can tick later if GoI expires), but the ON-CAST
   // damage is skipped for GoI-protected targets. The combat.ts damage_zone
   // tick loop re-checks GoI on each per-turn tick using sourceSlotLevel.
-  const effectiveTargets = filterGoIProtectedTargets(targets, slotLevel, caster.id);
+  const effectiveTargets = filterGoIProtectedTargets(targets, slotLevel, caster.id, state.battlefield);
   const excludedCount = targets.length - effectiveTargets.length;
 
   emit(
@@ -220,7 +220,7 @@ export function execute(
 
     // Session 78: check GoI protection per-target. The caster's own GoI does
     // NOT block their own spell (PHB p.245: "cast from outside the barrier").
-    const goiBlocked = target.id !== caster.id && isProtectedByGoI(target, slotLevel);
+    const goiBlocked = target.id !== caster.id && isProtectedByGoI(target, slotLevel, state.battlefield);
 
     // 1. Immediate on-cast damage (3d10 lightning, no save).
     //    Skipped if the target is GoI-protected (PHB p.245: "no effect on them").
