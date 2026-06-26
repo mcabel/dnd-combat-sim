@@ -56,6 +56,31 @@ export function hasSpellSlot(caster: Combatant, minLevel = 1): boolean {
   return false;
 }
 
+/**
+ * Return the lowest available slot level at or above `minLevel`, or null.
+ * Does NOT consume the slot — for planning purposes only.
+ *
+ * RFC-UPCASTING Phase 1 (Session 72): used by planner branches and
+ * selectCastSlot() to determine which slot level will be used before
+ * committing to a plan.
+ */
+export function getLowestAvailableSlot(caster: Combatant, minLevel = 1): number | null {
+  const r = caster.resources;
+  if (!r) return null;
+  // Pact slots (Warlock) — if the pact slot level meets the minimum, it's
+  // the only pact slot available, so it's the "lowest" pact option.
+  if (r.pactSlots && r.pactSlots.remaining > 0 && r.pactSlots.slotLevel >= minLevel) {
+    return r.pactSlots.slotLevel;
+  }
+  // Standard slots: iterate from minLevel upward.
+  if (r.spellSlots) {
+    for (let lvl = minLevel; lvl <= 9; lvl++) {
+      if ((r.spellSlots[lvl]?.remaining ?? 0) > 0) return lvl;
+    }
+  }
+  return null;
+}
+
 // ---- Innate Spellcasting (monster N/day spells) ---------------
 
 /**

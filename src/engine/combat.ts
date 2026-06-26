@@ -1379,12 +1379,13 @@ function getSpellInfoFromPlan(
   if (NON_SPELL_PLAN_TYPES.has(plan.type)) return null;
   // 'attack' is in NON_SPELL_PLAN_TYPES, so we don't reach here for weapon attacks.
   // Bespoke spell case ('fireball', 'cureWounds', 'magicMissile', etc.):
-  // these are always spells. The level is unknown on the plan (v1), so default
-  // to 1 (Counterspell auto-succeeds with a L3 slot for L1-3 spells).
+  // these are always spells. RFC-UPCASTING Phase 1: use castSlotLevel if
+  // present, falling back to action.slotLevel, then to 1.
   // The spell name is the plan type (camelCase) — we convert to the action
   // name if available, else use the plan type directly.
   const name = plan.action?.name ?? plan.type;
-  return { name, level: 1 };
+  const level = plan.castSlotLevel ?? plan.action?.slotLevel ?? 1;
+  return { name, level };
 }
 
 /**

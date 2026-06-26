@@ -160,6 +160,18 @@ export interface ActiveEffect {
   casterId: string;         // ID of the Combatant who cast the spell
   spellName: string;        // canonical spell name; also used as adv_system source label
   effectType: SpellEffectType;
+  /**
+   * The spell slot level used when this effect was applied.
+   * 0 = applied by a cantrip (e.g. Hex-like cantrip riders).
+   * undefined = legacy effects created before this field existed (treat as 0).
+   *
+   * Used by:
+   *   - Globe of Invulnerability: only blocks if sourceSlotLevel ≤ GoI threshold
+   *   - Dispel Magic: DC = 10 + sourceSlotLevel (PHB p.233)
+   *
+   * RFC-UPCASTING Phase 2 (Session 72)
+   */
+  sourceSlotLevel?: number;
   payload: {
     // advantage_vs
     advType?:  'advantage' | 'disadvantage';
@@ -2721,6 +2733,21 @@ export interface PlannedAction {
   // its `shouldCast` + `execute`. This avoids adding 262 individual case
   // branches for the Session 19 bulk-implementation pass.
   spellName?: string;
+  // ── RFC-UPCASTING Phase 1 (Session 72): cast slot level ──
+  // The spell slot level actually spent for this spell cast.
+  // Set by the planner / bespoke spell modules at plan-construction time.
+  //
+  // Distinct from `action.slotLevel` (the spell's BASE level).
+  //   castSlotLevel = slot consumed (e.g. 5 for Fireball at L5)
+  //   action.slotLevel = spell base level (e.g. 3 for Fireball)
+  //
+  // 0 or undefined = cantrip (no slot consumed, interaction level = 0).
+  // Used by:
+  //   - getSpellInfoFromPlan() → Counterspell trigger
+  //   - Globe of Invulnerability blocking check
+  //   - Dispel Magic accurate DC
+  //   - Upcast damage scaling in execute() handlers
+  castSlotLevel?: number;
   // ── TG-031: Open Hand Technique choice (Open Hand Monk 3, PHB p.79) ──
   // When the monk uses Flurry of Blows and hits, they can impose one effect
   // on the target: 'prone' (DEX save or knocked prone), 'push' (STR save or
