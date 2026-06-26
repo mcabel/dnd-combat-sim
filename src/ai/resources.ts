@@ -63,16 +63,21 @@ export function hasSpellSlot(caster: Combatant, minLevel = 1): boolean {
  * RFC-UPCASTING Phase 1 (Session 72): used by planner branches and
  * selectCastSlot() to determine which slot level will be used before
  * committing to a plan.
+ *
+ * Mirrors consumeSpellSlot's priority order: pact slots first (Warlock),
+ * then standard slots ascending from minLevel.
+ *
+ * Used by TG-033-P1 to set `castSlotLevel` on PlannedAction before
+ * the spell executes, so Counterspell and GoI see the correct cast level.
  */
 export function getLowestAvailableSlot(caster: Combatant, minLevel = 1): number | null {
   const r = caster.resources;
   if (!r) return null;
-  // Pact slots (Warlock) — if the pact slot level meets the minimum, it's
-  // the only pact slot available, so it's the "lowest" pact option.
+  // Pact slots (Warlock) — always preferred, same as consumeSpellSlot
   if (r.pactSlots && r.pactSlots.remaining > 0 && r.pactSlots.slotLevel >= minLevel) {
     return r.pactSlots.slotLevel;
   }
-  // Standard slots: iterate from minLevel upward.
+  // Standard slots: lowest available at or above minLevel
   if (r.spellSlots) {
     for (let lvl = minLevel; lvl <= 9; lvl++) {
       if ((r.spellSlots[lvl]?.remaining ?? 0) > 0) return lvl;

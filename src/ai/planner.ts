@@ -6276,6 +6276,7 @@ function planExtraAction(
         action: cureWoundsAction,
         targetId: self.id,   // self-heal
         description: `${self.name} uses Action Surge — casts Cure Wounds on self`,
+        castSlotLevel: getLowestAvailableSlot(self, 1) ?? 1,
       };
     }
   }

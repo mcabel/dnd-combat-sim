@@ -1379,10 +1379,10 @@ function getSpellInfoFromPlan(
   if (NON_SPELL_PLAN_TYPES.has(plan.type)) return null;
   // 'attack' is in NON_SPELL_PLAN_TYPES, so we don't reach here for weapon attacks.
   // Bespoke spell case ('fireball', 'cureWounds', 'magicMissile', etc.):
-  // these are always spells. RFC-UPCASTING Phase 1: use castSlotLevel if
-  // present, falling back to action.slotLevel, then to 1.
-  // The spell name is the plan type (camelCase) — we convert to the action
-  // name if available, else use the plan type directly.
+  // these are always spells. TG-033-P1 / RFC-UPCASTING Phase 1: read
+  // castSlotLevel set by the planner (via getLowestAvailableSlot at
+  // plan-construction time). Falls back to action.slotLevel (base level)
+  // then 1 for legacy plans without the field.
   const name = plan.action?.name ?? plan.type;
   const level = plan.castSlotLevel ?? plan.action?.slotLevel ?? 1;
   return { name, level };
