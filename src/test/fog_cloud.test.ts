@@ -343,11 +343,26 @@ console.log('\n=== 8. Integration: runCombat ===\n');
 
 {
   // Full combat: low-HP caster casts Fog Cloud round 1.
-  // The enemy's hitBonus is -20 so it never hits → the caster never takes
-  // damage → concentration never breaks → the Fog Cloud obstacle persists.
-  // Without this, the ~45% concentration-save fail rate + ~3% crit-death
-  // rate makes the test flaky (obstacle removed when concentration breaks
-  // or caster dies).
+  //
+  // The enemy is a harmless "training dummy" (cannotAttack: true, no
+  // actions) so it can never damage the caster → concentration never
+  // breaks → the Fog Cloud obstacle persists.
+  //
+  // PREVIOUS (flaky) APPROACH: enemy had a Shortbow with hitBonus -20,
+  // intending "never hits". But a natural 20 on the d20 is ALWAYS a
+  // critical hit regardless of hitBonus (PHB p.194). The crit + Sneak
+  // Attack damage (which fires even at disadvantage — separate bug)
+  // dealt 9-10 damage, either killing the caster (10 HP) outright or
+  // breaking concentration via the save. This produced ~3-7% test
+  // flakiness that CI occasionally hit (see Session 79 handover).
+  //
+  // The caster's faction ('party') is NOT auto-defeated by
+  // teamHasNoAttackCapability because canDealDamage() falls back to
+  // "improvised unarmed is always available" for non-cannotAttack
+  // creatures. The enemy faction WILL be auto-defeated at end of round
+  // 1, but that happens AFTER the caster's turn — obstacle +
+  // concentration are already set by then, and auto-defeat doesn't
+  // kill anyone.
   const caster = makeC({
     id: 'caster', faction: 'party', pos: { x: 0, y: 5, z: 0 },
     actions: [fogCloudAction()], resources: slots(2),
@@ -356,15 +371,8 @@ console.log('\n=== 8. Integration: runCombat ===\n');
   });
   const enemy = makeC({
     id: 'enemy', faction: 'enemy', pos: { x: 5, y: 5, z: 0 },
-    actions: [{
-      name: 'Shortbow', isMultiattack: false,
-      attackType: 'ranged', reach: 5, range: { normal: 80, long: 320 },
-      hitBonus: -20,  // never hits → no damage → concentration never breaks
-      damage: { count: 1, sides: 6, bonus: 2, average: 5 },
-      damageType: 'piercing', saveDC: null, saveAbility: null,
-      isAoE: false, isControl: false, requiresConcentration: false,
-      costType: 'action', legendaryCost: 0, description: '',
-    }],
+    actions: [],            // harmless training dummy
+    cannotAttack: true,     // cannot use improvised unarmed fallback
     maxHP: 100, currentHP: 100, ac: 15,
   });
   const bf = makeFlatBattlefield(20, 10, [caster, enemy]);
