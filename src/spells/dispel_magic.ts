@@ -58,12 +58,12 @@ export const metadata = {
   concentration: false,
   castingTime: 'action',
   // v1 simplification flags
-  dispelMagicSpellLevelTrackingV1Implemented: false,   // DC 13 flat instead of 10 + spell level
+  dispelMagicSpellLevelTrackingV1Implemented: true,    // Session 72: DC = 10 + sourceSlotLevel (PHB p.233)
   dispelMagicObjectTargetingV1Implemented: false,      // creature-only targeting
 } as const;
 
-/** v1 flat DC for non-concentration effect ability checks */
-const V1_FLAT_DC = 13;
+/** Legacy flat DC for effects without sourceSlotLevel (pre-Session 72) */
+const LEGACY_FLAT_DC = 13;
 
 // ---- Local log helper ---------------------------------------
 
@@ -252,47 +252,59 @@ export function execute(
         target.id,
       );
     } else {
-      // Ability check vs DC 13 (v1 flat DC)
-      // Session 43 Task #26: use rollAbilityCheckReactable so Silvery Barbs
-      // can fire on a successful check. The opponent is the target creature
-      // (whose effect is being dispelled) — they might cast Silvery Barbs
-      // to protect their buff if the dispel came from an enemy.
-      //
-      // PHB p.233: "make an ability check using your spellcasting ability".
-      // The local spellcastingMod() helper returns max(INT, WIS, CHA) mod.
-      // The canonical rollAbilityCheck takes a specific ability — we pass
-      // 'int' as the v1 default (Wizards are the typical dispellers).
-      // No proficiency per PHB p.233 (isProficient=false).
-      const spellcastingAbility: 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha' = 'int';
-      const checkResult = rollAbilityCheckReactable(
-        state,
-        caster,    // checker (the one making the ability check)
-        target,    // opponent (the target creature — might protect their buff)
-        spellcastingAbility,
-        V1_FLAT_DC,
-        false,     // no proficiency (PHB p.233 explicit)
-        'dispel magic',
-      );
-      const check = checkResult.total;
-      const success = checkResult.success;
+      // PHB p.233: auto-dispel if the Dispel slot level ≥ the effect's source level.
+      // Session 72 (RFC-UPCASTING Phase 2): sourceSlotLevel is now tracked on ActiveEffect.
+      // Effects without sourceSlotLevel are legacy (pre-Session 72) — use ability check.
+      const effectLevel = effect.sourceSlotLevel;
 
-      if (success) {
+      if (effectLevel !== undefined && slotLevel >= effectLevel) {
+        // Auto-dispel: Dispel slot level ≥ effect source level (PHB p.233)
         removeEffectById(target.id, effect.id, state.battlefield);
         dispelledCount++;
 
         emit(
           state, 'condition_remove', caster.id,
-          `${caster.name} dispels ${target.name}'s ${effect.spellName}! (check ${check} vs DC ${V1_FLAT_DC}${checkResult.negated ? ' — Silvery Barbs did NOT flip' : ''})`,
+          `${target.name}'s ${effect.spellName} (L${effectLevel}) is automatically dispelled by Dispel Magic (slot L${slotLevel})!`,
           target.id,
-          check,
         );
       } else {
-        emit(
-          state, 'save_success', caster.id,
-          `${caster.name} fails to dispel ${target.name}'s ${effect.spellName} (check ${check} vs DC ${V1_FLAT_DC}${checkResult.negated ? ' — Silvery Barbs FLIPPED success to failure!' : ''})`,
-          target.id,
-          check,
+        // Ability check: DC = 10 + effect's spell level (PHB p.233)
+        // Legacy effects (sourceSlotLevel undefined) use flat DC 13.
+        const dc = effectLevel !== undefined ? 10 + effectLevel : LEGACY_FLAT_DC;
+
+        // Session 43 Task #26: use rollAbilityCheckReactable so Silvery Barbs
+        // can fire on a successful check.
+        const spellcastingAbility: 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha' = 'int';
+        const checkResult = rollAbilityCheckReactable(
+          state,
+          caster,    // checker (the one making the ability check)
+          target,    // opponent (the target creature — might protect their buff)
+          spellcastingAbility,
+          dc,
+          false,     // no proficiency (PHB p.233 explicit)
+          'dispel magic',
         );
+        const check = checkResult.total;
+        const success = checkResult.success;
+
+        if (success) {
+          removeEffectById(target.id, effect.id, state.battlefield);
+          dispelledCount++;
+
+          emit(
+            state, 'condition_remove', caster.id,
+            `${caster.name} dispels ${target.name}'s ${effect.spellName}! (check ${check} vs DC ${dc}${checkResult.negated ? ' — Silvery Barbs did NOT flip' : ''})`,
+            target.id,
+            check,
+          );
+        } else {
+          emit(
+            state, 'save_success', caster.id,
+            `${caster.name} fails to dispel ${target.name}'s ${effect.spellName} (check ${check} vs DC ${dc}${checkResult.negated ? ' — Silvery Barbs FLIPPED success to failure!' : ''})`,
+            target.id,
+            check,
+          );
+        }
       }
     }
   }

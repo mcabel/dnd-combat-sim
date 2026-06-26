@@ -195,7 +195,7 @@ eq('school is abjuration', metadata.school, 'abjuration');
 eq('range is 120 ft', metadata.rangeFt, 120);
 eq('is NOT concentration', metadata.concentration, false);
 eq('casting time is action', metadata.castingTime, 'action');
-eq('spell level tracking NOT implemented (v1)', metadata.dispelMagicSpellLevelTrackingV1Implemented, false);
+eq('spell level tracking IS implemented (Session 72)', metadata.dispelMagicSpellLevelTrackingV1Implemented, true);
 eq('object targeting NOT implemented (v1)', metadata.dispelMagicObjectTargetingV1Implemented, false);
 
 // ============================================================

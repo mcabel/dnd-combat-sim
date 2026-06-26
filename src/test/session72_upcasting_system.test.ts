@@ -466,6 +466,7 @@ console.log('\n=== Phase 4 — Globe of Invulnerability ===\n');
         spellName: 'Globe of Invulnerability',
         effectType: 'spell_shield',
         sourceSlotLevel: 6,
+        sourceIsConcentration: true,
         payload: { blockThreshold: 5 },
       }],
     });
@@ -481,6 +482,7 @@ console.log('\n=== Phase 4 — Globe of Invulnerability ===\n');
         spellName: 'Globe of Invulnerability',
         effectType: 'spell_shield',
         sourceSlotLevel: 6,
+        sourceIsConcentration: true,
         payload: { blockThreshold: 5 },
       }],
     });
@@ -496,6 +498,7 @@ console.log('\n=== Phase 4 — Globe of Invulnerability ===\n');
         spellName: 'Globe of Invulnerability',
         effectType: 'spell_shield',
         sourceSlotLevel: 6,
+        sourceIsConcentration: true,
         payload: { blockThreshold: 5 },
       }],
     });
@@ -518,6 +521,7 @@ console.log('\n=== Phase 4 — Globe of Invulnerability ===\n');
         spellName: 'Globe of Invulnerability',
         effectType: 'spell_shield',
         sourceSlotLevel: 7,
+        sourceIsConcentration: true,
         payload: { blockThreshold: 6 },
       }],
     });
@@ -541,6 +545,7 @@ console.log('\n=== Phase 4 — Globe of Invulnerability ===\n');
         spellName: 'Some Other Shield',
         effectType: 'spell_shield',
         sourceSlotLevel: 5,
+        sourceIsConcentration: true,
         payload: { blockThreshold: 4 },
       }],
     });
@@ -681,6 +686,7 @@ function selectCastSlotTest(
       spellName: 'Globe of Invulnerability',
       effectType: 'spell_shield',
       sourceSlotLevel: 6,
+      sourceIsConcentration: true,
       payload: { blockThreshold: 5 },
     }],
   });
@@ -709,6 +715,7 @@ function selectCastSlotTest(
       spellName: 'Globe of Invulnerability',
       effectType: 'spell_shield',
       sourceSlotLevel: 9,
+      sourceIsConcentration: true,
       payload: { blockThreshold: 8 },
     }],
   });
@@ -723,6 +730,7 @@ function selectCastSlotTest(
       spellName: 'Globe of Invulnerability',
       effectType: 'spell_shield',
       sourceSlotLevel: 10, // hypothetical
+      sourceIsConcentration: true,
       payload: { blockThreshold: 9 },
     }],
   });
