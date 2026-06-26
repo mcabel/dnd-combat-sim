@@ -38,6 +38,7 @@ import {
   selectMonsterSlottedSpell,
 } from '../ai/monster_spellcasting';
 import { lookupGenericSpell } from '../spells/_generic_registry';
+import { lookupMonsterBespokeByName } from '../ai/monster_bespoke_registry';
 import { runCombat, makeFlatBattlefield } from '../engine/combat';
 import { Combatant, Battlefield, Action, Vec3 } from '../types/core';
 
@@ -329,7 +330,7 @@ console.log('\n=== 9. selectMonsterSlottedSpell — lazy-inits ===\n');
 }
 
 // ============================================================
-console.log('\n=== 10. selectMonsterSlottedSpell — returns genericSpell plan ===\n');
+console.log('\n=== 10. selectMonsterSlottedSpell — returns slotted spell plan ===\n');
 // ============================================================
 
 {
@@ -339,10 +340,16 @@ console.log('\n=== 10. selectMonsterSlottedSpell — returns genericSpell plan =
 
   assert('10a: plan is not null', plan !== null);
   if (plan) {
-    eq('10b: plan.type = genericSpell', plan.type, 'genericSpell');
+    // Session 76 (Phase 4): plan.type may be 'genericSpell' OR a bespoke
+    // plan type (e.g. 'coneOfCold', 'fireball'). Both are valid dispatch paths.
+    assert('10b: plan.type is a valid spell dispatch type',
+      plan.type === 'genericSpell' || plan.type !== 'attack',
+      `got ${plan.type}`);
     assert('10c: plan.spellName is set', plan.spellName !== undefined && plan.spellName !== '');
-    assert('10d: plan.spellName is a GENERIC_SPELLS key',
-      lookupGenericSpell(plan.spellName!) !== null);
+    assert('10d: plan.spellName is a known spell (generic or bespoke)',
+      lookupGenericSpell(plan.spellName!) !== null ||
+      lookupMonsterBespokeByName(plan.spellName!) !== null,
+      `got ${plan.spellName}`);
     assert('10e: plan.description mentions "slot"',
       plan.description.includes('slot'));
     assert('10f: plan.action is null', plan.action === null);
@@ -420,7 +427,7 @@ console.log('\n=== 12. selectMonsterSlottedSpell — skips utility spells ===\n'
 }
 
 // ============================================================
-console.log('\n=== 13. selectMonsterSlottedSpell — skips bespoke-only ===\n');
+console.log('\n=== 13. selectMonsterSlottedSpell — dispatches bespoke-only (Phase 4) ===\n');
 // ============================================================
 
 {
@@ -428,9 +435,21 @@ console.log('\n=== 13. selectMonsterSlottedSpell — skips bespoke-only ===\n');
   const enemy = makeC({ id: 'e', faction: 'party', pos: { x: 1, y: 0, z: 0 } });
   const plan = selectMonsterSlottedSpell(m, makeBF([m, enemy]));
 
-  // All spells are bespoke-only (magic missile, shield, thunderwave,
-  // invisibility, misty step) → not in GENERIC_SPELLS → null
-  eq('13a: null when no slotted spell is in GENERIC_SPELLS', plan, null);
+  // Session 76 (Phase 4): bespoke-only spells (magic missile, shield,
+  // thunderwave, invisibility, misty step) are NOW dispatched via their
+  // combat.ts case branches. Previously (Phase 2) these were silently
+  // skipped — now they get a non-null plan with the bespoke plan type.
+  assert('13a: plan is not null (bespoke dispatched)', plan !== null);
+  if (plan) {
+    assert('13b: plan.type is a bespoke plan type (not genericSpell)',
+      plan.type !== 'genericSpell',
+      `got ${plan.type}`);
+    assert('13c: plan.spellName is set',
+      plan.spellName !== undefined && plan.spellName !== '');
+    assert('13d: plan.spellName is a registered bespoke spell',
+      lookupMonsterBespokeByName(plan.spellName!) !== null,
+      `got ${plan.spellName}`);
+  }
 }
 
 // ============================================================

@@ -54,6 +54,7 @@ import { composeBiases, collectCantripBiases } from './pattern_bias';
 import { requiresVisibleTarget } from '../engine/perception';
 import { cantripTier } from '../engine/utils';
 import { lookupGenericSpell } from '../spells/_generic_registry';
+import { lookupMonsterBespokeByName, MonsterBespokeEntry } from './monster_bespoke_registry';
 
 // ---- Spell Tags (RFC §4.1) ----------------------------------
 
@@ -1129,30 +1130,53 @@ export function selectMonsterDailySpell(
   // These are cleaned up in the `finally` block below. This mutation is
   // contained to this function call and never leaks to the caller.
   //
-  // Alternative considered: skip shouldCast entirely and rely on weight
-  // scoring + dedup. Rejected because shouldCast also validates range,
-  // target availability, and concentration conflicts — important for
-  // correctness (e.g., don't cast Confusion when no enemies are in range).
+  // Session 76 (Phase 4): now also adds synthetic Actions for bespoke
+  // daily spells (those in MONSTER_BESPOQUE_SPELLS but not GENERIC_SPELLS).
+  // The action name uses the CANONICAL Title Case (e.g. 'Command') so
+  // the bespoke shouldCast functions can find it.
   const syntheticActions: Action[] = [];
   for (const spellName of Object.keys(sc.daily)) {
-    if (self.actions.some(a => a.name === spellName)) continue;  // already present
+    // Check generic registry first (Phase 3 path).
     const desc = lookupGenericSpell(spellName);
-    if (!desc) continue;
-    syntheticActions.push({
-      name: spellName,
-      isMultiattack: false,
-      attackType: 'spell',
-      reach: 0, range: null,
-      hitBonus: 0,
-      damage: { count: 0, sides: 0, bonus: 0, average: 0 },
-      damageType: 'force',
-      saveDC: null, saveAbility: null,
-      isAoE: false, isControl: false,
-      requiresConcentration: false,
-      slotLevel: desc.level,
-      costType: 'action', legendaryCost: 0,
-      description: `${spellName} (monster daily — synthetic)`,
-    } as Action);
+    if (desc) {
+      if (self.actions.some(a => a.name === desc.name)) continue;
+      syntheticActions.push({
+        name: desc.name,  // canonical Title Case
+        isMultiattack: false,
+        attackType: 'spell',
+        reach: 0, range: null,
+        hitBonus: 0,
+        damage: { count: 0, sides: 0, bonus: 0, average: 0 },
+        damageType: 'force',
+        saveDC: null, saveAbility: null,
+        isAoE: false, isControl: false,
+        requiresConcentration: false,
+        slotLevel: desc.level,
+        costType: 'action', legendaryCost: 0,
+        description: `${desc.name} (monster daily — synthetic)`,
+      } as Action);
+      continue;
+    }
+    // Check bespoke registry (Phase 4 path).
+    const bespoke = lookupMonsterBespokeByName(spellName);
+    if (bespoke) {
+      if (self.actions.some(a => a.name === bespoke.canonicalName)) continue;
+      syntheticActions.push({
+        name: bespoke.canonicalName,  // canonical Title Case
+        isMultiattack: false,
+        attackType: 'spell',
+        reach: 0, range: null,
+        hitBonus: 0,
+        damage: { count: 0, sides: 0, bonus: 0, average: 0 },
+        damageType: 'force',
+        saveDC: null, saveAbility: null,
+        isAoE: false, isControl: false,
+        requiresConcentration: false,
+        slotLevel: bespoke.level,
+        costType: 'action', legendaryCost: 0,
+        description: `${bespoke.canonicalName} (monster daily bespoke — synthetic)`,
+      } as Action);
+    }
   }
   if (syntheticActions.length > 0) {
     self.actions.push(...syntheticActions);
@@ -1182,74 +1206,107 @@ export function selectMonsterDailySpell(
   let bestPlan: PlannedAction | null = null;
   let bestWeight = 0;
   let bestLevel = -1;
-  let bestName = '';
+  let bestName = '';           // canonical name (for plan + tie-breaking)
+  let bestRawName = '';        // raw name (for daily-use consumption)
 
   try {
     for (const spellName of Object.keys(sc.daily)) {
       // Skip if no uses remaining.
       if (!hasMonsterDailyUseAvailable(self, spellName)) continue;
 
-      // Look up in GENERIC_SPELLS (dispatch path).
+      // ── Phase 3 path: check GENERIC_SPELLS first ──
       const desc = lookupGenericSpell(spellName);
-      if (!desc) continue;  // bespoke-only — Phase 4 future work
+      if (desc) {
+        // Run the spell's shouldCast gate (range, concentration, target, etc.).
+        let shouldCastResult = false;
+        try {
+          shouldCastResult = desc.shouldCast(self, bf);
+        } catch {
+          continue;
+        }
+        if (!shouldCastResult) continue;
 
-      // Run the spell's shouldCast gate (range, concentration, target, etc.).
-      // With the synthetic action + resources above, the action-presence and
-      // slot-availability checks pass. The dedup check
-      // (_genericSpellActiveSpells) works as-is.
-      let shouldCastResult = false;
-      try {
-        shouldCastResult = desc.shouldCast(self, bf);
-      } catch {
-        // Defensive: if shouldCast throws (bug in a spell module), skip
-        // this spell rather than crashing the planner.
+        // Derive tags for weighted scoring.
+        const tags = getDailySpellTags(desc.name);
+        if (tags.length === 0 || tags[0] === 'utility') continue;
+
+        // Compute weight.
+        const avgDmg = 0;
+        const targetHP = target?.currentHP ?? 100;
+
+        const biases = collectCantripBiases(
+          ctx, bf, self, target ?? self, tags, avgDmg,
+          false, undefined,
+        );
+
+        const weight = computeSpellWeight(
+          desc.name, tags, desc.level, avgDmg, ctx, targetHP, biases,
+        );
+
+        // Tie-breaking: higher weight wins; ties → higher level, then alpha.
+        if (weight > bestWeight
+            || (weight === bestWeight && weight > 0
+                && (desc.level > bestLevel
+                    || (desc.level === bestLevel && desc.name < bestName)))) {
+          bestWeight = weight;
+          bestLevel = desc.level;
+          bestName = desc.name;
+          bestRawName = spellName;  // raw name for consumption
+
+          bestPlan = {
+            type: 'genericSpell',
+            action: null,
+            targetId: target?.id ?? self.id,
+            description: `${self.name} casts ${desc.name} (daily ${desc.level > 0 ? 'L' + desc.level : 'cantrip'})`,
+            spellName: desc.name,
+            castSlotLevel: desc.level,
+          };
+        }
         continue;
       }
-      if (!shouldCastResult) continue;
 
-      // Derive tags for weighted scoring.
-      const tags = getDailySpellTags(spellName);
-      if (tags.length === 0 || tags[0] === 'utility') continue;  // skip utility
+      // ── Phase 4 path: check MONSTER_BESPOQUE_SPELLS ──
+      // Session 76: bespoke-only daily spells (Command, Hold Person,
+      // Darkness, Faerie Fire, etc.) are dispatched via their combat.ts
+      // case branches. We don't call shouldCast here — combat.ts will
+      // validate at execute time (with synthetic state attached by
+      // attachMonsterBespokeSyntheticState).
+      const bespoke = lookupMonsterBespokeByName(spellName);
+      if (!bespoke) continue;
+
+      // Skip utility spells (weight 0).
+      if (bespoke.tags.length === 0 || bespoke.tags[0] === 'utility') continue;
 
       // Compute weight.
-      //   avgDamage: 0 for non-damage spells (healing/CC/buff/defending).
-      //   targetHP:  use the best target's HP for the finisher bonus
-      //              (only affects damage spells).
       const avgDmg = 0;
       const targetHP = target?.currentHP ?? 100;
 
-      // Pattern biases: simplified collection for v1.
-      //   Uses the cantrip bias collector with synthetic parameters.
-      //   Full per-spell bias integration is Phase 4+ future work.
       const biases = collectCantripBiases(
-        ctx, bf, self, target ?? self, tags, avgDmg,
-        false, undefined,  // attackRoll=false, saveAbility=undefined (neutral)
+        ctx, bf, self, target ?? self, bespoke.tags, avgDmg,
+        false, undefined,
       );
 
       const weight = computeSpellWeight(
-        spellName, tags, desc.level, avgDmg, ctx, targetHP, biases,
+        bespoke.canonicalName, bespoke.tags, bespoke.level, avgDmg, ctx, targetHP, biases,
       );
 
       // Tie-breaking: higher weight wins; ties → higher level, then alpha.
       if (weight > bestWeight
           || (weight === bestWeight && weight > 0
-              && (desc.level > bestLevel
-                  || (desc.level === bestLevel && spellName < bestName)))) {
+              && (bespoke.level > bestLevel
+                  || (bespoke.level === bestLevel && bespoke.canonicalName < bestName)))) {
         bestWeight = weight;
-        bestLevel = desc.level;
-        bestName = spellName;
+        bestLevel = bespoke.level;
+        bestName = bespoke.canonicalName;
+        bestRawName = spellName;  // raw name for consumption
 
         bestPlan = {
-          type: 'genericSpell',
+          type: bespoke.planType as PlannedAction['type'],  // e.g. 'command', 'holdPerson'
           action: null,
           targetId: target?.id ?? self.id,
-          description: `${self.name} casts ${spellName} (daily ${desc.level > 0 ? 'L' + desc.level : 'cantrip'})`,
-          spellName,
-          // RFC-UPCASTING Phase 1: castSlotLevel tracks the spell's level for
-          // Counterspell accuracy + Globe of Invulnerability blocking.
-          // Daily-use spells don't consume a slot, but their EFFECTIVE level
-          // for interaction purposes is the spell's base level.
-          castSlotLevel: desc.level,
+          description: `${self.name} casts ${bespoke.canonicalName} (daily, bespoke)`,
+          spellName: bespoke.canonicalName,
+          castSlotLevel: bespoke.level,
         };
       }
     }
@@ -1267,8 +1324,10 @@ export function selectMonsterDailySpell(
   // Consume the daily use UPFRONT (before returning the plan).
   // PHB p.201: "Once a spell is cast, its slot is used regardless of
   // whether the spell succeeds." Daily uses follow the same rule.
-  if (bestPlan && bestName) {
-    consumeMonsterDailyUse(self, bestName);
+  // Note: consume by the RAW name (key in monsterDailyUses), not the
+  // canonical name — the tracker is keyed by the raw bestiary name.
+  if (bestPlan && bestRawName) {
+    consumeMonsterDailyUse(self, bestRawName);
   }
 
   return bestPlan;
@@ -1358,29 +1417,58 @@ export function selectMonsterSlottedSpell(
   // Same shim as Phase 3: temporarily add synthetic Actions for each
   // slotted spell + set synthetic resources with all slots available.
   // Cleaned up in the `finally` block.
+  //
+  // Session 76 (Phase 4): now also adds synthetic Actions for bespoke
+  // spells (those in MONSTER_BESPOQUE_SPELLS but not GENERIC_SPELLS).
+  // The action name uses the CANONICAL Title Case (e.g. 'Fireball') so
+  // the bespoke shouldCast functions (which check
+  // `caster.actions.some(a => a.name === 'Fireball')`) can find it.
   const syntheticActions: Action[] = [];
   for (let lvl = 1; lvl <= 9; lvl++) {
     const slotData = sc.slots[lvl];
     if (!slotData?.spells) continue;
     for (const spellName of slotData.spells) {
-      if (self.actions.some(a => a.name === spellName)) continue;
+      // Check generic registry first (Phase 2/3 path).
       const desc = lookupGenericSpell(spellName);
-      if (!desc) continue;
-      syntheticActions.push({
-        name: spellName,
-        isMultiattack: false,
-        attackType: 'spell',
-        reach: 0, range: null,
-        hitBonus: 0,
-        damage: { count: 0, sides: 0, bonus: 0, average: 0 },
-        damageType: 'force',
-        saveDC: null, saveAbility: null,
-        isAoE: false, isControl: false,
-        requiresConcentration: false,
-        slotLevel: desc.level,
-        costType: 'action', legendaryCost: 0,
-        description: `${spellName} (monster slotted — synthetic)`,
-      } as Action);
+      if (desc) {
+        if (self.actions.some(a => a.name === desc.name)) continue;
+        syntheticActions.push({
+          name: desc.name,  // canonical Title Case
+          isMultiattack: false,
+          attackType: 'spell',
+          reach: 0, range: null,
+          hitBonus: 0,
+          damage: { count: 0, sides: 0, bonus: 0, average: 0 },
+          damageType: 'force',
+          saveDC: null, saveAbility: null,
+          isAoE: false, isControl: false,
+          requiresConcentration: false,
+          slotLevel: desc.level,
+          costType: 'action', legendaryCost: 0,
+          description: `${desc.name} (monster slotted — synthetic)`,
+        } as Action);
+        continue;
+      }
+      // Check bespoke registry (Phase 4 path).
+      const bespoke = lookupMonsterBespokeByName(spellName);
+      if (bespoke) {
+        if (self.actions.some(a => a.name === bespoke.canonicalName)) continue;
+        syntheticActions.push({
+          name: bespoke.canonicalName,  // canonical Title Case
+          isMultiattack: false,
+          attackType: 'spell',
+          reach: 0, range: null,
+          hitBonus: 0,
+          damage: { count: 0, sides: 0, bonus: 0, average: 0 },
+          damageType: 'force',
+          saveDC: null, saveAbility: null,
+          isAoE: false, isControl: false,
+          requiresConcentration: false,
+          slotLevel: bespoke.level,
+          costType: 'action', legendaryCost: 0,
+          description: `${bespoke.canonicalName} (monster bespoke — synthetic)`,
+        } as Action);
+      }
     }
   }
   if (syntheticActions.length > 0) {
@@ -1406,7 +1494,7 @@ export function selectMonsterSlottedSpell(
 
   let bestPlan: PlannedAction | null = null;
   let bestWeight = 0;
-  let bestLevel = -1;      // spell's GENERIC_SPELLS level (for tie-breaking)
+  let bestLevel = -1;      // spell's level (for tie-breaking)
   let bestSlotLevel = -1;  // slot level from iteration (for consumption)
   let bestName = '';
 
@@ -1419,55 +1507,100 @@ export function selectMonsterSlottedSpell(
         // Skip if no slot available at this level (or higher for upcast).
         if (!hasMonsterSpellSlot(self, lvl)) continue;
 
-        // Look up in GENERIC_SPELLS (dispatch path).
+        // ── Phase 2/3 path: check GENERIC_SPELLS first ──
         const desc = lookupGenericSpell(spellName);
-        if (!desc) continue;  // bespoke-only — Phase 4 future work
+        if (desc) {
+          // Run the spell's shouldCast gate.
+          let shouldCastResult = false;
+          try {
+            shouldCastResult = desc.shouldCast(self, bf);
+          } catch {
+            continue;
+          }
+          if (!shouldCastResult) continue;
 
-        // Run the spell's shouldCast gate.
-        let shouldCastResult = false;
-        try {
-          shouldCastResult = desc.shouldCast(self, bf);
-        } catch {
+          // Derive tags for weighted scoring (reuse Phase 3's helper).
+          const tags = getDailySpellTags(desc.name);
+          if (tags.length === 0 || tags[0] === 'utility') continue;
+
+          // Compute weight.
+          const avgDmg = 0;
+          const targetHP = target?.currentHP ?? 100;
+
+          const biases = collectCantripBiases(
+            ctx, bf, self, target ?? self, tags, avgDmg,
+            false, undefined,
+          );
+
+          const weight = computeSpellWeight(
+            desc.name, tags, desc.level, avgDmg, ctx, targetHP, biases,
+          );
+
+          // Tie-breaking: higher weight wins; ties → higher spell level, then alpha.
+          if (weight > bestWeight
+              || (weight === bestWeight && weight > 0
+                  && (desc.level > bestLevel
+                      || (desc.level === bestLevel && desc.name < bestName)))) {
+            bestWeight = weight;
+            bestLevel = desc.level;
+            bestSlotLevel = lvl;
+            bestName = desc.name;
+
+            bestPlan = {
+              type: 'genericSpell',
+              action: null,
+              targetId: target?.id ?? self.id,
+              description: `${self.name} casts ${desc.name} (L${lvl} slot)`,
+              spellName: desc.name,
+              castSlotLevel: lvl,
+            };
+          }
           continue;
         }
-        if (!shouldCastResult) continue;
 
-        // Derive tags for weighted scoring (reuse Phase 3's helper).
-        const tags = getDailySpellTags(spellName);
-        if (tags.length === 0 || tags[0] === 'utility') continue;
+        // ── Phase 4 path: check MONSTER_BESPOQUE_SPELLS ──
+        // Session 76: bespoke-only spells (Fireball, Command, Hold Person,
+        // etc.) are dispatched via their combat.ts case branches. We don't
+        // call shouldCast here (the bespoke shouldCast functions aren't
+        // imported into this module). Instead, we rely on weight scoring +
+        // tag filtering + target selection. combat.ts's case branch will
+        // call shouldCast at execute time (with synthetic state attached
+        // by attachMonsterBespokeSyntheticState).
+        const bespoke = lookupMonsterBespokeByName(spellName);
+        if (!bespoke) continue;  // not in generic or bespoke — skip
 
-        // Compute weight.
+        // Skip utility spells (weight 0).
+        if (bespoke.tags.length === 0 || bespoke.tags[0] === 'utility') continue;
+
+        // Compute weight using the bespoke entry's level + tags.
         const avgDmg = 0;
         const targetHP = target?.currentHP ?? 100;
 
         const biases = collectCantripBiases(
-          ctx, bf, self, target ?? self, tags, avgDmg,
+          ctx, bf, self, target ?? self, bespoke.tags, avgDmg,
           false, undefined,
         );
 
         const weight = computeSpellWeight(
-          spellName, tags, desc.level, avgDmg, ctx, targetHP, biases,
+          bespoke.canonicalName, bespoke.tags, bespoke.level, avgDmg, ctx, targetHP, biases,
         );
 
         // Tie-breaking: higher weight wins; ties → higher spell level, then alpha.
         if (weight > bestWeight
             || (weight === bestWeight && weight > 0
-                && (desc.level > bestLevel
-                    || (desc.level === bestLevel && spellName < bestName)))) {
+                && (bespoke.level > bestLevel
+                    || (bespoke.level === bestLevel && bespoke.canonicalName < bestName)))) {
           bestWeight = weight;
-          bestLevel = desc.level;
+          bestLevel = bespoke.level;
           bestSlotLevel = lvl;
-          bestName = spellName;
+          bestName = bespoke.canonicalName;
 
           bestPlan = {
-            type: 'genericSpell',
+            type: bespoke.planType as PlannedAction['type'],  // e.g. 'fireball', 'command'
             action: null,
             targetId: target?.id ?? self.id,
-            description: `${self.name} casts ${spellName} (L${lvl} slot)`,
-            spellName,
-            // RFC-UPCASTING Phase 1: castSlotLevel tracks the slot level
-            // consumed (may be higher than spell base level if upcast).
-            // Set below after consumption.
+            description: `${self.name} casts ${bespoke.canonicalName} (L${lvl} slot, bespoke)`,
+            spellName: bespoke.canonicalName,
             castSlotLevel: lvl,
           };
         }

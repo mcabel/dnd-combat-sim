@@ -897,6 +897,17 @@ import {
   lookupGenericSpell,
 } from '../spells/_generic_registry';
 
+// ── Session 76 — RFC-MONSTER-SPELLCASTING Phase 4: bespoke spell dispatch ──
+// Monster-bespoke spells (Fireball, Command, Hold Person, etc.) are
+// dispatched via their existing case branches below. The planner sets
+// plan.type to the bespoke plan type (e.g. 'fireball'). Before the
+// switch, we attach synthetic state (action + resources) so the bespoke
+// shouldCast functions (which check caster.actions + hasSpellSlot) pass.
+import {
+  lookupMonsterBespokeByPlanType,
+  attachMonsterBespokeSyntheticState,
+} from '../ai/monster_bespoke_registry';
+
 // ---- Combat log ---------------------------------------------
 
 export interface CombatEvent {
@@ -3075,6 +3086,33 @@ export function executePlannedAction(
         `${actor.name}'s ${spellInfo.name} (L${spellInfo.level}) is blocked by Globe of Invulnerability on ${goiTarget.name}!`,
         goiTarget.id);
       return;  // spell has no effect — skip the entire switch
+    }
+  }
+
+  // ── Session 76: Monster-bespoke spell synthetic state ──────────────
+  // The planner (selectMonsterSlottedSpell / selectMonsterDailySpell)
+  // validated the spell selection with synthetic state (action + resources),
+  // but that state was cleaned up after planning. The bespoke shouldCast
+  // functions in the switch below check `caster.actions.some(a => a.name)`
+  // and `hasSpellSlot(caster, level)` — both fail for monsters without
+  // synthetic state.
+  //
+  // We detect monster-bespoke casts by checking if plan.type is a registered
+  // monster-bespoke plan type. If so, we attach synthetic state before the
+  // switch and clean up after. The existing bespoke case branch then calls
+  // shouldCast + execute normally.
+  //
+  // The resource consumption (slot or daily use) happened upfront in the
+  // planner (PHB p.201). execute()'s call to consumeSpellSlot() is a safe
+  // no-op for monsters (returns null when resources is null or slot is
+  // exhausted — doesn't crash).
+  let monsterBespokeCleanup: (() => void) | null = null;
+  if (actor.monsterSpellcasting) {
+    const bespokeEntry = lookupMonsterBespokeByPlanType(plan.type);
+    if (bespokeEntry) {
+      monsterBespokeCleanup = attachMonsterBespokeSyntheticState(
+        actor, bespokeEntry.canonicalName, bespokeEntry.level,
+      );
     }
   }
 
@@ -6032,13 +6070,22 @@ export function executePlannedAction(
       // `monsterSpellcasting.slots[N].spells` lists. If so, skip shouldCast
       // and execute directly.
       //
+      // Session 76: the check is now case-insensitive. plan.spellName uses
+      // the canonical Title Case (e.g. 'Fireball'), while monsterSpellcasting
+      // stores the raw bestiary name (lowercase, e.g. 'fireball'). Without
+      // case-insensitive matching, the monster detection would fail and the
+      // shouldCast re-check would block execution.
+      //
       // Note: desc.execute() will call consumeSpellSlot(), which is a safe
       // no-op for monsters (returns null when `resources` is null). The
       // resource tracking is separate (monsterDailyUses / monsterSpellSlots,
       // consumed in planner).
-      const isMonsterDailyCast = !!actor.monsterSpellcasting?.daily?.[spellName];
+      const spellNameLower = spellName.toLowerCase();
+      const isMonsterDailyCast = !!actor.monsterSpellcasting?.daily &&
+        Object.keys(actor.monsterSpellcasting.daily).some(k => k.toLowerCase() === spellNameLower);
       const isMonsterSlottedCast = !isMonsterDailyCast && !!actor.monsterSpellcasting?.slots &&
-        Object.values(actor.monsterSpellcasting.slots).some(s => s.spells.includes(spellName));
+        Object.values(actor.monsterSpellcasting.slots).some(s =>
+          s.spells.some(sp => sp.toLowerCase() === spellNameLower));
       const isMonsterSpellCast = isMonsterDailyCast || isMonsterSlottedCast;
       if (isMonsterSpellCast || desc.shouldCast(actor, bf)) {
         desc.execute(actor, state);
@@ -6067,6 +6114,15 @@ export function executePlannedAction(
   ]);
   if (!NON_SPELL_ACTIONS.has(plan.type)) {
     breakInvisibilityOnAction(actor, state);
+  }
+
+  // ── Session 76: Monster-bespoke spell synthetic state cleanup ──────
+  // Remove the synthetic action + resources that were attached before the
+  // switch. The cleanup function is idempotent (safe to call even if the
+  // switch threw — though we don't have try/finally here, the existing
+  // code doesn't handle exceptions either, so this matches the pattern).
+  if (monsterBespokeCleanup) {
+    monsterBespokeCleanup();
   }
 }
 

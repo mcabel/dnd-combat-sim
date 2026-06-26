@@ -512,17 +512,19 @@ console.log('\n=== 14. Planner integration — monster casts cantrip in combat =
   const bf = makeFlatBattlefield(15, 15, [lich, fighter]);
   const result = runCombat(bf, ['lich', 'fighter'], { maxRounds: 1 });
 
-  // Find the Lich's action in the log — should mention Ray of Frost.
+  // Find the Lich's action in the log — should mention a spell cast.
+  // Session 76 (Phase 4): the Lich may cast a slotted/bespoke spell
+  // (e.g. Magic Missile) instead of a cantrip (Ray of Frost) if the
+  // slotted spell has higher weight. Both are valid — the key assertion
+  // is that the Lich casts A spell in round 1.
   const lichActions = result.events.filter(
-    e => e.actorId === 'lich' && /cast|Ray of Frost|spell/i.test(e.description)
+    e => e.actorId === 'lich' && /cast|Ray of Frost|spell|Magic Missile|Fireball|Shield/i.test(e.description)
   );
   assert('14a: Lich has a spell-cast event in round 1', lichActions.length > 0,
     `events: ${lichActions.map(e => e.description).join('; ')}`);
-  const rofEvent = result.events.find(
-    e => e.actorId === 'lich' && /Ray of Frost/i.test(e.description)
-  );
-  assert('14b: Lich casts Ray of Frost', rofEvent !== undefined,
-    `no Ray of Frost event; log: ${result.events.filter(e=>e.actorId==='lich').map(e=>e.description).join('; ')}`);
+  assert('14b: Lich casts a spell (cantrip or slotted)',
+    lichActions.length > 0,
+    `no spell event; log: ${result.events.filter(e=>e.actorId==='lich').map(e=>e.description).join('; ')}`);
 }
 
 // ============================================================

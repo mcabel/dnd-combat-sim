@@ -254,11 +254,25 @@ Bespoke spell modules already have `metadata` objects. Extend them with an optio
 - Round-1 opener logic: prefer concentration buffs/debuffs on round 1.
 - **Covers**: ~145 creatures with daily-use spells (Lich 3/day, Drow 1/day, etc.).
 
-### Phase 4 (DEFERRED): Spell Upcast + Multi-Target (HIGH risk)
+### Phase 4: Bespoke Spell Dispatch (MEDIUM risk) — ✅ DONE (Session 76)
+- **Name→plan-type mapping**: `MONSTER_BESPOQUE_SPELLS` registry maps ~267 bespoke
+  spell names to their combat.ts case branches (e.g. 'Fireball' → 'fireball').
+- **Case-insensitive lookup**: `lookupGenericSpell()` now matches lowercase
+  bestiary names against Title Case registry keys (critical fix — without this,
+  Phase 2/3 only matched ~0 of 26 bestiary spells for the Lich).
+- **Synthetic state at execute time**: `attachMonsterBespokeSyntheticState()`
+  temporarily adds synthetic action + resources so bespoke shouldCast functions
+  pass (same pattern as Phase 2/3 planner-time shim, but at execute time).
+- **Bespoke + generic unified**: the planner checks GENERIC_SPELLS first, then
+  falls back to the bespoke registry. Both paths use the same weight scoring.
+- **Covers**: ~267 unique bespoke spells (Fireball, Command, Hold Person, Cure
+  Wounds, Magic Missile, Shield, etc.) used by ~770 creatures.
+
+### Phase 5 (DEFERRED): Spell Upcast + Multi-Target (HIGH risk)
 - Upcast spells using higher-level slots (e.g. Fireball at L4 for +1d6 damage).
 - Multi-target selection for AoE spells (pick the position that hits the most enemies).
 - Reaction spell integration (Shield, Counterspell, Hellish Rebuke — already implemented for PCs; extend to monsters).
-- **Defer until Phase 1-3 stable.**
+- **Defer until Phase 1-4 stable.**
 
 ---
 

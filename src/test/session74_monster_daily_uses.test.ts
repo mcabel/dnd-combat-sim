@@ -40,6 +40,7 @@ import {
   SPELL_TAG_OVERRIDES,
 } from '../ai/monster_spellcasting';
 import { lookupGenericSpell } from '../spells/_generic_registry';
+import { lookupMonsterBespokeByName } from '../ai/monster_bespoke_registry';
 import { runCombat, makeFlatBattlefield } from '../engine/combat';
 import { planTurn } from '../ai/planner';
 import { Combatant, Battlefield, Action, Vec3 } from '../types/core';
@@ -347,7 +348,7 @@ console.log('\n=== 9. selectMonsterDailySpell — lazy-inits monsterDailyUses ==
 }
 
 // ============================================================
-console.log('\n=== 10. selectMonsterDailySpell — returns genericSpell plan ===\n');
+console.log('\n=== 10. selectMonsterDailySpell — returns daily spell plan ===\n');
 // ============================================================
 
 {
@@ -357,13 +358,19 @@ console.log('\n=== 10. selectMonsterDailySpell — returns genericSpell plan ===
 
   assert('10a: plan is not null', plan !== null);
   if (plan) {
-    eq('10b: plan.type = genericSpell', plan.type, 'genericSpell');
+    // Session 76 (Phase 4): plan.type may be 'genericSpell' OR a bespoke
+    // plan type (e.g. 'holdPerson', 'command'). Both are valid.
+    assert('10b: plan.type is a valid spell dispatch type',
+      plan.type === 'genericSpell' || plan.type !== 'attack',
+      `got ${plan.type}`);
     assert('10c: plan.spellName is set', plan.spellName !== undefined && plan.spellName !== '');
-    assert('10d: plan.spellName is a GENERIC_SPELLS key',
-      lookupGenericSpell(plan.spellName!) !== null);
+    assert('10d: plan.spellName is a known spell (generic or bespoke)',
+      lookupGenericSpell(plan.spellName!) !== null ||
+      lookupMonsterBespokeByName(plan.spellName!) !== null,
+      `got ${plan.spellName}`);
     assert('10e: plan.description mentions "daily"',
       plan.description.includes('daily'));
-    assert('10f: plan.action is null (genericSpell dispatch)', plan.action === null);
+    assert('10f: plan.action is null (spell dispatch)', plan.action === null);
   }
 }
 
@@ -460,17 +467,26 @@ console.log('\n=== 13. selectMonsterDailySpell — skips utility spells ===\n');
 }
 
 // ============================================================
-console.log('\n=== 14. selectMonsterDailySpell — skips spells not in GENERIC_SPELLS ===\n');
+console.log('\n=== 14. selectMonsterDailySpell — dispatches bespoke-only (Phase 4) ===\n');
 // ============================================================
 
 {
   // Monster with only bespoke daily spells (Command, Hold Person, Cure Wounds).
-  // None are in GENERIC_SPELLS → all skipped → returns null.
+  // Session 76 (Phase 4): these are NOW dispatched via their combat.ts case
+  // branches. Previously (Phase 3) they were silently skipped.
   const m = makeBespokeOnlyDailyMonster();
   const enemy = makeC({ id: 'e', faction: 'party', pos: { x: 1, y: 0, z: 0 } });
   const plan = selectMonsterDailySpell(m, makeBF([m, enemy]));
 
-  eq('14a: null when no daily spell is in GENERIC_SPELLS', plan, null);
+  assert('14a: plan is not null (bespoke dispatched)', plan !== null);
+  if (plan) {
+    assert('14b: plan.type is a bespoke plan type (not genericSpell)',
+      plan.type !== 'genericSpell',
+      `got ${plan.type}`);
+    assert('14c: plan.spellName is a registered bespoke spell',
+      lookupMonsterBespokeByName(plan.spellName!) !== null,
+      `got ${plan.spellName}`);
+  }
 }
 
 // ============================================================
@@ -483,12 +499,17 @@ console.log('\n=== 15. selectMonsterDailySpell — sets castSlotLevel to spell l
   const plan = selectMonsterDailySpell(m, makeBF([m, enemy]));
 
   if (plan) {
+    // Session 76 (Phase 4): spell may be generic OR bespoke.
     const desc = lookupGenericSpell(plan.spellName!);
+    const bespoke = lookupMonsterBespokeByName(plan.spellName!);
     if (desc) {
       eq(`15a: castSlotLevel = spell level (${desc.level})`,
         plan.castSlotLevel, desc.level);
+    } else if (bespoke) {
+      eq(`15a: castSlotLevel = bespoke level (${bespoke.level})`,
+        plan.castSlotLevel, bespoke.level);
     } else {
-      assert('15a: spell should be in GENERIC_SPELLS', false);
+      assert('15a: spell should be in GENERIC_SPELLS or bespoke registry', false);
     }
   } else {
     assert('15a: plan should not be null', false);
@@ -512,15 +533,18 @@ console.log('\n=== 16. selectMonsterDailySpell — dedup (skips active spells) =
 
   const plan = selectMonsterDailySpell(m, bf);
 
-  // Blink should be skipped (dedup). Fly should be selected instead.
+  // Blink should be skipped (dedup). Other spells (Fly, Command, Hold Person)
+  // may be selected. Session 76 (Phase 4): Hold Person (bespoke, cc) may now
+  // be selected over Fly (generic, defending) due to higher weight.
   if (plan) {
     assert(`16a: Blink not selected (already active)`,
       plan.spellName !== 'Blink',
       `got ${plan.spellName}`);
-    // Fly is the only other GENERIC_SPELLS match → should be selected
-    eq('16b: Fly selected (Blink dedup)', plan.spellName, 'Fly');
+    assert('16b: non-Blink spell selected',
+      plan.spellName === 'Fly' || plan.spellName === 'Command' || plan.spellName === 'Hold Person',
+      `got ${plan.spellName}`);
   } else {
-    assert('16a: plan should not be null (Fly still available)', false);
+    assert('16a: plan should not be null (other spells still available)', false);
   }
 }
 

@@ -2132,9 +2132,37 @@ export const GENERIC_SPELL_LIST: GenericSpellDescriptor[] = Object.values(GENERI
 // ---- Lookup helper ------------------------------------------
 
 /**
- * Returns the GenericSpellDescriptor for the given canonical spell name,
- * or null if not found. Used by combat.ts's `case 'genericSpell':` branch.
+ * Case-insensitive lookup index (lowercase canonical name → descriptor).
+ *
+ * Built once at module load. The bestiary stores spell names in lowercase
+ * (e.g. "fireball"), while GENERIC_SPELLS uses canonical Title Case keys
+ * (e.g. "Fireball"). Without case-insensitive lookup, monster spellcasting
+ * (Phase 2/3/4) would fail to match ~all bestiary spells — the parser
+ * preserves the bestiary's lowercase casing.
+ *
+ * Session 76 (RFC-MONSTER-SPELLCASTING Phase 4): lookup is now case-
+ * insensitive. PC spellcasting is unaffected (action.name uses canonical
+ * Title Case, which still matches).
+ */
+const GENERIC_SPELLS_BY_LOWER: Map<string, GenericSpellDescriptor> = new Map();
+for (const desc of Object.values(GENERIC_SPELLS)) {
+  GENERIC_SPELLS_BY_LOWER.set(desc.name.toLowerCase(), desc);
+}
+
+/**
+ * Returns the GenericSpellDescriptor for the given spell name (case-
+ * insensitive), or null if not found. Used by combat.ts's
+ * `case 'genericSpell':` branch and by the monster spellcasting planner
+ * (src/ai/monster_spellcasting.ts).
+ *
+ * Session 76: case-insensitive to match bestiary lowercase spell names
+ * against the canonical Title Case keys in GENERIC_SPELLS.
  */
 export function lookupGenericSpell(name: string): GenericSpellDescriptor | null {
-  return GENERIC_SPELLS[name] ?? null;
+  if (!name) return null;
+  // Fast path: exact match (preserves existing behavior for Title Case callers).
+  const exact = GENERIC_SPELLS[name];
+  if (exact) return exact;
+  // Case-insensitive fallback (handles bestiary lowercase + mixed case).
+  return GENERIC_SPELLS_BY_LOWER.get(name.toLowerCase()) ?? null;
 }
