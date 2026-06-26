@@ -72,7 +72,7 @@
 import { Combatant, Battlefield } from '../types/core';
 import { rollSaveReactable, EngineState } from '../engine/combat';
 import { applySpellEffect, removeEffectsFromCaster } from '../engine/spell_effects';
-import { startConcentration, rollDie, applyDamageWithTempHP, elementalAffinityBonus } from '../engine/utils';
+import { startConcentration, rollDie, applyDamageWithTempHP, elementalAffinityBonus, cantripTier } from '../engine/utils';
 import { chebyshev3D } from '../engine/movement';
 
 // ---- Metadata -----------------------------------------------
@@ -186,6 +186,9 @@ export function execute(
   const action = caster.actions.find(a => a.name === 'Create Bonfire');
   const saveDC = action?.saveDC ?? 13;
 
+  // ── RFC-UPCASTING Phase 6: Cantrip damage scaling (PHB p.201) ──
+  const scaledDieCount = 1 + cantripTier(caster);
+
   // Break existing concentration before starting new one
   if (caster.concentration?.active) {
     removeEffectsFromCaster(caster.id, state.battlefield);
@@ -202,7 +205,7 @@ export function execute(
     // of the total damage roll). The damage_zone tick (start-of-turn) does
     // NOT get EA — the tick handler in combat.ts has no caster context.
     const eaBonus = elementalAffinityBonus(caster, metadata.damageType);
-    const fullDmg = rollDamage() + eaBonus;
+    const fullDmg = rollDamageScaled(scaledDieCount) + eaBonus;
     const dmg = save.success ? Math.floor(fullDmg / 2) : fullDmg;
     const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);
 
@@ -211,7 +214,7 @@ export function execute(
       actorId: caster.id,
       type: save.success ? 'save_success' : 'save_fail',
       targetId: target.id,
-      description: `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} DEX save vs Create Bonfire (rolled ${save.total}) — ${dealt} ${metadata.damageType} damage (${metadata.dieCount}d${metadata.dieSides}=${fullDmg}${eaBonus > 0 ? ` + ${eaBonus} EA` : ''}${save.success ? ', halved' : ''})`,
+      description: `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} DEX save vs Create Bonfire (rolled ${save.total}) — ${dealt} ${metadata.damageType} damage (${scaledDieCount}d${metadata.dieSides}=${fullDmg}${eaBonus > 0 ? ` + ${eaBonus} EA` : ''}${save.success ? ', halved' : ''})`,
       value: save.roll,
     });
     state.log.events.push({
@@ -231,7 +234,9 @@ export function execute(
     spellName: 'Create Bonfire',
     effectType: 'damage_zone',
     payload: {
-      dieCount: metadata.dieCount,
+      // ── RFC-UPCASTING Phase 6: Cantrip damage scaling (PHB p.201) ──
+      // Persistent damage_zone die count scales with caster level.
+      dieCount: scaledDieCount,
       dieSides: metadata.dieSides,
       damageType: metadata.damageType,
       saveDC,
@@ -245,17 +250,30 @@ export function execute(
     actorId: caster.id,
     type: 'action',
     targetId: target.id,
-    description: `${caster.name} casts Create Bonfire at ${target.name}! (DC ${saveDC} DEX, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}, half on save, persistent)`,
+    description: `${caster.name} casts Create Bonfire at ${target.name}! (DC ${saveDC} DEX, ${scaledDieCount}d${metadata.dieSides} ${metadata.damageType}, half on save, persistent)`,
   });
 }
 
 // ---- Dice helper --------------------------------------------
 
 /**
- * Roll `metadata.dieCount`d`metadata.dieSides` and return the total.
+ * Roll `count`d`metadata.dieSides` and return the total.
+ *
+ * ── RFC-UPCASTING Phase 6: Cantrip damage scaling ──
+ * The `count` parameter now takes a dynamic die count (1 + cantripTier)
+ * instead of the hardcoded metadata.dieCount. The base function is kept
+ * for backward compatibility; new callers should use rollDamageScaled().
  */
 export function rollDamage(): number {
+  return rollDamageScaled(metadata.dieCount);
+}
+
+/**
+ * Roll `count`d`metadata.dieSides` and return the total.
+ * RFC-UPCASTING Phase 6: accepts dynamic die count for cantrip scaling.
+ */
+export function rollDamageScaled(count: number): number {
   let total = 0;
-  for (let i = 0; i < metadata.dieCount; i++) total += rollDie(metadata.dieSides);
+  for (let i = 0; i < count; i++) total += rollDie(metadata.dieSides);
   return total;
 }

@@ -20,7 +20,7 @@ import {
   addResistance, removeResistance,
   parseDieSides, consumeBardicInspiration,
   teamHasNoAttackCapability, canDealDamage, makeImprovisedUnarmed, makeImprovisedWeapon,
-  effectiveSpeed, rollDie, abilityMod, proficiencyBonus,
+  effectiveSpeed, rollDie, abilityMod, proficiencyBonus, cantripTier,
   rollDice,
   rollDiceString as rollBoomingBladeDice,
   rollAbilityCheck,  // Session 43 Task #26: for rollAbilityCheckReactable
@@ -49,7 +49,7 @@ import { tickAdvantages, grantSelf, grantVulnerability } from './adv_system';
 import { getSummonEntry }                           from '../summons/registry';
 import { rollGrappleContest, rollGrappleContestDetailed, rollShoveContest, canGrappleOrShoveTarget, rollDiceString } from './utils';
 import { computeLOS } from './los';
-import { removeEffectsFromCaster, removeEffectById, undoEffect, getActiveAcBonus, getActiveAcFloor, getActiveBlessDie, getActiveBaneDie, getActiveHexDie, getActiveDamageZones, getActiveWeaponEnchant, getActiveEnlargeReduce, getActiveTaunt, getActiveCurseAttackDisadv, getActiveCurseRider, applySpellEffect, getActiveTerrainZones, makeTerrainFn } from './spell_effects';
+import { removeEffectsFromCaster, removeEffectById, undoEffect, getActiveAcBonus, getActiveAcFloor, getActiveBlessDie, getActiveBaneDie, getActiveHexDie, getActiveDamageZones, getActiveWeaponEnchant, getActiveEnlargeReduce, getActiveTaunt, getActiveCurseAttackDisadv, getActiveCurseRider, applySpellEffect, getActiveTerrainZones, makeTerrainFn, isProtectedByGoI } from './spell_effects';
 import { TerrainZone } from './spell_effects';
 import { applyCantripEffect, getCantripAttackAdvantage, resolveCantripAction, resolveCantripAoE, resolveCantripTouchEffect } from './cantrip_effects';
 import { execute as executeHex } from '../spells/hex';
@@ -1479,9 +1479,14 @@ export function resolveAttack(
       target.id, save.roll);
 
     if (action.damage) {
+      // ── RFC-UPCASTING Phase 6: Cantrip damage scaling (PHB p.201) ──
+      // Cantrips (slotLevel === 0) scale damage dice at caster levels 5/11/17.
+      const cantripDmgExpr = action.slotLevel === 0
+        ? { ...action.damage, count: 1 + cantripTier(attacker) }
+        : action.damage;
       // Session 47 Task #29-follow-up-5: Elemental Affinity (Draconic Sorcerer 6)
       // adds CHA mod to damage of spells matching the sorcerer's ancestry type.
-      const dmg = rollDamage(action.damage, false) + elementalAffinityBonus(attacker, action.damageType);
+      const dmg = rollDamage(cantripDmgExpr, false) + elementalAffinityBonus(attacker, action.damageType);
       // Session 53 Batch 4e: Avoidance trait. "If subjected to an effect that
       // allows a save for half damage, takes NO damage on success and HALF on
       // fail." Flip the save-for-half outcome.
@@ -1535,8 +1540,12 @@ export function resolveAttack(
   // Auto-hit (no hitBonus — e.g. Reaping Scythe, Magic Missile)
   if (action.hitBonus === null) {
     if (action.damage) {
+      // ── RFC-UPCASTING Phase 6: Cantrip damage scaling (PHB p.201) ──
+      const cantripDmgExpr = action.slotLevel === 0
+        ? { ...action.damage, count: 1 + cantripTier(attacker) }
+        : action.damage;
       // Session 47: Elemental Affinity bonus for auto-hit spells.
-      const dmg = rollDamage(action.damage, false) + elementalAffinityBonus(attacker, action.damageType);
+      const dmg = rollDamage(cantripDmgExpr, false) + elementalAffinityBonus(attacker, action.damageType);
       const dealt = applyDamageWithTempHP(target, dmg, action.damageType);
       // TG-008: Absorb Elements / Hellish Rebuke reaction trigger.
       // (Shield's "blocks Magic Missile" is NOT modelled in v1 — the auto-hit
@@ -1969,7 +1978,12 @@ export function resolveAttack(
     target.id, result.roll);
 
   if (action.damage) {
-    let dmg = rollDamage(action.damage, isCrit);
+    // ── RFC-UPCASTING Phase 6: Cantrip damage scaling (PHB p.201) ──
+    // Cantrips (slotLevel === 0) scale damage dice at caster levels 5/11/17.
+    const cantripDmgExpr = action.slotLevel === 0
+      ? { ...action.damage, count: 1 + cantripTier(attacker) }
+      : action.damage;
+    let dmg = rollDamage(cantripDmgExpr, isCrit);
 
     // ── Session 47 Task #29-follow-up-5: Elemental Affinity (Draconic Sorcerer 6) ──
     // PHB p.102: add CHA mod to damage of spells matching draconic ancestry.
@@ -3018,6 +3032,43 @@ export function executePlannedAction(
   // or the spell is silent (e.g. Counterspell itself, Message cantrip).
   if (spellInfo && !actor.isDead && !actor.isUnconscious) {
     revealOnCast(actor, spellInfo.name, state);
+  }
+
+  // ── Globe of Invulnerability check (PHB p.245) ────────────────────
+  // Spells cast at blockThreshold level or lower have no effect on targets
+  // protected by GoI. The slot is still consumed. Cantrips (level 0) are
+  // NOT blocked by GoI.
+  //
+  // v1 scope:
+  //   - Only blocks single-target spells entirely (target has GoI).
+  //   - AoE exclusion of GoI-protected targets is future work
+  //     (globeOfInvulnerabilityAoEV1Simplified: true).
+  //   - Only the GoI caster is protected (not 10-ft radius allies — deferred).
+  //   - Only blocks spells cast from outside the barrier (actor !== target).
+  //     A creature inside their own GoI can cast spells normally.
+  //   - Known AoE plan types are excluded from blocking (they hit an area,
+  //     not a single target). Full AoE exclusion is future work.
+  const AOE_PLAN_TYPES = new Set<string>([
+    'fireball', 'lightningBolt', 'burningHands', 'shatter', 'thunderwave',
+    'armsOfHadar', 'sleep', 'entangle', 'faerieFire', 'hungerOfHadar',
+    'callLightning', 'cloudOfDaggers', 'flamingSphere', 'iceKnife',
+    'spiritGuardians', 'guardianOfFaith', 'dawn', 'sunburst', 'tidalWave',
+    'darkness', 'fogCloud', 'grease', 'sleetStorm', 'waterySphere',
+    'stinkingCloud', 'slow', 'confusion', 'fear', 'hypnoticPattern',
+  ]);
+  if (spellInfo && spellInfo.level > 0 && plan.targetId && !AOE_PLAN_TYPES.has(plan.type)) {
+    const goiTarget = bf.combatants.get(plan.targetId);
+    // PHB p.245: only blocks spells cast from outside the barrier.
+    // The GoI caster is at the center, so their own spells are NOT blocked.
+    if (goiTarget && goiTarget.id !== actor.id && isProtectedByGoI(goiTarget, spellInfo.level)) {
+      // PHB p.245: the blocked spell's slot is consumed but has no effect.
+      consumeSpellSlot(actor, spellInfo.level);
+      actor.budget.actionUsed = true;
+      log(state, 'action', actor.id,
+        `${actor.name}'s ${spellInfo.name} (L${spellInfo.level}) is blocked by Globe of Invulnerability on ${goiTarget.name}!`,
+        goiTarget.id);
+      return;  // spell has no effect — skip the entire switch
+    }
   }
 
   switch (plan.type) {

@@ -58,6 +58,7 @@
 import { Combatant } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
 import { applySpellEffect } from '../engine/spell_effects';
+import { cantripTier } from '../engine/utils';
 
 // ---- Metadata -----------------------------------------------
 
@@ -157,7 +158,11 @@ export function applyCantripEffect(
   // (_boomingBladePendingDamageDice / _boomingBladeCasterId).
   // executeMove reads target.activeEffects for 'movement_rider' effects;
   // cleanup() removes them at the start of the target's next turn.
-  const riderDice = metadata.riderDiceByLevel[1];
+  //
+  // ── RFC-UPCASTING Phase 6: Cantrip damage scaling (PHB p.201) ──
+  // Rider dice count scales with caster level: 1d8 (tier 0) → 2d8 → 3d8 → 4d8.
+  const riderDiceCount = 1 + cantripTier(caster);
+  const riderDice = `${riderDiceCount}d8`;
 
   applySpellEffect(target, {
     casterId: caster.id,

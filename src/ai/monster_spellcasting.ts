@@ -35,6 +35,7 @@ import { Combatant, Battlefield, Action, PlannedAction, DamageType, AbilityScore
 import { chebyshev3D } from '../engine/movement';
 import { composeBiases, collectCantripBiases } from './pattern_bias';
 import { requiresVisibleTarget } from '../engine/perception';
+import { cantripTier } from '../engine/utils';
 
 // ---- Spell Tags (RFC §4.1) ----------------------------------
 
@@ -245,13 +246,12 @@ export function deriveSpellTags(spellName: string): SpellTag[] {
  *
  * Monsters use `casterLevel` (parsed from "Nth-level spellcaster" header,
  * or CR as fallback — see parser/fivetools.ts parseCasterLevel).
+ *
+ * RFC-UPCASTING Phase 6: refactored to delegate to cantripTier() from
+ * utils.ts. The function signature is preserved for backward compat.
  */
 export function cantripDiceCount(casterLevel: number | undefined): number {
-  const lvl = casterLevel ?? 1;
-  if (lvl >= 17) return 4;
-  if (lvl >= 11) return 3;
-  if (lvl >= 5) return 2;
-  return 1;
+  return 1 + cantripTier({ casterLevel, level: undefined } as Combatant);
 }
 
 /**

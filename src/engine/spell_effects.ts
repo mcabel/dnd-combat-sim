@@ -200,6 +200,7 @@ export function applySpellEffect(
     case 'enlarge_reduce':
     case 'terrain_zone':
     case 'movement_rider':
+    case 'spell_shield':
       // No immediate side-effect — read at resolution time.
       // (damage_zone: the start-of-turn damage tick is in combat.ts's
       // runCombat loop, right after resetBudget.)
@@ -207,6 +208,8 @@ export function applySpellEffect(
       // runCombat loop, after damage_zone ticks.)
       // (movement_rider: fires in executeMove when bearer willingly moves
       // 5+ ft; cleared at start of bearer's next turn by cleanup().)
+      // (spell_shield: checked by isProtectedByGoI() in combat.ts before
+      // spell execution; no structural mutation on apply.)
       break;
   }
 
@@ -399,7 +402,10 @@ export function undoEffect(target: Combatant, effect: ActiveEffect): void {
     case 'enlarge_reduce':
     case 'terrain_zone':
     case 'movement_rider':
+    case 'spell_shield':
       // Read-only at resolution — nothing to undo structurally.
+      // (spell_shield: the effect is simply removed from activeEffects;
+      //  no structural state was mutated on apply.)
       break;
 
     case 'damage_zone':
@@ -883,4 +889,27 @@ export function makeTerrainFn(bf: Battlefield): (pos: Vec3) => TerrainType {
 /** Returns the target's current exhaustion level (PHB p.291). */
 export function getExhaustionLevel(c: Combatant): number {
   return c.exhaustionLevel;
+}
+
+// ---- Globe of Invulnerability (PHB p.245) ─────────────────
+
+/**
+ * Returns true if `target` has an active Globe of Invulnerability effect
+ * that blocks spells cast at `castLevel`.
+ *
+ * PHB p.245: Any spell of 5th level or lower cast from outside the barrier
+ * can't affect creatures or objects within it. The slot is still consumed.
+ * Cantrips (level 0) are NOT blocked by GoI.
+ *
+ * Upcast: L6→blocks ≤5, L7→blocks ≤6, L8→blocks ≤7, L9→blocks ≤8.
+ *
+ * v1: applies only to the GoI caster (not 10-ft radius allies — deferred).
+ */
+export function isProtectedByGoI(target: Combatant, castLevel: number): boolean {
+  if (!target.activeEffects) return false;
+  return target.activeEffects.some(eff =>
+    eff.effectType === 'spell_shield' &&
+    eff.spellName === 'Globe of Invulnerability' &&
+    castLevel <= (eff.payload.blockThreshold ?? 0)
+  );
 }

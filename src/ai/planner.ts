@@ -15,6 +15,7 @@ import {
   hasSpellSlot,
   getLowestAvailableSlot,
 } from './resources';
+import { isProtectedByGoI } from '../engine/spell_effects';
 import { shouldCast as shouldCastHW } from '../spells/healing_word';
 import { shouldCast as shouldCastCW } from '../spells/cure_wounds';
 import { shouldCast as shouldCastFaerieFire } from '../spells/faerie_fire';
@@ -909,6 +910,41 @@ function planRetreat(
 // ---- Main planner -------------------------------------------
 
 /**
+ * Determine the effective cast slot for a spell, considering whether the
+ * target is protected by an effect that blocks spells below a level threshold
+ * (e.g. Globe of Invulnerability, PHB p.245).
+ *
+ * Returns:
+ *   - The lowest available slot at/above baseLevel if no blocking effect
+ *   - The minimum slot that penetrates the threshold, if one is available
+ *   - null if no slot is available at the needed level
+ *
+ * This enables "penetration-motivated upcasting": the AI will upcast a spell
+ * to exceed GoI's blockThreshold rather than waste a lower slot on a blocked
+ * spell. The upcast slot is still consumed per PHB p.245.
+ */
+function selectCastSlot(
+  caster: Combatant,
+  baseLevel: number,
+  target: Combatant | null,
+): number | null {
+  let minSlot = baseLevel;
+
+  if (target && target.activeEffects) {
+    for (const eff of target.activeEffects) {
+      if (eff.effectType === 'spell_shield' && eff.payload.blockThreshold !== undefined) {
+        // To penetrate, castLevel must be > blockThreshold
+        const needed = eff.payload.blockThreshold + 1;
+        if (needed > 9) return null;  // impossible to penetrate (e.g. L9 GoI)
+        if (needed > minSlot) minSlot = needed;
+      }
+    }
+  }
+
+  return getLowestAvailableSlot(caster, minSlot);
+}
+
+/**
  * Plan a full turn for `self` based on its AI profile.
  * Implements the state machine from design doc §6.
  *
@@ -1435,7 +1471,7 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
   {
     const twTargets = shouldCastThunderwave(self, battlefield);
     if (twTargets && twTargets.length >= 2) {
-      const twSlot = getLowestAvailableSlot(self, 1);
+      const twSlot = selectCastSlot(self, 1, twTargets[0]);
       plan.action = {
         type: 'thunderwave',
         action: null,
@@ -1457,7 +1493,7 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
   {
     const bhTargets = shouldCastBurningHands(self, battlefield);
     if (bhTargets && bhTargets.length >= 1) {
-      const bhSlotLevel = getLowestAvailableSlot(self, 1) ?? 1;
+      const bhSlotLevel = selectCastSlot(self, 1, bhTargets[0]) ?? 1;
       plan.action = {
         type: 'burningHands',
         action: null,
@@ -1517,7 +1553,7 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
   if (!plan.action) {
     const dwTarget = shouldCastDissonantWhispers(self, battlefield);
     if (dwTarget) {
-      const dwSlotLevel = getLowestAvailableSlot(self, 1) ?? 1;
+      const dwSlotLevel = selectCastSlot(self, 1, dwTarget) ?? 1;
       plan.action = {
         type: 'dissonantWhispers',
         action: null,
@@ -1535,7 +1571,7 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
   // Ranged spell attack, 120 ft. On hit: 4d6 radiant + next attack vs target has advantage.
   // Cleric's primary offensive spell. Fires when no AoE/control spell was chosen.
   if (!plan.action && target && shouldCastGuidingBolt(self, target, battlefield)) {
-    const gbSlotLevel = getLowestAvailableSlot(self, 1) ?? 1;
+    const gbSlotLevel = selectCastSlot(self, 1, target) ?? 1;
     plan.action = {
       type: 'guidingBolt',
       action: null,
@@ -1552,7 +1588,7 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
   // Auto-hit reliable damage. Fire when no AoE/control spell was chosen and target is in range.
   // Outperforms Fire Bolt (cantrip) in expected damage at the cost of a spell slot.
   if (!plan.action && target && shouldCastMagicMissile(self, target, battlefield)) {
-    const mmSlotLevel = getLowestAvailableSlot(self, 1) ?? 1;
+    const mmSlotLevel = selectCastSlot(self, 1, target) ?? 1;
     plan.action = {
       type: 'magicMissile',
       action: null,
@@ -1622,7 +1658,7 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
   if (!plan.action && target && self.actions.some(a => a.name === 'Blindness/Deafness')) {
     const bdTargets = shouldCastBlindnessDeafness(self, battlefield);
     if (bdTargets && bdTargets.length > 0) {
-      const bdSlotLevel = getLowestAvailableSlot(self, 2) ?? 2;
+      const bdSlotLevel = selectCastSlot(self, 2, bdTargets[0]) ?? 2;
       plan.action = {
         type: 'blindnessDeafness',
         action: null,
@@ -2165,7 +2201,7 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
   if (!plan.action && self.actions.some(a => a.name === 'Scorching Ray')) {
     const srTargets = shouldCastScorchingRay(self, battlefield);
     if (srTargets) {
-      const srSlotLevel = getLowestAvailableSlot(self, 2) ?? 2;
+      const srSlotLevel = selectCastSlot(self, 2, srTargets[0]) ?? 2;
       const names = srTargets.map(t => t.name).join(', ');
       plan.action = {
         type: 'scorchingRay',
@@ -2186,7 +2222,7 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
   if (!plan.action && self.actions.some(a => a.name === 'Shatter')) {
     const shTargets = shouldCastShatter(self, battlefield);
     if (shTargets) {
-      const shSlot = getLowestAvailableSlot(self, 2);
+      const shSlot = selectCastSlot(self, 2, shTargets[0]);
       const names = shTargets.map(t => t.name).join(', ');
       plan.action = {
         type: 'shatter',
@@ -2985,7 +3021,7 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
       && !!fbTargets && fbTargets.length >= 2
       && hasSpellSlot(self, 3);
     if (fbTargets && !_fireballSurgeReady) {
-      const fbSlot = getLowestAvailableSlot(self, 3);
+      const fbSlot = selectCastSlot(self, 3, fbTargets[0]);
       const names = fbTargets.map(t => t.name).join(', ');
       plan.action = {
         type: 'fireball',
@@ -3007,7 +3043,7 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
   if (!plan.action && self.actions.some(a => a.name === 'Lightning Bolt')) {
     const lbTargets = shouldCastLightningBolt(self, battlefield);
     if (lbTargets) {
-      const lbSlot = getLowestAvailableSlot(self, 3);
+      const lbSlot = selectCastSlot(self, 3, lbTargets[0]);
       const names = lbTargets.map(t => t.name).join(', ');
       plan.action = {
         type: 'lightningBolt',
@@ -3050,7 +3086,7 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
   if (!plan.action && self.actions.some(a => a.name === 'Inflict Wounds')) {
     const iwTarget = shouldCastInflictWounds(self, battlefield);
     if (iwTarget) {
-      const iwSlotLevel = getLowestAvailableSlot(self, 1) ?? 1;
+      const iwSlotLevel = selectCastSlot(self, 1, iwTarget) ?? 1;
       plan.action = {
         type: 'inflictWounds',
         action: null,
@@ -3149,7 +3185,7 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
   if (!plan.action && self.actions.some(a => a.name === 'Sunburst')) {
     const sbTargets = shouldCastSunburst(self, battlefield);
     if (sbTargets) {
-      const sbSlotLevel = getLowestAvailableSlot(self, 8) ?? 8;
+      const sbSlotLevel = selectCastSlot(self, 8, sbTargets[0]) ?? 8;
       const names = sbTargets.map(t => t.name).join(', ');
       plan.action = {
         type: 'sunburst',
@@ -3440,7 +3476,7 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
   if (!plan.action && self.actions.some(a => a.name === 'Mind Spike')) {
     const msTarget = shouldCastMindSpike(self, battlefield);
     if (msTarget) {
-      const msSlotLevel = getLowestAvailableSlot(self, 2) ?? 2;
+      const msSlotLevel = selectCastSlot(self, 2, msTarget) ?? 2;
       plan.action = {
         type: 'mindSpike',
         action: null,
@@ -5343,7 +5379,7 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
   if (!plan.action && self.actions.some(a => a.name === 'Dawn')) { const t = shouldCastDawn(self, battlefield); if (t) { plan.action = { type: 'dawn', action: null, targetId: t[0].id, description: `${self.name} casts Dawn` }; return plan; } }
   if (!plan.action && self.actions.some(a => a.name === 'Guardian of Faith')) { const t = shouldCastGuardianOfFaith(self, battlefield); if (t) { plan.action = { type: 'guardianOfFaith', action: null, targetId: t[0].id, description: `${self.name} casts Guardian of Faith` }; return plan; } }
   if (!plan.action && self.actions.some(a => a.name === 'Spirit Guardians')) { const t = shouldCastSpiritGuardians(self, battlefield); if (t) { plan.action = { type: 'spiritGuardians', action: null, targetId: t[0].id, description: `${self.name} casts Spirit Guardians` }; return plan; } }
-  if (!plan.action && self.actions.some(a => a.name === 'Hunger of Hadar')) { const hohSlotLevel = getLowestAvailableSlot(self, 3) ?? 3; const t = shouldCastHungerOfHadar(self, battlefield); if (t) { plan.action = { type: 'hungerOfHadar', action: null, targetId: t[0].id, description: `${self.name} casts Hunger of Hadar`, castSlotLevel: hohSlotLevel }; return plan; } }
+  if (!plan.action && self.actions.some(a => a.name === 'Hunger of Hadar')) { const t = shouldCastHungerOfHadar(self, battlefield); const hohSlotLevel = t ? (selectCastSlot(self, 3, t[0]) ?? 3) : 3; if (t) { plan.action = { type: 'hungerOfHadar', action: null, targetId: t[0].id, description: `${self.name} casts Hunger of Hadar`, castSlotLevel: hohSlotLevel }; return plan; } }
   if (!plan.action && self.actions.some(a => a.name === 'Call Lightning')) { const t = shouldCastCallLightning(self, battlefield); if (t) { plan.action = { type: 'callLightning', action: null, targetId: t[0].id, description: `${self.name} casts Call Lightning` }; return plan; } }
   if (!plan.action && self.actions.some(a => a.name === 'Cacophonic Shield')) { const t = shouldCastCacophonicShield(self, battlefield); if (t) { plan.action = { type: 'cacophonicShield', action: null, targetId: t[0].id, description: `${self.name} casts Cacophonic Shield` }; return plan; } }
   if (!plan.action && self.actions.some(a => a.name === 'Dust Devil')) { const t = shouldCastDustDevil(self, battlefield); if (t) { plan.action = { type: 'dustDevil', action: null, targetId: t[0].id, description: `${self.name} casts Dust Devil` }; return plan; } }
@@ -6300,7 +6336,7 @@ function planExtraAction(
   if (mainWasAttack && self.actions.some(a => a.name === 'Fireball') && hasSpellSlot(self, 3)) {
     const fbTargets = shouldCastFireball(self, battlefield);
     if (fbTargets && fbTargets.length >= 2) {
-      const fbSurgeSlot = getLowestAvailableSlot(self, 3);
+      const fbSurgeSlot = selectCastSlot(self, 3, fbTargets[0]);
       return {
         type: 'fireball',
         action: null,

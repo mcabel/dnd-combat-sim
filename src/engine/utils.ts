@@ -100,6 +100,29 @@ export function rollDamage(expr: DiceExpression, isCrit: boolean): number {
   return Math.max(0, total); // damage never negative
 }
 
+// ---- Cantrip damage scaling (PHB p.201) ----------------------
+
+/**
+ * PHB p.201: Cantrip damage increases at character levels 5, 11, and 17.
+ * For monsters, `casterLevel` from the Combatant maps to the same tier
+ * breakpoints (parsed from "Nth-level spellcaster" header in the stat block).
+ *
+ * Returns 0 (base), 1 (+1 die), 2 (+2 dice), or 3 (+3 dice).
+ *
+ * RFC-UPCASTING Phase 6 (Session 72)
+ */
+export function cantripTier(caster: Combatant): number {
+  const effectiveLevel =
+    caster.casterLevel ??
+    caster.level ??
+    1;
+
+  if (effectiveLevel >= 17) return 3;
+  if (effectiveLevel >= 11) return 2;
+  if (effectiveLevel >= 5)  return 1;
+  return 0;
+}
+
 // ---- Ability modifiers / saves ------------------------------
 
 /** Standard 5e ability modifier: floor((score - 10) / 2) */

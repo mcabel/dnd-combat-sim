@@ -54,7 +54,7 @@
 
 import { Combatant } from '../types/core';
 import { rollSaveReactable, CombatEvent, EngineState } from '../engine/combat';
-import { rollDie, applyDamageWithTempHP } from '../engine/utils';
+import { rollDie, applyDamageWithTempHP, cantripTier } from '../engine/utils';
 import { euclideanDistFt } from '../engine/movement';
 
 // ---- Constants ----------------------------------------------
@@ -139,10 +139,10 @@ export function execute(
   const bf = state.battlefield;
   const action = caster.actions.find(a => a.name === 'Thunderclap');
   const saveDC = action?.saveDC ?? 13;
-  // v1 reads damage from the Action if present, else defaults to 1d6.
-  // This lets the AI/parser scale the dice count via action.damage
-  // without changing the engine.
-  const dmgCount = action?.damage?.count ?? 1;
+  // ── RFC-UPCASTING Phase 6: Cantrip damage scaling (PHB p.201) ──
+  // Use cantripTier() to determine dice count (1 + tier) instead of
+  // reading from the Action (which may have base count 1 for PCs).
+  const dmgCount = 1 + cantripTier(caster);
   const dmgSides = action?.damage?.sides ?? 6;
 
   // Find all creatures within range (excluding the caster).

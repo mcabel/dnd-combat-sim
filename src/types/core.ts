@@ -139,6 +139,7 @@ export type SpellEffectType =
   | 'suggestion'            // charmed + disadv on own attacks (Mass Suggestion PHB p.258 — follow-a-suggestion behaviour)
   | 'terrain_zone'          // persistent terrain effect on the battlefield (Grease/Sleet Storm/Watery Sphere)
   | 'exhaustion_level'      // increment exhaustion level (Sickening Radiance XGE p.164, future spells)
+  | 'spell_shield'          // blocks spells at or below a level threshold (Globe of Invulnerability PHB p.245)
   // ── Session 62 RFC-VISION-AUDIO: battlefield obstacle effect ──
   // Used by Fog Cloud (PHB p.243) and future obscurement spells (Darkness,
   // Wall of Fog, etc.). The spell module's execute() adds a vision-blocking
@@ -317,6 +318,11 @@ export interface ActiveEffect {
     // (called from resetBudget). Stored on the TARGET (the hit combatant).
     moveDamageDice?: string;      // e.g. '1d8' for Booming Blade thunder rider
     moveDamageType?: DamageType;  // e.g. 'thunder'
+    // ── spell_shield (Globe of Invulnerability PHB p.245) ─────────────
+    // Spells cast at blockThreshold level or lower from outside the barrier
+    // have no effect. The slot is still consumed. Cantrips (level 0) are
+    // NOT blocked by GoI. Upcast: L6→5, L7→6, L8→7, L9→8.
+    blockThreshold?: number;       // spells at this level or below are blocked
   };
   sourceIsConcentration: boolean;     // if true, removed when caster's concentration ends
   /**

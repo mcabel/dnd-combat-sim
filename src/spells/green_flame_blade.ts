@@ -71,7 +71,7 @@
 
 import { Combatant } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
-import { rollDie, applyDamageWithTempHP } from '../engine/utils';
+import { rollDie, applyDamageWithTempHP, cantripTier } from '../engine/utils';
 import { euclideanDistFt } from '../engine/movement';
 
 // ---- Constants ----------------------------------------------
@@ -185,30 +185,28 @@ function getSpellcastingMod(caster: Combatant): number {
 }
 
 /**
- * Roll the splash damage expression for a given caster level
+ * Roll the splash damage expression for a given cantrip tier
  * and spellcasting modifier.
  *
- * Splash damage by level:
- *   1–4:  mod           (min 1)
- *   5–10: 1d8 + mod     (min 1)
- *   11–16: 2d8 + mod    (min 1)
- *   17+:  3d8 + mod     (min 1)
+ * Splash damage by tier (RFC-UPCASTING Phase 6):
+ *   tier 0 (level 1–4):  mod           (min 1)
+ *   tier 1 (level 5–10): 1d8 + mod     (min 1)
+ *   tier 2 (level 11–16): 2d8 + mod    (min 1)
+ *   tier 3 (level 17+):  3d8 + mod     (min 1)
  *
- * @param casterLevel The caster's level (1–20). v1 default = 1.
+ * @param tier The cantrip tier (0–3) from cantripTier().
  * @param spellcastingMod The caster's spellcasting ability modifier.
  * @returns { roll: number, diceCount: number, mod: number } — the
  *          rolled total, the number of d8s rolled, and the mod
  *          applied. Total clamped to min 1 (TCE p.107).
  */
 export function rollSplashDamage(
-  casterLevel: number = 1,
+  tier: number = 0,
   spellcastingMod: number = DEFAULT_SPELLCASTING_MOD,
 ): { roll: number; diceCount: number; mod: number } {
-  let diceCount = 0;
-  if (casterLevel >= 17) diceCount = 3;
-  else if (casterLevel >= 11) diceCount = 2;
-  else if (casterLevel >= 5) diceCount = 1;
-  // else 1–4: 0 dice, just mod
+  // ── RFC-UPCASTING Phase 6: cantripTier maps directly to splash dice ──
+  // tier 0 = 0d8 + mod, tier 1 = 1d8 + mod, tier 2 = 2d8 + mod, tier 3 = 3d8 + mod
+  const diceCount = tier;
 
   let roll = spellcastingMod;
   for (let i = 0; i < diceCount; i++) roll += rollDie(8);
@@ -310,12 +308,12 @@ export function applyCantripEffect(
     return true; // rider ran, just no target
   }
 
-  // Roll the splash damage. v1 reads caster level from the `casterLevel`
-  // field on the caster (default 1). The AI/parser should populate this
-  // from the caster's character level; tests set it directly.
-  const casterLevel: number = caster.casterLevel ?? 1;
+  // Roll the splash damage. ── RFC-UPCASTING Phase 6: use cantripTier() ──
+  // cantripTier returns 0/1/2/3 which maps directly to the splash dice count
+  // (0d8 at tier 0, 1d8 at tier 1, 2d8 at tier 2, 3d8 at tier 3).
+  const tier = cantripTier(caster);
   const spellcastingMod = getSpellcastingMod(caster);
-  const splash = rollSplashDamage(casterLevel, spellcastingMod);
+  const splash = rollSplashDamage(tier, spellcastingMod);
 
   const dealt = applyDamageWithTempHP(splashTarget, splash.roll, 'fire');
   emit(
