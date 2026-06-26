@@ -460,6 +460,17 @@ export interface Action {
    * breath, yeti Cold Breath, etc.).
    */
   recharge?: { min: number; recharged: boolean };
+  /**
+   * RFC-UPCASTING Phase 6 (Session 72): When true, this cantrip does NOT
+   * receive cantripTier()-based damage scaling in resolveAttack().
+   *
+   * Some cantrips have flat damage that never scales with caster level
+   * (e.g. Magic Stone XGE p.160: always 1d6+mod regardless of level).
+   * Most cantrips DO scale (PHB p.201: +1 die at levels 5/11/17).
+   *
+   * Default: false (all cantrips scale). Set to true for flat-damage cantrips.
+   */
+  noCantripScaling?: boolean;
 }
 
 // ---- LegendaryAction ----------------------------------------

@@ -472,19 +472,19 @@ console.log('\n--- 15. splash damage at level 1 = mod ---');
 {
   // Run multiple iterations to verify the damage is exactly the mod (no dice at level 1).
   for (let i = 0; i < 10; i++) {
-    const splash = rollSplashDamage(1, 3);
+    const splash = rollSplashDamage(0, 3);  // tier 0 = level 1-4
     eq(`15.${i}. level 1 splash = mod (3)`, splash.roll, 3);
     eq(`15.${i}b. level 1 diceCount = 0`, splash.diceCount, 0);
   }
 }
 {
   // Min-1 rule: mod = -2 → splash clamped to 1.
-  const splash = rollSplashDamage(1, -2);
+  const splash = rollSplashDamage(0, -2);  // tier 0
   eq('15c. min-1 rule: negative mod clamps to 1', splash.roll, 1);
 }
 {
   // mod = 0 → clamped to 1.
-  const splash = rollSplashDamage(1, 0);
+  const splash = rollSplashDamage(0, 0);  // tier 0
   eq('15d. min-1 rule: zero mod clamps to 1', splash.roll, 1);
 }
 
@@ -494,7 +494,7 @@ console.log('\n--- 15. splash damage at level 1 = mod ---');
 console.log('\n--- 16. splash damage at level 5 = 1d8 + mod ---');
 {
   for (let i = 0; i < 20; i++) {
-    const splash = rollSplashDamage(5, 3);
+    const splash = rollSplashDamage(1, 3);  // tier 1 = level 5-10
     eq(`16.${i}. level 5 diceCount = 1`, splash.diceCount, 1);
     assert(`16.${i}b. level 5 splash in 4..11 range (1d8 + 3)`,
       splash.roll >= 4 && splash.roll <= 11, `got ${splash.roll}`);
@@ -508,7 +508,7 @@ console.log('\n--- 16. splash damage at level 5 = 1d8 + mod ---');
 console.log('\n--- 17. splash damage at level 11 = 2d8 + mod ---');
 {
   for (let i = 0; i < 20; i++) {
-    const splash = rollSplashDamage(11, 3);
+    const splash = rollSplashDamage(2, 3);  // tier 2 = level 11-16
     eq(`17.${i}. level 11 diceCount = 2`, splash.diceCount, 2);
     assert(`17.${i}b. level 11 splash in 5..19 range (2d8 + 3)`,
       splash.roll >= 5 && splash.roll <= 19, `got ${splash.roll}`);
@@ -522,7 +522,7 @@ console.log('\n--- 17. splash damage at level 11 = 2d8 + mod ---');
 console.log('\n--- 18. splash damage at level 17 = 3d8 + mod ---');
 {
   for (let i = 0; i < 20; i++) {
-    const splash = rollSplashDamage(17, 3);
+    const splash = rollSplashDamage(3, 3);  // tier 3 = level 17+
     eq(`18.${i}. level 17 diceCount = 3`, splash.diceCount, 3);
     assert(`18.${i}b. level 17 splash in 6..27 range (3d8 + 3)`,
       splash.roll >= 6 && splash.roll <= 27, `got ${splash.roll}`);
@@ -607,14 +607,14 @@ console.log('\n--- 21. findSplashTarget — null if no enemy in range ---');
 console.log('\n--- 22. rollSplashDamage dice counts ---');
 {
   // Boundary tests for level → diceCount mapping.
-  eq('22a. level 1 diceCount = 0', rollSplashDamage(1, 3).diceCount, 0);
-  eq('22b. level 4 diceCount = 0', rollSplashDamage(4, 3).diceCount, 0);
-  eq('22c. level 5 diceCount = 1', rollSplashDamage(5, 3).diceCount, 1);
-  eq('22d. level 10 diceCount = 1', rollSplashDamage(10, 3).diceCount, 1);
-  eq('22e. level 11 diceCount = 2', rollSplashDamage(11, 3).diceCount, 2);
-  eq('22f. level 16 diceCount = 2', rollSplashDamage(16, 3).diceCount, 2);
-  eq('22g. level 17 diceCount = 3', rollSplashDamage(17, 3).diceCount, 3);
-  eq('22h. level 20 diceCount = 3', rollSplashDamage(20, 3).diceCount, 3);
+  eq('22a. tier 0 diceCount = 0', rollSplashDamage(0, 3).diceCount, 0);
+  eq('22b. tier 0 diceCount = 0 (recheck)', rollSplashDamage(0, 3).diceCount, 0);
+  eq('22c. tier 1 diceCount = 1', rollSplashDamage(1, 3).diceCount, 1);
+  eq('22d. tier 1 diceCount = 1 (recheck)', rollSplashDamage(1, 3).diceCount, 1);
+  eq('22e. tier 2 diceCount = 2', rollSplashDamage(2, 3).diceCount, 2);
+  eq('22f. tier 2 diceCount = 2 (recheck)', rollSplashDamage(2, 3).diceCount, 2);
+  eq('22g. tier 3 diceCount = 3', rollSplashDamage(3, 3).diceCount, 3);
+  eq('22h. tier 3 diceCount = 3 (recheck)', rollSplashDamage(3, 3).diceCount, 3);
 }
 
 // ============================================================

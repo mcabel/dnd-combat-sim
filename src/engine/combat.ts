@@ -1481,7 +1481,8 @@ export function resolveAttack(
     if (action.damage) {
       // ── RFC-UPCASTING Phase 6: Cantrip damage scaling (PHB p.201) ──
       // Cantrips (slotLevel === 0) scale damage dice at caster levels 5/11/17.
-      const cantripDmgExpr = action.slotLevel === 0
+      // Exception: some cantrips have flat damage (noCantripScaling=true).
+      const cantripDmgExpr = action.slotLevel === 0 && !action.noCantripScaling
         ? { ...action.damage, count: 1 + cantripTier(attacker) }
         : action.damage;
       // Session 47 Task #29-follow-up-5: Elemental Affinity (Draconic Sorcerer 6)
@@ -1541,7 +1542,7 @@ export function resolveAttack(
   if (action.hitBonus === null) {
     if (action.damage) {
       // ── RFC-UPCASTING Phase 6: Cantrip damage scaling (PHB p.201) ──
-      const cantripDmgExpr = action.slotLevel === 0
+      const cantripDmgExpr = action.slotLevel === 0 && !action.noCantripScaling
         ? { ...action.damage, count: 1 + cantripTier(attacker) }
         : action.damage;
       // Session 47: Elemental Affinity bonus for auto-hit spells.
@@ -1980,7 +1981,8 @@ export function resolveAttack(
   if (action.damage) {
     // ── RFC-UPCASTING Phase 6: Cantrip damage scaling (PHB p.201) ──
     // Cantrips (slotLevel === 0) scale damage dice at caster levels 5/11/17.
-    const cantripDmgExpr = action.slotLevel === 0
+    // Exception: some cantrips have flat damage (noCantripScaling=true).
+    const cantripDmgExpr = action.slotLevel === 0 && !action.noCantripScaling
       ? { ...action.damage, count: 1 + cantripTier(attacker) }
       : action.damage;
     let dmg = rollDamage(cantripDmgExpr, isCrit);

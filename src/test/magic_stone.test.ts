@@ -136,6 +136,7 @@ const MAGIC_STONE_ACTION: Action = {
   isControl: false,
   requiresConcentration: false,
   slotLevel: 0,
+  noCantripScaling: true,  // XGE p.160: flat 1d6+mod at all levels, no tier scaling
   costType: 'action', // v1: single action (collapsed bonus-action enchant + action throw)
   legendaryCost: 0,
   description: 'Magic Stone',
