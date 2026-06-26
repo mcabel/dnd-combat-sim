@@ -58,6 +58,7 @@ export const metadata = {
   castingTime: 'action',
   damageDice: '3d6',
   damageType: 'fire',
+  burningHandsUpcastV1Implemented: true,               // +1d6/slot-level NOW modelled
 } as const;
 
 // ---- Local log helper ---------------------------------------
@@ -161,11 +162,12 @@ export function execute(
     inConeFt(caster.pos, aimTarget.pos, t.pos, CONE_HALF_ANGLE_DEG, CONE_RANGE_FT),
   );
 
-  consumeSpellSlot(caster, 1);
+  const slotLevel = consumeSpellSlot(caster, 1) ?? 1;
+  const diceCount = 3 + Math.max(0, slotLevel - 1);
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Burning Hands (DC ${saveDC} DEX) — ${inCone.length} creature${inCone.length !== 1 ? 's' : ''} in cone!`,
+    `${caster.name} casts Burning Hands (DC ${saveDC} DEX, slot L${slotLevel}, ${diceCount}d6) — ${inCone.length} creature${inCone.length !== 1 ? 's' : ''} in cone!`,
   );
 
   for (const target of inCone) {
@@ -173,10 +175,12 @@ export function execute(
 
     const save = rollSaveReactable(state, caster, target, 'dex', saveDC);
 
-    // Roll 3d6 fire damage
+    // Roll Nd6 fire damage (upcast: +1d6/slot-level above 1st)
     // Session 48 Task #29-follow-up-5c: Elemental Affinity (Draconic Sorcerer 6)
     const eaBonus = elementalAffinityBonus(caster, 'fire');
-    const dmgRoll = rollDie(6) + rollDie(6) + rollDie(6) + eaBonus;
+    let dmgRoll = 0;
+    for (let i = 0; i < diceCount; i++) dmgRoll += rollDie(6);
+    dmgRoll += eaBonus;
     const dmgFinal = save.success ? Math.floor(dmgRoll / 2) : dmgRoll;
 
     emit(

@@ -58,6 +58,7 @@ export const metadata = {
   aoeShape: 'sphere',
   concentration: false,
   castingTime: 'action',
+  sleepUpcastV1Implemented: true,            // +2d8/slot-level above 1st
 } as const;
 
 // ---- Local log helper ---------------------------------------
@@ -133,14 +134,16 @@ export function execute(
   targets: Combatant[],  // living enemies in range (unsorted — we sort internally)
   state: EngineState,
 ): void {
-  consumeSpellSlot(caster, 1);
+  const slotLevel = consumeSpellSlot(caster, 1) ?? 1;
+  const poolDice = 5 + 2 * Math.max(0, slotLevel - 1);
 
-  // Roll 5d8 for total HP budget
-  let budget = rollDie(8) + rollDie(8) + rollDie(8) + rollDie(8) + rollDie(8);
+  // Roll poolDice d8 for total HP budget
+  let budget = 0;
+  for (let i = 0; i < poolDice; i++) budget += rollDie(8);
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Sleep — rolls 5d8 = ${budget} HP budget` +
+    `${caster.name} casts Sleep at L${slotLevel} — rolls ${poolDice}d8 = ${budget} HP budget` +
     ` (${targets.length} target${targets.length !== 1 ? 's' : ''} in range)`,
   );
 

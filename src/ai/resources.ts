@@ -416,6 +416,7 @@ export function shouldCastHealingWord(
  * Build a spellHeal PlannedAction.
  * Rolls and applies the heal eagerly (same pattern as secondWind).
  * isHealingWord=true → 1d4 + WIS mod (Healing Word), false → 1d8 + WIS mod (Cure Wounds).
+ * Upcast: +1 die per slot level above 1st (PHB p.230 / p.250).
  */
 export function spellHealPlan(
   caster: Combatant,
@@ -429,8 +430,13 @@ export function spellHealPlan(
   if (slotUsed === null) {
     consumeInnateSpellUse(caster, spellName);
   }
-  const sides  = isHealingWord ? 4 : 8;
-  const roll   = rollDie(sides);
+  const effectiveSlotLevel = slotUsed ?? 1;
+
+  // Upcast scaling: +1 die per slot level above 1st (PHB p.230 / p.250)
+  const diceCount = 1 + Math.max(0, effectiveSlotLevel - 1);
+  const sides = isHealingWord ? 4 : 8;
+  let roll = 0;
+  for (let i = 0; i < diceCount; i++) roll += rollDie(sides);
   const mod    = abMod(caster.wis);
   const amount = Math.max(1, roll + mod);
   const spell  = isHealingWord ? 'Healing Word' : 'Cure Wounds';
@@ -439,6 +445,7 @@ export function spellHealPlan(
     action: null,
     targetId,
     healAmount: amount,
-    description: `${caster.name} casts ${spell} for ${amount} HP`,
+    castSlotLevel: effectiveSlotLevel,
+    description: `${caster.name} casts ${spell} (slot ${effectiveSlotLevel}) for ${amount} HP (${diceCount}d${sides}+${mod})`,
   };
 }

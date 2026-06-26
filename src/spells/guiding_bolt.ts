@@ -47,6 +47,7 @@ export const metadata = {
   damageType: 'radiant' as const,
   concentration: false,
   castingTime: 'action',
+  guidingBoltUpcastV1Implemented: true,               // +1d6/slot-level NOW modelled
 } as const;
 
 // ---- Local log helper ---------------------------------------
@@ -119,11 +120,12 @@ export function execute(
   const hitBonus = action?.hitBonus ?? 0;
   const bf = state.battlefield;
 
-  consumeSpellSlot(caster, 1);
+  const slotLevel = consumeSpellSlot(caster, 1) ?? 1;
+  const diceCount = metadata.damageCount + Math.max(0, slotLevel - metadata.level);
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Guiding Bolt at ${target.name}!`,
+    `${caster.name} casts Guiding Bolt at ${target.name}! (slot L${slotLevel}, ${diceCount}d6)`,
     target.id,
   );
 
@@ -155,12 +157,12 @@ export function execute(
     target.id, result.roll,
   );
 
-  // Damage: 4d6 radiant (8d6 on crit)
+  // Damage: 4d6 radiant (upcast: +1d6/slot-level above 1st), 8d6+ on crit
   const dmgExpr = {
-    count: metadata.damageCount,
+    count: diceCount,
     sides: metadata.damageDie,
     bonus: 0,
-    average: 14,
+    average: diceCount * 3.5,
   };
   const dmg = rollDamage(dmgExpr, isCrit);
   const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);

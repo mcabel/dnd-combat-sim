@@ -69,7 +69,7 @@ export const metadata = {
   saveAbility: 'dex' as const,
   castingTime: 'action',
   lightningBoltExactLineGeometryV1Simplified: true,                // thin-rectangle approx
-  lightningBoltUpcastV1Implemented: false,                         // +1d6/slot-level NOT modelled
+  lightningBoltUpcastV1Implemented: true,                          // +1d6/slot-level modelled via consumeSpellSlot return
 } as const;
 
 // ---- Local log helper ---------------------------------------
@@ -94,10 +94,10 @@ function emit(
 
 // ---- Dice helper --------------------------------------------
 
-/** Roll `metadata.dieCount`d`metadata.dieSides` and return the total. */
-export function rollDamage(): number {
+/** Roll `diceCount`d`metadata.dieSides` and return the total. */
+export function rollDamage(diceCount: number = metadata.dieCount): number {
   let total = 0;
-  for (let i = 0; i < metadata.dieCount; i++) total += rollDie(metadata.dieSides);
+  for (let i = 0; i < diceCount; i++) total += rollDie(metadata.dieSides);
   return total;
 }
 
@@ -187,11 +187,12 @@ export function execute(
   const action = caster.actions.find(a => a.name === 'Lightning Bolt');
   const saveDC = action?.saveDC ?? 15;
 
-  consumeSpellSlot(caster, 3);
+  const slotLevel = consumeSpellSlot(caster, 3) ?? 3;
+  const diceCount = 8 + Math.max(0, slotLevel - 3);
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Lightning Bolt! (DC ${saveDC} DEX, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}, ${metadata.lineLengthFt}-ft × ${metadata.lineWidthFt}-ft line) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} caught!`,
+    `${caster.name} casts Lightning Bolt at L${slotLevel}! (DC ${saveDC} DEX, ${diceCount}d${metadata.dieSides} ${metadata.damageType}, ${metadata.lineLengthFt}-ft × ${metadata.lineWidthFt}-ft line) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} caught!`,
   );
 
   for (const target of targets) {
@@ -200,7 +201,7 @@ export function execute(
     const save = rollSaveReactable(state, caster, target, 'dex', saveDC);
     // Session 48 Task #29-follow-up-5c: Elemental Affinity (Draconic Sorcerer 6)
     const eaBonus = elementalAffinityBonus(caster, metadata.damageType);
-    const fullDmg = rollDamage() + eaBonus;
+    const fullDmg = rollDamage(diceCount) + eaBonus;
     const dmg = save.success ? Math.floor(fullDmg / 2) : fullDmg;
     const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);
 
@@ -208,7 +209,7 @@ export function execute(
       state,
       save.success ? 'save_success' : 'save_fail',
       caster.id,
-      `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} DEX save vs Lightning Bolt (rolled ${save.total}) — ${dealt} ${metadata.damageType} damage (${metadata.dieCount}d${metadata.dieSides}=${fullDmg}${save.success ? ', halved' : ''})`,
+      `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} DEX save vs Lightning Bolt (rolled ${save.total}) — ${dealt} ${metadata.damageType} damage (${diceCount}d${metadata.dieSides}=${fullDmg}${save.success ? ', halved' : ''})`,
       target.id, save.roll,
     );
     emit(

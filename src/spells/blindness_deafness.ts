@@ -35,13 +35,14 @@ export const metadata = {
   concentration: false, saveAbility: 'con' as const, castingTime: 'action',
   blindnessDeafnessAlwaysBlindV1Simplified: true,  // v1 always picks blinded
   blindnessDeafnessEndOfTurnSaveV1Simplified: false,  // v1 no end-of-turn save
+  blindnessDeafnessUpcastV1Implemented: true,     // +1 target/slot-level above 2nd
 } as const;
 
 function emit(state: EngineState, type: CombatEvent['type'], actorId: string, desc: string, targetId?: string, value?: number): void {
   state.log.events.push({ round: state.battlefield.round, actorId, type, targetId, value, description: desc });
 }
 
-export function shouldCast(caster: Combatant, bf: Battlefield): Combatant | null {
+export function shouldCast(caster: Combatant, bf: Battlefield): Combatant[] | null {
   if (!caster.actions.some(a => a.name === 'Blindness/Deafness')) return null;
   if (!hasSpellSlot(caster, 2)) return null;
   const candidates: Array<{ c: Combatant; threat: number; dist: number }> = [];
@@ -57,32 +58,39 @@ export function shouldCast(caster: Combatant, bf: Battlefield): Combatant | null
   }
   if (candidates.length === 0) return null;
   candidates.sort((a, b) => a.threat !== b.threat ? b.threat - a.threat : a.dist - b.dist);
-  return candidates[0].c;
+  return candidates.map(e => e.c);
 }
 
-export function execute(caster: Combatant, target: Combatant, state: EngineState): void {
+export function execute(caster: Combatant, targets: Combatant[], state: EngineState): void {
   const action = caster.actions.find(a => a.name === 'Blindness/Deafness');
   const saveDC = action?.saveDC ?? 13;
-  consumeSpellSlot(caster, 2);
-  emit(state, 'action', caster.id, `${caster.name} casts Blindness/Deafness at ${target.name}! (DC ${saveDC} CON)`, target.id);
-  if (target.isDead || target.isUnconscious) return;
-  const save = rollSaveReactable(state, caster, target, 'con', saveDC);
-  emit(state, save.success ? 'save_success' : 'save_fail', caster.id,
-    `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} CON save vs Blindness/Deafness (rolled ${save.total})`, target.id, save.roll);
-  if (save.success) { emit(state, 'action', caster.id, `${target.name} resists Blindness/Deafness!`, target.id); return; }
-  // v1: always pick 'blinded' (more impactful — disadvantage on attacks)
-  // Duration: 1 min = 10 rounds (PHB p.219). sourceTurnExpires tracks when
-  // the effect expires so the pipeline can remove it + promote any suppressed
-  // same-name effect (e.g. Darkness-spell blinded → Blindness/Deafness takeover).
-  const round = state.battlefield.round;
-  applySpellEffect(target, {
-    casterId: caster.id, spellName: 'Blindness/Deafness',
-    effectType: 'condition_apply', payload: { condition: 'blinded' as Condition, saveDC },
-    sourceIsConcentration: false,
-    appliedTurn: round,
-    sourceTurnExpires: round + 10,   // 1 min = 10 rounds
-  });
-  emit(state, 'condition_add', caster.id, `${target.name} is BLINDED by Blindness/Deafness!`, target.id);
+  const slotLevel = consumeSpellSlot(caster, 2) ?? 2;
+  const targetCount = 1 + Math.max(0, slotLevel - 2);
+  const targetsToAffect = targets.slice(0, targetCount);
+
+  emit(state, 'action', caster.id,
+    `${caster.name} casts Blindness/Deafness at L${slotLevel}! (up to ${targetCount} target${targetCount !== 1 ? 's' : ''}, DC ${saveDC} CON)`);
+
+  for (const target of targetsToAffect) {
+    if (target.isDead || target.isUnconscious) continue;
+    const save = rollSaveReactable(state, caster, target, 'con', saveDC);
+    emit(state, save.success ? 'save_success' : 'save_fail', caster.id,
+      `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} CON save vs Blindness/Deafness (rolled ${save.total})`, target.id, save.roll);
+    if (save.success) { emit(state, 'action', caster.id, `${target.name} resists Blindness/Deafness!`, target.id); continue; }
+    // v1: always pick 'blinded' (more impactful — disadvantage on attacks)
+    // Duration: 1 min = 10 rounds (PHB p.219). sourceTurnExpires tracks when
+    // the effect expires so the pipeline can remove it + promote any suppressed
+    // same-name effect (e.g. Darkness-spell blinded → Blindness/Deafness takeover).
+    const round = state.battlefield.round;
+    applySpellEffect(target, {
+      casterId: caster.id, spellName: 'Blindness/Deafness',
+      effectType: 'condition_apply', payload: { condition: 'blinded' as Condition, saveDC },
+      sourceIsConcentration: false,
+      appliedTurn: round,
+      sourceTurnExpires: round + 10,   // 1 min = 10 rounds
+    });
+    emit(state, 'condition_add', caster.id, `${target.name} is BLINDED by Blindness/Deafness!`, target.id);
+  }
 }
 
 export function cleanup(_c: Combatant): void { /* no-op — NOT concentration */ }

@@ -87,7 +87,7 @@ export const metadata = {
   sunburstBlindnessDurationV1Simplified: true,                      // 1-min not tracked (persists for combat)
   sunburstEndOfTurnSaveV1Implemented: false,                        // end-of-turn save skipped
   sunburstUndeadOozeDisadvantageV1Simplified: true,                 // no creature-type tag in v1
-  sunburstUpcastV1Implemented: false,                               // +2d6/slot-level NOT modelled
+  sunburstUpcastV1Implemented: true,                                // +2d6/slot-level modelled
 } as const;
 
 // ---- Local log helper ---------------------------------------
@@ -112,10 +112,10 @@ function emit(
 
 // ---- Dice helper --------------------------------------------
 
-/** Roll `metadata.dieCount`d`metadata.dieSides` and return the total. */
-export function rollDamage(): number {
+/** Roll `count`d`metadata.dieSides` and return the total. */
+export function rollDamage(count: number): number {
   let total = 0;
-  for (let i = 0; i < metadata.dieCount; i++) total += rollDie(metadata.dieSides);
+  for (let i = 0; i < count; i++) total += rollDie(metadata.dieSides);
   return total;
 }
 
@@ -208,18 +208,19 @@ export function execute(
   const action = caster.actions.find(a => a.name === 'Sunburst');
   const saveDC = action?.saveDC ?? 13;
 
-  consumeSpellSlot(caster, 8);
+  const slotLevel = consumeSpellSlot(caster, 8) ?? 8;
+  const diceCount = 12 + 2 * Math.max(0, slotLevel - 8);
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Sunburst! (DC ${saveDC} CON, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}, ${metadata.aoeRadiusFt}-ft radius AoE + blinded on fail) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} caught!`,
+    `${caster.name} casts Sunburst at L${slotLevel}! (DC ${saveDC} CON, ${diceCount}d${metadata.dieSides} ${metadata.damageType}, ${metadata.aoeRadiusFt}-ft radius AoE + blinded on fail) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} caught!`,
   );
 
   for (const target of targets) {
     if (target.isDead || target.isUnconscious) continue;
 
     const save = rollSaveReactable(state, caster, target, 'con', saveDC);
-    const fullDmg = rollDamage();
+    const fullDmg = rollDamage(diceCount);
     const dmg = save.success ? Math.floor(fullDmg / 2) : fullDmg;
     const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);
 
@@ -227,7 +228,7 @@ export function execute(
       state,
       save.success ? 'save_success' : 'save_fail',
       caster.id,
-      `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} CON save vs Sunburst (rolled ${save.total}) — ${dealt} ${metadata.damageType} damage (${metadata.dieCount}d${metadata.dieSides}=${fullDmg}${save.success ? ', halved' : ''})${save.success ? '' : ' + BLINDED'}`,
+      `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} CON save vs Sunburst (rolled ${save.total}) — ${dealt} ${metadata.damageType} damage (${diceCount}d${metadata.dieSides}=${fullDmg}${save.success ? ', halved' : ''})${save.success ? '' : ' + BLINDED'}`,
       target.id, save.roll,
     );
     emit(

@@ -63,7 +63,7 @@ export const metadata = {
   concentration: false,
   saveAbility: 'con' as const,
   castingTime: 'action',
-  shatterUpcastV1Implemented: false,                            // +1d8/slot-level NOT modelled
+  shatterUpcastV1Implemented: true,                             // +1d8/slot-level modelled via consumeSpellSlot return
 } as const;
 
 // ---- Local log helper ---------------------------------------
@@ -88,10 +88,10 @@ function emit(
 
 // ---- Dice helper --------------------------------------------
 
-/** Roll `metadata.dieCount`d`metadata.dieSides` and return the total. */
-export function rollDamage(): number {
+/** Roll `diceCount`d`metadata.dieSides` and return the total. */
+export function rollDamage(diceCount: number = metadata.dieCount): number {
   let total = 0;
-  for (let i = 0; i < metadata.dieCount; i++) total += rollDie(metadata.dieSides);
+  for (let i = 0; i < diceCount; i++) total += rollDie(metadata.dieSides);
   return total;
 }
 
@@ -179,18 +179,19 @@ export function execute(
   const action = caster.actions.find(a => a.name === 'Shatter');
   const saveDC = action?.saveDC ?? 13;
 
-  consumeSpellSlot(caster, 2);
+  const slotLevel = consumeSpellSlot(caster, 2) ?? 2;
+  const diceCount = 3 + Math.max(0, slotLevel - 2);
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Shatter! (DC ${saveDC} CON, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}, ${metadata.aoeRadiusFt}-ft radius AoE) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} caught!`,
+    `${caster.name} casts Shatter at L${slotLevel}! (DC ${saveDC} CON, ${diceCount}d${metadata.dieSides} ${metadata.damageType}, ${metadata.aoeRadiusFt}-ft radius AoE) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} caught!`,
   );
 
   for (const target of targets) {
     if (target.isDead || target.isUnconscious) continue;
 
     const save = rollSaveReactable(state, caster, target, 'con', saveDC);
-    const fullDmg = rollDamage();
+    const fullDmg = rollDamage(diceCount);
     const dmg = save.success ? Math.floor(fullDmg / 2) : fullDmg;
     const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);
 
@@ -198,7 +199,7 @@ export function execute(
       state,
       save.success ? 'save_success' : 'save_fail',
       caster.id,
-      `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} CON save vs Shatter (rolled ${save.total}) — ${dealt} ${metadata.damageType} damage (${metadata.dieCount}d${metadata.dieSides}=${fullDmg}${save.success ? ', halved' : ''})`,
+      `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} CON save vs Shatter (rolled ${save.total}) — ${dealt} ${metadata.damageType} damage (${diceCount}d${metadata.dieSides}=${fullDmg}${save.success ? ', halved' : ''})`,
       target.id, save.roll,
     );
     emit(

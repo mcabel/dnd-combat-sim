@@ -57,7 +57,7 @@ export const metadata = {
   concentration: false,
   castingTime: 'action',
   scorchingRayMultiTargetV1Simplified: true,    // repeats first target if <3 enemies
-  scorchingRayUpcastV1Implemented: false,        // +1 ray/slot-level NOT modelled
+  scorchingRayUpcastV1Implemented: true,         // +1 ray/slot-level above 2nd
 } as const;
 
 // ---- Local log helper ---------------------------------------
@@ -179,14 +179,15 @@ export function execute(
   const action = caster.actions.find(a => a.name === 'Scorching Ray');
   const hitBonus = action?.hitBonus ?? abilityMod(caster.int);
 
-  consumeSpellSlot(caster, 2);
+  const slotLevel = consumeSpellSlot(caster, 2) ?? 2;
+  const rayCount = 3 + Math.max(0, slotLevel - 2);
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Scorching Ray! (${metadata.rayCount} rays, ranged spell attack, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType} on hit)`,
+    `${caster.name} casts Scorching Ray at L${slotLevel}! (${rayCount} rays, ranged spell attack, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType} on hit)`,
   );
 
-  for (let i = 0; i < metadata.rayCount; i++) {
+  for (let i = 0; i < rayCount; i++) {
     const target = targets[i];
     if (!target) continue;
 

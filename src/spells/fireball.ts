@@ -73,7 +73,7 @@ export const metadata = {
   castingTime: 'action',
   fireballEuclideanRadiusV1Simplified: true,                       // chebyshev square approx
   fireballCornerPropagationV1Implemented: false,                   // "around corners" NOT modelled
-  fireballUpcastV1Implemented: false,                              // +1d6/slot-level NOT modelled
+  fireballUpcastV1Implemented: true,                               // +1d6/slot-level modelled via consumeSpellSlot return
 } as const;
 
 // ---- Local log helper ---------------------------------------
@@ -98,10 +98,10 @@ function emit(
 
 // ---- Dice helper --------------------------------------------
 
-/** Roll `metadata.dieCount`d`metadata.dieSides` and return the total. */
-export function rollDamage(): number {
+/** Roll `diceCount`d`metadata.dieSides` and return the total. */
+export function rollDamage(diceCount: number = metadata.dieCount): number {
   let total = 0;
-  for (let i = 0; i < metadata.dieCount; i++) total += rollDie(metadata.dieSides);
+  for (let i = 0; i < diceCount; i++) total += rollDie(metadata.dieSides);
   return total;
 }
 
@@ -196,11 +196,12 @@ export function execute(
   const action = caster.actions.find(a => a.name === 'Fireball');
   const saveDC = action?.saveDC ?? 15;
 
-  consumeSpellSlot(caster, 3);
+  const slotLevel = consumeSpellSlot(caster, 3) ?? 3;
+  const diceCount = 8 + Math.max(0, slotLevel - 3);
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Fireball! (DC ${saveDC} DEX, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}, ${metadata.aoeRadiusFt}-ft radius AoE) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} caught!`,
+    `${caster.name} casts Fireball at L${slotLevel}! (DC ${saveDC} DEX, ${diceCount}d${metadata.dieSides} ${metadata.damageType}, ${metadata.aoeRadiusFt}-ft radius AoE) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} caught!`,
   );
 
   for (const target of targets) {
@@ -211,7 +212,7 @@ export function execute(
     // adds CHA mod to the fire damage if the caster's ancestry is fire.
     // The bonus is added once to the total damage roll (before save halving).
     const eaBonus = elementalAffinityBonus(caster, metadata.damageType);
-    const fullDmg = rollDamage() + eaBonus;
+    const fullDmg = rollDamage(diceCount) + eaBonus;
     const dmg = save.success ? Math.floor(fullDmg / 2) : fullDmg;
     const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);
 
@@ -219,7 +220,7 @@ export function execute(
       state,
       save.success ? 'save_success' : 'save_fail',
       caster.id,
-      `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} DEX save vs Fireball (rolled ${save.total}) — ${dealt} ${metadata.damageType} damage (${metadata.dieCount}d${metadata.dieSides}=${fullDmg}${save.success ? ', halved' : ''})`,
+      `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} DEX save vs Fireball (rolled ${save.total}) — ${dealt} ${metadata.damageType} damage (${diceCount}d${metadata.dieSides}=${fullDmg}${save.success ? ', halved' : ''})`,
       target.id, save.roll,
     );
     emit(

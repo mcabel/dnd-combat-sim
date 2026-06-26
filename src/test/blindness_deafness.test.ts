@@ -177,7 +177,7 @@ console.log('\n=== 2. shouldCast — precondition gates ===\n');
   const otherEnemy = makeCombatant('e2', { faction: 'enemy', pos: { x: 1, y: 0, z: 0 } });
   const bf = makeBF([caster, enemy, otherEnemy]);
   const result = shouldCast(caster, bf);
-  eq('Already-blinded enemy skipped', result?.id, 'e2');
+  eq('Already-blinded enemy skipped', result?.[0]?.id, 'e2');
 }
 
 {
@@ -187,7 +187,7 @@ console.log('\n=== 2. shouldCast — precondition gates ===\n');
   const otherEnemy = makeCombatant('e2', { faction: 'enemy', pos: { x: 1, y: 0, z: 0 } });
   const bf = makeBF([caster, enemy, otherEnemy]);
   const result = shouldCast(caster, bf);
-  eq('Already-blinded (any source) enemy skipped', result?.id, 'e2');
+  eq('Already-blinded (any source) enemy skipped', result?.[0]?.id, 'e2');
 }
 
 {
@@ -214,7 +214,7 @@ console.log('\n=== 3. shouldCast — target priority ===\n');
   const strong = makeCombatant('strong', { faction: 'enemy', maxHP: 50, pos: { x: 2, y: 0, z: 0 } });
   const bf = makeBF([caster, weak, strong]);
   const result = shouldCast(caster, bf);
-  eq('Highest-threat (maxHP) enemy picked', result?.id, 'strong');
+  eq('Highest-threat (maxHP) enemy picked', result?.[0]?.id, 'strong');
 }
 
 // ============================================================
@@ -232,7 +232,7 @@ console.log('\n=== 4. execute — save resolution + condition application ===\n'
   const bf = makeBF([caster, enemy]);
   const state = makeState(bf);
 
-  execute(caster, enemy, state);
+  execute(caster, [enemy], state);
 
   assert('Enemy is blinded (CON 1 vs DC 25 — guaranteed fail)', enemy.conditions.has('blinded'));
 
@@ -256,7 +256,7 @@ console.log('\n=== 4. execute — save resolution + condition application ===\n'
   const bf = makeBF([caster, enemy]);
   const state = makeState(bf);
 
-  execute(caster, enemy, state);
+  execute(caster, [enemy], state);
 
   assert('Enemy is NOT blinded (CON 30 vs DC 5 — guaranteed success)', !enemy.conditions.has('blinded'));
   assert('No BD effect registered (save succeeded)', !enemy.activeEffects.some(e => e.spellName === 'Blindness/Deafness'));
@@ -270,7 +270,7 @@ console.log('\n=== 4. execute — save resolution + condition application ===\n'
   const bf = makeBF([caster, enemy]);
   const state = makeState(bf);
 
-  execute(caster, enemy, state);
+  execute(caster, [enemy], state);
 
   eq('2nd-level slot consumed', caster.resources!.spellSlots![2]!.remaining, 1);
 }
@@ -283,7 +283,7 @@ console.log('\n=== 4. execute — save resolution + condition application ===\n'
   const bf = makeBF([caster, enemy]);
   const state = makeState(bf);
 
-  execute(caster, enemy, state);
+  execute(caster, [enemy], state);
 
   // concentration should remain null (or unchanged from previous state)
   assert('Concentration is NOT started (BD is non-concentration)', caster.concentration === null || caster.concentration?.active !== true || caster.concentration?.spellName !== 'Blindness/Deafness');
@@ -297,7 +297,7 @@ console.log('\n=== 4. execute — save resolution + condition application ===\n'
   const bf = makeBF([caster, deadEnemy]);
   const state = makeState(bf);
 
-  execute(caster, deadEnemy, state);
+  execute(caster, [deadEnemy], state);
 
   assert('Dead enemy not blinded', !deadEnemy.conditions.has('blinded'));
   // Slot is still consumed (the spell was cast — the target just died before resolution)
@@ -317,7 +317,7 @@ console.log('\n=== 5. execute — logging ===\n');
   const bf = makeBF([caster, enemy]);
   const state = makeState(bf);
 
-  execute(caster, enemy, state);
+  execute(caster, [enemy], state);
 
   const events = state.log.events as any[];
   const actionEvents = events.filter(e => e.type === 'action');
@@ -344,7 +344,7 @@ console.log('\n=== 6. cleanup — no-op ===\n');
   const bf = makeBF([caster, enemy]);
   const state = makeState(bf);
 
-  execute(caster, enemy, state);
+  execute(caster, [enemy], state);
 
   const enemyConditionsBefore = enemy.conditions.size;
   cleanup(caster); // should NOT remove the condition
@@ -367,7 +367,7 @@ console.log('\n=== 7. Integration pipeline ===\n');
   const state = makeState(bf);
 
   const target = shouldCast(caster, bf);
-  assert('shouldCast picks goblin (only enemy)', target?.id === 'goblin1');
+  assert('shouldCast picks goblin (only enemy)', target?.[0]?.id === 'goblin1');
   if (target) execute(caster, target, state);
 
   eq('Slot consumed', caster.resources!.spellSlots![2]!.remaining, 1);

@@ -255,7 +255,7 @@ console.log('\n=== 3. execute — DUAL damage_zone payload + immediate damage ==
       eq('cold zone casterId matches caster', coldZone.casterId, caster.id);
     }
     if (acidZone) {
-      eq('acid zone dieCount is 4', acidZone.payload.dieCount, 4);
+      eq('acid zone dieCount is 2 (upcast: 2 + max(0, slotLvl-3))', acidZone.payload.dieCount, 2);
       eq('acid zone dieSides is 6', acidZone.payload.dieSides, 6);
       eq('acid zone sourceIsConcentration is true', acidZone.sourceIsConcentration, true);
       eq('acid zone spellName is Hunger of Hadar', acidZone.spellName, 'Hunger of Hadar');
@@ -314,12 +314,12 @@ console.log('\n=== 6. rollColdDamage + rollAcidDamage range checks ===\n');
 
 {
   for (let i = 0; i < 30; i++) {
-    const cold = rollColdDamage();
-    assert(`rollColdDamage() in [2, 12] (iteration ${i})`, cold >= 2 && cold <= 12, `got ${cold}`);
+    const cold = rollColdDamage(2);
+    assert(`rollColdDamage(2) in [2, 12] (iteration ${i})`, cold >= 2 && cold <= 12, `got ${cold}`);
   }
   for (let i = 0; i < 30; i++) {
-    const acid = rollAcidDamage();
-    assert(`rollAcidDamage() in [4, 24] (iteration ${i})`, acid >= 4 && acid <= 24, `got ${acid}`);
+    const acid = rollAcidDamage(2);
+    assert(`rollAcidDamage(2) in [2, 12] (iteration ${i})`, acid >= 2 && acid <= 12, `got ${acid}`);
   }
 }
 

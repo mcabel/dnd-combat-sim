@@ -153,7 +153,7 @@ eq('damage type is thunder', metadata.damageType, 'thunder');
 eq('NOT concentration', metadata.concentration, false);
 eq('save ability is con', metadata.saveAbility, 'con');
 eq('casting time is action', metadata.castingTime, 'action');
-eq('upcast NOT implemented (v1)', metadata.shatterUpcastV1Implemented, false);
+eq('upcast IS implemented (v1)', metadata.shatterUpcastV1Implemented, true);
 
 // ============================================================
 // 2. shouldCast — precondition gates

@@ -13,7 +13,7 @@
 //   means the action must be a cantrip if the spell is 1st level).
 //   The engine does not currently model this PHB p.203 restriction.
 //
-// Upcast: +1d4 per slot level above 1st (not modelled — lv1 only).
+// Upcast: +1d4 per slot level above 1st.
 //
 // Spell module pattern (Session 31 architecture):
 //   shouldCast(caster, bf) → Combatant | null   (target or null)
@@ -38,6 +38,7 @@ export const metadata = {
   castingAbility: 'wis',    // Wis-based for Cleric/Druid/Bard
   concentration: false,
   castingTime: 'bonusAction',
+  healingWordUpcastV1Implemented: true,   // +1d4/slot above 1st (RFC-UPCASTING)
 } as const;
 
 // ---- Local log helper ---------------------------------------
@@ -125,8 +126,10 @@ export function shouldCast(
 /**
  * Cast Healing Word on target.
  *   1. Guard: target must not be dead or undead (PHB p.250).
- *   2. Consume a 1st-level spell slot.
- *   3. Roll 1d4 + WIS modifier (min 1) healing.
+ *   2. Consume a 1st-level spell slot (or higher — consumeSpellSlot returns
+ *      the actual slot level for upcast scaling).
+ *   3. Roll (1 + slotLevel-1)d4 + WIS modifier healing.
+ *      Upcast: +1d4 per slot level above 1st (PHB p.250).
  *   4. Apply heal via applyHeal — automatically clears 'unconscious'
  *      condition if target was at 0 HP and healed > 0 (PHB p.250 / p.197).
  *   5. Log: spell cast, condition_remove (if revived), heal amount.
@@ -152,16 +155,20 @@ export function execute(
     return;
   }
 
-  consumeSpellSlot(caster, 1);
+  const slotLevel = consumeSpellSlot(caster, 1) ?? 1;
+
+  // Upcast scaling: +1d4 per slot level above 1st (PHB p.250)
+  const diceCount = 1 + Math.max(0, slotLevel - 1);
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Healing Word on ${target.name}!`,
+    `${caster.name} casts Healing Word on ${target.name}! (slot level ${slotLevel}, ${diceCount}d4)`,
     target.id,
   );
 
-  // Roll 1d4 + WIS modifier; minimum 1 HP restored (always at least some healing)
-  const roll   = rollDie(metadata.healDie);
+  // Roll diceCount d4 + WIS modifier; minimum 1 HP restored (always at least some healing)
+  let roll = 0;
+  for (let i = 0; i < diceCount; i++) roll += rollDie(metadata.healDie);
   const wisMod = abilityMod(caster.wis);
   const amount = Math.max(1, roll + wisMod);
 
@@ -179,7 +186,7 @@ export function execute(
 
   emit(
     state, 'heal', caster.id,
-    `Healing Word: ${healed} HP restored to ${target.name} (1d4[${roll}]+${wisMod}=${amount})`,
+    `Healing Word: ${healed} HP restored to ${target.name} (${diceCount}d4[${roll}]+${wisMod}=${amount})`,
     target.id, healed,
   );
 }

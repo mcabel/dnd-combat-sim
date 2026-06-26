@@ -42,6 +42,7 @@ export const metadata = {
   concentration: false,
   saveAbility: 'con' as const,
   castingTime: 'action',
+  thunderwaveUpcastV1Implemented: true,                            // +1d8/slot-level modelled via consumeSpellSlot return
 } as const;
 
 // ---- Local log helper ---------------------------------------
@@ -123,11 +124,12 @@ export function execute(
   const action = caster.actions.find(a => a.name === 'Thunderwave');
   const saveDC = action?.saveDC ?? 13;
 
-  consumeSpellSlot(caster, 1);
+  const slotLevel = consumeSpellSlot(caster, 1) ?? 1;
+  const diceCount = 2 + Math.max(0, slotLevel - 1);
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Thunderwave (DC ${saveDC} CON) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} in range!`,
+    `${caster.name} casts Thunderwave at L${slotLevel} (DC ${saveDC} CON, ${diceCount}d8 thunder) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} in range!`,
   );
 
   for (const target of targets) {
@@ -135,8 +137,9 @@ export function execute(
 
     const save = rollSaveReactable(state, caster, target, 'con', saveDC);
 
-    // Roll full 2d8 thunder damage
-    const dmgRoll = rollDie(8) + rollDie(8);
+    // Roll ${diceCount}d8 thunder damage
+    let dmgRoll = 0;
+    for (let i = 0; i < diceCount; i++) dmgRoll += rollDie(8);
     const dmgFinal = save.success ? Math.floor(dmgRoll / 2) : dmgRoll;
 
     emit(

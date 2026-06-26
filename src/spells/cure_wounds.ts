@@ -33,6 +33,7 @@ export const metadata = {
   castingAbility: 'wis',  // Wis-based for Cleric/Druid/Paladin/Ranger/Bard
   concentration: false,
   castingTime: 'action',
+  cureWoundsUpcastV1Implemented: true,   // +1d8/slot above 1st (RFC-UPCASTING)
 } as const;
 
 // ---- Local log helper ---------------------------------------
@@ -122,8 +123,10 @@ export function shouldCast(
 /**
  * Cast Cure Wounds on target.
  *   1. Guard: target must not be dead or undead (PHB p.230).
- *   2. Consume a 1st-level spell slot.
- *   3. Roll 1d8 + WIS modifier (min 1) healing.
+ *   2. Consume a 1st-level spell slot (or higher — consumeSpellSlot returns
+ *      the actual slot level for upcast scaling).
+ *   3. Roll (1 + slotLevel-1)d8 + WIS modifier healing.
+ *      Upcast: +1d8 per slot level above 1st (PHB p.230).
  *   4. Apply heal via applyHeal — automatically clears 'unconscious'
  *      condition if target was at 0 HP and healed > 0 (PHB p.197).
  *   5. Log: spell cast, condition_remove (if revived), heal amount.
@@ -131,7 +134,7 @@ export function shouldCast(
  * @param caster     The casting Combatant (Cleric / Druid / Paladin / Ranger / Bard)
  * @param target     Ally (or self) receiving the heal
  * @param state      Current EngineState (for logging + battlefield access)
- * @param _slotLevel Reserved for upcast support (not yet modelled); defaults to 1.
+ * @param _slotLevel Reserved for upcast support; defaults to 1.
  */
 export function execute(
   caster: Combatant,
@@ -154,19 +157,24 @@ export function execute(
   // Consume a spell slot if available; otherwise fall back to innate spellcasting.
   // The Couatl (and similar monsters) cast Cure Wounds via innate spellcasting (3/day),
   // not spell slots — see Session 41 Task #2.
-  const slotUsed = consumeSpellSlot(caster, 1);
-  if (slotUsed === null) {
+  const slotLevel = consumeSpellSlot(caster, 1);
+  if (slotLevel === null) {
     consumeInnateSpellUse(caster, 'Cure Wounds');
   }
+  const effectiveSlotLevel = slotLevel ?? 1;
+
+  // Upcast scaling: +1d8 per slot level above 1st (PHB p.230)
+  const diceCount = 1 + Math.max(0, effectiveSlotLevel - 1);
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Cure Wounds on ${target.name}!`,
+    `${caster.name} casts Cure Wounds on ${target.name}! (slot level ${effectiveSlotLevel}, ${diceCount}d8)`,
     target.id,
   );
 
-  // Roll 1d8 + WIS modifier; minimum 1 HP restored
-  const roll   = rollDie(metadata.healDie);
+  // Roll diceCount d8 + WIS modifier; minimum 1 HP restored
+  let roll = 0;
+  for (let i = 0; i < diceCount; i++) roll += rollDie(metadata.healDie);
   const wisMod = abilityMod(caster.wis);
   const amount = Math.max(1, roll + wisMod);
 
@@ -184,7 +192,7 @@ export function execute(
 
   emit(
     state, 'heal', caster.id,
-    `Cure Wounds: ${healed} HP restored to ${target.name} (1d8[${roll}]+${wisMod}=${amount})`,
+    `Cure Wounds: ${healed} HP restored to ${target.name} (${diceCount}d8[${roll}]+${wisMod}=${amount})`,
     target.id, healed,
   );
 }

@@ -54,6 +54,7 @@ export const metadata = {
   castingTime: 'action',
   damageDice: '3d6',
   damageType: 'psychic',
+  dissonantWhispersUpcastV1Implemented: true,            // +1d6/slot-level above 1st NOW modelled
 } as const;
 
 // ---- Local log helper ---------------------------------------
@@ -151,11 +152,12 @@ export function execute(
   const action = caster.actions.find(a => a.name === 'Dissonant Whispers');
   const saveDC = action?.saveDC ?? 13;
 
-  consumeSpellSlot(caster, 1);
+  const slotLevel = consumeSpellSlot(caster, 1) ?? 1;
+  const diceCount = 3 + Math.max(0, slotLevel - 1);
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Dissonant Whispers on ${target.name} (DC ${saveDC} WIS)`,
+    `${caster.name} casts Dissonant Whispers on ${target.name} (DC ${saveDC} WIS, slot L${slotLevel}, ${diceCount}d6)`,
     target.id,
   );
 
@@ -163,7 +165,8 @@ export function execute(
   const isDeafened = target.conditions.has('deafened');
   if (isDeafened) {
     // Roll damage for the half-on-success calculation, but target is auto-success
-    const dmgRoll = rollDie(6) + rollDie(6) + rollDie(6);
+    let dmgRoll = 0;
+    for (let i = 0; i < diceCount; i++) dmgRoll += rollDie(6);
     const dmgFinal = Math.floor(dmgRoll / 2);
     emit(
       state, 'save_success', caster.id,
@@ -179,7 +182,8 @@ export function execute(
 
   const save = rollSaveReactable(state, caster, target, 'wis', saveDC);
 
-  const dmgRoll = rollDie(6) + rollDie(6) + rollDie(6);
+  let dmgRoll = 0;
+  for (let i = 0; i < diceCount; i++) dmgRoll += rollDie(6);
   const dmgFinal = save.success ? Math.floor(dmgRoll / 2) : dmgRoll;
 
   if (save.success) {

@@ -146,7 +146,7 @@ eq('damage type is fire', metadata.damageType, 'fire');
 eq('NOT concentration', metadata.concentration, false);
 eq('casting time is action', metadata.castingTime, 'action');
 eq('multi-target v1 simplified flag set', metadata.scorchingRayMultiTargetV1Simplified, true);
-eq('upcast NOT implemented (v1)', metadata.scorchingRayUpcastV1Implemented, false);
+eq('upcast implemented (v1)', metadata.scorchingRayUpcastV1Implemented, true);
 
 // ============================================================
 // 2. shouldCast — precondition gates

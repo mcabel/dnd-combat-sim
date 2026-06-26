@@ -361,12 +361,12 @@ console.log('\n=== 9. rollDamage ===\n');
 {
   let min = Infinity, max = -Infinity;
   for (let i = 0; i < 1000; i++) {
-    const r = rollDamage();
+    const r = rollDamage(12);
     if (r < min) min = r;
     if (r > max) max = r;
   }
-  assert(`rollDamage min >= 12 (got ${min})`, min >= 12);
-  assert(`rollDamage max <= 72 (got ${max})`, max <= 72);
+  assert(`rollDamage(12) min >= 12 (got ${min})`, min >= 12);
+  assert(`rollDamage(12) max <= 72 (got ${max})`, max <= 72);
 }
 
 // ---- Summary --------------------------------------------------

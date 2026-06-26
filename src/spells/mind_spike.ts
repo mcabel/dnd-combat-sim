@@ -63,7 +63,7 @@ export const metadata = {
   castingTime: 'action',
   mindSpikeConcentrationV1Simplified: true,                          // canon concentration simplified to one-shot
   mindSpikeLocationTrackingV1Simplified: true,                      // "know target's location" rider NOT modelled
-  mindSpikeUpcastV1Implemented: false,                               // +1d8/slot-level NOT modelled
+  mindSpikeUpcastV1Implemented: true,                                // +1d8/slot-level modelled
 } as const;
 
 // ---- Local log helper ---------------------------------------
@@ -88,10 +88,10 @@ function emit(
 
 // ---- Dice helper --------------------------------------------
 
-/** Roll `metadata.dieCount`d`metadata.dieSides` and return the total. */
-export function rollDamage(): number {
+/** Roll `count`d`metadata.dieSides` and return the total. */
+export function rollDamage(count: number): number {
   let total = 0;
-  for (let i = 0; i < metadata.dieCount; i++) total += rollDie(metadata.dieSides);
+  for (let i = 0; i < count; i++) total += rollDie(metadata.dieSides);
   return total;
 }
 
@@ -166,11 +166,12 @@ export function execute(
   const action = caster.actions.find(a => a.name === 'Mind Spike');
   const saveDC = action?.saveDC ?? 13;
 
-  consumeSpellSlot(caster, 2);
+  const slotLevel = consumeSpellSlot(caster, 2) ?? 2;
+  const diceCount = 3 + Math.max(0, slotLevel - 2);
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Mind Spike at ${target.name}! (DC ${saveDC} WIS, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}, half on save)`,
+    `${caster.name} casts Mind Spike at L${slotLevel} at ${target.name}! (DC ${saveDC} WIS, ${diceCount}d${metadata.dieSides} ${metadata.damageType}, half on save)`,
     target.id,
   );
 
@@ -184,7 +185,7 @@ export function execute(
   }
 
   const save = rollSaveReactable(state, caster, target, 'wis', saveDC);
-  const fullDmg = rollDamage();
+  const fullDmg = rollDamage(diceCount);
   const dmg = save.success ? Math.floor(fullDmg / 2) : fullDmg;
   const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);
 
@@ -192,7 +193,7 @@ export function execute(
     state,
     save.success ? 'save_success' : 'save_fail',
     caster.id,
-    `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} WIS save vs Mind Spike (rolled ${save.total}) — ${dealt} ${metadata.damageType} damage (${metadata.dieCount}d${metadata.dieSides}=${fullDmg}${save.success ? ', halved' : ''})`,
+    `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} WIS save vs Mind Spike (rolled ${save.total}) — ${dealt} ${metadata.damageType} damage (${diceCount}d${metadata.dieSides}=${fullDmg}${save.success ? ', halved' : ''})`,
     target.id, save.roll,
   );
   emit(

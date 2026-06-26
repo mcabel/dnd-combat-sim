@@ -74,7 +74,7 @@ export const metadata = {
   hungerOfHadarAcidDieV1AdjustedTo4d6: true,             // canon: 2d6 acid; v1: 4d6 (per task spec)
   hungerOfHadarCenterPointV1SimplifiedTo60Ft: true,      // canon: any point within 150 ft; v1: highest-threat enemy within 60 ft
   hungerOfHadarBlindnessAndTerrainV1NotModelled: true,   // blindness + difficult-terrain + light-obscurement riders
-  hungerOfHadarUpcastV1Implemented: false,               // +1d6/slot-level not modelled
+  hungerOfHadarUpcastV1Implemented: true,                // +1d6/slot-level modelled
 } as const;
 
 // ---- Local log helper ---------------------------------------
@@ -106,14 +106,14 @@ export function rollNDice(count: number, sides: number): number {
   return total;
 }
 
-/** Roll the cold-damage portion (2d6). */
-export function rollColdDamage(): number {
-  return rollNDice(metadata.coldDieCount, metadata.coldDieSides);
+/** Roll the cold-damage portion (dieCount d6). */
+export function rollColdDamage(dieCount: number): number {
+  return rollNDice(dieCount, metadata.coldDieSides);
 }
 
-/** Roll the acid-damage portion (4d6). */
-export function rollAcidDamage(): number {
-  return rollNDice(metadata.acidDieCount, metadata.acidDieSides);
+/** Roll the acid-damage portion (dieCount d6). */
+export function rollAcidDamage(dieCount: number): number {
+  return rollNDice(dieCount, metadata.acidDieSides);
 }
 
 // ---- Planner ------------------------------------------------
@@ -203,7 +203,8 @@ export function execute(
   targets: Combatant[],
   state: EngineState,
 ): void {
-  consumeSpellSlot(caster, 3);
+  const slotLevel = consumeSpellSlot(caster, 3) ?? 3;
+  const dieCount = 2 + Math.max(0, slotLevel - 3);
 
   if (caster.concentration?.active) {
     removeEffectsFromCaster(caster.id, state.battlefield);
@@ -213,20 +214,20 @@ export function execute(
   const names = targets.map(t => t.name).join(', ');
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Hunger of Hadar! A sphere of blackness opens (${targets.length} enem${targets.length !== 1 ? 'ies' : 'y'}: ${names}) — ${metadata.coldDieCount}d${metadata.coldDieSides} ${metadata.coldDamageType} + ${metadata.acidDieCount}d${metadata.acidDieSides} ${metadata.acidDamageType} per turn, no save`,
+    `${caster.name} casts Hunger of Hadar at L${slotLevel}! A sphere of blackness opens (${targets.length} enem${targets.length !== 1 ? 'ies' : 'y'}: ${names}) — ${dieCount}d${metadata.coldDieSides} ${metadata.coldDamageType} + ${dieCount}d${metadata.coldDieSides} ${metadata.acidDamageType} per turn, no save`,
   );
 
   for (const target of targets) {
     if (target.isDead || target.isUnconscious) continue;
 
-    // 1. Immediate on-cast damage: 2d6 cold + 4d6 acid (no save).
-    const coldDmg = rollColdDamage();
-    const acidDmg = rollAcidDamage();
+    // 1. Immediate on-cast damage: dieCount d6 cold + dieCount d6 acid (no save).
+    const coldDmg = rollColdDamage(dieCount);
+    const acidDmg = rollAcidDamage(dieCount);
     const dealtCold = applyDamageWithTempHP(target, coldDmg, metadata.coldDamageType);
     const dealtAcid = applyDamageWithTempHP(target, acidDmg, metadata.acidDamageType);
     emit(
       state, 'damage', caster.id,
-      `${target.name} takes ${dealtCold} ${metadata.coldDamageType} + ${dealtAcid} ${metadata.acidDamageType} damage from Hunger of Hadar (on cast: ${metadata.coldDieCount}d${metadata.coldDieSides}=${coldDmg} + ${metadata.acidDieCount}d${metadata.acidDieSides}=${acidDmg})`,
+      `${target.name} takes ${dealtCold} ${metadata.coldDamageType} + ${dealtAcid} ${metadata.acidDamageType} damage from Hunger of Hadar (on cast: ${dieCount}d${metadata.coldDieSides}=${coldDmg} + ${dieCount}d${metadata.coldDieSides}=${acidDmg})`,
       target.id, dealtCold + dealtAcid,
     );
 
@@ -236,7 +237,7 @@ export function execute(
       spellName: 'Hunger of Hadar',
       effectType: 'damage_zone',
       payload: {
-        dieCount: metadata.coldDieCount,
+        dieCount,
         dieSides: metadata.coldDieSides,
         damageType: metadata.coldDamageType,
       },
@@ -247,7 +248,7 @@ export function execute(
       spellName: 'Hunger of Hadar',
       effectType: 'damage_zone',
       payload: {
-        dieCount: metadata.acidDieCount,
+        dieCount,
         dieSides: metadata.acidDieSides,
         damageType: metadata.acidDamageType,
       },
@@ -256,7 +257,7 @@ export function execute(
 
     emit(
       state, 'condition_add', caster.id,
-      `${target.name} is trapped in the dark void! (will take ${metadata.coldDieCount}d${metadata.coldDieSides} ${metadata.coldDamageType} + ${metadata.acidDieCount}d${metadata.acidDieSides} ${metadata.acidDamageType} at the start of each of its turns)`,
+      `${target.name} is trapped in the dark void! (will take ${dieCount}d${metadata.coldDieSides} ${metadata.coldDamageType} + ${dieCount}d${metadata.acidDieSides} ${metadata.acidDamageType} at the start of each of its turns)`,
       target.id,
     );
   }

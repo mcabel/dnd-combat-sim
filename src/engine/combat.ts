@@ -3326,10 +3326,14 @@ export function executePlannedAction(
     }
 
     case 'magicMissile': {
-      // Magic Missile — PHB p.257: 3 auto-hit darts, each 1d4+1 force. 120 ft, no concentration.
-      // Slot consumed inside executeMagicMissile.
+      // Magic Missile — PHB p.257: 3 auto-hit darts (+1 dart/slot above 1st), each 1d4+1 force. 120 ft, no concentration.
+      // Slot consumed inside executeMagicMissile (or below if Shield negates).
       const mmTarget = plan.targetId ? bf.combatants.get(plan.targetId) : null;
       if (!mmTarget || mmTarget.isDead || mmTarget.isUnconscious) break;
+
+      // Upcast: +1 dart per slot level above 1st (PHB p.257)
+      const mmSlotLevel = plan.castSlotLevel ?? 1;
+      const mmDartCount = 3 + Math.max(0, mmSlotLevel - 1);
 
       // ── Session 37: Shield "targeted by Magic Missile" reaction (PHB p.275) ──
       // Magic Missile auto-hits (no attack roll), so it bypasses the
@@ -3346,11 +3350,11 @@ export function executePlannedAction(
         kind: 'targeted_by_magic_missile',
         caster: actor,
         target: mmTarget,
-        dartCount: 3,  // MM default (L1); upcast +1 dart/level not modelled
+        dartCount: mmDartCount,
       });
       if (mmOutcome && mmOutcome.kind === 'negated') {
         // Shield blocked all MM darts. MM slot is still consumed (spell was cast).
-        consumeSpellSlot(actor, 1);
+        consumeSpellSlot(actor, mmSlotLevel);
         actor.budget.actionUsed = true;
         log(state, 'action', actor.id,
           `${actor.name}'s Magic Missile was BLOCKED by ${mmTarget.name}'s Shield! (slot consumed, no damage)`,
@@ -3944,11 +3948,10 @@ export function executePlannedAction(
       // Blindness/Deafness — PHB p.219: action, 30 ft, CON save, NO
       // concentration (1 min duration). On fail: caster picks blinded (v1
       // always picks blinded — more combat-relevant than deafened).
-      const bdTargetId = plan.targetId;
-      if (!bdTargetId) break;
-      const bdTarget = bf.combatants.get(bdTargetId);
-      if (!bdTarget || bdTarget.isDead || bdTarget.isUnconscious) break;
-      executeBlindnessDeafness(actor, bdTarget, state);
+      // Upcast: +1 target/slot above 2nd.
+      const bdTargets = shouldCastBlindnessDeafness(actor, bf);
+      if (!bdTargets || bdTargets.length === 0) break;
+      executeBlindnessDeafness(actor, bdTargets, state);
       break;
     }
 

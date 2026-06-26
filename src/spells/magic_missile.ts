@@ -28,13 +28,14 @@ export const metadata = {
   level: 1,
   school: 'evocation',
   rangeFt: 120,
-  darts: 3,
+  darts: 3,                       // base at L1; upcast +1 dart/slot above 1st
   damageDie: 4,
   damageBonus: 1,    // 1d4+1 per dart
   damageType: 'force' as const,
   concentration: false,
   castingTime: 'action',
   autoHit: true,
+  magicMissileUpcastV1Implemented: true,   // +1 dart/slot-level above 1st
 } as const;
 
 // ---- Local log helper ---------------------------------------
@@ -91,13 +92,12 @@ export function execute(
   target: Combatant,
   state: EngineState,
 ): void {
-  consumeSpellSlot(caster, 1);
-
-  const dartsTotal = metadata.darts;
+  const slotLevel = consumeSpellSlot(caster, 1) ?? 1;
+  const dartsTotal = 3 + Math.max(0, slotLevel - 1);
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Magic Missile — ${dartsTotal} darts at ${target.name}!`,
+    `${caster.name} casts Magic Missile at L${slotLevel} — ${dartsTotal} darts at ${target.name}!`,
     target.id,
   );
 

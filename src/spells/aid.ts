@@ -47,7 +47,7 @@ export const metadata = {
   maxTargets: 3,
   // v1 simplification flags (mirror cantrip-workstream pattern):
   aidHPCleanupV1Implemented: false,        // 8-hr cleanup not enforced
-  aidUpcastV1Implemented: false,           // +5/slot-level not modelled
+  aidUpcastV1Implemented: true,            // +5 HP/slot-level above 2nd per target
 } as const;
 
 // ---- Local log helper ---------------------------------------
@@ -157,20 +157,21 @@ export function execute(
   targets: Combatant[],
   state: EngineState,
 ): void {
-  consumeSpellSlot(caster, 2);
+  const slotLevel = consumeSpellSlot(caster, 2) ?? 2;
+  const hpGain = 5 * (1 + Math.max(0, slotLevel - 2));
 
   const names = targets.map(t => t.name).join(', ');
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Aid on ${names} (${targets.length} creature${targets.length !== 1 ? 's' : ''})! ` +
-    `(+5 max HP, +5 current HP each)`,
+    `${caster.name} casts Aid at L${slotLevel} on ${names} (${targets.length} creature${targets.length !== 1 ? 's' : ''})! ` +
+    `(+${hpGain} max HP, +${hpGain} current HP each)`,
   );
 
   for (const target of targets) {
     // Re-check liveness (stale edge case)
     if (target.isDead || target.isUnconscious) continue;
 
-    const bonus = metadata.hpBonus;
+    const bonus = hpGain;
     target.maxHP += bonus;
     target.currentHP += bonus;
 

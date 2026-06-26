@@ -148,7 +148,7 @@ eq('NOT concentration', metadata.concentration, false);
 eq('casting time is bonusAction', metadata.castingTime, 'bonusAction');
 eq('durationRounds is 10', (metadata as any).durationRounds, 10);
 eq('subsequent attack v1 simplified flag set', metadata.spiritualWeaponSubsequentAttackV1Simplified, true);
-eq('upcast NOT implemented (v1)', metadata.spiritualWeaponUpcastV1Implemented, false);
+eq('upcast implemented (RFC-UPCASTING)', metadata.spiritualWeaponUpcastV1Implemented, true);
 eq('retargeting NOT implemented (v1)', metadata.spiritualWeaponRetargetingV1Implemented, false);
 
 // ============================================================

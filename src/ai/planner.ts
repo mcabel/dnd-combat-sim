@@ -13,6 +13,7 @@ import {
   shouldCastHex, hexPlan,
   shouldCastCureWounds, spellHealPlan,
   hasSpellSlot,
+  getLowestAvailableSlot,
 } from './resources';
 import { shouldCast as shouldCastHW } from '../spells/healing_word';
 import { shouldCast as shouldCastCW } from '../spells/cure_wounds';
@@ -715,10 +716,12 @@ function planBonusAction(
   {
     const hwTarget = shouldCastHW(self, battlefield);
     if (hwTarget) {
+      const hwSlotLevel = getLowestAvailableSlot(self, 1) ?? 1;
       return {
         type: 'healingWord',
         action: null,
         targetId: hwTarget.id,
+        castSlotLevel: hwSlotLevel,
         description: `${self.name} casts Healing Word on ${hwTarget.name}`,
       };
     }
@@ -790,10 +793,12 @@ function planBonusAction(
   if (self.actions.some(a => a.name === 'Spiritual Weapon')) {
     const swTarget = shouldCastSpiritualWeapon(self, battlefield);
     if (swTarget) {
+      const swSlotLevel = getLowestAvailableSlot(self, 2) ?? 2;
       return {
         type: 'spiritualWeapon',
         action: null,
         targetId: swTarget.id,
+        castSlotLevel: swSlotLevel,
         description: `${self.name} casts Spiritual Weapon at ${swTarget.name} (1d8 force + persistent)`,
       };
     }
@@ -1330,10 +1335,12 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
     const cwTarget = shouldCastCW(self, battlefield);
     if (cwTarget) {
       const cwAction = self.actions.find(a => a.name === 'Cure Wounds') ?? null;
+      const cwSlotLevel = getLowestAvailableSlot(self, 1) ?? 1;
       plan.action = {
         type: 'cureWounds',
         action: cwAction,
         targetId: cwTarget.id,
+        castSlotLevel: cwSlotLevel,
         description: `${self.name} casts Cure Wounds on ${cwTarget.name}`,
       };
       plan.targetId = cwTarget.id;
@@ -1388,11 +1395,13 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
   {
     const sleepTargets = shouldCastSleep(self, battlefield);
     if (sleepTargets && sleepTargets.length >= 1) {
+      const sleepSlotLevel = getLowestAvailableSlot(self, 1) ?? 1;
       plan.action = {
         type: 'sleep',
         action: null,
         targetId: sleepTargets[0].id,
         description: `${self.name} casts Sleep`,
+        castSlotLevel: sleepSlotLevel,
       };
       plan.targetId = sleepTargets[0].id;
       plan.bonusAction = planBonusAction(self, target, battlefield);
@@ -1426,11 +1435,13 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
   {
     const twTargets = shouldCastThunderwave(self, battlefield);
     if (twTargets && twTargets.length >= 2) {
+      const twSlot = getLowestAvailableSlot(self, 1);
       plan.action = {
         type: 'thunderwave',
         action: null,
         targetId: twTargets[0].id,
         description: `${self.name} casts Thunderwave`,
+        castSlotLevel: twSlot ?? 1,
       };
       plan.targetId = twTargets[0].id;
       plan.bonusAction = planBonusAction(self, target, battlefield);
@@ -1446,11 +1457,13 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
   {
     const bhTargets = shouldCastBurningHands(self, battlefield);
     if (bhTargets && bhTargets.length >= 1) {
+      const bhSlotLevel = getLowestAvailableSlot(self, 1) ?? 1;
       plan.action = {
         type: 'burningHands',
         action: null,
         targetId: bhTargets[0].id,
         description: `${self.name} casts Burning Hands`,
+        castSlotLevel: bhSlotLevel,
       };
       plan.targetId = bhTargets[0].id;
       plan.bonusAction = planBonusAction(self, target, battlefield);
@@ -1504,11 +1517,13 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
   if (!plan.action) {
     const dwTarget = shouldCastDissonantWhispers(self, battlefield);
     if (dwTarget) {
+      const dwSlotLevel = getLowestAvailableSlot(self, 1) ?? 1;
       plan.action = {
         type: 'dissonantWhispers',
         action: null,
         targetId: dwTarget.id,
         description: `${self.name} casts Dissonant Whispers on ${dwTarget.name}`,
+        castSlotLevel: dwSlotLevel,
       };
       plan.targetId = dwTarget.id;
       plan.bonusAction = planBonusAction(self, dwTarget, battlefield);
@@ -1520,11 +1535,13 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
   // Ranged spell attack, 120 ft. On hit: 4d6 radiant + next attack vs target has advantage.
   // Cleric's primary offensive spell. Fires when no AoE/control spell was chosen.
   if (!plan.action && target && shouldCastGuidingBolt(self, target, battlefield)) {
+    const gbSlotLevel = getLowestAvailableSlot(self, 1) ?? 1;
     plan.action = {
       type: 'guidingBolt',
       action: null,
       targetId: target.id,
       description: `${self.name} casts Guiding Bolt at ${target.name}`,
+      castSlotLevel: gbSlotLevel,
     };
     plan.targetId = target.id;
     plan.bonusAction = planBonusAction(self, target, battlefield);
@@ -1535,11 +1552,13 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
   // Auto-hit reliable damage. Fire when no AoE/control spell was chosen and target is in range.
   // Outperforms Fire Bolt (cantrip) in expected damage at the cost of a spell slot.
   if (!plan.action && target && shouldCastMagicMissile(self, target, battlefield)) {
+    const mmSlotLevel = getLowestAvailableSlot(self, 1) ?? 1;
     plan.action = {
       type: 'magicMissile',
       action: null,
       targetId: target.id,
       description: `${self.name} casts Magic Missile at ${target.name}`,
+      castSlotLevel: mmSlotLevel,
     };
   }
 
@@ -1560,11 +1579,13 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
   if (!plan.action && self.actions.some(a => a.name === 'Aid')) {
     const aidTargets = shouldCastAid(self, battlefield);
     if (aidTargets && aidTargets.length > 0) {
+      const aidSlotLevel = getLowestAvailableSlot(self, 2) ?? 2;
       plan.action = {
         type: 'aid',
         action: null,
         targetId: aidTargets[0].id,
         description: `${self.name} casts Aid on ${aidTargets.length} all${aidTargets.length !== 1 ? 'ies' : 'y'}`,
+        castSlotLevel: aidSlotLevel,
       };
       plan.targetId = aidTargets[0].id;
       plan.bonusAction = planBonusAction(self, target, battlefield);
@@ -1599,16 +1620,18 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
   // fires only when no concentration spell was chosen (so the caster can
   // keep their concentration slot open for Bless/Faerie Fire/Entangle).
   if (!plan.action && target && self.actions.some(a => a.name === 'Blindness/Deafness')) {
-    const bdTarget = shouldCastBlindnessDeafness(self, battlefield);
-    if (bdTarget) {
+    const bdTargets = shouldCastBlindnessDeafness(self, battlefield);
+    if (bdTargets && bdTargets.length > 0) {
+      const bdSlotLevel = getLowestAvailableSlot(self, 2) ?? 2;
       plan.action = {
         type: 'blindnessDeafness',
         action: null,
-        targetId: bdTarget.id,
-        description: `${self.name} casts Blindness/Deafness at ${bdTarget.name}`,
+        targetId: bdTargets[0].id,
+        description: `${self.name} casts Blindness/Deafness at ${bdTargets[0].name}`,
+        castSlotLevel: bdSlotLevel,
       };
-      plan.targetId = bdTarget.id;
-      plan.bonusAction = planBonusAction(self, bdTarget, battlefield);
+      plan.targetId = bdTargets[0].id;
+      plan.bonusAction = planBonusAction(self, bdTargets[0], battlefield);
       return plan;
     }
   }
@@ -2142,12 +2165,14 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
   if (!plan.action && self.actions.some(a => a.name === 'Scorching Ray')) {
     const srTargets = shouldCastScorchingRay(self, battlefield);
     if (srTargets) {
+      const srSlotLevel = getLowestAvailableSlot(self, 2) ?? 2;
       const names = srTargets.map(t => t.name).join(', ');
       plan.action = {
         type: 'scorchingRay',
         action: null,
         targetId: srTargets[0].id,
         description: `${self.name} casts Scorching Ray at ${names} (3 rays)`,
+        castSlotLevel: srSlotLevel,
       };
       plan.targetId = srTargets[0].id;
       plan.bonusAction = planBonusAction(self, srTargets[0], battlefield);
@@ -2161,12 +2186,14 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
   if (!plan.action && self.actions.some(a => a.name === 'Shatter')) {
     const shTargets = shouldCastShatter(self, battlefield);
     if (shTargets) {
+      const shSlot = getLowestAvailableSlot(self, 2);
       const names = shTargets.map(t => t.name).join(', ');
       plan.action = {
         type: 'shatter',
         action: null,
         targetId: shTargets[0].id,
         description: `${self.name} casts Shatter on ${names}`,
+        castSlotLevel: shSlot ?? 2,
       };
       plan.targetId = shTargets[0].id;
       plan.bonusAction = planBonusAction(self, shTargets[0], battlefield);
@@ -2203,10 +2230,12 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
   if (!plan.action && self.actions.some(a => a.name === 'Spiritual Weapon')) {
     const swTarget = shouldCastSpiritualWeapon(self, battlefield);
     if (swTarget) {
+      const swSlotLevel = getLowestAvailableSlot(self, 2) ?? 2;
       plan.action = {
         type: 'spiritualWeapon',
         action: null,
         targetId: swTarget.id,
+        castSlotLevel: swSlotLevel,
         description: `${self.name} casts Spiritual Weapon at ${swTarget.name}`,
       };
       plan.targetId = swTarget.id;
@@ -2956,12 +2985,14 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
       && !!fbTargets && fbTargets.length >= 2
       && hasSpellSlot(self, 3);
     if (fbTargets && !_fireballSurgeReady) {
+      const fbSlot = getLowestAvailableSlot(self, 3);
       const names = fbTargets.map(t => t.name).join(', ');
       plan.action = {
         type: 'fireball',
         action: null,
         targetId: fbTargets[0].id,
         description: `${self.name} casts Fireball on ${names}`,
+        castSlotLevel: fbSlot ?? 3,
       };
       plan.targetId = fbTargets[0].id;
       plan.bonusAction = planBonusAction(self, fbTargets[0], battlefield);
@@ -2976,12 +3007,14 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
   if (!plan.action && self.actions.some(a => a.name === 'Lightning Bolt')) {
     const lbTargets = shouldCastLightningBolt(self, battlefield);
     if (lbTargets) {
+      const lbSlot = getLowestAvailableSlot(self, 3);
       const names = lbTargets.map(t => t.name).join(', ');
       plan.action = {
         type: 'lightningBolt',
         action: null,
         targetId: lbTargets[0].id,
         description: `${self.name} casts Lightning Bolt on ${names}`,
+        castSlotLevel: lbSlot ?? 3,
       };
       plan.targetId = lbTargets[0].id;
       plan.bonusAction = planBonusAction(self, lbTargets[0], battlefield);
@@ -3017,11 +3050,13 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
   if (!plan.action && self.actions.some(a => a.name === 'Inflict Wounds')) {
     const iwTarget = shouldCastInflictWounds(self, battlefield);
     if (iwTarget) {
+      const iwSlotLevel = getLowestAvailableSlot(self, 1) ?? 1;
       plan.action = {
         type: 'inflictWounds',
         action: null,
         targetId: iwTarget.id,
         description: `${self.name} casts Inflict Wounds on ${iwTarget.name}`,
+        castSlotLevel: iwSlotLevel,
       };
       plan.targetId = iwTarget.id;
       plan.bonusAction = planBonusAction(self, iwTarget, battlefield);
@@ -3114,12 +3149,14 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
   if (!plan.action && self.actions.some(a => a.name === 'Sunburst')) {
     const sbTargets = shouldCastSunburst(self, battlefield);
     if (sbTargets) {
+      const sbSlotLevel = getLowestAvailableSlot(self, 8) ?? 8;
       const names = sbTargets.map(t => t.name).join(', ');
       plan.action = {
         type: 'sunburst',
         action: null,
         targetId: sbTargets[0].id,
         description: `${self.name} casts Sunburst on ${names}`,
+        castSlotLevel: sbSlotLevel,
       };
       plan.targetId = sbTargets[0].id;
       plan.bonusAction = planBonusAction(self, sbTargets[0], battlefield);
@@ -3403,11 +3440,13 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
   if (!plan.action && self.actions.some(a => a.name === 'Mind Spike')) {
     const msTarget = shouldCastMindSpike(self, battlefield);
     if (msTarget) {
+      const msSlotLevel = getLowestAvailableSlot(self, 2) ?? 2;
       plan.action = {
         type: 'mindSpike',
         action: null,
         targetId: msTarget.id,
         description: `${self.name} casts Mind Spike at ${msTarget.name}`,
+        castSlotLevel: msSlotLevel,
       };
       plan.targetId = msTarget.id;
       plan.bonusAction = planBonusAction(self, msTarget, battlefield);
@@ -5304,7 +5343,7 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
   if (!plan.action && self.actions.some(a => a.name === 'Dawn')) { const t = shouldCastDawn(self, battlefield); if (t) { plan.action = { type: 'dawn', action: null, targetId: t[0].id, description: `${self.name} casts Dawn` }; return plan; } }
   if (!plan.action && self.actions.some(a => a.name === 'Guardian of Faith')) { const t = shouldCastGuardianOfFaith(self, battlefield); if (t) { plan.action = { type: 'guardianOfFaith', action: null, targetId: t[0].id, description: `${self.name} casts Guardian of Faith` }; return plan; } }
   if (!plan.action && self.actions.some(a => a.name === 'Spirit Guardians')) { const t = shouldCastSpiritGuardians(self, battlefield); if (t) { plan.action = { type: 'spiritGuardians', action: null, targetId: t[0].id, description: `${self.name} casts Spirit Guardians` }; return plan; } }
-  if (!plan.action && self.actions.some(a => a.name === 'Hunger of Hadar')) { const t = shouldCastHungerOfHadar(self, battlefield); if (t) { plan.action = { type: 'hungerOfHadar', action: null, targetId: t[0].id, description: `${self.name} casts Hunger of Hadar` }; return plan; } }
+  if (!plan.action && self.actions.some(a => a.name === 'Hunger of Hadar')) { const hohSlotLevel = getLowestAvailableSlot(self, 3) ?? 3; const t = shouldCastHungerOfHadar(self, battlefield); if (t) { plan.action = { type: 'hungerOfHadar', action: null, targetId: t[0].id, description: `${self.name} casts Hunger of Hadar`, castSlotLevel: hohSlotLevel }; return plan; } }
   if (!plan.action && self.actions.some(a => a.name === 'Call Lightning')) { const t = shouldCastCallLightning(self, battlefield); if (t) { plan.action = { type: 'callLightning', action: null, targetId: t[0].id, description: `${self.name} casts Call Lightning` }; return plan; } }
   if (!plan.action && self.actions.some(a => a.name === 'Cacophonic Shield')) { const t = shouldCastCacophonicShield(self, battlefield); if (t) { plan.action = { type: 'cacophonicShield', action: null, targetId: t[0].id, description: `${self.name} casts Cacophonic Shield` }; return plan; } }
   if (!plan.action && self.actions.some(a => a.name === 'Dust Devil')) { const t = shouldCastDustDevil(self, battlefield); if (t) { plan.action = { type: 'dustDevil', action: null, targetId: t[0].id, description: `${self.name} casts Dust Devil` }; return plan; } }
@@ -6261,11 +6300,13 @@ function planExtraAction(
   if (mainWasAttack && self.actions.some(a => a.name === 'Fireball') && hasSpellSlot(self, 3)) {
     const fbTargets = shouldCastFireball(self, battlefield);
     if (fbTargets && fbTargets.length >= 2) {
+      const fbSurgeSlot = getLowestAvailableSlot(self, 3);
       return {
         type: 'fireball',
         action: null,
         targetId: fbTargets[0].id,
         description: `${self.name} uses Action Surge — casts Fireball on ${fbTargets.map(t => t.name).join(', ')} (${fbTargets.length} clustered)`,
+        castSlotLevel: fbSurgeSlot ?? 3,
       };
     }
   }

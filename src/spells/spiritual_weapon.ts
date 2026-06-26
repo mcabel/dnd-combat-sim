@@ -15,7 +15,8 @@
 //         20 feet and repeat the attack against a creature within 5 feet
 //         of it.
 //
-// Upcast: +1d8 force per slot level above 2nd (not modelled in v1).
+// Upcast: +1d8 force per TWO slot levels above 2nd.
+//         L2→1d8, L3→1d8, L4→2d8, L5→2d8, L6→3d8, L7→3d8, L8→4d8.
 //
 // v1 simplifications:
 //   - BONUS ACTION cast: PHB p.278 says "bonus action" — v1 uses
@@ -45,8 +46,6 @@
 //     (no positional AoE subsystem). The weapon is "anchored" to the
 //     target for v1's purposes. Forward-compat TODO via the metadata
 //     flag `spiritualWeaponRetargetingV1Implemented: false`.
-//   - Upcast: +1d8/slot-level NOT modelled — v1 always rolls 1d8 force.
-//     Forward-compat TODO via `spiritualWeaponUpcastV1Implemented: false`.
 //
 // Spell module pattern:
 //   shouldCast(caster, bf) → Combatant | null
@@ -75,7 +74,7 @@ export const metadata = {
   castingTime: 'bonusAction',
   durationRounds: 10,             // 1 min = 10 rounds
   spiritualWeaponSubsequentAttackV1Simplified: true,    // auto-tick (canon: bonus action attack)
-  spiritualWeaponUpcastV1Implemented: false,             // +1d8/slot-level NOT modelled
+  spiritualWeaponUpcastV1Implemented: true,              // +1d8 per TWO slot levels above 2nd (RFC-UPCASTING)
   spiritualWeaponRetargetingV1Implemented: false,        // weapon move NOT modelled
 } as const;
 
@@ -101,10 +100,10 @@ function emit(
 
 // ---- Dice helper --------------------------------------------
 
-/** Roll `metadata.dieCount`d`metadata.dieSides` and return the total. */
-export function rollDamage(): number {
+/** Roll `count`d`metadata.dieSides` and return the total. */
+export function rollDamage(count: number = metadata.dieCount): number {
   let total = 0;
-  for (let i = 0; i < metadata.dieCount; i++) total += rollDie(metadata.dieSides);
+  for (let i = 0; i < count; i++) total += rollDie(metadata.dieSides);
   return total;
 }
 
@@ -170,23 +169,14 @@ export function shouldCast(caster: Combatant, bf: Battlefield): Combatant | null
  *       Paladin). v1 uses the action's hitBonus if set, else falls back
  *       to WIS mod.
  *  3. On hit:
- *     - Roll 1d8 force, apply immediately. (v1: NO +spellcasting-mod
- *       bonus — forward-compat TODO.)
- *     - Apply a damage_zone effect (1d8 force, ticksRemaining: 10) for
- *       the persistent per-turn damage. The start-of-turn damage tick
- *       (combat.ts runCombat loop) rolls 1d8 force and decrements
- *       ticksRemaining; after 10 ticks the effect is removed.
+ *     - Roll (1 + floor(max(0, slotLevel-2)/2))d8 force, apply immediately.
+ *       Upcast: +1d8 per TWO slot levels above 2nd (PHB p.278).
+ *       L2→1d8, L4→2d8, L6→3d8, L8→4d8.
+ *     - Apply a damage_zone effect for the persistent per-turn damage.
  *  4. On miss: NO immediate damage, BUT the damage_zone effect is still
  *     attached (the weapon persists for the duration; v1 simplification
  *     — canon: a missed attack just means no damage on the cast turn,
  *     but the weapon is still there for subsequent-turn attacks).
- *     v1 simplification: the persistent damage_zone is attached on cast
- *     regardless of hit/miss. (Canon would require a fresh attack roll
- *     on subsequent turns — v1 omits that for simplicity.)
- *
- * v1 simplifications: bonus action (not action); subsequent attacks
- * simplified to auto-tick damage_zone (no attack roll); NO +spellcasting
- * damage bonus; NO weapon movement; NOT concentration; upcast NOT modelled.
  *
  * @param caster  The casting Combatant (Cleric/Paladin)
  * @param target  The candidate from shouldCast (single enemy in range)
@@ -200,11 +190,15 @@ export function execute(
   const action = caster.actions.find(a => a.name === 'Spiritual Weapon');
   const hitBonus = action?.hitBonus ?? abilityMod(caster.wis);
 
-  consumeSpellSlot(caster, 2);
+  const slotLevel = consumeSpellSlot(caster, 2) ?? 2;
+
+  // Upcast scaling: +1d8 per TWO slot levels above 2nd (PHB p.278)
+  // L2→1d8, L3→1d8, L4→2d8, L5→2d8, L6→3d8, L7→3d8, L8→4d8
+  const dieCount = 1 + Math.floor(Math.max(0, slotLevel - 2) / 2);
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Spiritual Weapon at ${target.name}! (bonus action, melee spell attack, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType} on hit + persistent damage_zone ${metadata.durationRounds} rounds)`,
+    `${caster.name} casts Spiritual Weapon at ${target.name}! (bonus action, melee spell attack, slot level ${slotLevel}, ${dieCount}d${metadata.dieSides} ${metadata.damageType} on hit + persistent damage_zone ${metadata.durationRounds} rounds)`,
     target.id,
   );
 
@@ -226,24 +220,25 @@ export function execute(
       target.id, result.roll,
     );
 
-    // 1d8 force. Crit does NOT double (fixed spell dice).
-    const dmg = rollDamage();
+    // dieCount d8 force. Crit does NOT double (fixed spell dice).
+    const dmg = rollDamage(dieCount);
     const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);
     emit(
       state, 'damage', caster.id,
-      `${target.name} takes ${dealt} ${metadata.damageType} damage from Spiritual Weapon (${metadata.dieCount}d${metadata.dieSides}=${dmg})`,
+      `${target.name} takes ${dealt} ${metadata.damageType} damage from Spiritual Weapon (${dieCount}d${metadata.dieSides}=${dmg})`,
       target.id, dealt,
     );
   }
 
-  // Apply damage_zone effect for persistent per-turn damage (1d8 force).
+  // Apply damage_zone effect for persistent per-turn damage.
+  // Use the same dieCount as the on-cast damage (upcast affects persistent too).
   // NO saveDC (automatic damage). NOT concentration. ticksRemaining: 10.
   applySpellEffect(target, {
     casterId: caster.id,
     spellName: 'Spiritual Weapon',
     effectType: 'damage_zone',
     payload: {
-      dieCount: metadata.dieCount,
+      dieCount,
       dieSides: metadata.dieSides,
       damageType: metadata.damageType,
       ticksRemaining: metadata.durationRounds,
@@ -253,7 +248,7 @@ export function execute(
 
   emit(
     state, 'condition_add', caster.id,
-    `${target.name} is threatened by a spectral weapon! (will take ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType} at the start of each of its next ${metadata.durationRounds} turns)`,
+    `${target.name} is threatened by a spectral weapon! (will take ${dieCount}d${metadata.dieSides} ${metadata.damageType} at the start of each of its next ${metadata.durationRounds} turns)`,
     target.id,
   );
 }

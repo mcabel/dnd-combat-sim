@@ -67,7 +67,7 @@ export const metadata = {
   castingTime: 'action',
   inflictWoundsReachExtensionV1Simplified: true,                   // strict 5-ft adjacency
   inflictWoundsHitBonusFromActionV1Implemented: true,              // uses action.hitBonus
-  inflictWoundsUpcastV1Implemented: false,                         // +1d10/slot-level NOT modelled
+  inflictWoundsUpcastV1Implemented: true,                          // +1d10/slot-level NOW modelled
 } as const;
 
 // ---- Local log helper ---------------------------------------
@@ -93,12 +93,12 @@ function emit(
 // ---- Dice helper --------------------------------------------
 
 /**
- * Roll `metadata.dieCount`d`metadata.dieSides` and return the total.
+ * Roll `count`d10 and return the total.
  * Crit doubles the dice (PHB p.196: "roll the dice twice").
  */
-export function rollDamage(isCrit = false): number {
+export function rollDamage(isCrit = false, count: number = metadata.dieCount): number {
   let total = 0;
-  const rolls = isCrit ? metadata.dieCount * 2 : metadata.dieCount;
+  const rolls = isCrit ? count * 2 : count;
   for (let i = 0; i < rolls; i++) total += rollDie(metadata.dieSides);
   return total;
 }
@@ -179,11 +179,12 @@ export function execute(
   // pattern (which uses INT mod for Wizard).
   const hitBonus = action?.hitBonus ?? abilityMod(caster.wis);
 
-  consumeSpellSlot(caster, 1);
+  const slotLevel = consumeSpellSlot(caster, 1) ?? 1;
+  const diceCount = metadata.dieCount + Math.max(0, slotLevel - metadata.level);
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Inflict Wounds! (melee spell attack, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType} on hit, crit doubles dice)`,
+    `${caster.name} casts Inflict Wounds! (melee spell attack, ${diceCount}d${metadata.dieSides} ${metadata.damageType} on hit, slot L${slotLevel}, crit doubles dice)`,
     target.id,
   );
 
@@ -214,12 +215,12 @@ export function execute(
     target.id, result.roll,
   );
 
-  // 3d10 necrotic damage; crit doubles the dice (PHB p.196).
-  const dmg = rollDamage(result.isCrit);
+  // 3d10 necrotic damage (upcast: +1d10/slot-level above 1st); crit doubles the dice (PHB p.196).
+  const dmg = rollDamage(result.isCrit, diceCount);
   const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);
   emit(
     state, 'damage', caster.id,
-    `Inflict Wounds: ${target.name} takes ${dealt} ${metadata.damageType} damage (${metadata.dieCount}d${metadata.dieSides}=${dmg}${result.isCrit ? ', CRIT doubled' : ''})`,
+    `Inflict Wounds: ${target.name} takes ${dealt} ${metadata.damageType} damage (${diceCount}d${metadata.dieSides}=${dmg}${result.isCrit ? ', CRIT doubled' : ''})`,
     target.id, dealt,
   );
 }
