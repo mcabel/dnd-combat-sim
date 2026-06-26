@@ -6017,23 +6017,30 @@ export function executePlannedAction(
       if (!spellName) break;
       const desc = lookupGenericSpell(spellName);
       if (!desc) break;
-      // ── Session 74: Monster daily-use spells bypass the shouldCast re-check ──
-      // The planner's selectMonsterDailySpell() already validated shouldCast
+      // ── Session 74/75: Monster spell casts bypass the shouldCast re-check ──
+      // The planner's selectMonsterDailySpell() (Phase 3) and
+      // selectMonsterSlottedSpell() (Phase 2) already validated shouldCast
       // (using a temporary synthetic action + resources, since monsters don't
       // have the spell in `actions` or `resources.spellSlots`). The re-check
       // here would fail for monsters because the synthetic state was cleaned
-      // up after planning. The daily-use consumption happened upfront in the
-      // planner (PHB p.201: "Once a spell is cast, its slot is used").
+      // up after planning. The resource consumption (daily use or spell slot)
+      // happened upfront in the planner (PHB p.201: "Once a spell is cast,
+      // its slot is used").
       //
-      // We detect monster daily casts by checking if the spell is in the
-      // actor's `monsterSpellcasting.daily` map. If so, skip shouldCast and
-      // execute directly.
+      // We detect monster spell casts by checking if the spell is in the
+      // actor's `monsterSpellcasting.daily` map OR in any of their
+      // `monsterSpellcasting.slots[N].spells` lists. If so, skip shouldCast
+      // and execute directly.
       //
       // Note: desc.execute() will call consumeSpellSlot(), which is a safe
       // no-op for monsters (returns null when `resources` is null). The
-      // daily-use tracking is separate (monsterDailyUses, consumed in planner).
+      // resource tracking is separate (monsterDailyUses / monsterSpellSlots,
+      // consumed in planner).
       const isMonsterDailyCast = !!actor.monsterSpellcasting?.daily?.[spellName];
-      if (isMonsterDailyCast || desc.shouldCast(actor, bf)) {
+      const isMonsterSlottedCast = !isMonsterDailyCast && !!actor.monsterSpellcasting?.slots &&
+        Object.values(actor.monsterSpellcasting.slots).some(s => s.spells.includes(spellName));
+      const isMonsterSpellCast = isMonsterDailyCast || isMonsterSlottedCast;
+      if (isMonsterSpellCast || desc.shouldCast(actor, bf)) {
         desc.execute(actor, state);
       }
       break;

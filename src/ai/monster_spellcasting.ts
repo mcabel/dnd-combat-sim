@@ -12,7 +12,15 @@
 //   prefer damage cantrips on full HP, defending on low HP. Returns a
 //   PlannedAction (type: 'cast') or null (fall back to weapon attacks).
 //
-// Phase 2 (DEFERRED): slot-based leveled spells, monsterSpellSlots consumption.
+// Phase 2 (Session 75): Slot-based leveled spells — `monsterSpellSlots`
+//   consumption. Iterates `monsterSpellcasting.slots[1-9].spells` (level 0
+//   = cantrips, handled by Phase 1). For each spell with a slot available,
+//   looks up the GENERIC_SPELLS registry. Runs the spell's shouldCast()
+//   gate. Computes weight via the same scoring pipeline as Phase 1/3.
+//   Consumes the slot UPFRONT and returns a PlannedAction (type:
+//   'genericSpell'). Only spells in GENERIC_SPELLS are dispatchable
+//   (77 of 373 unique slotted spells). Bespoke-only slotted spells
+//   (Fireball, Counterspell, Dispel Magic, etc.) are Phase 4+ future work.
 // Phase 3 (Session 74): daily-use spells — `monsterDailyUses` consumption.
 //   Iterates `monsterSpellcasting.daily` (spell name → uses/day). For each
 //   spell with remaining uses, looks up the GENERIC_SPELLS registry. Runs
@@ -23,7 +31,7 @@
 //   spells). Bespoke-only daily spells (Command, Hold Person, etc.) are
 //   Phase 4+ future work.
 // Phase 4 (DEFERRED): spell upcast, multi-target AoE, reaction spells,
-//   bespoke-only daily spells via name→plan-type mapping.
+//   bespoke-only daily/slotted spells via name→plan-type mapping.
 //
 // Autonomous decisions (RFC §9.1, Core + Sheet offline):
 //   #1 = A: Only cast spells with a known template (skip unimplemented).
@@ -805,25 +813,92 @@ export function selectMonsterSpell(
   return bestPlan;
 }
 
-// ---- Phase 2/3 Forward-Compat Helpers ------------------------
+// ---- Phase 2: Slot-Based Spells (Session 75) -----------------
 
 /**
- * Phase 2: Initialize `monsterSpellSlots` from `monsterSpellcasting.slots`.
- * Called at combat start (to be wired in Phase 2). Stubbed here for
- * forward-compat — does nothing in Phase 1.
+ * Phase 2 (Session 75): Initialize `monsterSpellSlots` from
+ * `monsterSpellcasting.slots`.
+ *
+ * For each slot level 1-9, populates `monster.monsterSpellSlots[level] =
+ * { max, remaining: max }`. Level 0 (cantrips) are at-will and NOT tracked.
+ *
+ * Idempotent: if `monsterSpellSlots` is already populated, this is a no-op
+ * (prevents accidental reset mid-combat). Callers may safely call this
+ * multiple times.
+ *
+ * RFC §5.3: "At combat start (in runCombat() or monsterToCombatant()),
+ * initialize monsterSpellSlots from monsterSpellcasting.slots."
+ *
+ * v1 implementation note: Called LAZILY from selectMonsterSlottedSpell()
+ * on the first invocation for each monster (same pattern as Phase 3's
+ * initMonsterDailyUses). This avoids touching combat.ts init paths.
  */
-export function initMonsterSpellSlots(_monster: Combatant): void {
-  // Phase 2: populate monster.monsterSpellSlots from monsterSpellcasting.slots.
-  // Phase 1: no-op (at-will + cantrips don't consume slots).
+export function initMonsterSpellSlots(monster: Combatant): void {
+  const sc = monster.monsterSpellcasting;
+  if (!sc?.slots) return;
+  // Idempotent guard: don't reset an already-initialized tracker.
+  if (monster.monsterSpellSlots) return;
+  monster.monsterSpellSlots = {};
+  for (let lvl = 1; lvl <= 9; lvl++) {
+    const slotData = sc.slots[lvl];
+    if (!slotData || slotData.max <= 0) continue;
+    const safeMax = Math.max(0, Number(slotData.max) || 0);
+    if (safeMax === 0) continue;
+    monster.monsterSpellSlots[lvl] = { max: safeMax, remaining: safeMax };
+  }
 }
 
 /**
- * Phase 2: Consume a monster spell slot of the given level.
- * Stubbed for forward-compat. Phase 1 doesn't call this.
+ * Phase 2 (Session 75): Check if the monster has at least one spell slot
+ * available at or above the given minimum level. Returns false if the
+ * monster has no `monsterSpellSlots` field or no slots remain.
+ *
+ * Mirrors `hasSpellSlot()` from resources.ts, but checks monster slots
+ * instead of PC resources.
  */
-export function consumeMonsterSpellSlot(_monster: Combatant, _level: number): boolean {
-  // Phase 2: decrement monster.monsterSpellSlots[level].remaining.
-  return true;  // Phase 1: always "succeeds" (at-will = infinite)
+export function hasMonsterSpellSlot(
+  monster: Combatant,
+  minLevel = 1,
+): boolean {
+  if (!monster.monsterSpellSlots) return false;
+  for (let lvl = minLevel; lvl <= 9; lvl++) {
+    const slot = monster.monsterSpellSlots[lvl];
+    if (slot && slot.remaining > 0) return true;
+  }
+  return false;
+}
+
+/**
+ * Phase 2 (Session 75): Consume a monster spell slot of the given level
+ * (or higher if the exact level is exhausted — upcast).
+ *
+ * Decrements `monster.monsterSpellSlots[level].remaining` by 1. If no slot
+ * remains at the exact level, tries higher levels (upcast per PHB p.201).
+ * Returns the slot level actually consumed, or null if no slot is available.
+ *
+ * Mirrors `consumeSpellSlot()` from resources.ts, but checks monster slots
+ * instead of PC resources. Does NOT handle Warlock pact slots (monsters
+ * don't have those).
+ *
+ * v1 design: called from selectMonsterSlottedSpell() BEFORE returning the
+ * plan (upfront consumption, matching Phase 3's daily-use pattern and
+ * PHB p.201: "Once a spell is cast, its slot is used regardless of whether
+ * the spell succeeds").
+ */
+export function consumeMonsterSpellSlot(
+  monster: Combatant,
+  desiredLevel: number,
+): number | null {
+  if (!monster.monsterSpellSlots) return null;
+  // Try desired level first, then higher (upcast)
+  for (let lvl = desiredLevel; lvl <= 9; lvl++) {
+    const slot = monster.monsterSpellSlots[lvl];
+    if (slot && slot.remaining > 0) {
+      slot.remaining--;
+      return lvl;
+    }
+  }
+  return null;
 }
 
 // ---- Phase 3: Daily-Use Spells (Session 74) ------------------
@@ -1194,6 +1269,233 @@ export function selectMonsterDailySpell(
   // whether the spell succeeds." Daily uses follow the same rule.
   if (bestPlan && bestName) {
     consumeMonsterDailyUse(self, bestName);
+  }
+
+  return bestPlan;
+}
+
+// ---- Phase 2: Main Entry — selectMonsterSlottedSpell --------
+
+/**
+ * Phase 2 (Session 75): Select the best slot-based leveled spell for a
+ * monster to cast this turn.
+ *
+ * Algorithm (RFC §4.3, Phase 2 subset):
+ *   1. Guard: monster has `monsterSpellcasting.slots` with at least one
+ *      leveled slot (1-9) remaining.
+ *   2. Lazy-init `monsterSpellSlots` on first call (idempotent).
+ *   3. For each slot level 1-9, for each spell in that level's spell list:
+ *      a. Check `hasMonsterSpellSlot(self, spellLevel)` (skip if no slots).
+ *      b. Look up in GENERIC_SPELLS via `lookupGenericSpell(spellName)`.
+ *         Skip if not found (bespoke-only spells are Phase 4+ future work).
+ *      c. Call `desc.shouldCast(self, bf)` to verify castability (range,
+ *         concentration conflicts, target availability, etc.).
+ *      d. Derive tags via `getDailySpellTags(spellName)` (reused from Phase 3).
+ *      e. Compute weight (baseWeight × tagMultiplier × pattern biases).
+ *   4. Pick the highest-weight spell. Ties → highest spell level, then
+ *      alphabetical.
+ *   5. Consume the spell slot UPFRONT (PHB p.201: slot used regardless of
+ *      outcome). Uses `consumeMonsterSpellSlot(self, spellLevel)` which
+ *      tries the exact level first, then upcasts to higher levels.
+ *   6. Return a `PlannedAction { type: 'genericSpell', spellName,
+ *      castSlotLevel }`.
+ *
+ * Returns null if:
+ *   - No `monsterSpellcasting.slots`.
+ *   - All slots exhausted.
+ *   - No slotted spell is in GENERIC_SPELLS (bespoke-only spells skipped).
+ *   - No slotted spell passes shouldCast().
+ *   - No living enemies AND no downed allies (most spells need a target).
+ *
+ * Dispatch path: same as Phase 3 — combat.ts `case 'genericSpell':` →
+ * `lookupGenericSpell(plan.spellName)` → `desc.shouldCast(actor, bf)` →
+ * `desc.execute(actor, state)`. The shouldCast re-check is bypassed for
+ * monster spell casts (planner already validated; synthetic state cleaned
+ * up). The slot consumption happens here (in the planner), not in execute()
+ * — execute()'s `consumeSpellSlot()` is a safe no-op for monsters.
+ *
+ * v1 scope (Session 75):
+ *   - Only slotted spells in GENERIC_SPELLS (77 of 373 unique slotted
+ *     spells). Bespoke-only slotted spells (Fireball, Counterspell, Dispel
+ *     Magic, etc.) are deferred to Phase 4.
+ *   - Slots consumed upfront in the planner (matches Phase 3 pattern).
+ *   - `castSlotLevel` set to the slot level consumed (for Counterspell /
+ *     GoI accuracy, per RFC-UPCASTING Phase 1). Note: if the exact level
+ *     is exhausted, the spell is upcast to a higher level.
+ *   - Pattern biases: simplified collection (same as Phase 3).
+ *   - Does NOT upcast for penetration (RFC-UPCASTING Phase 5's
+ *     selectCastSlot is PC-only; monster upcast-for-penetration is Phase 4+).
+ */
+export function selectMonsterSlottedSpell(
+  self: Combatant,
+  bf: Battlefield,
+): PlannedAction | null {
+  const sc = self.monsterSpellcasting;
+  if (!sc?.slots) return null;
+
+  // Lazy-init the spell-slots tracker (idempotent).
+  if (!self.monsterSpellSlots) {
+    initMonsterSpellSlots(self);
+  }
+  // Re-check after init (init may have been a no-op if slots were empty).
+  if (!self.monsterSpellSlots) return null;
+
+  // Quick bail: if no slots remain at any level, skip.
+  if (!hasMonsterSpellSlot(self, 1)) return null;
+
+  // Build the context once.
+  const ctx = computeSpellcastContext(self, bf);
+
+  // If no living enemies AND no downed allies, bail — most slotted spells
+  // need a target. (Self-buffs like Fly could fire with no enemies, but
+  // they're low-value without a fight. v1: skip.)
+  if (ctx.enemyCount === 0 && !ctx.hasDownedAlly) return null;
+
+  // Find a target enemy (used for offensive spells + finisher bonus).
+  const target = findDailySpellTarget(self, bf);
+
+  // ── Synthetic action + resources for shouldCast compatibility ──
+  // Same shim as Phase 3: temporarily add synthetic Actions for each
+  // slotted spell + set synthetic resources with all slots available.
+  // Cleaned up in the `finally` block.
+  const syntheticActions: Action[] = [];
+  for (let lvl = 1; lvl <= 9; lvl++) {
+    const slotData = sc.slots[lvl];
+    if (!slotData?.spells) continue;
+    for (const spellName of slotData.spells) {
+      if (self.actions.some(a => a.name === spellName)) continue;
+      const desc = lookupGenericSpell(spellName);
+      if (!desc) continue;
+      syntheticActions.push({
+        name: spellName,
+        isMultiattack: false,
+        attackType: 'spell',
+        reach: 0, range: null,
+        hitBonus: 0,
+        damage: { count: 0, sides: 0, bonus: 0, average: 0 },
+        damageType: 'force',
+        saveDC: null, saveAbility: null,
+        isAoE: false, isControl: false,
+        requiresConcentration: false,
+        slotLevel: desc.level,
+        costType: 'action', legendaryCost: 0,
+        description: `${spellName} (monster slotted — synthetic)`,
+      } as Action);
+    }
+  }
+  if (syntheticActions.length > 0) {
+    self.actions.push(...syntheticActions);
+  }
+  // Synthetic resources: all slots available (so hasSpellSlot returns true).
+  const originalResources = self.resources;
+  if (!originalResources) {
+    self.resources = {
+      spellSlots: {
+        1: { max: 4, remaining: 4 },
+        2: { max: 3, remaining: 3 },
+        3: { max: 3, remaining: 3 },
+        4: { max: 3, remaining: 3 },
+        5: { max: 2, remaining: 2 },
+        6: { max: 1, remaining: 1 },
+        7: { max: 1, remaining: 1 },
+        8: { max: 1, remaining: 1 },
+        9: { max: 1, remaining: 1 },
+      },
+    } as any;
+  }
+
+  let bestPlan: PlannedAction | null = null;
+  let bestWeight = 0;
+  let bestLevel = -1;      // spell's GENERIC_SPELLS level (for tie-breaking)
+  let bestSlotLevel = -1;  // slot level from iteration (for consumption)
+  let bestName = '';
+
+  try {
+    for (let lvl = 1; lvl <= 9; lvl++) {
+      const slotData = sc.slots[lvl];
+      if (!slotData?.spells) continue;
+
+      for (const spellName of slotData.spells) {
+        // Skip if no slot available at this level (or higher for upcast).
+        if (!hasMonsterSpellSlot(self, lvl)) continue;
+
+        // Look up in GENERIC_SPELLS (dispatch path).
+        const desc = lookupGenericSpell(spellName);
+        if (!desc) continue;  // bespoke-only — Phase 4 future work
+
+        // Run the spell's shouldCast gate.
+        let shouldCastResult = false;
+        try {
+          shouldCastResult = desc.shouldCast(self, bf);
+        } catch {
+          continue;
+        }
+        if (!shouldCastResult) continue;
+
+        // Derive tags for weighted scoring (reuse Phase 3's helper).
+        const tags = getDailySpellTags(spellName);
+        if (tags.length === 0 || tags[0] === 'utility') continue;
+
+        // Compute weight.
+        const avgDmg = 0;
+        const targetHP = target?.currentHP ?? 100;
+
+        const biases = collectCantripBiases(
+          ctx, bf, self, target ?? self, tags, avgDmg,
+          false, undefined,
+        );
+
+        const weight = computeSpellWeight(
+          spellName, tags, desc.level, avgDmg, ctx, targetHP, biases,
+        );
+
+        // Tie-breaking: higher weight wins; ties → higher spell level, then alpha.
+        if (weight > bestWeight
+            || (weight === bestWeight && weight > 0
+                && (desc.level > bestLevel
+                    || (desc.level === bestLevel && spellName < bestName)))) {
+          bestWeight = weight;
+          bestLevel = desc.level;
+          bestSlotLevel = lvl;
+          bestName = spellName;
+
+          bestPlan = {
+            type: 'genericSpell',
+            action: null,
+            targetId: target?.id ?? self.id,
+            description: `${self.name} casts ${spellName} (L${lvl} slot)`,
+            spellName,
+            // RFC-UPCASTING Phase 1: castSlotLevel tracks the slot level
+            // consumed (may be higher than spell base level if upcast).
+            // Set below after consumption.
+            castSlotLevel: lvl,
+          };
+        }
+      }
+    }
+  } finally {
+    // ── Cleanup: remove synthetic actions + restore resources ──
+    if (syntheticActions.length > 0) {
+      const syntheticNames = new Set(syntheticActions.map(a => a.name));
+      self.actions = self.actions.filter(a => !syntheticNames.has(a.name));
+    }
+    if (!originalResources) {
+      self.resources = null;
+    }
+  }
+
+  // Consume the spell slot UPFRONT (before returning the plan).
+  // PHB p.201: "Once a spell is cast, its slot is used regardless of
+  // whether the spell succeeds." Uses consumeMonsterSpellSlot which tries
+  // the slot level the spell is prepared at first, then upcasts to higher
+  // levels if that level is exhausted.
+  if (bestPlan && bestName) {
+    const consumedLevel = consumeMonsterSpellSlot(self, bestSlotLevel);
+    if (consumedLevel !== null) {
+      // Update castSlotLevel to the actual slot consumed (may be higher
+      // if upcast due to exact-level exhaustion).
+      bestPlan.castSlotLevel = consumedLevel;
+    }
   }
 
   return bestPlan;

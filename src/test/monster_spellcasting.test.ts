@@ -567,24 +567,48 @@ console.log('\n=== 15. Backward-compat — non-spellcasting monster unaffected =
 }
 
 // ============================================================
-console.log('\n=== 16. Phase 2/3 forward-compat stubs ===\n');
+console.log('\n=== 16. Phase 2/3 resource tracking (Session 74/75) ===\n');
 // ============================================================
 
 {
   const lich = makeLichLike();
-  // Phase 2/3 init functions are no-ops in Phase 1 (should not throw).
-  // Import them dynamically to avoid polluting the top-level import (they're stubs).
   const ms = require('../ai/monster_spellcasting');
   const initMonsterSpellSlots = ms.initMonsterSpellSlots;
   const initMonsterDailyUses = ms.initMonsterDailyUses;
   const consumeMonsterSpellSlot = ms.consumeMonsterSpellSlot;
+  const hasMonsterSpellSlot = ms.hasMonsterSpellSlot;
 
-  initMonsterSpellSlots(lich);  // no-op
-  initMonsterDailyUses(lich);   // no-op
-  eq('16a: Phase 1 monsterSpellSlots absent (Phase 2 will populate)', lich.monsterSpellSlots, undefined);
-  eq('16b: Phase 1 monsterDailyUses absent (Phase 3 will populate)', lich.monsterDailyUses, undefined);
-  eq('16c: consumeMonsterSpellSlot returns true (Phase 1: at-will = infinite)',
-    consumeMonsterSpellSlot(lich, 1), true);
+  // Phase 2 (Session 75): initMonsterSpellSlots now populates from slots.
+  initMonsterSpellSlots(lich);
+  // makeLichLike has slots: { 0: cantrips, 1: {max:4} } (simplified for Phase 1 tests)
+  assert('16a: Phase 2 monsterSpellSlots populated', lich.monsterSpellSlots !== undefined);
+  if (lich.monsterSpellSlots) {
+    eq('16a-i: L1 slots max = 4', lich.monsterSpellSlots[1]?.max, 4);
+    eq('16a-ii: L1 slots remaining = 4 (full on init)', lich.monsterSpellSlots[1]?.remaining, 4);
+    // Level 0 (cantrips) should NOT be tracked (at-will)
+    eq('16a-iii: L0 slots not tracked (at-will)', lich.monsterSpellSlots[0], undefined);
+  }
+
+  // Phase 3 (Session 74): initMonsterDailyUses is still a no-op for the Lich
+  // (Lich has no daily field — uses slots, not daily-use spells).
+  initMonsterDailyUses(lich);
+  eq('16b: Lich (no daily) has monsterDailyUses undefined', lich.monsterDailyUses, undefined);
+
+  // Phase 2 (Session 75): consumeMonsterSpellSlot now returns number|null.
+  // Consuming an L1 slot should return 1 and decrement remaining.
+  eq('16c-i: consumeMonsterSpellSlot(L1) returns 1', consumeMonsterSpellSlot(lich, 1), 1);
+  eq('16c-ii: L1 remaining = 3 after consume', lich.monsterSpellSlots[1].remaining, 3);
+  // hasMonsterSpellSlot checks
+  assert('16c-iii: hasMonsterSpellSlot(1) true (3 remaining)', hasMonsterSpellSlot(lich, 1));
+  // Consume remaining 3 L1 slots
+  consumeMonsterSpellSlot(lich, 1);
+  consumeMonsterSpellSlot(lich, 1);
+  consumeMonsterSpellSlot(lich, 1);
+  eq('16c-iv: L1 remaining = 0 after 4 consumes', lich.monsterSpellSlots[1].remaining, 0);
+  // No higher slots available → consume returns null (no upcast possible)
+  eq('16c-v: consumeMonsterSpellSlot(L1) returns null when L1 exhausted and no higher slots',
+    consumeMonsterSpellSlot(lich, 1), null);
+  assert('16c-vi: hasMonsterSpellSlot(1) false (all slots exhausted)', !hasMonsterSpellSlot(lich, 1));
 }
 
 // ============================================================

@@ -372,7 +372,7 @@ import { GENERIC_SPELL_LIST } from '../spells/_generic_registry';
 // ── Session 42 Task #18 — Thirsting Blade check ──
 import { hasInvocation } from '../spells/_invocations';
 // ── Session 63 RFC-MONSTER-SPELLCASTING Phase 1 — monster cantrip casting ──
-import { selectMonsterSpell, selectMonsterDailySpell } from './monster_spellcasting';
+import { selectMonsterSpell, selectMonsterDailySpell, selectMonsterSlottedSpell } from './monster_spellcasting';
 // ── Session 43 Task #24 — Extra Attack feature check ──
 import { hasFeature } from '../characters/builder';
 import { selectAction, selfPreserveDecision, selectLegendaryAction, isActionAvailable } from './actions';
@@ -5807,6 +5807,32 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
         plan.bonusAction = planBonusAction(self, gustTarget, battlefield);
         return plan;
       }
+    }
+  }
+
+  // === SESSION 75 — MONSTER SLOTTED SPELLS (RFC-MONSTER-SPELLCASTING Phase 2) ===
+  // Monsters with `monsterSpellcasting.slots` (478 creatures) have spell
+  // slots L1-9 with prepared spells (e.g. Lich: 4×L1, 3×L2, ..., 1×L9;
+  // Mage: 4×L1, 3×L2, 3×L3, 3×L4, 1×L5). This branch selects the
+  // highest-weighted available slotted spell and returns it as a
+  // 'genericSpell' PlannedAction. Spell slots are consumed UPFRONT
+  // (PHB p.201).
+  //
+  // Sits ABOVE the daily spell branch (Phase 3) because slotted spells are
+  // the "primary" spellcasting mechanic (Lich, Mage, Priest use slots,
+  // not daily). Most monsters have EITHER slots OR daily, not both.
+  // Sits BELOW all bespoke spell branches.
+  //
+  // v1 scope: only slotted spells in GENERIC_SPELLS (77 of 373 unique).
+  // Bespoke-only slotted spells (Fireball, Counterspell, Dispel Magic,
+  // etc.) are silently skipped — Phase 4+ future work.
+  if (!plan.action && self.monsterSpellcasting?.slots) {
+    const slottedPlan = selectMonsterSlottedSpell(self, battlefield);
+    if (slottedPlan) {
+      plan.action = slottedPlan;
+      plan.targetId = slottedPlan.targetId ?? null;
+      plan.bonusAction = planBonusAction(self, target, battlefield);
+      return plan;
     }
   }
 
