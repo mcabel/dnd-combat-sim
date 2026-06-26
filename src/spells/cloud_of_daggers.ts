@@ -56,7 +56,7 @@
 
 import { Combatant, Battlefield } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
-import { applySpellEffect, removeEffectsFromCaster } from '../engine/spell_effects';
+import { applySpellEffect, removeEffectsFromCaster, isProtectedByGoI } from '../engine/spell_effects';
 import { startConcentration, rollDie, applyDamageWithTempHP } from '../engine/utils';
 import { chebyshev3D } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
@@ -208,7 +208,7 @@ export function execute(
   target: Combatant,
   state: EngineState,
 ): void {
-  consumeSpellSlot(caster, 2);
+  const slotLevel = consumeSpellSlot(caster, 2) ?? 2;
 
   // Safety: clean up any stale concentration before starting new
   if (caster.concentration?.active) {
@@ -225,24 +225,46 @@ export function execute(
   // Re-check liveness (stale edge case)
   if (target.isDead || target.isUnconscious) return;
 
+  // Session 78 (GoI AoE exclusion follow-up): PHB p.245: "the spell has no
+  // effect on them." The spell still fires (slot already consumed above).
+  // For persistent damage zones, the damage_zone EFFECT is applied to the
+  // target (so it can tick later if GoI expires), but the ON-CAST damage is
+  // skipped if the target is GoI-protected. The caster's own GoI does NOT
+  // block their own spell (PHB p.245: "cast from outside the barrier").
+  const goiBlocked = target.id !== caster.id && isProtectedByGoI(target, slotLevel);
+
   // 1. Immediate damage on cast (the "enters the area for the first
   //    time on a turn" trigger — the target is in the area when the
-  //    spell is cast).
-  const immediateDmg = rollDamage();
-  const dealtImmediate = applyDamageWithTempHP(target, immediateDmg, metadata.damageType);
-  emit(
-    state, 'damage', caster.id,
-    `${target.name} takes ${dealtImmediate} ${metadata.damageType} damage from Cloud of Daggers (on cast: ${metadata.dieCount}d${metadata.dieSides}=${immediateDmg})`,
-    target.id, dealtImmediate,
-  );
+  //    spell is cast). Skipped if GoI-protected.
+  if (!goiBlocked) {
+    const immediateDmg = rollDamage();
+    const dealtImmediate = applyDamageWithTempHP(target, immediateDmg, metadata.damageType);
+    emit(
+      state, 'damage', caster.id,
+      `${target.name} takes ${dealtImmediate} ${metadata.damageType} damage from Cloud of Daggers (on cast: ${metadata.dieCount}d${metadata.dieSides}=${immediateDmg})`,
+      target.id, dealtImmediate,
+    );
+  } else {
+    emit(
+      state, 'damage', caster.id,
+      `${target.name} is protected by Globe of Invulnerability — on-cast damage negated (persistent effect still applied, will tick when GoI expires).`,
+      target.id, 0,
+    );
+  }
 
   // 2. Apply damage_zone effect for persistent start-of-turn damage
   //    (the "starts its turn there" trigger). The start-of-turn damage
   //    tick is in combat.ts's runCombat loop, right after resetBudget.
+  //    ALWAYS applied (even to GoI-protected targets) so the spell can start
+  //    ticking if GoI expires later. sourceSlotLevel is set so the combat.ts
+  //    damage_zone tick loop can re-check GoI protection on each per-turn
+  //    tick (PHB p.245: the spell continues to have no effect on GoI-
+  //    protected creatures for as long as GoI is active).
   applySpellEffect(target, {
     casterId: caster.id,
     spellName: 'Cloud of Daggers',
     effectType: 'damage_zone',
+    sourceSlotLevel: slotLevel,
     payload: {
       dieCount: metadata.dieCount,
       dieSides: metadata.dieSides,

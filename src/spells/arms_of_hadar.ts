@@ -37,6 +37,7 @@ import { rollSaveReactable, CombatEvent, EngineState } from '../engine/combat';
 import { rollDie, applyDamage } from '../engine/utils';
 import { euclideanDistFt } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
+import { filterGoIProtectedTargets } from '../engine/spell_effects';
 
 // ---- Metadata -----------------------------------------------
 
@@ -127,14 +128,21 @@ export function execute(
   const action = caster.actions.find(a => a.name === 'Arms of Hadar');
   const saveDC = action?.saveDC ?? 13;
 
-  consumeSpellSlot(caster, 1);
+  const slotLevel = consumeSpellSlot(caster, 1) ?? 1;
+
+  // Session 78 (GoI AoE exclusion follow-up): exclude targets protected by
+  // Globe of Invulnerability from this AoE. PHB p.245: "the spell has no
+  // effect on them." The spell still fires (slot already consumed above);
+  // protected targets are simply skipped in the damage loop.
+  const effectiveTargets = filterGoIProtectedTargets(targets, slotLevel, caster.id);
+  const excludedCount = targets.length - effectiveTargets.length;
 
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Arms of Hadar (DC ${saveDC} STR) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} in the 10-ft radius!`,
+    `${caster.name} casts Arms of Hadar (DC ${saveDC} STR) — ${effectiveTargets.length} creature${effectiveTargets.length !== 1 ? 's' : ''} in the 10-ft radius${excludedCount > 0 ? ` (${excludedCount} excluded by Globe of Invulnerability)` : ''}!`,
   );
 
-  for (const target of targets) {
+  for (const target of effectiveTargets) {
     if (target.isDead || target.isUnconscious) continue;
 
     const save = rollSaveReactable(state, caster, target, 'str', saveDC);

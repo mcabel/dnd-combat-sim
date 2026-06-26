@@ -48,7 +48,7 @@
 
 import { Combatant, Battlefield, DamageType, Vec3 } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
-import { applySpellEffect, removeEffectsFromCaster } from '../engine/spell_effects';
+import { applySpellEffect, removeEffectsFromCaster, filterGoIProtectedTargets, isProtectedByGoI } from '../engine/spell_effects';
 import { startConcentration, rollDie, applyDamageWithTempHP, elementalAffinityBonus } from '../engine/utils';
 import { chebyshev3D } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
@@ -192,6 +192,7 @@ export function execute(
   state: EngineState,
 ): void {
   consumeSpellSlot(caster, 3);
+  const slotLevel = 3;
 
   if (caster.concentration?.active) {
     removeEffectsFromCaster(caster.id, state.battlefield);
@@ -199,34 +200,63 @@ export function execute(
   startConcentration(caster, 'Call Lightning');
 
   const names = targets.map(t => t.name).join(', ');
+
+  // Session 78 (GoI AoE exclusion follow-up): PHB p.245: "the spell has no
+  // effect on them." The spell still fires (slot already consumed above).
+  // For persistent damage zones, the damage_zone EFFECT is applied to ALL
+  // targets in range (so it can tick later if GoI expires), but the ON-CAST
+  // damage is skipped for GoI-protected targets. The combat.ts damage_zone
+  // tick loop re-checks GoI on each per-turn tick using sourceSlotLevel.
+  const effectiveTargets = filterGoIProtectedTargets(targets, slotLevel, caster.id);
+  const excludedCount = targets.length - effectiveTargets.length;
+
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Call Lightning! A storm cloud gathers, and a bolt strikes (${targets.length} enem${targets.length !== 1 ? 'ies' : 'y'} in range: ${names}) — ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}, no save`,
+    `${caster.name} casts Call Lightning! A storm cloud gathers, and a bolt strikes (${effectiveTargets.length} enem${effectiveTargets.length !== 1 ? 'ies' : 'y'} in range: ${names}) — ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}, no save${excludedCount > 0 ? ` (${excludedCount} excluded by Globe of Invulnerability)` : ''}`,
   );
 
   for (const target of targets) {
     if (target.isDead || target.isUnconscious) continue;
 
+    // Session 78: check GoI protection per-target. The caster's own GoI does
+    // NOT block their own spell (PHB p.245: "cast from outside the barrier").
+    const goiBlocked = target.id !== caster.id && isProtectedByGoI(target, slotLevel);
+
     // 1. Immediate on-cast damage (3d10 lightning, no save).
+    //    Skipped if the target is GoI-protected (PHB p.245: "no effect on them").
     // Session 50 Task #29-follow-up-5c-3: Elemental Affinity (Draconic
     // Sorcerer 6) adds CHA mod to the lightning damage if the caster's
     // ancestry is lightning. No save → no halving. The damage_zone tick
     // (start-of-turn bolt) does NOT get EA — the tick handler has no
     // caster context.
-    const eaBonus = elementalAffinityBonus(caster, metadata.damageType);
-    const immediateDmg = rollDamage() + eaBonus;
-    const dealtImmediate = applyDamageWithTempHP(target, immediateDmg, metadata.damageType);
-    emit(
-      state, 'damage', caster.id,
-      `${target.name} takes ${dealtImmediate} ${metadata.damageType} damage from Call Lightning bolt (on cast: ${metadata.dieCount}d${metadata.dieSides}=${immediateDmg})`,
-      target.id, dealtImmediate,
-    );
+    if (!goiBlocked) {
+      const eaBonus = elementalAffinityBonus(caster, metadata.damageType);
+      const immediateDmg = rollDamage() + eaBonus;
+      const dealtImmediate = applyDamageWithTempHP(target, immediateDmg, metadata.damageType);
+      emit(
+        state, 'damage', caster.id,
+        `${target.name} takes ${dealtImmediate} ${metadata.damageType} damage from Call Lightning bolt (on cast: ${metadata.dieCount}d${metadata.dieSides}=${immediateDmg})`,
+        target.id, dealtImmediate,
+      );
+    } else {
+      emit(
+        state, 'damage', caster.id,
+        `${target.name} is protected by Globe of Invulnerability — on-cast damage negated (persistent effect still applied, will tick when GoI expires).`,
+        target.id, 0,
+      );
+    }
 
     // 2. Apply damage_zone effect for persistent start-of-turn damage.
+    //    ALWAYS applied (even to GoI-protected targets) so the spell can start
+    //    ticking if GoI expires later. sourceSlotLevel is set so the combat.ts
+    //    damage_zone tick loop can re-check GoI protection on each per-turn
+    //    tick (PHB p.245: the spell continues to have no effect on GoI-
+    //    protected creatures for as long as GoI is active).
     applySpellEffect(target, {
       casterId: caster.id,
       spellName: 'Call Lightning',
       effectType: 'damage_zone',
+      sourceSlotLevel: slotLevel,
       payload: {
         dieCount: metadata.dieCount,
         dieSides: metadata.dieSides,
@@ -246,7 +276,7 @@ export function execute(
   // each of the caster's turns (v1: automatic movement toward highest-threat
   // enemy, no action cost — canon requires an action to call down another bolt).
   // Use the first target's position as the initial center (the strike point).
-  const centerTarget = targets.find(t => !t.isDead && !t.isUnconscious) ?? targets[0];
+  const centerTarget = effectiveTargets.find(t => !t.isDead && !t.isUnconscious) ?? targets[0];
   caster._movingZone = {
     spellName: 'Call Lightning',
     centerX: centerTarget.pos.x,

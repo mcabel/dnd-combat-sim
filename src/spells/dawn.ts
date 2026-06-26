@@ -40,7 +40,7 @@
 
 import { Combatant, Battlefield, DamageType, AbilityScore, Vec3 } from '../types/core';
 import { rollSaveReactable, CombatEvent, EngineState } from '../engine/combat';
-import { applySpellEffect, removeEffectsFromCaster } from '../engine/spell_effects';
+import { applySpellEffect, removeEffectsFromCaster, filterGoIProtectedTargets, isProtectedByGoI } from '../engine/spell_effects';
 import { startConcentration, rollDie, applyDamageWithTempHP } from '../engine/utils';
 import { chebyshev3D } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
@@ -184,6 +184,7 @@ export function execute(
   const saveDC = action?.saveDC ?? 13;
 
   consumeSpellSlot(caster, 5);
+  const slotLevel = 5;
 
   if (caster.concentration?.active) {
     removeEffectsFromCaster(caster.id, state.battlefield);
@@ -191,38 +192,67 @@ export function execute(
   startConcentration(caster, 'Dawn');
 
   const names = targets.map(t => t.name).join(', ');
+
+  // Session 78 (GoI AoE exclusion follow-up): PHB p.245: "the spell has no
+  // effect on them." The spell still fires (slot already consumed above).
+  // For persistent damage zones, the damage_zone EFFECT is applied to ALL
+  // targets in range (so it can tick later if GoI expires), but the ON-CAST
+  // damage is skipped for GoI-protected targets. The combat.ts damage_zone
+  // tick loop re-checks GoI on each per-turn tick using sourceSlotLevel.
+  const effectiveTargets = filterGoIProtectedTargets(targets, slotLevel, caster.id);
+  const excludedCount = targets.length - effectiveTargets.length;
+
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Dawn! A cylinder of sunlight blazes down (${targets.length} enem${targets.length !== 1 ? 'ies' : 'y'}: ${names}) — DC ${saveDC} CON, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}, half on save`,
+    `${caster.name} casts Dawn! A cylinder of sunlight blazes down (${effectiveTargets.length} enem${effectiveTargets.length !== 1 ? 'ies' : 'y'}: ${names}) — DC ${saveDC} CON, ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}, half on save${excludedCount > 0 ? ` (${excludedCount} excluded by Globe of Invulnerability)` : ''}`,
   );
 
   for (const target of targets) {
     if (target.isDead || target.isUnconscious) continue;
 
-    // 1. Immediate on-cast damage: CON save for half.
-    const save = rollSaveReactable(state, caster, target, metadata.saveAbility, saveDC);
-    const fullDmg = rollDamage();
-    const dmg = save.success ? Math.floor(fullDmg / 2) : fullDmg;
-    const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);
+    // Session 78: check GoI protection per-target. The caster's own GoI does
+    // NOT block their own spell (PHB p.245: "cast from outside the barrier").
+    const goiBlocked = target.id !== caster.id && isProtectedByGoI(target, slotLevel);
 
-    emit(
-      state,
-      save.success ? 'save_success' : 'save_fail',
-      caster.id,
-      `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} CON save vs Dawn (rolled ${save.total}) — ${dealt} ${metadata.damageType} damage (${metadata.dieCount}d${metadata.dieSides}=${fullDmg}${save.success ? ', halved' : ''})`,
-      target.id, save.roll,
-    );
-    emit(
-      state, 'damage', caster.id,
-      `${target.name} takes ${dealt} ${metadata.damageType} damage from Dawn (on cast)`,
-      target.id, dealt,
-    );
+    // 1. Immediate on-cast damage: CON save for half.
+    //    Skipped if the target is GoI-protected (PHB p.245: "no effect on them").
+    if (!goiBlocked) {
+      const save = rollSaveReactable(state, caster, target, metadata.saveAbility, saveDC);
+      const fullDmg = rollDamage();
+      const dmg = save.success ? Math.floor(fullDmg / 2) : fullDmg;
+      const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);
+
+      emit(
+        state,
+        save.success ? 'save_success' : 'save_fail',
+        caster.id,
+        `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} CON save vs Dawn (rolled ${save.total}) — ${dealt} ${metadata.damageType} damage (${metadata.dieCount}d${metadata.dieSides}=${fullDmg}${save.success ? ', halved' : ''})`,
+        target.id, save.roll,
+      );
+      emit(
+        state, 'damage', caster.id,
+        `${target.name} takes ${dealt} ${metadata.damageType} damage from Dawn (on cast)`,
+        target.id, dealt,
+      );
+    } else {
+      emit(
+        state, 'damage', caster.id,
+        `${target.name} is protected by Globe of Invulnerability — on-cast damage negated (persistent effect still applied, will tick when GoI expires).`,
+        target.id, 0,
+      );
+    }
 
     // 2. Apply damage_zone effect for persistent start-of-turn damage.
+    //    ALWAYS applied (even to GoI-protected targets) so the spell can start
+    //    ticking if GoI expires later. sourceSlotLevel is set so the combat.ts
+    //    damage_zone tick loop can re-check GoI protection on each per-turn
+    //    tick (PHB p.245: the spell continues to have no effect on GoI-
+    //    protected creatures for as long as GoI is active).
     applySpellEffect(target, {
       casterId: caster.id,
       spellName: 'Dawn',
       effectType: 'damage_zone',
+      sourceSlotLevel: slotLevel,
       payload: {
         dieCount: metadata.dieCount,
         dieSides: metadata.dieSides,

@@ -44,7 +44,7 @@
 
 import { Combatant, Battlefield, Condition } from '../types/core';
 import { rollSaveReactable, CombatEvent, EngineState } from '../engine/combat';
-import { applySpellEffect, removeEffectsFromCaster } from '../engine/spell_effects';
+import { applySpellEffect, removeEffectsFromCaster, filterGoIProtectedTargets } from '../engine/spell_effects';
 import { startConcentration } from '../engine/utils';
 import { chebyshev3D, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
@@ -114,14 +114,24 @@ export function execute(caster: Combatant, targets: Combatant[], state: EngineSt
   const action = caster.actions.find(a => a.name === 'Stinking Cloud');
   const saveDC = action?.saveDC ?? 13;
 
-  consumeSpellSlot(caster, 3);
+  const slotLevel = consumeSpellSlot(caster, 3) ?? 3;
   if (caster.concentration?.active) removeEffectsFromCaster(caster.id, state.battlefield);
   startConcentration(caster, 'Stinking Cloud');
 
+  // Session 78 (GoI AoE exclusion follow-up): PHB p.245: "the spell has no
+  // effect on them." This applies to ALL spell effects, not just damage —
+  // Stinking Cloud's poisoned + incapacitated conditions are also blocked.
+  // The spell still fires (slot already consumed above); protected targets
+  // are simply skipped in the condition application loop.
+  const effectiveTargets = filterGoIProtectedTargets(targets, slotLevel, caster.id);
+  const excludedCount = targets.length - effectiveTargets.length;
+
   emit(state, 'action', caster.id,
-    `${caster.name} casts Stinking Cloud! (DC ${saveDC} CON, poisoned+incapacitated on fail, ${metadata.aoeRadiusFt}-ft radius) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} caught!`);
+    `${caster.name} casts Stinking Cloud! (DC ${saveDC} CON, poisoned+incapacitated on fail, ${metadata.aoeRadiusFt}-ft radius) — ${effectiveTargets.length} creature${effectiveTargets.length !== 1 ? 's' : ''} caught${excludedCount > 0 ? ` (${excludedCount} excluded by Globe of Invulnerability)` : ''}!`);
 
   // Find the center (highest-threat enemy) for the terrain zone position
+  // NOTE: use the original targets list (not effectiveTargets) so the terrain
+  // zone is placed correctly even if all targets are GoI-protected.
   const center = targets.reduce<Combatant | null>((best, t) => {
     if (t.isDead || t.isUnconscious) return best;
     if (!best || t.maxHP > best.maxHP) return t;
@@ -135,11 +145,15 @@ export function execute(caster: Combatant, targets: Combatant[], state: EngineSt
   // applied via terrain_zone (it only supports one condition); this is a
   // minor simplification — poisoned already gives disadv on attacks/ability
   // checks. Documented via stinkingCloudTerrainIncapacitatedV2SimplifiedToPoisonedOnly.
+  //
+  // Session 78: sourceSlotLevel is set so the terrain_zone tick in combat.ts
+  // can re-check GoI protection on each per-turn tick.
   if (center) {
     applySpellEffect(caster, {
       casterId: caster.id,
       spellName: 'Stinking Cloud',
       effectType: 'terrain_zone',
+      sourceSlotLevel: slotLevel,
       payload: {
         terrainSaveAbility: 'con' as const,
         terrainCondition: 'poisoned' as Condition,
@@ -152,7 +166,7 @@ export function execute(caster: Combatant, targets: Combatant[], state: EngineSt
     });
   }
 
-  for (const target of targets) {
+  for (const target of effectiveTargets) {
     if (target.isDead || target.isUnconscious) continue;
     const save = rollSaveReactable(state, caster, target, 'con', saveDC);
     emit(state, save.success ? 'save_success' : 'save_fail', caster.id,

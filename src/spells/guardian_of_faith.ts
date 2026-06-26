@@ -48,6 +48,7 @@ import { CombatEvent, EngineState } from '../engine/combat';
 import { rollDie, applyDamageWithTempHP } from '../engine/utils';
 import { chebyshev3D } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
+import { filterGoIProtectedTargets } from '../engine/spell_effects';
 
 // ---- Metadata -----------------------------------------------
 
@@ -181,16 +182,24 @@ export function execute(
   state: EngineState,
 ): void {
   consumeSpellSlot(caster, 4);
+  const slotLevel = 4;
 
   // Guardian of Faith is NOT concentration — no startConcentration call.
 
-  const names = targets.map(t => t.name).join(', ');
+  // Session 78 (GoI AoE exclusion follow-up): exclude targets protected by
+  // Globe of Invulnerability from this AoE. PHB p.245: "the spell has no
+  // effect on them." The spell still fires (slot already consumed above);
+  // protected targets are simply skipped in the damage loop.
+  const effectiveTargets = filterGoIProtectedTargets(targets, slotLevel, caster.id);
+  const excludedCount = targets.length - effectiveTargets.length;
+
+  const names = effectiveTargets.map(t => t.name).join(', ');
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Guardian of Faith! A spectral guardian appears (${targets.length} enem${targets.length !== 1 ? 'ies' : 'y'}: ${names}) — one-shot ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}, no save`,
+    `${caster.name} casts Guardian of Faith! A spectral guardian appears (${effectiveTargets.length} enem${effectiveTargets.length !== 1 ? 'ies' : 'y'}: ${names}) — one-shot ${metadata.dieCount}d${metadata.dieSides} ${metadata.damageType}, no save${excludedCount > 0 ? ` (${excludedCount} excluded by Globe of Invulnerability)` : ''}`,
   );
 
-  for (const target of targets) {
+  for (const target of effectiveTargets) {
     if (target.isDead || target.isUnconscious) continue;
 
     // One-shot 20d6 radiant (no save, no damage_zone effect).

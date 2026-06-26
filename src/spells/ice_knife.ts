@@ -68,6 +68,7 @@ import { rollSaveReactable, CombatEvent, EngineState } from '../engine/combat';
 import { rollAttack, rollDie, applyDamageWithTempHP, abilityMod, elementalAffinityBonus } from '../engine/utils';
 import { chebyshev3D, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
+import { filterGoIProtectedTargets } from '../engine/spell_effects';
 
 // ---- Metadata -----------------------------------------------
 
@@ -251,7 +252,7 @@ export function execute(
 
   const { primary, explosion } = plan;
 
-  consumeSpellSlot(caster, 1);
+  const slotLevel = consumeSpellSlot(caster, 1) ?? 1;
 
   emit(
     state, 'action', caster.id,
@@ -298,7 +299,15 @@ export function execute(
   // ── Phase 2: cold explosion (fires on hit OR miss — XGE p.157) ───
   // Re-collect the explosion list from the live battlefield (some
   // members may have died from the pierce damage above).
-  const liveExplosion = explosion.filter(t => !t.isDead && !t.isUnconscious);
+  const liveExplosionRaw = explosion.filter(t => !t.isDead && !t.isUnconscious);
+
+  // Session 78 (GoI AoE exclusion follow-up): exclude targets protected by
+  // Globe of Invulnerability from the cold AoE. PHB p.245: "the spell has
+  // no effect on them." The piercing attack-roll on the primary target is
+  // a separate mechanic (handled by combat.ts's single-target GoI block);
+  // this filter only applies to the AoE cold damage.
+  const liveExplosion = filterGoIProtectedTargets(liveExplosionRaw, slotLevel, caster.id);
+  const excludedCount = liveExplosionRaw.length - liveExplosion.length;
 
   if (liveExplosion.length === 0) {
     emit(
@@ -311,7 +320,7 @@ export function execute(
 
   emit(
     state, 'condition_add', caster.id,
-    `Ice Knife explodes! ${liveExplosion.length} creature${liveExplosion.length !== 1 ? 's' : ''} within ${metadata.aoeRadiusFt} ft of ${primary.name} must make a DC ${saveDC} DEX save vs ${metadata.coldDieCount}d${metadata.coldDieSides} ${metadata.coldDamageType}.`,
+    `Ice Knife explodes! ${liveExplosion.length} creature${liveExplosion.length !== 1 ? 's' : ''} within ${metadata.aoeRadiusFt} ft of ${primary.name} must make a DC ${saveDC} DEX save vs ${metadata.coldDieCount}d${metadata.coldDieSides} ${metadata.coldDamageType}${excludedCount > 0 ? ` (${excludedCount} excluded by Globe of Invulnerability)` : ''}.`,
     primary.id,
   );
 

@@ -53,7 +53,7 @@
 
 import { Combatant, Battlefield } from '../types/core';
 import { rollSaveReactable, CombatEvent, EngineState } from '../engine/combat';
-import { applySpellEffect, removeEffectsFromCaster } from '../engine/spell_effects';
+import { applySpellEffect, removeEffectsFromCaster, isProtectedByGoI } from '../engine/spell_effects';
 import { startConcentration, rollDie, applyDamageWithTempHP, elementalAffinityBonus } from '../engine/utils';
 import { chebyshev3D } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
@@ -179,7 +179,7 @@ export function execute(
   const action = caster.actions.find(a => a.name === 'Flaming Sphere');
   const saveDC = action?.saveDC ?? 13;
 
-  consumeSpellSlot(caster, 2);
+  const slotLevel = consumeSpellSlot(caster, 2) ?? 2;
 
   if (caster.concentration?.active) {
     removeEffectsFromCaster(caster.id, state.battlefield);
@@ -194,37 +194,59 @@ export function execute(
 
   if (target.isDead || target.isUnconscious) return;
 
-  // On-cast damage: DEX save for half.
+  // Session 78 (GoI AoE exclusion follow-up): PHB p.245: "the spell has no
+  // effect on them." The spell still fires (slot already consumed above).
+  // For persistent damage zones, the damage_zone EFFECT is applied to the
+  // target (so it can tick later if GoI expires), but the ON-CAST damage is
+  // skipped if the target is GoI-protected. The caster's own GoI does NOT
+  // block their own spell (PHB p.245: "cast from outside the barrier").
+  const goiBlocked = target.id !== caster.id && isProtectedByGoI(target, slotLevel);
+
+  // On-cast damage: DEX save for half. Skipped if GoI-protected.
   // Session 51 Task #29-follow-up-5c-4: Elemental Affinity (Draconic
   // Sorcerer 6) adds CHA mod to the fire damage if the caster's ancestry
   // is fire. The bonus is added BEFORE save halving (so it IS halved on
   // save success — consistent with the v1 model where the bonus is part
   // of the total damage roll). The damage_zone tick (start-of-turn)
   // does NOT get EA — the tick handler in combat.ts has no caster context.
-  const eaBonus = elementalAffinityBonus(caster, metadata.damageType);
-  const save = rollSaveReactable(state, caster, target, 'dex', saveDC);
-  const fullDmg = rollDamage() + eaBonus;
-  const dmg = save.success ? Math.floor(fullDmg / 2) : fullDmg;
-  const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);
+  if (!goiBlocked) {
+    const eaBonus = elementalAffinityBonus(caster, metadata.damageType);
+    const save = rollSaveReactable(state, caster, target, 'dex', saveDC);
+    const fullDmg = rollDamage() + eaBonus;
+    const dmg = save.success ? Math.floor(fullDmg / 2) : fullDmg;
+    const dealt = applyDamageWithTempHP(target, dmg, metadata.damageType);
 
-  emit(
-    state,
-    save.success ? 'save_success' : 'save_fail',
-    caster.id,
-    `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} DEX save vs Flaming Sphere (rolled ${save.total}) — ${dealt} ${metadata.damageType} damage (${metadata.dieCount}d${metadata.dieSides}=${fullDmg}${eaBonus > 0 ? ` + ${eaBonus} EA` : ''}${save.success ? ', halved' : ''})`,
-    target.id, save.roll,
-  );
-  emit(
-    state, 'damage', caster.id,
-    `${target.name} takes ${dealt} ${metadata.damageType} damage from Flaming Sphere (on cast)`,
-    target.id, dealt,
-  );
+    emit(
+      state,
+      save.success ? 'save_success' : 'save_fail',
+      caster.id,
+      `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} DEX save vs Flaming Sphere (rolled ${save.total}) — ${dealt} ${metadata.damageType} damage (${metadata.dieCount}d${metadata.dieSides}=${fullDmg}${eaBonus > 0 ? ` + ${eaBonus} EA` : ''}${save.success ? ', halved' : ''})`,
+      target.id, save.roll,
+    );
+    emit(
+      state, 'damage', caster.id,
+      `${target.name} takes ${dealt} ${metadata.damageType} damage from Flaming Sphere (on cast)`,
+      target.id, dealt,
+    );
+  } else {
+    emit(
+      state, 'damage', caster.id,
+      `${target.name} is protected by Globe of Invulnerability — on-cast damage negated (persistent effect still applied, will tick when GoI expires).`,
+      target.id, 0,
+    );
+  }
 
   // Persistent damage_zone — start-of-turn tick rolls DEX save for half.
+  // ALWAYS applied (even to GoI-protected targets) so the spell can start
+  // ticking if GoI expires later. sourceSlotLevel is set so the combat.ts
+  // damage_zone tick loop can re-check GoI protection on each per-turn
+  // tick (PHB p.245: the spell continues to have no effect on GoI-
+  // protected creatures for as long as GoI is active).
   applySpellEffect(target, {
     casterId: caster.id,
     spellName: 'Flaming Sphere',
     effectType: 'damage_zone',
+    sourceSlotLevel: slotLevel,
     payload: {
       dieCount: metadata.dieCount,
       dieSides: metadata.dieSides,

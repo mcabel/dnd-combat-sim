@@ -6530,6 +6530,33 @@ export function runCombat(
           // not actual damage zones. See _undoEffect in spell_effects.ts.
           if (dieCount <= 0 || dieSides <= 0) continue;
 
+          // Session 78 (GoI AoE exclusion follow-up): check Globe of
+          // Invulnerability protection on each per-tick damage application.
+          // PHB p.245: "Any spell of 5th level or lower cast from outside
+          // the barrier can't affect creatures or objects within it...
+          // the spell has no effect on them." This applies to persistent
+          // damage zones too — the spell continues to have no effect on
+          // GoI-protected creatures for as long as GoI is active.
+          //
+          // The zone's sourceSlotLevel (set by spell modules in Session 78)
+          // determines the spell's effective level for the GoI block check.
+          // Legacy zones (pre-Session 78, sourceSlotLevel undefined) default
+          // to 0 — which means isProtectedByGoI(actor, 0) returns false
+          // (cantrips/level-0 are never blocked), preserving backward compat.
+          //
+          // The caster's own GoI does NOT block their own spell (PHB p.245:
+          // "cast from outside the barrier" — the GoI caster is at the center).
+          const zoneSlotLevel = zone.sourceSlotLevel ?? 0;
+          if (zoneSlotLevel > 0 && actor.id !== zone.casterId && isProtectedByGoI(actor, zoneSlotLevel)) {
+            log(state, 'damage', zone.casterId,
+              `${actor.name} is protected by Globe of Invulnerability — ${zone.spellName} start-of-turn damage negated (L${zoneSlotLevel} ≤ GoI threshold).`,
+              actor.id, 0);
+            // Do NOT skip ticksRemaining decrement — the zone still "ticks"
+            // (time passes), it just does no damage. This ensures timed
+            // zones (Cordon of Arrows, Melf's Acid Arrow) still expire
+            // on schedule even while blocked by GoI.
+            // Fall through to the ticksRemaining decrement below.
+          } else {
           // Roll the damage (mirror Cloud of Daggers's rollDamage helper).
           let dmgRoll = 0;
           for (let i = 0; i < dieCount; i++) dmgRoll += rollDie(dieSides);
@@ -6575,6 +6602,8 @@ export function runCombat(
 
           // Death check (the damage may have killed the actor).
           checkDeath(actor, state);
+
+          } // end else (not GoI-blocked — damage was applied)
 
           // Session 17: ticksRemaining decrement (Melf's Acid Arrow = 1,
           // Cordon of Arrows = 4). If ticksRemaining reaches 0, mark the

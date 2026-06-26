@@ -920,13 +920,23 @@ export function isProtectedByGoI(target: Combatant, castLevel: number): boolean 
  * own spells (PHB p.245: "cast from outside the barrier").
  *
  * Used by AoE spell execute() functions to exclude GoI-protected targets
- * from damage. The spell still fires (slot consumed, action used); only
- * the protected targets are skipped.
+ * from spell effects (damage, conditions, etc.). PHB p.245: "the spell has
+ * no effect on them" — this applies to ALL spell effects, not just damage.
+ * The spell still fires (slot consumed, action used); only the protected
+ * targets are skipped.
  *
- * Session 77 follow-up to RFC-UPCASTING Phase 4: closes the
+ * Session 77 (RFC-UPCASTING Phase 4 follow-up): closes the
  * `globeOfInvulnerabilityAoEV1Simplified: true` gap for the 5 core
  * damage AoE spells (fireball, lightning_bolt, burning_hands, shatter,
- * thunderwave). Other AoE spells retain the v1 simplification.
+ * thunderwave).
+ *
+ * Session 78: extended to 12 more spells (arms_of_hadar, hunger_of_hadar,
+ * call_lightning, cloud_of_daggers, flaming_sphere, ice_knife,
+ * spirit_guardians, guardian_of_faith, dawn, sunburst, tidal_wave,
+ * stinking_cloud). For persistent damage_zone spells, the effect IS applied
+ * to GoI-protected targets (so it can tick later if GoI expires), but the
+ * on-cast damage is skipped. The combat.ts damage_zone tick loop re-checks
+ * GoI on each per-turn tick using the zone's sourceSlotLevel.
  *
  * @param targets   Candidate targets in the AoE
  * @param castLevel The actual spell slot level consumed (e.g. 3 for L3 Fireball).
