@@ -30,6 +30,7 @@ import { rollSaveReactable, CombatEvent, EngineState } from '../engine/combat';
 import { rollDie, applyDamage } from '../engine/utils';
 import { chebyshev3D, pushAway } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
+import { filterGoIProtectedTargets } from '../engine/spell_effects';
 
 // ---- Metadata -----------------------------------------------
 
@@ -127,12 +128,20 @@ export function execute(
   const slotLevel = consumeSpellSlot(caster, 1) ?? 1;
   const diceCount = 2 + Math.max(0, slotLevel - 1);
 
+  // Session 77 (RFC-UPCASTING Phase 4 follow-up): exclude targets protected
+  // by Globe of Invulnerability from this AoE. PHB p.245: "the spell has no
+  // effect on them." The spell still fires (slot already consumed above);
+  // protected targets are simply skipped in the damage loop (no damage,
+  // no push — Thunderwave's full effect is negated per PHB p.245).
+  const effectiveTargets = filterGoIProtectedTargets(targets, slotLevel, caster.id);
+  const excludedCount = targets.length - effectiveTargets.length;
+
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Thunderwave at L${slotLevel} (DC ${saveDC} CON, ${diceCount}d8 thunder) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} in range!`,
+    `${caster.name} casts Thunderwave at L${slotLevel} (DC ${saveDC} CON, ${diceCount}d8 thunder) — ${effectiveTargets.length} creature${effectiveTargets.length !== 1 ? 's' : ''} in range${excludedCount > 0 ? ` (${excludedCount} excluded by Globe of Invulnerability)` : ''}!`,
   );
 
-  for (const target of targets) {
+  for (const target of effectiveTargets) {
     if (target.isDead || target.isUnconscious) continue;
 
     const save = rollSaveReactable(state, caster, target, 'con', saveDC);

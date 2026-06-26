@@ -37,6 +37,7 @@ import { CombatEvent, EngineState, rollSaveReactable } from '../engine/combat';
 import { rollDie, applyDamage, elementalAffinityBonus } from '../engine/utils';
 import { inConeFt, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
+import { filterGoIProtectedTargets } from '../engine/spell_effects';
 
 // ---- Constants ----------------------------------------------
 
@@ -165,12 +166,19 @@ export function execute(
   const slotLevel = consumeSpellSlot(caster, 1) ?? 1;
   const diceCount = 3 + Math.max(0, slotLevel - 1);
 
+  // Session 77 (RFC-UPCASTING Phase 4 follow-up): exclude targets protected
+  // by Globe of Invulnerability from this AoE. PHB p.245: "the spell has no
+  // effect on them." The spell still fires (slot already consumed above);
+  // protected targets are simply skipped in the damage loop.
+  const effectiveTargets = filterGoIProtectedTargets(inCone, slotLevel, caster.id);
+  const excludedCount = inCone.length - effectiveTargets.length;
+
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Burning Hands (DC ${saveDC} DEX, slot L${slotLevel}, ${diceCount}d6) — ${inCone.length} creature${inCone.length !== 1 ? 's' : ''} in cone!`,
+    `${caster.name} casts Burning Hands (DC ${saveDC} DEX, slot L${slotLevel}, ${diceCount}d6) — ${effectiveTargets.length} creature${effectiveTargets.length !== 1 ? 's' : ''} in cone${excludedCount > 0 ? ` (${excludedCount} excluded by Globe of Invulnerability)` : ''}!`,
   );
 
-  for (const target of inCone) {
+  for (const target of effectiveTargets) {
     if (target.isDead || target.isUnconscious) continue;
 
     const save = rollSaveReactable(state, caster, target, 'dex', saveDC);

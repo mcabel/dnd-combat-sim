@@ -48,6 +48,7 @@ import { rollSaveReactable, CombatEvent, EngineState } from '../engine/combat';
 import { rollDie, applyDamageWithTempHP } from '../engine/utils';
 import { chebyshev3D, livingEnemiesOf } from '../engine/movement';
 import { consumeSpellSlot, hasSpellSlot } from '../ai/resources';
+import { filterGoIProtectedTargets } from '../engine/spell_effects';
 
 // ---- Metadata -----------------------------------------------
 
@@ -182,12 +183,19 @@ export function execute(
   const slotLevel = consumeSpellSlot(caster, 2) ?? 2;
   const diceCount = 3 + Math.max(0, slotLevel - 2);
 
+  // Session 77 (RFC-UPCASTING Phase 4 follow-up): exclude targets protected
+  // by Globe of Invulnerability from this AoE. PHB p.245: "the spell has no
+  // effect on them." The spell still fires (slot already consumed above);
+  // protected targets are simply skipped in the damage loop.
+  const effectiveTargets = filterGoIProtectedTargets(targets, slotLevel, caster.id);
+  const excludedCount = targets.length - effectiveTargets.length;
+
   emit(
     state, 'action', caster.id,
-    `${caster.name} casts Shatter at L${slotLevel}! (DC ${saveDC} CON, ${diceCount}d${metadata.dieSides} ${metadata.damageType}, ${metadata.aoeRadiusFt}-ft radius AoE) — ${targets.length} creature${targets.length !== 1 ? 's' : ''} caught!`,
+    `${caster.name} casts Shatter at L${slotLevel}! (DC ${saveDC} CON, ${diceCount}d${metadata.dieSides} ${metadata.damageType}, ${metadata.aoeRadiusFt}-ft radius AoE) — ${effectiveTargets.length} creature${effectiveTargets.length !== 1 ? 's' : ''} caught${excludedCount > 0 ? ` (${excludedCount} excluded by Globe of Invulnerability)` : ''}!`,
   );
 
-  for (const target of targets) {
+  for (const target of effectiveTargets) {
     if (target.isDead || target.isUnconscious) continue;
 
     const save = rollSaveReactable(state, caster, target, 'con', saveDC);

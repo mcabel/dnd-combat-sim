@@ -913,3 +913,41 @@ export function isProtectedByGoI(target: Combatant, castLevel: number): boolean 
     castLevel <= (eff.payload.blockThreshold ?? 0)
   );
 }
+
+/**
+ * Filter a list of AoE spell targets, removing those protected by Globe of
+ * Invulnerability (PHB p.245). The caster's own GoI does NOT block their
+ * own spells (PHB p.245: "cast from outside the barrier").
+ *
+ * Used by AoE spell execute() functions to exclude GoI-protected targets
+ * from damage. The spell still fires (slot consumed, action used); only
+ * the protected targets are skipped.
+ *
+ * Session 77 follow-up to RFC-UPCASTING Phase 4: closes the
+ * `globeOfInvulnerabilityAoEV1Simplified: true` gap for the 5 core
+ * damage AoE spells (fireball, lightning_bolt, burning_hands, shatter,
+ * thunderwave). Other AoE spells retain the v1 simplification.
+ *
+ * @param targets   Candidate targets in the AoE
+ * @param castLevel The actual spell slot level consumed (e.g. 3 for L3 Fireball).
+ *                  Pass 0 for cantrips — cantrips are never blocked by GoI
+ *                  (PHB p.245) so the filter is a no-op.
+ * @param casterId  The casting combatant's ID. PHB p.245: spells cast from
+ *                  outside the barrier are blocked; the GoI caster is at the
+ *                  center, so their own spells are NOT blocked.
+ * @returns Filtered target list (GoI-protected targets removed).
+ */
+export function filterGoIProtectedTargets(
+  targets: Combatant[],
+  castLevel: number,
+  casterId: string,
+): Combatant[] {
+  // PHB p.245: cantrips (level 0) are never blocked by GoI.
+  if (castLevel <= 0) return targets;
+  return targets.filter(t => {
+    // PHB p.245: "cast from outside the barrier" — the GoI caster is at the
+    // center of the barrier, so their own spells are NOT blocked.
+    if (t.id === casterId) return true;
+    return !isProtectedByGoI(t, castLevel);
+  });
+}
