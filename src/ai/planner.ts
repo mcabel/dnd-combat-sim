@@ -372,7 +372,7 @@ import { GENERIC_SPELL_LIST } from '../spells/_generic_registry';
 // ── Session 42 Task #18 — Thirsting Blade check ──
 import { hasInvocation } from '../spells/_invocations';
 // ── Session 63 RFC-MONSTER-SPELLCASTING Phase 1 — monster cantrip casting ──
-import { selectMonsterSpell } from './monster_spellcasting';
+import { selectMonsterSpell, selectMonsterDailySpell } from './monster_spellcasting';
 // ── Session 43 Task #24 — Extra Attack feature check ──
 import { hasFeature } from '../characters/builder';
 import { selectAction, selfPreserveDecision, selectLegendaryAction, isActionAvailable } from './actions';
@@ -5807,6 +5807,32 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
         plan.bonusAction = planBonusAction(self, gustTarget, battlefield);
         return plan;
       }
+    }
+  }
+
+  // === SESSION 74 — MONSTER DAILY-USE SPELLS (RFC-MONSTER-SPELLCASTING Phase 3) ===
+  // Monsters with `monsterSpellcasting.daily` (1371 creatures) have spells
+  // they can cast 1/day, 2/day, or 3/day (e.g. Drow: darkness/faerie fire 1/day,
+  // Mind Flayer Arcanist: dominate monster 1/day). This branch selects the
+  // highest-weighted available daily spell and returns it as a 'genericSpell'
+  // PlannedAction. Daily uses are consumed UPFRONT (PHB p.201).
+  //
+  // Sits ABOVE the cantrip branch (Phase 1) so daily spells are preferred
+  // over cantrips when available (daily spells are typically higher-impact).
+  // Sits BELOW all bespoke spell branches (a monster that also has a bespoke
+  // spell in `actions` — e.g. a Lich's Paralyzing Touch — would have already
+  // been handled above).
+  //
+  // v1 scope: only daily spells in GENERIC_SPELLS (105 of 420 unique). Spells
+  // not in the registry (bespoke-only like Command, Hold Person) are silently
+  // skipped — Phase 4+ future work.
+  if (!plan.action && self.monsterSpellcasting?.daily) {
+    const dailyPlan = selectMonsterDailySpell(self, battlefield);
+    if (dailyPlan) {
+      plan.action = dailyPlan;
+      plan.targetId = dailyPlan.targetId ?? null;
+      plan.bonusAction = planBonusAction(self, target, battlefield);
+      return plan;
     }
   }
 

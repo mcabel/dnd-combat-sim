@@ -6017,9 +6017,23 @@ export function executePlannedAction(
       if (!spellName) break;
       const desc = lookupGenericSpell(spellName);
       if (!desc) break;
-      // Re-run shouldCast with the live battlefield (target may have died
-      // or moved out of range between planTurn and executePlannedAction).
-      if (desc.shouldCast(actor, bf)) {
+      // ── Session 74: Monster daily-use spells bypass the shouldCast re-check ──
+      // The planner's selectMonsterDailySpell() already validated shouldCast
+      // (using a temporary synthetic action + resources, since monsters don't
+      // have the spell in `actions` or `resources.spellSlots`). The re-check
+      // here would fail for monsters because the synthetic state was cleaned
+      // up after planning. The daily-use consumption happened upfront in the
+      // planner (PHB p.201: "Once a spell is cast, its slot is used").
+      //
+      // We detect monster daily casts by checking if the spell is in the
+      // actor's `monsterSpellcasting.daily` map. If so, skip shouldCast and
+      // execute directly.
+      //
+      // Note: desc.execute() will call consumeSpellSlot(), which is a safe
+      // no-op for monsters (returns null when `resources` is null). The
+      // daily-use tracking is separate (monsterDailyUses, consumed in planner).
+      const isMonsterDailyCast = !!actor.monsterSpellcasting?.daily?.[spellName];
+      if (isMonsterDailyCast || desc.shouldCast(actor, bf)) {
         desc.execute(actor, state);
       }
       break;
