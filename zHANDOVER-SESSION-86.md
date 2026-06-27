@@ -5,6 +5,7 @@
 - Branch: main
 - Commits this session (oldest → newest):
   - `83cf9ec` — Session 85: Eldritch Blast multi-target per beam — retarget remaining beams on kill
+  - `1eb54c6` — Session 85: fix flaky scorching_ray test — allow 0-3 crit damage events (was 0-1)
 - Previous: `cfa4af9` (Session 85 add zHANDOVER-SESSION-85.md), `e136b5f` (Session 84 GoI save-fail tracker), `bfe9cdb` (Session 84 handover), `d0b6f20` (Session 83 GoI moving-zone), `577e66a` (Session 83 GoI terrain_zone tick)
 - State: clean, pushed
 - URL: https://github.com/mcabel/dnd-combat-sim
@@ -68,15 +69,32 @@ PHB p.194: a natural 1 is an auto-miss regardless of hitBonus/AC (~5% miss rate)
 - **New test:** session85_eldritch_blast_multitarget (30) — ✅.
 - **Full CI chunk 1** (69 files): 69/69 passed, 3545 assertions, 0 failed.
 - **Full CI chunk 2** (69 files, contains the new test): 69/69 passed, 3821 assertions, 0 failed.
+- **Full CI chunk 6** (69 files, run locally to diagnose a CI flake — see Part 2): 69/69 passed, 4094 assertions, 0 failed.
 - **Full CI on `83cf9ec`:** all 6 test chunks `success` ✅ (see CI STATUS below).
 
 ## TSC STATUS
 
 `npx tsc --noEmit` baseline unchanged: **5 pre-existing errors, 0 new errors from this session.** (The 5 errors are the same `Record<string, unknown>` conversion errors in combat.ts:2580/2600, utils.ts:601, and the `monsterSpellSlots` possibly-undefined in monster_spellcasting.test.ts:602/609 — all pre-existing, unrelated to this change.)
 
+## Part 2: Fix flaky scorching_ray test — commit `1eb54c6`
+
+**Flake discovered:** The zHANDOVER-SESSION-86.md commit (`96ca864`, which adds only a .md file — identical code to the all-green `83cf9ec`) showed a red X on CI chunk 6. Investigation via the GitHub Actions logs API identified the failure: `scorching_ray.test.ts` test 6b, assertion `"0 or 1 damage event (crit-hit rare): got 2"`.
+
+**Root cause:** Test 6b fires Scorching Ray (3 rays) at AC 30 + hitBonus 0, where only nat-20 crits hit (5% per ray). The assertion allowed 0-1 damage events, but with 3 independent rays each having a 5% crit chance, 2 crits (→2 damage events) occurs ~0.7% of the time (P = C(3,2) × 0.05² × 0.95 ≈ 0.007). The assertion was too strict for a probabilistic test with independent per-ray crit chances. This flake is pre-existing and unrelated to the Session 85 EB multi-target change (Scorching Ray is a 2nd-level spell with its own bespoke `execute()` that calls `resolveAttack` directly — it does NOT go through the `executePlannedAction` attackCount loop that was modified this session).
+
+**Fix:** Changed the assertion from `damageEvents.length === 0 || damageEvents.length === 1` to `damageEvents.length === critEvents.length` — each crit ray deals exactly 1 damage event; missed rays deal none. This is the correct invariant (0-3 damage events, matching the 0-3 crit events) and is fully deterministic regardless of how many rays crit.
+
+**Verification:** 109/109 pass across 10 consecutive runs (was 108/109 ~0.7% of the time). TSC unchanged (5 pre-existing errors).
+
 ## CI STATUS
 
 - `83cf9ec` (EB multi-target per beam): **9/9 check-runs `success` ✅ — no red X**
+  - build: success
+  - deploy: success
+  - report-build-status: success
+  - test (1) through test (6): all success
+- `96ca864` (zHANDOVER-SESSION-86.md): test (6) flaked on `scorching_ray.test.ts` (~0.7% double-crit flake). Code identical to `83cf9ec` (only a .md file added). Diagnosed and fixed in `1eb54c6`.
+- `1eb54c6` (flaky test fix): **9/9 check-runs `success` ✅ — no red X**
   - build: success
   - deploy: success
   - report-build-status: success
@@ -157,9 +175,10 @@ The helper picks the closest living enemy (Chebyshev distance), tie-broken by hi
 
 ## VERIFICATION SNAPSHOT
 
-- `git log --oneline -5`: `83cf9ec`, `cfa4af9`, `e136b5f`, `bfe9cdb`, `d0b6f20`
+- `git log --oneline -5`: `1eb54c6`, `96ca864`, `83cf9ec`, `cfa4af9`, `e136b5f`
 - `git status` → clean working tree (after push)
 - `npx tsc --noEmit 2>&1 | grep "error TS" | wc -l` → **5** (pre-existing, unchanged)
-- Key test files: all pass (EB family 329 assertions, action_surge 28, session85 30, full CI chunks 1+2 = 7366 assertions)
+- Key test files: all pass (EB family 329 assertions, action_surge 28, session85 30, scorching_ray 109, full CI chunks 1+2+6 = 11460 assertions)
 - CI on `83cf9ec`: all 9 check-runs `success` ✅
+- CI on `1eb54c6` (flaky test fix): all 9 check-runs `success` ✅
 - **NO RED X**

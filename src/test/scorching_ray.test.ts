@@ -389,9 +389,13 @@ console.log('\n=== 6. execute — logging ===\n');
   // With AC 30 + hitBonus 0, only nat-20 crits hit (no plain hits).
   eq('Total attack events = 3 (miss + crit)', missEvents.length + critEvents.length + hitEvents.length, 3);
   eq('No plain attack_hit events (nat 20 → crit)', hitEvents.length, 0);
-  // Damage events only fire on hits (0 or 1 per cast — nat 20 rare).
-  assert('0 or 1 damage event (crit-hit rare)',
-    damageEvents.length === 0 || damageEvents.length === 1, `got ${damageEvents.length}`);
+  // Damage events: one per crit ray. Each of the 3 rays has an independent
+  // 5% nat-20 crit chance, so 0 crits (~85.7%), 1 crit (~13.5%), 2 crits
+  // (~0.7%), or 3 crits (~0.01%) are all valid outcomes. The previous
+  // assertion only allowed 0-1 damage events, which flaked ~0.7% of the
+  // time when 2 rays crit. Fix: assert damage events == crit events (each
+  // crit ray deals exactly 1 damage event; missed rays deal none).
+  eq('Damage events = crit events (each crit ray deals damage)', damageEvents.length, critEvents.length);
 }
 
 // ============================================================
