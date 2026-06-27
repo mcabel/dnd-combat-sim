@@ -6035,6 +6035,45 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
       && plan.action.action.slotLevel === 0) {
     const tier = cantripTier(self);
     plan.action.attackCount = tier + 1;  // 1/2/3/4 beams
+
+    // ── Session 88: EB spread damage heuristic ──
+    // PHB p.237: "You can direct the beams at the same target or at different
+    // ones." When the warlock has multiple beams AND there are other living
+    // enemies in range that are weak enough to be killed by a single beam
+    // (currentHP ≤ max beam damage), spread the beams across multiple targets
+    // to maximize kills per turn. This is a tactical AI strategy choice, not
+    // a RAW requirement — focus-fire (all beams at primary, retarget on kill)
+    // is the default and remains valid when no weak secondary targets exist.
+    //
+    // The heuristic is conservative: only spreads to enemies that COULD be
+    // killed by one beam (currentHP ≤ max non-crit damage = 1d10 + CHA mod
+    // with Agonizing Blast). This avoids spreading to tanky enemies where
+    // focus-firing would be more effective.
+    const beamCount = plan.action.attackCount;
+    if (beamCount > 1 && target) {
+      const ebAction = plan.action.action;
+      const rangeFt = ebAction.range?.normal ?? 120;  // EB default 120; Eldritch Spear patches to 300
+      const chaMod = Math.floor((self.cha - 10) / 2);
+      const hasAgonizing = self.eldritchInvocations?.includes('Agonizing Blast') ?? false;
+      // Max non-crit single-beam damage: 1d10 (10) + CHA mod (Agonizing Blast).
+      // A target with currentHP ≤ this CAN be killed by one max-damage beam.
+      const maxBeamDamage = 10 + (hasAgonizing ? chaMod : 0);
+
+      const secondaryEnemies = livingEnemiesOf(self, battlefield)
+        .filter(e => e.id !== target.id)               // exclude primary
+        .filter(e => e.currentHP > 0 && e.currentHP <= maxBeamDamage)  // weak enough
+        .filter(e => {
+          const distFt = chebyshev3D(self.pos, e.pos) * 5;
+          return distFt <= rangeFt;
+        })
+        .sort((a, b) => a.currentHP - b.currentHP);    // weakest first
+
+      if (secondaryEnemies.length > 0) {
+        plan.action.secondaryTargetIds = secondaryEnemies
+          .slice(0, beamCount - 1)                     // up to beamCount-1 secondaries
+          .map(e => e.id);
+      }
+    }
   }
 
   // === MOVEMENT ===

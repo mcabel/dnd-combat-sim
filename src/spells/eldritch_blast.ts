@@ -99,13 +99,20 @@ export const metadata = {
    * direct the beams at the same target or at different ones." When an EB
    * beam kills the primary target, remaining beams re-target to the next-best
    * living enemy in range (combat.ts `pickNextEldritchBlastTarget`). This
-   * prevents wasted beams and approximates the RAW multi-target choice. The
-   * AI still focus-fires on one primary target (planner picks one); the engine
-   * handles re-targeting on kill. A deliberate "spread damage" AI heuristic
-   * (firing beams at different living targets from the start) is NOT
-   * implemented — focus-fire-then-switch is the v1 strategy.
+   * prevents wasted beams and approximates the RAW multi-target choice.
+   *
+   * Session 88: A deliberate "spread damage" AI heuristic is NOW implemented.
+   * When the planner chooses EB with multiple beams AND there are other living
+   * enemies in range that are weak enough to be killed by a single beam
+   * (currentHP ≤ max beam damage), the planner populates
+   * `PlannedAction.secondaryTargetIds` with up to `attackCount - 1` secondary
+   * target IDs. The engine then directs beams 2+ at the secondary targets from
+   * the start (instead of focus-firing the primary). If a secondary target is
+   * dead, the beam falls back to the primary + retarget-on-kill. The default
+   * (no secondary targets) remains focus-fire-then-switch.
    */
   multiTargetPerBeamV1Implemented: true as const,  // Session 85: re-target on kill
+  spreadDamageV1Implemented: true as const,         // Session 88: deliberate spread heuristic
   /** Components: V + S (no M). */
   components: { v: true, s: true, m: false } as const,
   /**

@@ -3229,10 +3229,36 @@ export function executePlannedAction(
       // living enemy in range instead of being wasted. Extra Attack /
       // Thirsting Blade preserve v1 break-on-death behavior (PHB p.192 allows
       // splitting, but v1 simplifies to focus-fire on one target).
+      //
+      // Session 88: EB spread damage heuristic. When the planner populates
+      // `plan.secondaryTargetIds` (weak enemies worth spreading to), beams 2+
+      // target the secondary enemies from the start instead of focus-firing
+      // the primary. If a secondary target is dead (killed by a previous beam
+      // or was dead before), the beam falls back to the primary, and the
+      // retarget-on-kill logic handles the case where the primary is also dead.
       const attackCount = plan.attackCount ?? 1;
       const isEB = plan.action.name === 'Eldritch Blast';
+      const secondaryIds = isEB ? (plan.secondaryTargetIds ?? []) : [];
       let currentTarget = effectiveTarget;
       for (let i = 0; i < attackCount; i++) {
+        // Session 88: EB spread — for beam i > 0, try to assign a secondary target.
+        // The secondary list is 0-indexed: secondaryIds[0] = beam 2's target,
+        // secondaryIds[1] = beam 3's target, etc.
+        let spreadLogEmitted = false;
+        if (isEB && i > 0 && secondaryIds.length >= i) {
+          const secId = secondaryIds[i - 1];
+          const secondary = bf.combatants.get(secId);
+          if (secondary && !secondary.isDead && !secondary.isUnconscious) {
+            currentTarget = secondary;
+            log(state, 'action', actor.id,
+              `${actor.name} directs Eldritch Beam ${i + 1}/${attackCount} at ${secondary.name} (spread damage)`,
+              secondary.id);
+            spreadLogEmitted = true;
+          }
+          // If secondary is dead/unconscious, currentTarget retains its
+          // previous value. The dead-check below will trigger retarget-on-kill
+          // if currentTarget is also dead.
+        }
         if (currentTarget.isDead || currentTarget.isUnconscious) {
           if (!isEB) break;  // non-EB: v1 break-on-death
           // EB: re-target remaining beams to the next living enemy in range.
@@ -3248,12 +3274,13 @@ export function executePlannedAction(
           log(state, 'action', actor.id,
             `${actor.name} retargets Eldritch Beam ${i + 1}/${attackCount} to ${nextEnemy.name} — previous target fell!`,
             nextEnemy.id);
+          spreadLogEmitted = true;  // suppress "makes Beam" log (retarget log covers it)
         }
         resolveAttack(actor, currentTarget, plan.action, state);
         // Log the next beam/attack announcement (skip for EB if the target
-        // fell — the re-target log at the top of the next iteration covers it).
+        // fell or a spread/retarget log was emitted — those logs cover it).
         const targetDown = currentTarget.isDead || currentTarget.isUnconscious;
-        if (attackCount > 1 && i < attackCount - 1 && !(isEB && targetDown)) {
+        if (attackCount > 1 && i < attackCount - 1 && !(isEB && (targetDown || spreadLogEmitted))) {
           const label = isEB
             ? `Eldritch Beam ${i + 2}/${attackCount}`
             : `attack ${i + 2}/${attackCount} (Extra Attack / Thirsting Blade)`;

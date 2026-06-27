@@ -2786,6 +2786,27 @@ export interface PlannedAction {
   // not per hit (PHB p.79: "immediately after you hit" — per hit is more
   // canon-accurate but fiddly for v1).
   openHandTechniqueChoice?: 'prone' | 'push' | 'disabler';
+  // ── Session 88: Eldritch Blast spread damage heuristic ──────────────
+  // PHB p.237: "You can direct the beams at the same target or at different
+  // ones. Make a separate attack roll for each beam."
+  //
+  // When the planner chooses Eldritch Blast with multiple beams (attackCount >
+  // 1) AND there are other living enemies in range that are weak enough to be
+  // killed by a single beam (currentHP ≤ max beam damage), the planner
+  // populates this list with up to `attackCount - 1` secondary target IDs.
+  //
+  // Beam 1 targets `targetId` (the primary, chosen by selectTarget).
+  // Beam i (i > 1) targets `secondaryTargetIds[i - 2]` if that target is
+  // still alive; otherwise falls back to the primary + retarget-on-kill.
+  //
+  // This implements the "spread damage" AI strategy: instead of focus-firing
+  // all beams on one target (Session 85 retarget-on-kill handles the case
+  // where the primary dies mid-beam), spread beams across multiple weak
+  // enemies to maximize kills per turn.
+  //
+  // Left undefined or empty: focus-fire behavior (all beams at primary,
+  // retarget on kill). This is the default and backward-compat path.
+  secondaryTargetIds?: string[];
 }
 
 // ============================================================
