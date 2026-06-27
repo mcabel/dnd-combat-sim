@@ -20,8 +20,12 @@
 //     highest-threat enemy within 60 ft (mirrors Sunburst). Documented
 //     via `pyrotechnicsFireSourceV1Simplified`.
 //   - Shape: canon 10-ft-radius sphere. v1 uses chebyshev (square approx).
-//   - Blinded duration: canon 1 min. v1 has no duration tracker — blinded
-//     persists for the v1 combat. NOT concentration (sourceIsConc: false).
+//   - Blinded duration: canon 1 min. Tracked via sourceTurnExpires
+//     (Session 82, RFC-COMBINING-EFFECTS Phase 2): the blinded
+//     condition_apply effect gets appliedTurn + sourceTurnExpires =
+//     round + 10, so reevaluateEffects removes it once the 1-min cap
+//     elapses (mirroring Blindness/Deafness / Sunburst / Color Spray).
+//     NOT concentration (sourceIsConc: false).
 //   - Smoke mode (Session 27 canon fix): canon creates a heavily obscured
 //     sphere (terrain). v1 has no persistent-terrain/vision subsystem, so
 //     smoke mode applies `blinded` to ALL creatures in the sphere (no save)
@@ -64,6 +68,7 @@ export const metadata = {
   pyrotechnicsFireSourceV1Simplified: true,                 // fire-source assumed available
   pyrotechnicsFireworksModeV1Default: true,                 // planner picks fireworks by default
   pyrotechnicsSmokeModeV1Implemented: true,                 // Session 27: smoke mode available (executeSmoke)
+  pyrotechnicsBlindedDurationV1Implemented: true,           // Session 82: 1-min tracked via sourceTurnExpires (both modes)
 } as const;
 
 export type PyrotechnicsMode = 'fireworks' | 'smoke';
@@ -131,10 +136,13 @@ export function executeFireworks(caster: Combatant, targets: Combatant[], state:
       `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} CON save vs Pyrotechnics (rolled ${save.total})${save.success ? '' : ' + BLINDED'}`, target.id, save.roll);
 
     if (!save.success && !target.conditions.has('blinded')) {
+      const round = state.battlefield.round;
       applySpellEffect(target, {
         casterId: caster.id, spellName: 'Pyrotechnics',
         effectType: 'condition_apply', payload: { condition: 'blinded' },
         sourceIsConcentration: false,
+        appliedTurn: round,
+        sourceTurnExpires: round + 10,  // 1 min = 10 rounds (XGE p.162)
       });
       emit(state, 'condition_add', caster.id, `${target.name} is BLINDED by the flash! (disadv on attacks, adv on attacks vs them)`, target.id);
     }
@@ -154,10 +162,13 @@ export function executeSmoke(caster: Combatant, targets: Combatant[], state: Eng
       emit(state, 'condition_add', caster.id, `${target.name} is already blinded — smoke has no additional effect.`, target.id);
       continue;
     }
+    const round = state.battlefield.round;
     applySpellEffect(target, {
       casterId: caster.id, spellName: 'Pyrotechnics',
       effectType: 'condition_apply', payload: { condition: 'blinded' },
       sourceIsConcentration: false,
+      appliedTurn: round,
+      sourceTurnExpires: round + 10,  // 1 min = 10 rounds (XGE p.162)
     });
     emit(state, 'condition_add', caster.id, `${target.name} is BLINDED by the thick smoke! (heavily obscured — no save; disadv on attacks, adv on attacks vs them)`, target.id);
   }
