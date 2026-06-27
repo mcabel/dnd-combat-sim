@@ -3958,7 +3958,32 @@ export function executePlannedAction(
       tryActivePerception(actor, state);
       break;
     }
-    case 'ready':
+    case 'ready': {
+      // Ready action (PHB p.193): "you take the Ready action so you can act
+      // later in the round using your reaction." The creature chooses a
+      // perceptible trigger and an action to take when it occurs.
+      //
+      // Session 81: this is a DEFENSIVE NO-OP STUB. The AI planner never
+      // emits a 'ready' plan today (no heuristic for when/what to ready),
+      // so this branch is unreachable in normal play. Previously `case 'ready':`
+      // FELL THROUGH to `case 'bardicInspiration':`, which would have
+      // incorrectly granted a Bardic Inspiration die if a 'ready' plan ever
+      // surfaced — a latent bug. This stub breaks the fall-through, logs the
+      // action, and consumes the action budget so the turn still progresses.
+      //
+      // Full implementation requires: (1) a planner heuristic for when to
+      // ready and what trigger+action to set; (2) a `readiedAction` field on
+      // Combatant storing the trigger + action; (3) trigger-evaluation hooks
+      // after movement/attacks/spell-casts; (4) firing the readied action as
+      // a reaction (consuming `budget.reactionUsed`); (5) clearing the
+      // readied action at the start of the creature's next turn if unused.
+      // This is tracked as a follow-up (MEDIUM-HIGH risk — needs an RFC for
+      // the trigger taxonomy + AI heuristic + reaction plumbing).
+      actor.budget.actionUsed = true;
+      log(state, 'action', actor.id,
+        plan.description || `${actor.name} takes the Ready action (not yet implemented — action spent, no trigger set).`);
+      break;
+    }
     case 'bardicInspiration': {
       // PHB p.54: Bard grants an Inspiration die (bonus action) to one ally.
       // The recipient adds the die to their next attack roll or saving throw.
