@@ -4,7 +4,8 @@
 
 - Branch: main
 - Commits this session:
-  - `<pending>` — Session 90: add RFC-LAIRACTIONS.md + LAIR-ACTIONS-OUT-OF-SCOPE.md (documentation only, no code change)
+  - `42c9e26` — Session 90: add RFC-LAIRACTIONS.md + LAIR-ACTIONS-OUT-OF-SCOPE.md (initial draft, docs only)
+  - `<pending>` — Session 90: apply user decisions to RFC + registry (5 open questions resolved; docs only)
 - Previous: `82073a8` (Session 89 handover), `a53eaf4` (Session 89 Aura of Vitality per-turn), `96bb6b6` (Session 88 handover), `98bbd15` (Session 88 EB spread damage)
 - State: clean (will push after commit)
 - URL: https://github.com/mcabel/dnd-combat-sim
@@ -14,20 +15,27 @@
 
 ### Part 1: Lair Actions RFC + Out-of-Scope Registry — documentation only
 
-**User direction:** "Lair actions are a special ability that should be tied to a flag in the monster UI by default to 'on' (`LairMonstersAREinLair`); if on, at initiative count 20.00, with priority over ties, one of the effects described will be executed. Some lair actions are only for flavor or social roleplay with no benefit to combatants — those must be identified and need not be modeled, simply logged in their own out-of-scope document with an ID for searchability. The effects go from casting a spell automatically, to spawning minions, to automatic environmental damage, to hazards and many others. They should get a weighted score for the engine to pick the most beneficial to the Lair creature party. Prepare the RFC detailed and provide the handover that references it to give to another agent."
+**User direction (initial):** "Lair actions are a special ability that should be tied to a flag in the monster UI by default to 'on' (`LairMonstersAREinLair`); if on, at initiative count 20.00, with priority over ties, one of the effects described will be executed. Some lair actions are only for flavor or social roleplay with no benefit to combatants — those must be identified and need not be modeled, simply logged in their own out-of-scope document with an ID for searchability. The effects go from casting a spell automatically, to spawning minions, to automatic environmental damage, to hazards and many others. They should get a weighted score for the engine to pick the most beneficial to the Lair creature party. Prepare the RFC detailed and provide the handover that references it to give to another agent."
+
+**User decisions (5 open questions resolved — second message):**
+1. **[DD-2]** Changed from priority-over-ties (house rule) to **PHB default**: lair actions resolve AFTER creatures with initiative ≥ 20, BEFORE those with < 20. Requires `initiativeScore` numeric field.
+2. **[DD-4]** No blanket rule. Read each action individually. Tag `isMagical` / `isSpell` / `spellName` / `castLevel` per-action. Spells are blocked by GoI and counterable; magical non-spells bypass GoI but ARE suppressed by Antimagic Field (forward-compat).
+3. **Out-of-scope vs deferred:** Defer narrative-bespoke actions (Sphinx time travel). Only permanently-excluded flavor/social actions are `out-of-scope`.
+4. **Scoring weights:** Ship defaults, tune later.
+5. **`isInLair` UI surface:** All 3 surfaces — parser default + scenario JSON override + character builder JSON schema.
 
 **Deliverables (no code change — documentation only):**
 
-1. **`docs/RFC-LAIRACTIONS.md`** — a detailed, phased RFC for implementing mechanical lair actions. Grounded in analysis of the actual bestiary data (115 legendary groups, 309 lair action options, 5eTools schema tags). Covers:
+1. **`docs/RFC-LAIRACTIONS.md`** — a detailed, phased RFC for implementing mechanical lair actions. Grounded in analysis of the actual bestiary data (115 legendary groups, 309 lair action options, 5eTools schema tags). All 5 open questions resolved per user direction. Covers:
    - **Problem statement** (current stub is a no-op random-pick log)
    - **Research findings** (data scale, 5eTools tag frequency, effect taxonomy, reusable engine subsystems, what's missing)
-   - **7 documented design decisions [DD-1..DD-7]** with recommendations and flags for user review:
-     - [DD-1] `isInLair` flag, per-combatant, default `true` when `lairActions` defined
-     - [DD-2] Initiative count 20, **priority over ties** (house rule per user direction; Option A = resolve at round start, recommended)
+   - **7 documented design decisions [DD-1..DD-7]** — ALL RESOLVED:
+     - [DD-1] `isInLair` flag, per-combatant, default `true`; exposed in parser + scenario JSON + character builder (3 surfaces)
+     - [DD-2] Initiative count 20, **PHB-accurate tie resolution** (losing ties — lair actions resolve after creatures with init ≥ 20, before < 20). Requires `initiativeScore` numeric field.
      - [DD-3] Multiple lair creatures — each acts independently, descending CR order
-     - [DD-4] Lair actions are NOT spells — not blocked by GoI, not Counterspellable (2024 MM clarification)
+     - [DD-4] **Per-action magical/spell tagging** (no blanket rule). `isMagical` / `isSpell` / `spellName` / `castLevel`. Spells blocked by GoI + counterable; magical non-spells bypass GoI but suppressed by Antimagic Field (forward-compat).
      - [DD-5] "Can't repeat 2 rounds in a row" — per-creature 2-entry history
-     - [DD-6] AI scoring — expected-value estimator, not a planner action
+     - [DD-6] AI scoring — expected-value estimator with shippable default weights
      - [DD-7] Out-of-scope flavor actions — registry with stable IDs, logged not executed
    - **Out-of-scope identification heuristic** (§4) — precise rules for `outOfScope` vs `deferred` vs `bespoke`
    - **Structured `LairAction` schema** (§5) — the new type replacing `string[]`
@@ -78,14 +86,19 @@ None.
 
 ## IMMEDIATE NEXT ACTIONS (PRIORITY ORDER)
 
-### 1. ⭐ Lair Actions implementation — RFC ready, Phases 1–5 pending
+### 1. ⭐ Lair Actions implementation — RFC ready, ALL questions resolved, Phases 1–5 pending
 
-The RFC (`docs/RFC-LAIRACTIONS.md`) is complete and the Phase 0 registry (`docs/LAIR-ACTIONS-OUT-OF-SCOPE.md`) is populated. **The next agent should:**
-1. Review the 5 open questions in RFC §10 with the user (especially [DD-2] priority-over-ties Option A, [DD-4] GoI non-blockable, and the `isInLair` UI surface question).
-2. Begin Phase 1 (structured schema + parser extraction) — LOW risk, parser-only.
+The RFC (`docs/RFC-LAIRACTIONS.md`) is complete and all 5 open questions have been resolved by the user (see RFC §10). The Phase 0 registry (`docs/LAIR-ACTIONS-OUT-OF-SCOPE.md`) is populated (5 out-of-scope + 8 deferred + 2 borderline = 15 non-executable of 309). **The next agent should:**
+1. ~~Review the 5 open questions~~ — DONE. All resolved. Proceed directly to Phase 1.
+2. Begin Phase 1 (structured schema + parser extraction, including per-action `isMagical`/`isSpell` tagging per [DD-4]) — LOW risk, parser-only. The Phase 1 deliverable includes a 309-row tagging table.
 3. Proceed through Phases 2–5 per the RFC. Each phase is independently shippable with its own test file.
 
-**Estimated total effort:** 4–6 sessions (one per phase). Phase 3 (effect handlers) is the largest — 8 categories, ~294 in-scope actions.
+**Key implementation notes from the resolved decisions:**
+- **[DD-2]** Add `initiativeScore: number` to Combatant; update `rollInitiative` to store it; restructure `runCombat`'s round loop to fire lair actions at the init-20 boundary (after ≥20 creatures, before <20). Backward compat: legacy scenarios without scores fall back to round-start.
+- **[DD-4]** This is the most labor-intensive part — each of the 309 actions must be read and tagged individually. The 56 `@spell`-tagged actions get `isSpell: true` automatically; the rest default to `isMagical: true, isSpell: false`. Flag any `isMagical: false` exceptions as `[VERIFY]`.
+- **[DD-1]** Expose `isInLair` in the character builder JSON schema (`src/characters/types.ts` or the monster-import path in `builder.ts`), not just the parser.
+
+**Estimated total effort:** 4–6 sessions (one per phase). Phase 1 (tagging) and Phase 3 (effect handlers) are the largest — 309 actions to tag, ~294 in-scope actions to handle across 8 categories.
 
 ### 2. RFC-MONSTER-SPELLCASTING Phase 3 (MEDIUM-HIGH risk) — unchanged
 

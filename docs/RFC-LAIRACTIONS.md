@@ -94,9 +94,11 @@ The free-text paragraphs are **not** unstructured — 5eTools embeds inline tags
 ### 2.5 What does NOT exist yet (must be built)
 
 - A structured `LairAction` schema (currently `string[]`).
-- An initiative-count-20 hook with **priority over ties** (current stub fires at round start, before *all* turns — not tied to initiative 20).
-- A `LairMonstersAREinLair` per-combatant flag (default `true` when `lairActions` is defined).
+- An initiative-count-20 hook with **PHB-accurate tie resolution** (current stub fires at round start, before *all* turns — not tied to initiative 20).
+- A numeric `initiativeScore` on Combatant (currently `rollInitiative` computes scores but discards them, returning only an ordered ID array).
+- A `LairMonstersAREinLair` per-combatant flag (default `true` when `lairActions` is defined), exposed in the parser, scenario JSON, **and** character builder.
 - A per-creature "last lair action used" history (for the "can't repeat 2 rounds in a row" rule).
+- A per-action magical/spell tagging (`isMagical`, `isSpell`, `spellName`, `castLevel`) for GoI / Counterspell / Antimagic Field interactions.
 - An AI scoring function for action selection.
 - A dispatcher with per-category handlers.
 
@@ -106,19 +108,30 @@ The free-text paragraphs are **not** unstructured — 5eTools embeds inline tags
 
 These are the judgment calls I made to unblock implementation. Each is flagged **[DD-N]**. If you disagree with any, the RFC should be revised before Phase 1.
 
-### [DD-1] `LairMonstersAREinLair` flag — per-combatant, default `true`
+### [DD-1] `LairMonstersAREinLair` flag — per-combatant, default `true`, exposed in 3 surfaces
 
 - Added to `Combatant` as `isInLair?: boolean`.
-- **Parser default:** when `lairActions` is defined, `isInLair = true`. A dragon encountered outside its lair can be set to `false` by the scenario/character builder.
-- The UI (monster editor) exposes this as a toggle, defaulting to **on**, per your direction.
+- **Parser default:** when `lairActions` is defined, `isInLair = true`. A dragon encountered outside its lair can be set to `false`.
+- **Scenario JSON override:** the scenario/character builder JSON can set `isInLair: false` to override the parser default (e.g., a dragon ambush in a field).
+- **Character builder surface:** the character builder's monster-import path (`src/characters/builder.ts` monster branch) preserves the `isInLair` flag from the bestiary, and the `CharacterSheet`/monster JSON schema exposes it as a settable toggle (default on when `lairActions` present). This satisfies your direction "in char builder too."
 - When `isInLair === false`, the creature still *has* `lairActions` in its data, but the engine skips the lair-action hook entirely.
 
-### [DD-2] Initiative count 20, priority over ties — house rule (overrides PHB)
+### [DD-2] Initiative count 20, PHB-accurate tie resolution (losing ties) — RESOLVED per user
 
-- PHB p.??? / MM: "On initiative count 20 (losing initiative ties)." The PHB default is that the lair action resolves **after** any creature whose initiative = 20.
-- Your direction: **priority over ties** — lair actions resolve **before** any creature with initiative 20.
-- This is a deliberate house rule. The RFC implements it as `priority: 'before-ties'` (configurable; default per your direction).
-- **Implementation note:** the engine's current `runCombat` loop iterates `initiative` (an ordered string[]). There is no "initiative count" numeric tracked per creature — only the order. To implement count-20 priority, the RFC introduces a numeric `initiativeScore` on each combatant (1–30, rolled externally) and resolves lair actions at the moment the loop would reach score 20, before processing any creature with score ≤ 20 whose turn hasn't started. Creatures with score > 20 have already acted. This is a modest change to the round loop.
+- **PHB / MM:** "On initiative count 20 (losing initiative ties)." The lair action resolves **after** any creature whose initiative = 20. Creatures with initiative > 20 act first; creatures with initiative = 20 act before the lair action; creatures with initiative < 20 act after.
+- **User direction (this session):** use the PHB default — lair actions resolve **after** creatures with initiative ≥ 20, **before** creatures with initiative < 20.
+- **Implementation requirement:** the engine's `rollInitiative` (`utils.ts:911`) currently computes numeric initiative scores but **discards them**, returning only an ordered ID array. To resolve lair actions at count 20 accurately, the RFC adds a numeric `initiativeScore: number` field to `Combatant`, populated by `rollInitiative` (and accepted as an override in `runCombat`'s initiative parameter for pre-rolled scenarios).
+- **Round loop change:** `runCombat`'s per-round turn loop (`combat.ts:6451`) is restructured to insert a lair-action checkpoint at the boundary between creatures with initiative ≥ 20 and those with < 20:
+  ```
+  for each actorId in initiative (descending order):
+    if actorId is the first with initiativeScore < 20 AND no lair actions have fired this round:
+      resolveLairActions(state)   // fires once, after all ≥-20 creatures, before <-20 creatures
+    execute actorId's turn
+  // if no creature has initiativeScore < 20, lair actions fire at the end of the round
+  ```
+- **Edge case — all creatures have initiative > 20:** lair actions fire at the end of the round (after all turns). This is correct per PHB.
+- **Edge case — all creatures have initiative < 20:** lair actions fire at the start of the round (before all turns). Also correct.
+- **Edge case — no numeric scores (legacy scenarios passing only `initiative: string[]`):** fall back to firing at round start (the current stub behavior). This is a graceful degradation, not PHB-accurate, but preserves backward compat.
 
 ### [DD-3] Multiple lair creatures in one combat — each acts independently
 
@@ -126,12 +139,42 @@ These are the judgment calls I made to unblock implementation. Each is flagged *
 - Resolution order among multiple lair creatures: **descending CR** (highest CR first). Tie-break: alphabetical name (deterministic for tests).
 - The "can't repeat same effect 2 rounds in a row" rule is **per-creature** (each tracks its own history).
 
-### [DD-4] Lair actions are NOT spells — not blocked by Globe of Invulnerability, not Counterspellable
+### [DD-4] Per-action magical/spell tagging — RESOLVED per user (no blanket rule)
 
-- **2024 Monster Manual clarification:** lair actions are "magical effects" but **not spells** — they cannot be Counterspelled and are not blocked by GoI.
-- **Pre-2024 (this engine's scope):** RAW is ambiguous. PHB p.245 says GoI blocks "any spell of 5th level or lower cast from outside the barrier." Lair actions are not cast as spells.
-- **Decision:** lair actions bypass GoI and Counterspell. They are tagged `isSpell: false` in the effect payload. The `isProtectedByGoI` check is skipped for lair-action-sourced effects.
-- **Flag for review:** if you want pre-2024 strict RAW (where the question is unresolved), this is a reasonable default. If you want lair actions *blockable* by GoI (stricter), set `lairActionGoIBlockable: true` and pass a `castLevel` derived from the source creature's CR. I recommend the non-blockable default.
+**User direction (this session):** "You will have to read and understand each lair action individually. There is no blanket statement here: they can be magical, but not necessarily spells. But it CAN be a spell sometimes. Determine and tag each instance that allows casting a spell; some spells and their areas are blocked by GoI; it's important to tag lair actions that are magical, even if not spells, because antimagic field exists."
+
+**No blanket rule.** Each of the 309 lair actions is read individually and tagged with:
+
+```ts
+isMagical: boolean;     // default true (MM: "magical effects"). False only for purely physical effects (rare).
+isSpell: boolean;       // true ONLY when the action explicitly casts a named spell.
+spellName?: string;     // when isSpell (e.g., 'fireball', 'banishment').
+castLevel?: number;     // when isSpell — for GoI threshold check. Base spell level by default; upcast level if text specifies.
+```
+
+**Tagging rules (applied per-action in Phase 1 parser pass):**
+
+1. **`isSpell: true`** when the action text contains `@spell X` OR matches the pattern "casts [spell name]" / "casts the [spell name] spell." The 56 `@spell` tags in the data identify these directly. Examples:
+   - "Baphomet casts mirage arcane" → `isSpell: true, spellName: 'mirage arcane', castLevel: 7` (mirage arcane is 7th-level).
+   - "Geryon casts the banishment spell" → `isSpell: true, spellName: 'banishment', castLevel: 4`.
+   - "The lich rolls a d8 and regains a spell slot" → `isSpell: false` (no spell is cast; this is resource regeneration).
+2. **`isMagical: true, isSpell: false`** for all other actions where the effect is supernatural (magma erupting from nowhere, gravity reversing, magical darkness, summoned creatures appearing). This is the default — MM says lair actions are "magical effects." Examples:
+   - "Magma erupts from a point... DC 15 DEX, 5d6 fire" → `isMagical: true, isSpell: false`.
+   - "A strong current... DC 23 STR or pushed 60 ft" → `isMagical: true, isSpell: false`.
+3. **`isMagical: false`** only for purely physical effects with no magical source. This is **rare** — the MM describes all lair actions as magical. Reserved for edge cases like "a tremor shakes the lair" if the design team decides that's geological rather than magical. Default: all actions start `isMagical: true` unless explicitly reviewed.
+
+**Interaction matrix (per-tag, not blanket):**
+
+| Subsystem | `isSpell: true` | `isMagical: true, isSpell: false` | `isMagical: false` |
+|---|---|---|---|
+| **Globe of Invulnerability** | **Blocked** if `castLevel ≤ GoI threshold` and caster is outside the barrier (Session 87 spatial rules apply). The lair creature is the "caster" for `casterId` purposes. | **Not blocked** (GoI blocks spells, not magical effects). | Not blocked. |
+| **Counterspell** | **Counterable** (enemy within 60 ft can cast Counterspell; ability check vs DC 10+castLevel). | Not counterable. | Not counterable. |
+| **Antimagic Field** (forward-compat — not yet implemented) | **Suppressed** (spells are suppressed in AMF). | **Suppressed** (magical effects are suppressed in AMF per PHB p.213). | Not suppressed. |
+| **Dispel Magic** | **Dismissible** (dispels the spell effect if cast at ≥ castLevel). | Not dismissible (Dispel Magic ends spells, not magical effects). | Not dismissible. |
+
+**Implementation:** the `executeLairAction` dispatcher checks `action.isSpell` before applying effects. If `isSpell && castLevel > 0`, it calls `isProtectedByGoI(target, castLevel, bf, lairCreature.id)` per target (reusing the Session 87 spatial logic). If `isSpell`, it also fires the `triggerReactions` hook for `incoming_spell` (enabling Counterspell). If `!isSpell`, both are skipped.
+
+**Phase 1 deliverable:** the parser pass produces a per-action tagging table (309 rows) with columns: `id | sourceCreature | isMagical | isSpell | spellName | castLevel | category`. This table is reviewed before Phase 2 dispatch begins. The ~56 `@spell`-tagged actions get `isSpell: true` automatically; the remaining ~253 are `isMagical: true, isSpell: false` by default, with any `isMagical: false` exceptions flagged `[VERIFY]`.
 
 ### [DD-5] "Can't repeat same effect 2 rounds in a row" — per-creature 2-entry history
 
@@ -163,26 +206,51 @@ These are the judgment calls I made to unblock implementation. Each is flagged *
 
 ---
 
-## 4. Out-of-Scope Identification Heuristic
+## 4. Out-of-Scope vs Deferred Classification — RESOLVED per user
 
-An action is flagged `outOfScope: true` if **all** of the following hold:
+**User direction (this session):** "defer" — purely-narrative bespoke actions (Sphinx time travel, etc.) are classified as **`deferred`**, NOT `out-of-scope`. They remain candidates for future implementation when their subsystem lands; they are not permanently excluded.
+
+### 4.1 Out-of-scope (`outOfScope: true`, `outOfScopeId: 'lair_oos_NNN'`)
+
+An action is **out-of-scope** (permanently excluded from mechanical execution) if **all** of the following hold:
 
 1. **No mechanical tag** present in the raw 5eTools JSON: no `@dc`, `@damage`, `@condition`, `@creature`, `@spell`, `@hit`, `@dice`, `@status`, `@hazard`.
 2. **AND** the cleaned text matches one or more flavor signals:
-   - Time manipulation: "time is altered", "years forward", "years backward", "wish spell can return".
-   - Long-duration terrain reshaping (≥10 minutes): "after 10 minutes", "1 hour", "8 hours", "24 hours" — *unless* the action also has a combat-relevant tag (then it's in-scope, e.g., Juiblex green slime has `@hazard`).
-   - Pure atmospheric: "whispers", "sound of", "smell", "odor", "scent", "temperature", "wind", "breeze", "illuminate", "glow" — *unless* a mechanical tag is present.
+   - Long-duration terrain reshaping (≥10 minutes) with no combat use: "after 10 minutes, the terrain reshapes to assume the appearance..." (Balhannoth).
    - Object creation with no combat use: "conjure up ... temporary objects made of stone or metal" (Ki-rin).
-   - Social/infiltration: "simulacrum", "telepathic message", "illusion of ... appear to be".
-3. **OR** the action is explicitly meta-mechanical and out-of-engine-scope:
-   - "reroll initiative" (Sphinx) — affects the initiative order itself; defer to a future "meta-mechanics" phase.
+   - Vehicle/ship movement: "a strong wind propels the vessel" (Merrenoloth).
+3. **AND** the action has no plausible mechanical implementation even with a future subsystem (purely social/narrative).
 
-**Borderline cases** (mechanical but complex — kept IN scope, deferred to a later sub-phase):
-- Baphomet "Reverse Gravity" — mechanical (creatures fall), but requires a gravity-flip subsystem. Tagged `deferred: 'gravity'`.
-- Black Dragon "Magical Darkness" — mechanical (blocks darkvision, blocks nonmagical light), but requires the vision/light subsystem. Tagged `deferred: 'magical-darkness'`.
-- Green slime / brown mold (DMG hazards) — mechanical, but require a hazard-statblock lookup. Tagged `deferred: 'dmg-hazard'`.
+These are logged at runtime with their `outOfScopeId` but never executed. Count: **~5 actions** (see `docs/LAIR-ACTIONS-OUT-OF-SCOPE.md`).
 
-Deferred actions are **logged but not executed** until their subsystem is built, same runtime behavior as out-of-scope, but tagged differently for tracking.
+### 4.2 Deferred (`deferred: '<subsystem>'`, NOT out-of-scope)
+
+An action is **deferred** if it IS mechanical (or could become mechanical) but depends on a subsystem the engine doesn't yet have. Per user direction, narrative-bespoke actions that *could* be modeled someday are deferred, not out-of-scope. Subsystem tags:
+
+| Tag | Meaning | Example |
+|---|---|---|
+| `'gravity'` | gravity-flip subsystem | Baphomet "Reverse Gravity" |
+| `'magical-darkness'` / `'visibility'` | vision/light subsystem | Black Dragon darkness, fog/mist actions |
+| `'dmg-hazard'` | DMG hazard statblock lookup | Juiblex green slime |
+| `'meta-time'` | time-manipulation subsystem | Sphinx "time moves 10 years" |
+| `'meta-initiative'` | initiative-order mutation | Sphinx "reroll initiative" |
+
+Deferred actions are logged at runtime with their deferral tag. When the named subsystem is implemented, the action moves to in-scope and becomes executable. Count: **~8 actions**.
+
+### 4.3 Borderline `[VERIFY]` cases
+
+Two actions are flagged for human review in Phase 1:
+- Lichen Lich "shambling mound" — 1-hour duration but functions as a summon in combat. **Recommend:** reclassify as `summon` (in-scope, `durationRounds: Infinity`).
+- Juiblex "green slime" — DMG hazard with real combat effect. **Recommend:** `deferred: 'dmg-hazard'`.
+
+### 4.4 Summary
+
+| Classification | Count | Runtime | Reversibility |
+|---|---|---|---|
+| Out-of-scope (`lair_oos_*`) | ~5 | Logged with ID, never executed | Permanent (would need a design decision to model social/narrative effects) |
+| Deferred (`lair_def_*`) | ~8 | Logged with tag, executed when subsystem lands | Reversible — becomes executable when the subsystem is built |
+| Borderline `[VERIFY]` | 2 | Phase 1 agent classifies | — |
+| **Total non-executable** | **~15** | of 309 (~5%) | — |
 
 ---
 
@@ -193,12 +261,18 @@ Deferred actions are **logged but not executed** until their subsystem is built,
 ```ts
 // src/types/core.ts (addition)
 export interface LairAction {
-  id: string;                  // stable hash: `${creatureName}::${index}`
+  id: string;                  // stable: `${creatureName}::${index}`
   sourceCreature: string;      // legendary group name (e.g., "Adult Red Dragon")
   rawText: string;             // cleaned English text (for logging / fallback)
-  outOfScope: boolean;         // true → log only, never execute
+  outOfScope: boolean;         // true → log only, never executed (flavor/social)
   outOfScopeId?: string;       // 'lair_oos_NNN' if outOfScope
-  deferred?: string;           // subsystem tag if deferred ('gravity', 'magical-darkness', etc.)
+  deferred?: string;           // subsystem tag if deferred ('gravity', 'magical-darkness', 'meta-time', etc.)
+
+  // ── [DD-4] Magical / spell tagging (per-action, no blanket rule) ──
+  isMagical: boolean;          // default true (MM: "magical effects"). False only for purely physical (rare).
+  isSpell: boolean;            // true ONLY when the action casts a named spell.
+  spellName?: string;          // when isSpell (e.g., 'mirage arcane').
+  castLevel?: number;          // when isSpell — for GoI threshold check.
 
   // Extracted structure (all optional — depends on category)
   saveDC?: number;             // from @dc
@@ -206,8 +280,6 @@ export interface LairAction {
   damage?: { count: number; sides: number; type: string };  // from @damage
   conditions?: Condition[];    // from @condition
   summons?: { creature: string; count: number | string };   // from @creature + "up to N"
-  spellToCast?: string;        // from @spell
-  spellSlotLevel?: number;     // inferred if "casts at Nth level"
   rangeFt?: number;            // inferred from "within N feet"
   radiusFt?: number;           // inferred from "N-foot-radius"
   durationRounds?: number;     // 1 = "until next initiative count 20"; else N
@@ -224,22 +296,23 @@ export type LairActionCategory =
   | 'save_only'
   | 'damage_no_save'
   | 'summon'
-  | 'cast_spell'
+  | 'cast_spell'        // isSpell: true, spellName set
   | 'buff_ally'
   | 'debuff_enemy'
   | 'visibility'
   | 'spell_slot_regen'
   | 'movement'         // push/pull/knock
-  | 'flavor'           // out-of-scope
-  | 'deferred'         // in-scope but waiting on a subsystem
-  | 'bespoke';         // doesn't fit any category — needs a hand-written handler
+  | 'deferred'         // in-scope but waiting on a subsystem (gravity, magical-darkness, meta-time, etc.)
+  | 'bespoke'          // doesn't fit any category — needs a hand-written handler
+  | 'flavor';          // out-of-scope (social/narrative, no combat mechanical effect)
 ```
 
 ### 5.2 `Combatant` additions
 
 ```ts
 // src/types/core.ts (additions to Combatant)
-isInLair?: boolean;                    // [DD-1] default true when lairActions defined
+isInLair?: boolean;                    // [DD-1] default true when lairActions defined; parser + scenario JSON + char builder
+initiativeScore?: number;              // [DD-2] numeric initiative (1-30+); set by rollInitiative; for count-20 boundary
 lairActions?: {                        // REPLACES the current string[] schema
   actions: LairAction[];               //   (was: { actions: string[]; initiativeCount: number })
   initiativeCount: number;             //   always 20
@@ -253,44 +326,60 @@ _lairActionHistory?: string[];         // [DD-5] last 2 action IDs used
 
 1. Keep the existing string-flattening (for `rawText`).
 2. Run the 5eTools tag extractor (regex over raw JSON) to populate the structured fields.
-3. Infer `saveAbility` from text keywords ("Strength saving throw" → `'str'`; etc.).
-4. Infer `rangeFt` / `radiusFt` from "within N feet" / "N-foot-radius".
-5. Infer `durationRounds`: "until initiative count 20 on the next round" → `1`; "1 minute" → `10`; "until dismissed" → `Infinity`.
-6. Infer `targetsEnemies` from "each creature other than the [creature]" → `true`; "the [creature] casts Haste on themself" → `false`.
-7. Infer `targetFilter` from "each gnoll or hyena" → `'gnoll|hyena'`.
-8. Apply the out-of-scope heuristic (§4) → set `outOfScope` / `outOfScopeId`.
-9. Assign `category` via the categorization rules.
-10. Assign `id` = `${sourceCreature}::${index}` (stable, deterministic).
+3. **[DD-4] Tag each action individually:**
+   - `isSpell: true` if `@spell` tag present OR text matches "casts [spell]" / "casts the [spell] spell." Extract `spellName` and look up `castLevel` from the spell registry.
+   - `isMagical: true` by default for all actions (MM: "magical effects"). Set `isMagical: false` only if the text describes a purely physical effect with no magical source (rare; flag `[VERIFY]`).
+   - This is a **per-action read**, not a blanket rule. The Phase 1 deliverable is a 309-row tagging table.
+4. Infer `saveAbility` from text keywords ("Strength saving throw" → `'str'`; etc.).
+5. Infer `rangeFt` / `radiusFt` from "within N feet" / "N-foot-radius".
+6. Infer `durationRounds`: "until initiative count 20 on the next round" → `1`; "1 minute" → `10`; "until dismissed" → `Infinity`.
+7. Infer `targetsEnemies` from "each creature other than the [creature]" → `true`; "the [creature] casts Haste on themself" → `false`.
+8. Infer `targetFilter` from "each gnoll or hyena" → `'gnoll|hyena'`.
+9. Apply the out-of-scope heuristic (§4) → set `outOfScope` / `outOfScopeId` OR `deferred`.
+10. Assign `category` via the categorization rules (`cast_spell` when `isSpell`, else by tags).
+11. Assign `id` = `${sourceCreature}::${index}` (stable, deterministic).
 
 ---
 
 ## 6. Engine Integration
 
-### 6.1 Initiative count 20 hook
+### 6.1 Initiative count 20 hook (PHB-accurate, losing ties)
 
-The `runCombat` round loop (`combat.ts:6451`) gains a new phase **before** the per-actor turn loop:
+The `runCombat` round loop (`combat.ts:6451`) is restructured to insert a lair-action checkpoint **at the initiative-20 boundary** within the per-actor turn loop (not at round start). This requires numeric initiative scores (see [DD-2]):
 
 ```ts
 for (let round = 1; round <= maxRounds; round++) {
   battlefield.round = round;
   state.disengagedThisTurn.clear();
 
-  // ── Phase A: Lair actions (initiative count 20, priority over ties) ──
-  resolveLairActions(state);   // NEW — see §6.2
+  let lairActionsFiredThisRound = false;
 
-  // ── Phase B: Lair Actions (old stub location — REMOVED) ──
-  // (the old random-pick stub at combat.ts:6458 is deleted)
+  for (const actorId of initiative) {  // descending order
+    const actor = battlefield.combatants.get(actorId)!;
 
-  for (const actorId of initiative) { ... }   // existing per-actor loop
+    // ── Lair action checkpoint: fire AFTER all creatures with init ≥ 20,
+    //    BEFORE the first creature with init < 20. (PHB: losing ties) ──
+    if (!lairActionsFiredThisRound && (actor.initiativeScore ?? 0) < 20) {
+      resolveLairActions(state);   // see §6.2
+      lairActionsFiredThisRound = true;
+    }
+
+    // (existing per-actor turn logic)
+    if (!actor || actor.isDead) continue;
+    // ... executeTurnPlan(actor, plan, state) ...
+  }
+
+  // Edge case: if ALL creatures had initiative ≥ 20 (or no numeric scores),
+  // lair actions fire at the END of the round.
+  if (!lairActionsFiredThisRound) {
+    resolveLairActions(state);
+  }
 }
 ```
 
-**Note on [DD-2]:** true "initiative count 20, priority over ties" requires the engine to know each combatant's numeric initiative score. The current engine only has an ordered `initiative: string[]`. Two implementation options:
+**Backward compat:** if `initiativeScore` is undefined on all combatants (legacy scenarios passing only `initiative: string[]`), the `actor.initiativeScore ?? 0 < 20` check is true for the first creature, so lair actions fire at round start (the current stub behavior). This is graceful degradation — not PHB-accurate, but doesn't break existing tests.
 
-- **Option A (recommended, minimal):** keep `initiative: string[]` as the turn order, but resolve lair actions at the **start of the round** (before any creature acts). This is functionally "priority over ties" because lair actions happen before every creature's turn. This is a slight simplification — it doesn't handle the case where a creature has initiative > 20 (they'd act after the lair action in RAW too, which is what we want). **This option is correct for all practical cases and requires zero changes to initiative tracking.**
-- **Option B (strict RAW):** add `initiativeScore: number` to Combatant, resolve lair actions when the loop reaches the first creature with score ≤ 20. Higher complexity; only matters if a creature has initiative exactly 20 (rare).
-
-**Recommendation:** Option A. It satisfies your "priority over ties" direction (lair actions first) with no initiative-system changes. The RFC uses Option A.
+**`rollInitiative` change:** `utils.ts:911` is updated to store the rolled score on each combatant (`c.initiativeScore = roll`) in addition to returning the ordered ID array. This is a one-line addition with no behavior change.
 
 ### 6.2 `resolveLairActions(state)`
 
@@ -353,17 +442,19 @@ Routes by `action.category`:
 | `movement` | push/pull via position mutation | `chebyshev3D` |
 | `bespoke` | hand-written handler per `action.id` | — |
 
-### 6.4 Interaction matrix
+### 6.4 Interaction matrix (per-action tags — see [DD-4])
 
-| Subsystem | Interaction | Decision |
-|---|---|---|
-| **Globe of Invulnerability** | Lair action effects on GoI-protected creatures | [DD-4] NOT blocked (lair actions aren't spells) |
-| **Counterspell** | Enemy tries to counter a lair action | NOT counterable (not a spell) |
-| **Concentration** | Does a lair action break the caster's concentration? | NO — lair actions don't consume concentration |
-| **Legendary Actions** | Same round as lair actions? | YES — independent. Lair at count 20, legendary on other creatures' turns. |
-| **Reactions** | Can a lair action trigger a reaction (e.g., Shield)? | Only the `save_damage` category where damage is dealt — `triggerReactions` fires normally. Other categories: no. |
-| **Summons** | Do lair-summoned creatures get a turn? | YES — inserted into initiative after the lair creature (same as `summonSpell`). |
-| **Death** | If the lair creature dies, do ongoing lair effects end? | Duration-based effects persist until expiry; no new lair actions fire. |
+| Subsystem | `isSpell: true` action | `isMagical, !isSpell` action | `!isMagical` action (rare) |
+|---|---|---|---|
+| **Globe of Invulnerability** | Blocked if `castLevel ≤ GoI threshold` and lair creature is outside the barrier (Session 87 spatial rules; `casterId = lairCreature.id`). | NOT blocked (GoI blocks spells only). | NOT blocked. |
+| **Counterspell** | Counterable (enemy within 60 ft; ability check vs DC 10+castLevel). Fires `incoming_spell` reaction trigger. | Not counterable. | Not counterable. |
+| **Antimagic Field** (forward-compat) | Suppressed. | Suppressed (magical effects suppressed per PHB p.213). | Not suppressed. |
+| **Dispel Magic** | Dismissible (if cast at ≥ castLevel). | Not dismissible. | Not dismissible. |
+| **Concentration** | Does NOT break the lair creature's concentration (lair actions aren't concentration spells). | Same. | Same. |
+| **Legendary Actions** | Independent — lair at count 20, legendary on other creatures' turns. | Same. | Same. |
+| **Reactions (Shield, Absorb Elements)** | `save_damage` category fires `incoming_attack_hit` / `incoming_damage` triggers normally. Other categories: no. | Same. | Same. |
+| **Summons** | Lair-summoned creatures get a turn — inserted into initiative after the lair creature (same as `summonSpell`). | Same. | Same. |
+| **Death of lair creature** | Duration-based effects persist until expiry; no new lair actions fire. | Same. | Same. |
 
 ---
 
@@ -475,17 +566,19 @@ Each phase is independently shippable with its own test file. An agent can stop 
 
 ---
 
-## 10. Open Questions (please review before Phase 1)
+## 10. Resolved Questions (user decisions recorded Session 90)
 
-1. **[DD-2] Priority over ties — confirm Option A is acceptable.** Option A resolves lair actions at the *start of the round* (before all creatures). This is simpler than true initiative-count-20 tracking but means a creature with initiative 25 acts *after* the lair action even though RAW would have them act before count 20. Is this acceptable? (My recommendation: yes — it satisfies your "priority over ties" direction and the edge case is negligible.)
+All 5 open questions from the draft RFC have been resolved by the user. The design decisions in §3 reflect these resolutions. Summary for the implementing agent:
 
-2. **[DD-4] GoI / Counterspell interaction — confirm non-blockable default.** The 2024 MM says lair actions aren't spells. Pre-2024 (this engine) is ambiguous. Do you want lair actions blockable by GoI? (My recommendation: no — keeps legendary creatures threatening inside a GoI.)
+| # | Question | User decision | RFC section |
+|---|---|---|---|
+| 1 | [DD-2] Initiative count 20 tie resolution | **PHB default** — lair actions resolve AFTER creatures with initiative ≥ 20, BEFORE those with < 20. Requires `initiativeScore` numeric field. | [DD-2], §6.1 |
+| 2 | [DD-4] GoI / Counterspell interaction | **No blanket rule.** Read each action individually. Tag `isMagical` / `isSpell` / `spellName` / `castLevel` per-action. Spells are blocked by GoI and counterable; magical non-spells are not blocked by GoI but ARE suppressed by Antimagic Field (forward-compat). | [DD-4], §6.4 |
+| 3 | Out-of-scope vs deferred for narrative-bespoke | **Defer** — narrative-bespoke actions (Sphinx time travel, etc.) are `deferred`, not `out-of-scope`. Only permanently-excluded flavor/social actions (Balhannoth warp, Ki-rin objects, Merrenoloth ship) are `out-of-scope`. | §4 |
+| 4 | Scoring weight tuning | **Ship defaults** — use the weights in §7 as-is; tune in Phase 5 based on playtesting. | §7 |
+| 5 | `isInLair` UI surface | **All 3 surfaces** — parser default (true when lairActions defined) + scenario JSON override + character builder JSON schema (exposed as settable toggle, default on). | [DD-1] |
 
-3. **Out-of-scope registry scope.** The starter registry (§Phase 0) identifies ~12 clear flavor actions. The ~15 "bespoke" actions (time manipulation, simulacrum, etc.) are *in-scope but need hand-written handlers*. Should bespoke actions with no clear combat mechanical effect (e.g., Sphinx "time moves 10 years") be reclassified as out-of-scope? (My recommendation: yes — reclassify purely-narrative bespoke actions as out-of-scope; keep mechanically-meaningful bespoke actions like "reroll initiative" as `deferred`.)
-
-4. **Scoring weight tuning.** The weights in §7 are reasonable defaults. Do you want me to tune them against a specific combat scenario, or ship the defaults and let playtesting tune later? (My recommendation: ship defaults, tune in Phase 5.)
-
-5. **`isInLair` UI surface.** You said "tied to a flag in the monster UI by default to on." The engine doesn't currently have a monster editor UI (it's a simulation engine with a character builder). Should the flag be: (a) parser-set (default true when lairActions defined, overridable in scenario JSON), (b) exposed in the character builder JSON schema, or (c) both? (My recommendation: (a) for now — the RFC assumes parser default + scenario override.)
+**No further user input is required to begin Phase 1.** The implementing agent should proceed with the design as specified in §3–§8.
 
 ---
 

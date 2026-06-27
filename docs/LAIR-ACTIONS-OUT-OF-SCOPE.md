@@ -1,21 +1,23 @@
 # Lair Actions — Out-of-Scope & Deferred Registry
 
 **Phase 0 deliverable for RFC-LAIRACTIONS.**
-**Generated:** Session 90 (autonomous)
+**Generated:** Session 90 (autonomous), **updated** Session 90 (user decisions applied)
 **Source:** `bestiaryData/legendarygroups.json` — 115 legendary groups, 309 lair action options.
+
+**Update (Session 90):** per user direction, narrative-bespoke actions that *could* be modeled someday are reclassified as **`deferred`** (not `out-of-scope`). Only permanently-excluded flavor/social/narrative actions remain `out-of-scope`. The Sphinx "time moves 10 years" action moved from `lair_oos_006` to `lair_def_008` (`deferred: 'meta-time'`).
 
 This registry lists lair actions that the engine will **NOT execute mechanically** at runtime, for two reasons:
 
-- **Out-of-scope (`lair_oos_NNN`):** the action has no combat-mechanical effect (pure flavor, social, narrative, or long-duration out-of-combat reshaping). The engine logs these with their ID but does not execute them.
-- **Deferred (`lair_def_XXX`):** the action IS mechanical, but depends on a subsystem the engine doesn't yet have (vision/light, gravity, DMG hazards, initiative mutation). The engine logs these with their deferral tag; they become executable when the subsystem lands.
+- **Out-of-scope (`lair_oos_NNN`):** the action has no combat-mechanical effect and no plausible mechanical implementation even with a future subsystem (pure flavor, social, narrative, or out-of-combat-only). The engine logs these with their ID but does not execute them. **Permanent exclusion.**
+- **Deferred (`lair_def_XXX`):** the action IS mechanical (or could become mechanical), but depends on a subsystem the engine doesn't yet have (vision/light, gravity, DMG hazards, initiative mutation, time manipulation). The engine logs these with their deferral tag; they become executable when the subsystem lands. **Reversible.**
 
 The identification heuristic is defined in `docs/RFC-LAIRACTIONS.md` §4. This registry is a **starter** — the Phase 1 implementing agent should re-run the categorization pass against the full 309 actions and verify/extend this list. Entries marked `[VERIFY]` are borderline and need human review.
 
 ---
 
-## Out-of-Scope (flavor / social / narrative) — 6 entries
+## Out-of-Scope (flavor / social / narrative — permanently excluded) — 5 entries
 
-These have no combat-mechanical effect. Logged at runtime with the ID; never executed.
+These have no combat-mechanical effect and no plausible mechanical implementation. Logged at runtime with the ID; never executed.
 
 | ID | Creature | Action (truncated) | Reason |
 |---|---|---|---|
@@ -24,13 +26,14 @@ These have no combat-mechanical effect. Logged at runtime with the ID; never exe
 | `lair_oos_003` | Ki-rin | "conjure up one or more temporary objects made of stone or metal that can collectively fill no more than a 2-foot cube..." | Object creation with no combat use. |
 | `lair_oos_004` | Merrenoloth | "A strong wind propels the vessel, increasing its speed by 30 feet..." | Vehicle/ship movement, not creature combat. |
 | `lair_oos_005` | Merrenoloth | (duplicate of 004, alternate phrasing) | Same as 004. |
-| `lair_oos_006` | Sphinx | "The flow of time within the lair is altered such that everything within moves up to 10 years forward or backward..." | Narrative time manipulation; out of combat scope. `[VERIFY]` — could be reclassified `deferred: 'meta-time'` if time-travel mechanics are ever modeled. |
+
+*(Note: `lair_oos_006` was reclassified to `lair_def_008` per user direction — Sphinx time travel is deferred, not permanently excluded, since a time-manipulation subsystem could model it someday.)*
 
 ---
 
-## Deferred (mechanical, awaiting subsystem) — 7 entries
+## Deferred (mechanical, awaiting subsystem) — 8 entries
 
-These ARE mechanical. The engine logs them with the deferral tag and skips execution until the named subsystem is built.
+These ARE mechanical (or could become mechanical). The engine logs them with the deferral tag and skips execution until the named subsystem is built.
 
 | ID | Creature | Action (truncated) | Deferred subsystem |
 |---|---|---|---|
@@ -41,6 +44,7 @@ These ARE mechanical. The engine logs them with the deferral tag and skips execu
 | `lair_def_005` | Storm Giant Quintessent | (duplicate of 004, alternate phrasing) | `visibility` |
 | `lair_def_006` | Sphinx | "every creature in the lair must reroll initiative. The sphinx can choose not to reroll." | `meta-initiative` (needs initiative-order mutation) |
 | `lair_def_007` | Baphomet | "Reverse Gravity... gravity is reversed within that room... creatures fall in the direction of the new pull of gravity..." | `gravity` (needs gravity-flip subsystem) |
+| `lair_def_008` | Sphinx | "The flow of time within the lair is altered such that everything within moves up to 10 years forward or backward..." | `meta-time` (needs time-manipulation subsystem) — **reclassified from `lair_oos_006` per user direction** |
 
 ---
 
@@ -57,12 +61,12 @@ These were flagged by the heuristic but on inspection appear **mechanical and in
 
 ## Summary
 
-| Classification | Count | Runtime behavior |
-|---|---|---|
-| Out-of-scope (`lair_oos_*`) | 6 | Logged with ID, never executed |
-| Deferred (`lair_def_*`) | 7 | Logged with deferral tag, executed when subsystem lands |
-| Borderline (verify) | 2 | Phase 1 agent classifies as `summon` or `deferred` |
-| **Total non-executable** | **15** | of 309 total lair actions (~5%) |
+| Classification | Count | Runtime behavior | Reversibility |
+|---|---|---|---|
+| Out-of-scope (`lair_oos_*`) | 5 | Logged with ID, never executed | Permanent (social/narrative — no plausible mechanical model) |
+| Deferred (`lair_def_*`) | 8 | Logged with deferral tag, executed when subsystem lands | Reversible — becomes executable when the subsystem is built |
+| Borderline (verify) | 2 | Phase 1 agent classifies | — |
+| **Total non-executable** | **15** | of 309 total lair actions (~5%) | — |
 
 The remaining **~294 actions** (~95%) are in-scope and will be mechanically resolved across Phases 1–5 of RFC-LAIRACTIONS.
 
