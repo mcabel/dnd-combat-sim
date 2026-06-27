@@ -152,8 +152,9 @@ console.log('\n=== Phase 1 — Simple multi-target AoE on-cast exclusion ===\n')
 
 {
   // 1a. Arms of Hadar: GoI-protected target takes 0 damage, exposed takes damage
+  // Session 87: caster re-positioned to (4,0,0) — outside GoI 10-ft radius.
   const caster = makeCombatant('warlock', {
-    faction: 'party', pos: { x: 0, y: 0, z: 0 },
+    faction: 'party', pos: { x: 4, y: 0, z: 0 },
     actions: [AOH_ACTION], resources: withSlots({ 1: { max: 2, remaining: 2 } }),
     cha: 20,
   });
@@ -183,8 +184,9 @@ console.log('\n=== Phase 1 — Simple multi-target AoE on-cast exclusion ===\n')
 {
   // 1b. Ice Knife: GoI-protected target in explosion takes 0 cold damage
   //     (piercing on primary is a separate attack-roll mechanic)
+  // Session 87: caster re-positioned to (4,0,0) — outside GoI 10-ft radius.
   const caster = makeCombatant('wiz', {
-    faction: 'party', pos: { x: 0, y: 0, z: 0 },
+    faction: 'party', pos: { x: 4, y: 0, z: 0 },
     actions: [IK_ACTION], resources: withSlots({ 1: { max: 2, remaining: 2 } }),
     int: 20,
   });
@@ -240,8 +242,9 @@ console.log('\n=== Phase 1 — Simple multi-target AoE on-cast exclusion ===\n')
   // 1c. Sunburst: GoI-protected target takes 0 damage + no blinded
   //     NOTE: Sunburst is L8, so we need a L9 GoI (threshold 8) to block it.
   //     L6 GoI (threshold 5) would be penetrated by L8 Sunburst.
+  // Session 87: caster re-positioned to (4,0,0) — outside GoI 10-ft radius.
   const caster = makeCombatant('wiz', {
-    faction: 'party', pos: { x: 0, y: 0, z: 0 },
+    faction: 'party', pos: { x: 4, y: 0, z: 0 },
     actions: [SB_ACTION], resources: withSlots({ 8: { max: 1, remaining: 1 } }),
     int: 20,
   });
@@ -265,8 +268,9 @@ console.log('\n=== Phase 1 — Simple multi-target AoE on-cast exclusion ===\n')
 
 {
   // 1d. Tidal Wave: GoI-protected target takes 0 damage + no prone
+  // Session 87: caster re-positioned to (4,0,0) — outside GoI 10-ft radius.
   const caster = makeCombatant('wiz', {
-    faction: 'party', pos: { x: 0, y: 0, z: 0 },
+    faction: 'party', pos: { x: 4, y: 0, z: 0 },
     actions: [TW_ACTION], resources: withSlots({ 3: { max: 2, remaining: 2 } }),
     int: 20,
   });
@@ -290,8 +294,9 @@ console.log('\n=== Phase 1 — Simple multi-target AoE on-cast exclusion ===\n')
 
 {
   // 1e. Guardian of Faith: GoI-protected target takes 0 damage
+  // Session 87: caster re-positioned to (4,0,0) — outside GoI 10-ft radius.
   const caster = makeCombatant('cleric', {
-    faction: 'party', pos: { x: 0, y: 0, z: 0 },
+    faction: 'party', pos: { x: 4, y: 0, z: 0 },
     actions: [GOF_ACTION], resources: withSlots({ 4: { max: 1, remaining: 1 } }),
     wis: 20,
   });
@@ -329,8 +334,9 @@ console.log('\n=== Phase 2 — Multi-target persistent damage_zone ===\n');
 {
   // 2a. Hunger of Hadar: GoI-protected takes 0 on-cast damage, but gets
   //     TWO damage_zone effects with sourceSlotLevel set
+  // Session 87: caster re-positioned to (4,0,0) — outside GoI 10-ft radius.
   const caster = makeCombatant('warlock', {
-    faction: 'party', pos: { x: 0, y: 0, z: 0 },
+    faction: 'party', pos: { x: 4, y: 0, z: 0 },
     actions: [HOH_ACTION], resources: withSlots({ 3: { max: 2, remaining: 2 } }),
     cha: 20, concentration: null,
   });
@@ -364,8 +370,9 @@ console.log('\n=== Phase 2 — Multi-target persistent damage_zone ===\n');
 {
   // 2b. Call Lightning: GoI-protected takes 0 on-cast damage, but gets
   //     damage_zone effect with sourceSlotLevel set
+  // Session 87: caster re-positioned to (4,0,0) — outside GoI 10-ft radius.
   const caster = makeCombatant('druid', {
-    faction: 'party', pos: { x: 0, y: 0, z: 0 },
+    faction: 'party', pos: { x: 4, y: 0, z: 0 },
     actions: [CL_ACTION], resources: withSlots({ 3: { max: 2, remaining: 2 } }),
     wis: 20, concentration: null,
   });
@@ -395,8 +402,9 @@ console.log('\n=== Phase 2 — Multi-target persistent damage_zone ===\n');
 {
   // 2c. Spirit Guardians: GoI-protected takes 0 on-cast damage, but gets
   //     damage_zone effect with sourceSlotLevel set
+  // Session 87: caster re-positioned to (4,0,0) — outside GoI 10-ft radius.
   const caster = makeCombatant('cleric', {
-    faction: 'party', pos: { x: 0, y: 0, z: 0 },
+    faction: 'party', pos: { x: 4, y: 0, z: 0 },
     actions: [SG_ACTION], resources: withSlots({ 3: { max: 2, remaining: 2 } }),
     wis: 20, concentration: null,
   });
@@ -426,8 +434,9 @@ console.log('\n=== Phase 2 — Multi-target persistent damage_zone ===\n');
 {
   // 2d. Dawn: GoI-protected takes 0 on-cast damage, but gets damage_zone
   //     effect with sourceSlotLevel set
+  // Session 87: caster re-positioned to (4,0,0) — outside GoI 10-ft radius.
   const caster = makeCombatant('cleric', {
-    faction: 'party', pos: { x: 0, y: 0, z: 0 },
+    faction: 'party', pos: { x: 4, y: 0, z: 0 },
     actions: [DAWN_ACTION], resources: withSlots({ 5: { max: 1, remaining: 1 } }),
     wis: 20, concentration: null,
   });
@@ -464,8 +473,9 @@ console.log('\n=== Phase 3 — Single-target persistent damage_zone ===\n');
 {
   // 3a. Cloud of Daggers: GoI-protected takes 0 on-cast damage, but gets
   //     damage_zone effect with sourceSlotLevel set
+  // Session 87: caster re-positioned to (4,0,0) — outside GoI 10-ft radius.
   const caster = makeCombatant('bard', {
-    faction: 'party', pos: { x: 0, y: 0, z: 0 },
+    faction: 'party', pos: { x: 4, y: 0, z: 0 },
     actions: [COD_ACTION], resources: withSlots({ 2: { max: 2, remaining: 2 } }),
     cha: 20, concentration: null,
   });
@@ -491,8 +501,9 @@ console.log('\n=== Phase 3 — Single-target persistent damage_zone ===\n');
 {
   // 3b. Flaming Sphere: GoI-protected takes 0 on-cast damage, but gets
   //     damage_zone effect with sourceSlotLevel set
+  // Session 87: caster re-positioned to (4,0,0) — outside GoI 10-ft radius.
   const caster = makeCombatant('wiz', {
-    faction: 'party', pos: { x: 0, y: 0, z: 0 },
+    faction: 'party', pos: { x: 4, y: 0, z: 0 },
     actions: [FS_ACTION], resources: withSlots({ 2: { max: 2, remaining: 2 } }),
     int: 20, concentration: null,
   });
@@ -524,8 +535,9 @@ console.log('\n=== Phase 4 — Non-damage AoE (conditions) exclusion ===\n');
 
 {
   // 4a. Stinking Cloud: GoI-protected target gets NO conditions
+  // Session 87: caster re-positioned to (4,0,0) — outside GoI 10-ft radius.
   const caster = makeCombatant('wiz', {
-    faction: 'party', pos: { x: 0, y: 0, z: 0 },
+    faction: 'party', pos: { x: 4, y: 0, z: 0 },
     actions: [SC_ACTION], resources: withSlots({ 3: { max: 2, remaining: 2 } }),
     int: 20, concentration: null,
   });

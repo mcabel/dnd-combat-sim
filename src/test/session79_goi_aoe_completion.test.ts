@@ -161,8 +161,9 @@ console.log('\n=== Phase 1 — Pattern A: Instantaneous AoE on-cast exclusion ==
 {
   // 1a. Circle of Death (L6): GoI upcast to L7 (threshold=6) blocks L6 → protected takes 0
   // (GoI at base L6 only blocks ≤5, so L6 Circle of Death bypasses base GoI)
+  // Session 87: caster re-positioned to (4,0,0) — outside GoI 10-ft radius.
   const caster = makeCombatant('wiz', {
-    faction: 'party', pos: { x: 0, y: 0, z: 0 },
+    faction: 'party', pos: { x: 4, y: 0, z: 0 },
     actions: [COD_ACTION], resources: withSlots({ 6: { max: 1, remaining: 1 } }),
     cha: 20,
   });
@@ -190,8 +191,9 @@ console.log('\n=== Phase 1 — Pattern A: Instantaneous AoE on-cast exclusion ==
 
 {
   // 1b. Cone of Cold (L5): GoI(L6, threshold=5) blocks L5 → protected takes 0
+  // Session 87: caster re-positioned to (4,0,0) — outside GoI 10-ft radius.
   const caster = makeCombatant('wiz', {
-    faction: 'party', pos: { x: 0, y: 0, z: 0 },
+    faction: 'party', pos: { x: 4, y: 0, z: 0 },
     actions: [COC_ACTION], resources: withSlots({ 5: { max: 1, remaining: 1 } }),
     cha: 20,
   });
@@ -199,10 +201,12 @@ console.log('\n=== Phase 1 — Pattern A: Instantaneous AoE on-cast exclusion ==
     faction: 'enemy', pos: { x: 1, y: 0, z: 0 },
     activeEffects: [makeGoIEffect(5)],
   });
-  // exposed at (5,0,0): Chebyshev 4 from GoI holder at (1,0,0) → outside GoI radius
-  // Within 60ft cone aimed at eProt (1,0,0) from caster (0,0,0) — directly on axis
+  // exposed at (-2,0,0): Chebyshev 3 from GoI holder at (1,0,0) → outside GoI radius.
+  // Session 87: caster moved to (4,0,0), so the cone now aims in the -X direction
+  // (from caster (4,0,0) toward eProt (1,0,0)). eExp at (-2,0,0) is along the cone
+  // axis, 30 ft from caster (within 60-ft cone range).
   const eExp = makeCombatant('e_exp', {
-    faction: 'enemy', pos: { x: 5, y: 0, z: 0 },
+    faction: 'enemy', pos: { x: -2, y: 0, z: 0 },
   });
   const bf = makeBF([caster, eProt, eExp]);
   const state = makeState(bf);
@@ -218,8 +222,9 @@ console.log('\n=== Phase 1 — Pattern A: Instantaneous AoE on-cast exclusion ==
 
 {
   // 1c. Chain Lightning (L6, auto-hit, indexed loop): GoI(L7, threshold=6) blocks L6
+  // Session 87: caster re-positioned to (4,0,0) — outside GoI 10-ft radius.
   const caster = makeCombatant('wiz', {
-    faction: 'party', pos: { x: 0, y: 0, z: 0 },
+    faction: 'party', pos: { x: 4, y: 0, z: 0 },
     actions: [CL_ACTION], resources: withSlots({ 6: { max: 1, remaining: 1 } }),
     cha: 20,
   });
@@ -247,8 +252,9 @@ console.log('\n=== Phase 1 — Pattern A: Instantaneous AoE on-cast exclusion ==
 {
   // 1d. Earthquake (L8, auto-hit): GoI upcast to L9 (threshold=8) blocks L8
   // (GoI at base L6 only blocks ≤5; L8 GoI blocks ≤7; L9 GoI blocks ≤8)
+  // Session 87: caster re-positioned to (4,0,0) — outside GoI 10-ft radius.
   const caster = makeCombatant('wiz', {
-    faction: 'party', pos: { x: 0, y: 0, z: 0 },
+    faction: 'party', pos: { x: 4, y: 0, z: 0 },
     actions: [EQ_ACTION], resources: withSlots({ 8: { max: 1, remaining: 1 } }),
     cha: 20,
   });
@@ -273,8 +279,9 @@ console.log('\n=== Phase 1 — Pattern A: Instantaneous AoE on-cast exclusion ==
 
 {
   // 1e. Flame Strike (L5, dual damage fire+radiant): GoI blocks BOTH damage types
+  // Session 87: caster re-positioned to (4,0,0) — outside GoI 10-ft radius.
   const caster = makeCombatant('wiz', {
-    faction: 'party', pos: { x: 0, y: 0, z: 0 },
+    faction: 'party', pos: { x: 4, y: 0, z: 0 },
     actions: [FS_ACTION], resources: withSlots({ 5: { max: 1, remaining: 1 } }),
     cha: 20,
   });
@@ -305,8 +312,9 @@ console.log('\n=== Phase 2 — Pattern B: Persistent damage_zone ===\n');
 
 {
   // 2a. Cloudkill (L5): on-cast damage blocked, damage_zone applied with sourceSlotLevel
+  // Session 87: caster re-positioned to (4,0,0) — outside GoI 10-ft radius.
   const caster = makeCombatant('wiz', {
-    faction: 'party', pos: { x: 0, y: 0, z: 0 },
+    faction: 'party', pos: { x: 4, y: 0, z: 0 },
     actions: [CK_ACTION], resources: withSlots({ 5: { max: 1, remaining: 1 } }),
     cha: 20,
   });
@@ -348,8 +356,9 @@ console.log('\n=== Phase 2 — Pattern B: Persistent damage_zone ===\n');
 
 {
   // 2b. Insect Plague (L5): same pattern
+  // Session 87: caster re-positioned to (4,0,0) — outside GoI 10-ft radius.
   const caster = makeCombatant('wiz', {
-    faction: 'party', pos: { x: 0, y: 0, z: 0 },
+    faction: 'party', pos: { x: 4, y: 0, z: 0 },
     actions: [IP_ACTION], resources: withSlots({ 5: { max: 1, remaining: 1 } }),
     cha: 20,
   });
@@ -377,8 +386,9 @@ console.log('\n=== Phase 3 — Pattern B: terrain_zone spells ===\n');
 
 {
   // 3a. Evard's Black Tentacles (L4): terrain_zone + on-cast damage_zone
+  // Session 87: caster re-positioned to (4,0,0) — outside GoI 10-ft radius.
   const caster = makeCombatant('wiz', {
-    faction: 'party', pos: { x: 0, y: 0, z: 0 },
+    faction: 'party', pos: { x: 4, y: 0, z: 0 },
     actions: [EBT_ACTION], resources: withSlots({ 4: { max: 1, remaining: 1 } }),
     cha: 20,
   });
@@ -417,8 +427,9 @@ console.log('\n=== Phase 3 — Pattern B: terrain_zone spells ===\n');
 
 {
   // 3b. Sickening Radiance (L4): terrain_zone + on-cast damage + exhaustion
+  // Session 87: caster re-positioned to (4,0,0) — outside GoI 10-ft radius.
   const caster = makeCombatant('wiz', {
-    faction: 'party', pos: { x: 0, y: 0, z: 0 },
+    faction: 'party', pos: { x: 4, y: 0, z: 0 },
     actions: [SR_ACTION], resources: withSlots({ 4: { max: 1, remaining: 1 } }),
     cha: 20,
   });
@@ -454,8 +465,9 @@ console.log('\n=== Phase 4 — Pattern B: Single-target persistent ===\n');
 
 {
   // 4a. Moonbeam (L2): on-cast damage blocked, damage_zone applied with sourceSlotLevel
+  // Session 87: caster re-positioned to (4,0,0) — outside GoI 10-ft radius.
   const caster = makeCombatant('wiz', {
-    faction: 'party', pos: { x: 0, y: 0, z: 0 },
+    faction: 'party', pos: { x: 4, y: 0, z: 0 },
     actions: [MB_ACTION], resources: withSlots({ 2: { max: 1, remaining: 1 } }),
     cha: 20,
   });
@@ -482,8 +494,9 @@ console.log('\n=== Phase 4 — Pattern B: Single-target persistent ===\n');
 
 {
   // 4b. Wall of Fire (L4): on-appear damage blocked, damage_zone applied
+  // Session 87: caster re-positioned to (4,0,0) — outside GoI 10-ft radius.
   const caster = makeCombatant('wiz', {
-    faction: 'party', pos: { x: 0, y: 0, z: 0 },
+    faction: 'party', pos: { x: 4, y: 0, z: 0 },
     actions: [WOF_ACTION], resources: withSlots({ 4: { max: 1, remaining: 1 } }),
     cha: 20,
   });

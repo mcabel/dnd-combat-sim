@@ -242,9 +242,11 @@ console.log('\n=== Phase 2 — Fireball AoE exclusion ===\n');
 {
   // 2a. Fireball vs GoI-protected target: protected enemy takes 0 damage,
   //     non-protected enemy takes damage, slot is consumed.
+  // Session 87: caster re-positioned to (4,0,0) — 15 ft from GoI caster at
+  // (1,0,0), outside the 10-ft barrier radius (broader RAW reading).
   const caster = makeCombatant('wiz', {
     faction: 'party',
-    pos: { x: 0, y: 0, z: 0 },
+    pos: { x: 4, y: 0, z: 0 },
     actions: [FIREBALL_ACTION],
     resources: withSlots({ 3: { max: 2, remaining: 2 } }),
     int: 20,
@@ -362,9 +364,10 @@ console.log('\n=== Phase 3 — Lightning Bolt AoE exclusion ===\n');
 
 {
   // 3a. Lightning Bolt vs GoI-protected target: only exposed takes damage
+  // Session 87: caster re-positioned to (4,0,0) — outside GoI 10-ft radius.
   const caster = makeCombatant('wiz', {
     faction: 'party',
-    pos: { x: 0, y: 0, z: 0 },
+    pos: { x: 4, y: 0, z: 0 },
     actions: [LIGHTNING_BOLT_ACTION],
     resources: withSlots({ 3: { max: 2, remaining: 2 } }),
     int: 20,
@@ -398,9 +401,10 @@ console.log('\n=== Phase 4 — Shatter AoE exclusion ===\n');
 
 {
   // 4a. Shatter vs GoI-protected target: only exposed takes damage
+  // Session 87: caster re-positioned to (4,0,0) — outside GoI 10-ft radius.
   const caster = makeCombatant('wiz', {
     faction: 'party',
-    pos: { x: 0, y: 0, z: 0 },
+    pos: { x: 4, y: 0, z: 0 },
     actions: [SHATTER_ACTION],
     resources: withSlots({ 2: { max: 2, remaining: 2 } }),
     int: 20,
@@ -435,9 +439,10 @@ console.log('\n=== Phase 5 — Thunderwave AoE exclusion (damage + push) ===\n')
 {
   // 5a. Thunderwave vs GoI-protected target: no damage AND no push
   //     PHB p.245: "the spell has no effect on them" — push is also negated.
+  // Session 87: caster re-positioned to (4,0,0) — outside GoI 10-ft radius.
   const caster = makeCombatant('wiz', {
     faction: 'party',
-    pos: { x: 0, y: 0, z: 0 },
+    pos: { x: 4, y: 0, z: 0 },
     actions: [THUNDERWAVE_ACTION],
     resources: withSlots({ 1: { max: 2, remaining: 2 } }),
     int: 20,
@@ -484,9 +489,10 @@ console.log('\n=== Phase 6 — Burning Hands AoE exclusion ===\n');
   //     GoI radius (the GoI caster at 1 square from spell caster means all
   //     cone targets within 3 squares are ≤2 squares from the GoI caster).
   //     Split into two sub-tests: (a) GoI blocks, (b) no-GoI takes damage.
+  // Session 87: caster re-positioned to (4,0,0) — outside GoI 10-ft radius.
   const caster = makeCombatant('wiz', {
     faction: 'party',
-    pos: { x: 0, y: 0, z: 0 },
+    pos: { x: 4, y: 0, z: 0 },
     actions: [BURNING_HANDS_ACTION],
     resources: withSlots({ 1: { max: 4, remaining: 4 } }),
     int: 20,

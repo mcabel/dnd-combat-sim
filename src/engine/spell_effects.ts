@@ -918,12 +918,16 @@ export function getExhaustionLevel(c: Combatant): number {
  * GoI caster's own AoE spells were wrongly filtered off allies standing
  * within the GoI radius.
  *
- * Scope note: the broader RAW reading — that any combatant standing WITHIN a
- * barrier's 10-ft radius (not just the barrier's owner) counts as "inside" —
- * is intentionally NOT applied here; the existing AoE test suite (sessions
- * 77-79) positions attacking casters within 10 ft of GoI-protected targets
- * and asserts protection still applies. Extending to the spatial case is
- * tracked as a follow-up.
+ * Session 87: Broader RAW reading — any combatant standing WITHIN a barrier's
+ * 10-ft radius (not just the barrier's owner) counts as "inside" the barrier.
+ * PHB p.245: "Any spell of 5th level or lower cast from outside the barrier
+ * can't affect creatures or objects within it." The converse is that spells
+ * cast from INSIDE the barrier (caster within the 10-ft radius) DO affect
+ * creatures within it. Previously only the identity case (caster === GoI
+ * caster) was handled; now the spatial case (caster within 10 ft of the GoI
+ * caster) is also handled. The sessions 77-79 AoE test attackers have been
+ * re-positioned outside the 10-ft radius to preserve their "external
+ * attacker" intent.
  *
  * If `casterId` is omitted (backward compat), the caster is assumed to be
  * outside every barrier — preserving the pre-Session 81 behavior used by
@@ -939,24 +943,42 @@ export function isProtectedByGoI(
 
   // Helper: is the spell's caster inside the GoI barrier centered on `center`?
   //
-  // Session 81 scope (per handover): the caster is "inside" only when they ARE
-  // the GoI caster who owns this barrier (casterId === center.id). This is the
-  // documented edge case — "When the GoI caster is also the attacking spell's
-  // caster, their own spells are cast from INSIDE the barrier and should affect
-  // all creatures within it (including allies)."
+  // Session 81 scope: the caster is "inside" when they ARE the GoI caster who
+  // owns this barrier (casterId === center.id). This is the identity edge case —
+  // "When the GoI caster is also the attacking spell's caster, their own spells
+  // are cast from INSIDE the barrier and should affect all creatures within it
+  // (including allies)."
   //
-  // The broader RAW reading — that ANY combatant standing within the barrier's
-  // 10-ft radius counts as "inside" — is intentionally NOT applied here, because
-  // the existing AoE test suite (sessions 77-79) places attacking casters within
-  // 10 ft of GoI-protected targets and asserts protection still applies. Extending
-  // to the spatial case would require re-positioning those attackers outside the
-  // radius and is tracked as a follow-up.
+  // Session 87 broader RAW reading: the caster is ALSO "inside" when they are
+  // any combatant standing within the barrier's 10-ft radius (Chebyshev ≤ 2
+  // squares). PHB p.245: "Any spell of 5th level or lower cast from outside
+  // the barrier can't affect creatures or objects within it." The converse:
+  // spells cast from INSIDE the barrier (caster within 10 ft of the center) DO
+  // affect creatures within it. This closes the gap where an attacker standing
+  // inside an ally's GoI radius was wrongly treated as "outside" and their
+  // spells were blocked for creatures within that GoI.
   //
   // When `casterId` is undefined (backward compat — e.g. persistent damage-zone
   // tick sites), always returns false (caster assumed outside every barrier).
+  // When `casterId` is defined but the caster is not found in `bf` (e.g. an
+  // external attacker ID not represented as a combatant), returns false — the
+  // caster is assumed to be outside every barrier (cannot determine position).
   const isCasterInsideBarrier = (center: Combatant): boolean => {
     if (casterId === undefined) return false;
-    return casterId === center.id;  // caster IS the GoI caster who owns this barrier
+    // Identity case: caster IS the GoI caster who owns this barrier.
+    if (casterId === center.id) return true;
+    // Spatial case (Session 87): caster is within 10 ft of the barrier center.
+    if (bf) {
+      const caster = bf.combatants.get(casterId);
+      if (caster && !caster.isDead && !caster.isUnconscious) {
+        const dx = Math.abs(caster.pos.x - center.pos.x);
+        const dy = Math.abs(caster.pos.y - center.pos.y);
+        const dz = Math.abs(caster.pos.z - center.pos.z);
+        const chebyshev = Math.max(dx, dy, dz);
+        if (chebyshev <= 2) return true;  // within 10 ft (2 squares)
+      }
+    }
+    return false;
   };
 
   // 1) Target's own GoI effect (target is the GoI caster / barrier center)

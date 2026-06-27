@@ -397,6 +397,8 @@ console.log('\n=== Phase 5 — Fireball integration: GoI caster is attacker ===\
   // 5b. External attacker casts Fireball (L3) at a cluster including a GoI
   //     caster and an ally within the GoI radius. Both GoI caster and ally
   //     are filtered out (take 0 damage) — backward compat / unchanged.
+  // Session 87: caster re-positioned to (4,0,0) — outside GoI 10-ft radius
+  // (broader RAW reading: caster within 10 ft of GoI center would be "inside").
   const goiCaster = makeCombatant('goiTarget', {
     faction: 'enemy', dex: 1, pos: { x: 1, y: 0, z: 0 },
     maxHP: 1000, currentHP: 1000,
@@ -412,7 +414,7 @@ console.log('\n=== Phase 5 — Fireball integration: GoI caster is attacker ===\
   });
   const caster = makeCombatant('wiz', {
     faction: 'party',
-    pos: { x: 0, y: 0, z: 0 },
+    pos: { x: 4, y: 0, z: 0 },
     actions: [FIREBALL_ACTION],
     resources: withSlots({ 3: { max: 2, remaining: 2 } }),
     int: 20,
