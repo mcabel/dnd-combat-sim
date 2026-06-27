@@ -725,6 +725,7 @@ export interface TerrainZone {
   centerZ: number;
   sourceIsConcentration: boolean;
   terrainDifficulty?: boolean;              // if true, this zone marks cells as difficult terrain
+  sourceSlotLevel?: number;                 // Session 83: spell slot level (for GoI re-check on tick)
 }
 
 /**
@@ -751,6 +752,7 @@ export function getActiveTerrainZones(bf: Battlefield): TerrainZone[] {
         centerZ: e.payload.terrainCenterZ!,
         sourceIsConcentration: e.sourceIsConcentration,
         terrainDifficulty: e.payload.terrainDifficulty,
+        sourceSlotLevel: e.sourceSlotLevel,  // Session 83: for GoI re-check on tick
       });
     }
   }

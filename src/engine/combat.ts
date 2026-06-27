@@ -6810,6 +6810,23 @@ export function runCombat(
           const caster = battlefield.combatants.get(zone.casterId);
           if (caster && actor.faction === caster.faction) continue;
 
+          // Session 83 (GoI terrain_zone tick): PHB p.245 — "Any spell of 5th
+          // level or lower cast from outside the barrier can't affect creatures
+          // or objects within it... the spell has no effect on them." This
+          // applies to terrain zones too — a GoI-protected creature is not
+          // affected by the terrain zone's save/condition on per-turn ticks.
+          // Mirrors the damage_zone tick GoI check (Session 78 + Session 82
+          // casterId fix). The zone's sourceSlotLevel determines the spell's
+          // effective level for the GoI block check. The zone's caster's own
+          // GoI does NOT block their own spell (casterId → barrier skipped).
+          const terrainSlotLevel = zone.sourceSlotLevel ?? 0;
+          if (terrainSlotLevel > 0 && actor.id !== zone.casterId && isProtectedByGoI(actor, terrainSlotLevel, state.battlefield, zone.casterId)) {
+            log(state, 'action', zone.casterId,
+              `${actor.name} is protected by Globe of Invulnerability — ${zone.spellName} terrain tick negated (L${terrainSlotLevel} ≤ GoI threshold).`,
+              actor.id);
+            continue;  // skip this zone's save/condition — GoI-protected
+          }
+
           // Check if creature is within the zone's radius
           const distFt = chebyshev3D(
             actor.pos,
