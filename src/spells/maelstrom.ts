@@ -172,7 +172,7 @@ export function execute(caster: Combatant, targets: Combatant[], state: EngineSt
   for (const target of targets) {
     if (target.isDead || target.isUnconscious) continue;
 
-    const goiBlocked = target.id !== caster.id && isProtectedByGoI(target, slotLevel, state.battlefield);
+    const goiBlocked = target.id !== caster.id && isProtectedByGoI(target, slotLevel, state.battlefield, caster.id);
 
     if (!goiBlocked) {
       const save = rollSaveReactable(state, caster, target, 'dex', saveDC);

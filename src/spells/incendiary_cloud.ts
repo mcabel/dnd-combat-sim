@@ -106,7 +106,7 @@ export function execute(caster: Combatant, targets: Combatant[], state: EngineSt
 
     // Session 79: per-target GoI check. The caster's own GoI does NOT block
     // their own spell (PHB p.245: "cast from outside the barrier").
-    const goiBlocked = target.id !== caster.id && isProtectedByGoI(target, slotLevel, state.battlefield);
+    const goiBlocked = target.id !== caster.id && isProtectedByGoI(target, slotLevel, state.battlefield, caster.id);
 
     if (!goiBlocked) {
       const save = rollSaveReactable(state, caster, target, 'dex', saveDC);

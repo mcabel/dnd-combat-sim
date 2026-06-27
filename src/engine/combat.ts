@@ -6583,8 +6583,13 @@ export function runCombat(
           //
           // The caster's own GoI does NOT block their own spell (PHB p.245:
           // "cast from outside the barrier" — the GoI caster is at the center).
+          // Session 82: pass zone.casterId as the casterId arg so that a barrier
+          // the zone's caster is INSIDE (their own GoI) provides no protection —
+          // consistent with the on-cast Session 81 filterGoIProtectedTargets fix.
+          // (Only the identity case — zone caster === GoI caster — is handled;
+          // the spatial "caster within radius" case is a documented follow-up.)
           const zoneSlotLevel = zone.sourceSlotLevel ?? 0;
-          if (zoneSlotLevel > 0 && actor.id !== zone.casterId && isProtectedByGoI(actor, zoneSlotLevel, state.battlefield)) {
+          if (zoneSlotLevel > 0 && actor.id !== zone.casterId && isProtectedByGoI(actor, zoneSlotLevel, state.battlefield, zone.casterId)) {
             log(state, 'damage', zone.casterId,
               `${actor.name} is protected by Globe of Invulnerability — ${zone.spellName} start-of-turn damage negated (L${zoneSlotLevel} ≤ GoI threshold).`,
               actor.id, 0);

@@ -232,7 +232,7 @@ export function execute(
 
     // Session 78: check GoI protection per-target. The caster's own GoI does
     // NOT block their own spell (PHB p.245: "cast from outside the barrier").
-    const goiBlocked = target.id !== caster.id && isProtectedByGoI(target, slotLevel, state.battlefield);
+    const goiBlocked = target.id !== caster.id && isProtectedByGoI(target, slotLevel, state.battlefield, caster.id);
 
     // 1. Immediate on-cast damage: dieCount d6 cold + dieCount d6 acid (no save).
     //    Skipped if the target is GoI-protected (PHB p.245: "no effect on them").

@@ -205,7 +205,7 @@ export function execute(
     // targets in range (so it can tick later if GoI expires), but the ON-CAST
     // damage is skipped for GoI-protected targets. The caster's own GoI does
     // NOT block their own spell (PHB p.245: "cast from outside the barrier").
-    const goiBlocked = target.id !== caster.id && isProtectedByGoI(target, slotLevel, state.battlefield);
+    const goiBlocked = target.id !== caster.id && isProtectedByGoI(target, slotLevel, state.battlefield, caster.id);
 
     // 1. Immediate on-cast damage: CON save for half.
     //    Skipped if the target is GoI-protected (PHB p.245: "no effect on them").

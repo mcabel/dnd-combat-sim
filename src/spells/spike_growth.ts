@@ -222,7 +222,7 @@ export function execute(
   // the combat.ts tick loops re-check GoI on each per-turn tick using the
   // zones' sourceSlotLevel. The caster's own GoI does NOT block their own
   // spell (PHB p.245: "cast from outside the barrier").
-  const goiBlocked = target.id !== caster.id && isProtectedByGoI(target, slotLevel, state.battlefield);
+  const goiBlocked = target.id !== caster.id && isProtectedByGoI(target, slotLevel, state.battlefield, caster.id);
   if (goiBlocked) {
     emit(
       state, 'damage', caster.id,

@@ -103,7 +103,7 @@ export function execute(caster: Combatant, target: Combatant, state: EngineState
   // target (so it can tick later if GoI expires), but the ON-CAST (on-appear)
   // damage is skipped if the target is GoI-protected. The caster's own GoI
   // does NOT block their own spell (PHB p.245: "cast from outside the barrier").
-  const goiBlocked = target.id !== caster.id && isProtectedByGoI(target, slotLevel, state.battlefield);
+  const goiBlocked = target.id !== caster.id && isProtectedByGoI(target, slotLevel, state.battlefield, caster.id);
 
   // On-appear damage: DEX save, 10d6 cold (half on success). Skipped if GoI-protected.
   if (!goiBlocked) {
