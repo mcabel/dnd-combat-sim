@@ -294,7 +294,11 @@ console.log('\n=== Phase 4 — filterGoIProtectedTargets with battlefield ===\n'
 }
 
 {
-  // 4b. Caster's own GoI does NOT block their own spells (casterId check)
+  // 4b. Caster's own GoI does NOT block their own spells (casterId check).
+  //     Session 81 fix: when the spell's caster is INSIDE the GoI barrier
+  //     (here the GoI caster themselves), PHB p.245's "cast from outside
+  //     the barrier" clause means the barrier provides NO protection — so
+  //     allies within the radius are NOT filtered either.
   const goiCaster = makeCombatant('goiCaster', {
     pos: { x: 5, y: 5, z: 0 },
     activeEffects: [{ ...makeGoIEffect(5), casterId: 'goiCaster' }],
@@ -309,36 +313,11 @@ console.log('\n=== Phase 4 — filterGoIProtectedTargets with battlefield ===\n'
   const filteredIds = filtered.map(t => t.id);
   // Caster's own GoI doesn't block their own spells
   assert('4b. GoI caster NOT filtered (own spell)', filteredIds.includes('goiCaster'));
-  // But ally near GoI caster IS protected by the GoI (the spell is cast
-  // from outside — the caster is the GoI caster, but PHB p.245 says
-  // "cast from outside the barrier"). The GoI caster is AT the center,
-  // so their own spells don't affect those within the barrier.
-  // Wait — actually, the GoI caster's own spells are NOT blocked per
-  // the `casterId` check: `if (t.id === casterId) return true`.
-  // But the ALLY would be protected because the GoI caster's spell
-  // is cast from within the barrier... hmm.
-  //
-  // PHB p.245: "Any spell of 5th level or lower cast from outside the
-  // barrier can't affect creatures or objects within it."
-  //
-  // The GoI caster is INSIDE the barrier. So their own spells are cast
-  // FROM INSIDE the barrier, and therefore DO affect creatures within it.
-  // The `casterId` check correctly skips the GoI caster themselves, but
-  // allies within the GoI radius should ALSO not be filtered when the
-  // GoI caster is the one casting.
-  //
-  // Actually wait — the filterGoIProtectedTargets is called by the
-  // attacking spell's execute(). The `casterId` is the ATTACKER's ID.
-  // If the attacker IS the GoI caster, their spells are cast from
-  // inside the barrier and should NOT be blocked for anyone within.
-  // Currently only `t.id === casterId` passes, meaning only the
-  // caster's own GoI doesn't block their own spells. But allies
-  // within the radius would still be filtered.
-  //
-  // This is actually a subtle bug — but it's an edge case (GoI caster
-  // casting an AoE that hits their own allies within the GoI radius).
-  // For now, document the behavior and defer the fix.
-  assert('4b. Ally near GoI caster IS filtered (GoI caster is attacker — subtle edge case)', !filteredIds.includes('allyNear'));
+  // Session 81: the GoI caster is INSIDE the barrier, so their AoE spell
+  // is "cast from inside" and DOES affect allies within the radius.
+  // PHB p.245: "Any spell of 5th level or lower cast from OUTSIDE the
+  // barrier can't affect creatures or objects within it." — only outside.
+  assert('4b. Ally near GoI caster NOT filtered (Session 81: caster inside barrier)', filteredIds.includes('allyNear'));
 }
 
 {
@@ -451,6 +430,8 @@ console.log('\n=== Phase 7 — Metadata checks ===\n');
   eq('7b. globeOfInvulnerabilityV1Simplified still false', meta.globeOfInvulnerabilityV1Simplified, false);
   eq('7c. globeOfInvulnerabilityAoEV1Simplified still false', meta.globeOfInvulnerabilityAoEV1Simplified, false);
   eq('7d. globeOfInvulnerabilityImplemented still true', meta.globeOfInvulnerabilityImplemented, true);
+  // Session 81: caster-inside-barrier flag
+  eq('7e. globeOfInvulnerabilityCasterInsideV1Implemented (Session 81)', meta.globeOfInvulnerabilityCasterInsideV1Implemented, true);
 }
 
 // ============================================================

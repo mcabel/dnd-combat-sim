@@ -907,15 +907,68 @@ export function getExhaustionLevel(c: Combatant): number {
  * caster within 10 ft (Chebyshev 3D). The `bf` parameter enables spatial
  * queries; if omitted, falls back to self-only check (backward compat for
  * tests that don't pass a battlefield).
+ *
+ * Session 81: New optional `casterId` parameter — the ID of the combatant
+ * who cast the incoming spell. PHB p.245 only blocks spells "cast from
+ * outside the barrier", so when the spell's caster IS the GoI caster who
+ * owns a given barrier (casterId === barrier center's id), that barrier
+ * provides NO protection and is skipped. This fixes the edge case where the
+ * GoI caster's own AoE spells were wrongly filtered off allies standing
+ * within the GoI radius.
+ *
+ * Scope note: the broader RAW reading — that any combatant standing WITHIN a
+ * barrier's 10-ft radius (not just the barrier's owner) counts as "inside" —
+ * is intentionally NOT applied here; the existing AoE test suite (sessions
+ * 77-79) positions attacking casters within 10 ft of GoI-protected targets
+ * and asserts protection still applies. Extending to the spatial case is
+ * tracked as a follow-up.
+ *
+ * If `casterId` is omitted (backward compat), the caster is assumed to be
+ * outside every barrier — preserving the pre-Session 81 behavior used by
+ * persistent damage-zone tick sites whose semantics are tracked separately.
  */
-export function isProtectedByGoI(target: Combatant, castLevel: number, bf?: Battlefield): boolean {
+export function isProtectedByGoI(
+  target: Combatant,
+  castLevel: number,
+  bf?: Battlefield,
+  casterId?: string,
+): boolean {
   if (castLevel <= 0) return false;  // cantrips never blocked
-  // 1) Target's own GoI effect
-  if (target.activeEffects?.some(eff =>
+
+  // Helper: is the spell's caster inside the GoI barrier centered on `center`?
+  //
+  // Session 81 scope (per handover): the caster is "inside" only when they ARE
+  // the GoI caster who owns this barrier (casterId === center.id). This is the
+  // documented edge case — "When the GoI caster is also the attacking spell's
+  // caster, their own spells are cast from INSIDE the barrier and should affect
+  // all creatures within it (including allies)."
+  //
+  // The broader RAW reading — that ANY combatant standing within the barrier's
+  // 10-ft radius counts as "inside" — is intentionally NOT applied here, because
+  // the existing AoE test suite (sessions 77-79) places attacking casters within
+  // 10 ft of GoI-protected targets and asserts protection still applies. Extending
+  // to the spatial case would require re-positioning those attackers outside the
+  // radius and is tracked as a follow-up.
+  //
+  // When `casterId` is undefined (backward compat — e.g. persistent damage-zone
+  // tick sites), always returns false (caster assumed outside every barrier).
+  const isCasterInsideBarrier = (center: Combatant): boolean => {
+    if (casterId === undefined) return false;
+    return casterId === center.id;  // caster IS the GoI caster who owns this barrier
+  };
+
+  // 1) Target's own GoI effect (target is the GoI caster / barrier center)
+  const selfGoI = target.activeEffects?.find(eff =>
     eff.effectType === 'spell_shield' &&
     eff.spellName === 'Globe of Invulnerability' &&
     castLevel <= (eff.payload.blockThreshold ?? 0)
-  )) return true;
+  );
+  if (selfGoI) {
+    // PHB p.245: only blocks spells cast from OUTSIDE the barrier. If the
+    // spell's caster is inside this barrier (the target themselves, or an
+    // ally within 10 ft), this barrier provides no protection.
+    if (!isCasterInsideBarrier(target)) return true;
+  }
 
   // 2) Any nearby GoI caster within 10 ft (PHB p.245: 10-ft radius)
   if (bf) {
@@ -935,7 +988,14 @@ export function isProtectedByGoI(target: Combatant, castLevel: number, bf?: Batt
       const dy = Math.abs(target.pos.y - c.pos.y);
       const dz = Math.abs(target.pos.z - c.pos.z);
       const chebyshev = Math.max(dx, dy, dz);
-      if (chebyshev <= 2) return true;  // within 10-ft radius
+      if (chebyshev <= 2) {
+        // Target is within this barrier. But PHB p.245 only blocks spells
+        // "cast from outside the barrier" — if the spell's caster is inside
+        // THIS barrier (the GoI caster `c` themselves, or an ally within
+        // `c`'s 10-ft radius), this barrier provides no protection. Continue
+        // checking other nearby GoI casters instead of returning true.
+        if (!isCasterInsideBarrier(c)) return true;  // within 10-ft radius
+      }
     }
   }
   return false;
@@ -980,13 +1040,22 @@ export function isProtectedByGoI(target: Combatant, castLevel: number, bf?: Batt
  * to `false` and `globeOfInvulnerabilityAoEPartialV1Implemented` is removed —
  * GoI AoE exclusion is now complete (v1).
  *
+ * Session 81: `casterId` is now forwarded to `isProtectedByGoI` so that when
+ * the spell's caster is INSIDE a GoI barrier (the GoI caster themselves, or
+ * an ally within the 10-ft radius), that barrier provides no protection and
+ * creatures within it are NOT filtered. PHB p.245: only spells "cast from
+ * outside the barrier" are blocked. Previously only the GoI caster themselves
+ * was excluded via the `t.id === casterId` short-circuit, leaving allies
+ * within the radius wrongly filtered.
+ *
  * @param targets   Candidate targets in the AoE
  * @param castLevel The actual spell slot level consumed (e.g. 3 for L3 Fireball).
  *                  Pass 0 for cantrips — cantrips are never blocked by GoI
  *                  (PHB p.245) so the filter is a no-op.
  * @param casterId  The casting combatant's ID. PHB p.245: spells cast from
- *                  outside the barrier are blocked; the GoI caster is at the
- *                  center, so their own spells are NOT blocked.
+ *                  outside the barrier are blocked; spells cast from inside
+ *                  the barrier (caster is the GoI caster, or within the GoI
+ *                  10-ft radius) are NOT blocked for any creature within it.
  * @param bf        The battlefield (optional). If provided, enables 10-ft radius
  *                  ally protection — any target within 10 ft of a GoI caster
  *                  (including the GoI caster itself) is also protected.
@@ -1004,8 +1073,11 @@ export function filterGoIProtectedTargets(
   if (castLevel <= 0) return targets;
   return targets.filter(t => {
     // PHB p.245: "cast from outside the barrier" — the GoI caster is at the
-    // center of the barrier, so their own spells are NOT blocked.
+    // center of the barrier, so their own spells are NOT blocked. (This
+    // short-circuit is retained for clarity and as a defensive guard; the
+    // caster-inside-barrier check inside isProtectedByGoI now also covers
+    // allies within the radius when the caster is the GoI caster.)
     if (t.id === casterId) return true;
-    return !isProtectedByGoI(t, castLevel, bf);
+    return !isProtectedByGoI(t, castLevel, bf, casterId);
   });
 }

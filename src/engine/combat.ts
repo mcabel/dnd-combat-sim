@@ -3079,7 +3079,10 @@ export function executePlannedAction(
     const goiTarget = bf.combatants.get(plan.targetId);
     // PHB p.245: only blocks spells cast from outside the barrier.
     // The GoI caster is at the center, so their own spells are NOT blocked.
-    if (goiTarget && goiTarget.id !== actor.id && isProtectedByGoI(goiTarget, spellInfo.level, bf)) {
+    // Session 81: pass `actor.id` as casterId so a barrier the caster is
+    // INSIDE (their own GoI, or an ally's GoI they stand within) provides no
+    // protection — matching "cast from outside the barrier" semantics.
+    if (goiTarget && goiTarget.id !== actor.id && isProtectedByGoI(goiTarget, spellInfo.level, bf, actor.id)) {
       // PHB p.245: the blocked spell's slot is consumed but has no effect.
       consumeSpellSlot(actor, spellInfo.level);
       actor.budget.actionUsed = true;
