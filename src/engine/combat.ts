@@ -2952,6 +2952,54 @@ export function executeMove(
   }
 }
 
+// ---- Eldritch Blast multi-target retarget helper ------------
+
+/**
+ * Session 85: Eldritch Blast multi-target per beam (PHB p.237).
+ *
+ * PHB p.237: "You can direct the beams at the same target or at different
+ * ones. Make a separate attack roll for each beam."
+ *
+ * When an EB beam kills the primary target, remaining beams should re-target
+ * to the next-best living enemy in range instead of being wasted. This helper
+ * picks the re-target: the closest living enemy (excluding the just-fallen
+ * target) within the action's range, tie-broken by highest maxHP (threat).
+ *
+ * Uses Chebyshev distance (PHB default grid). Does NOT go through the
+ * perception layer — re-targeting is a reflexive "next visible enemy" choice
+ * that doesn't require perception state. Mirrors the simplicity of the
+ * existing `livingEnemiesOf` filter.
+ *
+ * @param actor         The EB caster.
+ * @param fallenTargetId  The ID of the target that just fell (to exclude).
+ * @param action        The Eldritch Blast action (for range lookup).
+ * @param bf            The battlefield.
+ * @returns The next target, or null if no living enemy is in range.
+ */
+export function pickNextEldritchBlastTarget(
+  actor: Combatant,
+  fallenTargetId: string,
+  action: Action,
+  bf: Battlefield,
+): Combatant | null {
+  const rangeFt = action.range?.normal ?? 120;  // EB default 120; Eldritch Spear patches to 300
+  const enemies = livingEnemiesOf(actor, bf).filter(e => e.id !== fallenTargetId);
+  let best: Combatant | null = null;
+  let bestDist = Infinity;
+  let bestThreat = -1;
+  for (const e of enemies) {
+    const distFt = chebyshev3D(actor.pos, e.pos) * 5;
+    if (distFt > rangeFt) continue;
+    // Closest first; tie-break by highest threat (maxHP).
+    if (distFt < bestDist || (distFt === bestDist && e.maxHP > bestThreat)) {
+      best = e;
+      bestDist = distFt;
+      bestThreat = e.maxHP;
+    }
+  }
+  return best;
+}
+
 // ---- Execute a PlannedAction --------------------------------
 
 /**
@@ -3173,22 +3221,45 @@ export function executePlannedAction(
       // The planner sets plan.attackCount = 2 when the actor has Thirsting
       // Blade + Pact of the Blade + melee attack. Default is 1 (single attack).
       // Loop resolveAttack this many times — each attack is independent
-      // (separate attack roll, damage roll, death check). The target may
-      // die mid-loop; subsequent attacks are skipped if the target is dead.
+      // (separate attack roll, damage roll, death check).
+      //
+      // Session 85: Eldritch Blast multi-target per beam (PHB p.237: "direct
+      // the beams at the same target or at different ones"). When an EB beam
+      // kills the current target, remaining beams re-target to the next-best
+      // living enemy in range instead of being wasted. Extra Attack /
+      // Thirsting Blade preserve v1 break-on-death behavior (PHB p.192 allows
+      // splitting, but v1 simplifies to focus-fire on one target).
       const attackCount = plan.attackCount ?? 1;
+      const isEB = plan.action.name === 'Eldritch Blast';
+      let currentTarget = effectiveTarget;
       for (let i = 0; i < attackCount; i++) {
-        if (effectiveTarget.isDead || effectiveTarget.isUnconscious) break;
-        resolveAttack(actor, effectiveTarget, plan.action, state);
-        if (attackCount > 1 && i < attackCount - 1) {
-          // Session 80: Eldritch Blast multi-beam uses the same attackCount
-          // pattern as Extra Attack / Thirsting Blade. Log beam number.
-          const isEB = plan.action.name === 'Eldritch Blast';
+        if (currentTarget.isDead || currentTarget.isUnconscious) {
+          if (!isEB) break;  // non-EB: v1 break-on-death
+          // EB: re-target remaining beams to the next living enemy in range.
+          const nextEnemy = pickNextEldritchBlastTarget(actor, currentTarget.id, plan.action, bf);
+          if (!nextEnemy) {
+            if (attackCount > 1) {
+              log(state, 'action', actor.id,
+                `${actor.name} has no other target in range — ${attackCount - i} Eldritch Beam(s) not fired.`);
+            }
+            break;
+          }
+          currentTarget = nextEnemy;
+          log(state, 'action', actor.id,
+            `${actor.name} retargets Eldritch Beam ${i + 1}/${attackCount} to ${nextEnemy.name} — previous target fell!`,
+            nextEnemy.id);
+        }
+        resolveAttack(actor, currentTarget, plan.action, state);
+        // Log the next beam/attack announcement (skip for EB if the target
+        // fell — the re-target log at the top of the next iteration covers it).
+        const targetDown = currentTarget.isDead || currentTarget.isUnconscious;
+        if (attackCount > 1 && i < attackCount - 1 && !(isEB && targetDown)) {
           const label = isEB
             ? `Eldritch Beam ${i + 2}/${attackCount}`
             : `attack ${i + 2}/${attackCount} (Extra Attack / Thirsting Blade)`;
           log(state, 'action', actor.id,
             `${actor.name} makes ${label}`,
-            effectiveTarget.id ?? undefined);
+            currentTarget.id ?? undefined);
         }
       }
       break;

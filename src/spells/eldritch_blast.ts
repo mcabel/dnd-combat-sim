@@ -32,9 +32,13 @@
 //     from scaling the die (1d10 → 2d10 etc). Each beam stays
 //     1d10 regardless of caster level — the scaling is in beam
 //     COUNT, not die size.
-//   - v1 simplification: all beams target the same enemy. RAW
-//     allows targeting different enemies, but that requires AI
-//     planner support for per-beam targeting (deferred).
+//   - v1 simplification: all beams START at the same enemy (focus-fire).
+//     Session 85: when a beam kills the primary target, remaining beams
+//     re-target to the next-best living enemy in range (PHB p.237: "direct
+//     the beams at the same target or at different ones"). A deliberate
+//     "spread damage" heuristic (firing at different living targets from
+//     the start) is NOT implemented — focus-fire-then-switch is the v1
+//     strategy.
 //   - Grasp of Hadar: now enforces once-per-turn (PHB p.111:
 //     "once on each of your turns"). A flag on the combatant
 //     tracks usage; reset at start of each turn.
@@ -90,6 +94,18 @@ export const metadata = {
   scalesByBeamCount: true as const,
   beamCountByLevel: { 5: 2, 11: 3, 17: 4 } as const,
   multiBeamV1Implemented: true as const,   // Session 80: multi-beam via attackCount pattern
+  /**
+   * Session 85: Multi-target per beam is NOW supported. PHB p.237: "You can
+   * direct the beams at the same target or at different ones." When an EB
+   * beam kills the primary target, remaining beams re-target to the next-best
+   * living enemy in range (combat.ts `pickNextEldritchBlastTarget`). This
+   * prevents wasted beams and approximates the RAW multi-target choice. The
+   * AI still focus-fires on one primary target (planner picks one); the engine
+   * handles re-targeting on kill. A deliberate "spread damage" AI heuristic
+   * (firing beams at different living targets from the start) is NOT
+   * implemented — focus-fire-then-switch is the v1 strategy.
+   */
+  multiTargetPerBeamV1Implemented: true as const,  // Session 85: re-target on kill
   /** Components: V + S (no M). */
   components: { v: true, s: true, m: false } as const,
   /**
