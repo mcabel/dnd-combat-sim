@@ -4,9 +4,10 @@
 
 - Branch: main
 - Commits this session:
-  - `<pending>` — Session 91: RFC-LAIRACTIONS Phase 1 — structured LairAction schema + parser extraction + per-action isMagical/isSpell tagging
+  - `be6d727` — Session 91: RFC-LAIRACTIONS Phase 1 — structured LairAction schema + parser extraction + per-action isMagical/isSpell tagging
+  - `<pending>` — Session 91: handover verification-snapshot update (CI-green confirmation)
 - Previous: `805090a` (Session 90 RFC decisions), `42c9e26` (Session 90 RFC + registry), `82073a8` (Session 89 handover), `a53eaf4` (Session 89 Aura of Vitality)
-- State: clean (will push after commit)
+- State: clean (pushed; CI green)
 - URL: https://github.com/mcabel/dnd-combat-sim
 - PAT: provided at session start (embed in remote URL as usual)
 
@@ -73,7 +74,18 @@ Category distribution: `bespoke` 68, `save_condition` 55, `save_damage` 55, `cas
 
 ## CI STATUS
 
-One code + test commit → triggers all 6 test chunks. Expected: all green (verified locally for chunks 5 & 6; chunks 1–4 carry no `lairActions` references so cannot regress from this change). The new test file `session91_lair_action_parser.test.ts` sorts into **chunk 6** (same chunk as `creature_lair_actions.test.ts`), which passed 69/69 locally.
+**VERIFIED GREEN on CI** (commit `be6d727`, pushed to `main`). All 9 check-runs completed with `success`:
+- `test (1)` → success
+- `test (2)` → success
+- `test (3)` → success
+- `test (4)` → success
+- `test (5)` → success
+- `test (6)` → success ← contains both `session91_lair_action_parser.test.ts` (157 pass) and `creature_lair_actions.test.ts` (12 pass) + `bestiary_integration.test.ts` (77 pass)
+- `build` → success
+- `deploy` → success
+- `report-build-status` → success
+
+**No red X.** The new test file `session91_lair_action_parser.test.ts` sorts into chunk 6 (same chunk as the existing lair test), which passed 69/69 files locally and on CI.
 
 ## OPEN BLOCKERS
 
@@ -159,11 +171,11 @@ Phase 1 is strictly the **data layer**: schema + parser + tagging. It does NOT a
 
 ## VERIFICATION SNAPSHOT
 
-- `git log --oneline -5` (after commit): `<pending>`, `805090a`, `42c9e26`, `82073a8`, `a53eaf4`
+- `git log --oneline -5` (after push): `be6d727` (Session 91 Phase 1), `805090a`, `42c9e26`, `82073a8`, `a53eaf4`
 - `git status` → clean (after push)
 - `./node_modules/.bin/tsc --noEmit 2>&1 | grep -c "error TS"` → **5** (pre-existing, unchanged)
 - `npx ts-node --transpile-only src/test/session91_lair_action_parser.test.ts` → **157 passed, 0 failed**
 - `npx ts-node --transpile-only src/test/creature_lair_actions.test.ts` → **12 passed, 0 failed** (regression)
 - CI chunk 6 local run → **69/69 files, 4045 assertions, 0 failed**
 - CI chunk 5 local run → **69/69 files, 3529 assertions, 0 failed**
-- **NO RED X expected** (parser-only change; all touched tests green locally)
+- **CI VERIFIED GREEN** (commit `be6d727`): all 9 check-runs `success` — **no red X** ✅
