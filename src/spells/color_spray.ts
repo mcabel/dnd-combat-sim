@@ -57,12 +57,15 @@
 //     picks a useful direction). Allies caught in that cone are still
 //     valid HP-pool targets per canon.
 //   - NOT concentration (PHB p.222: instantaneous — 1 min rider).
-//   - 1-min duration not tracked: the blinded condition persists for
-//     the entire v1 combat (no end-of-combat hook). Same v1 gap as
-//     Blindness/Deafness.
+//   - 1-min duration tracked via sourceTurnExpires (Session 81,
+//     RFC-COMBINING-EFFECTS Phase 2): the blinded condition_apply
+//     effect gets appliedTurn + sourceTurnExpires = round + 10, so
+//     reevaluateEffects removes it once the 1-min cap elapses (matching
+//     Blindness/Deafness / Sunburst). The end-of-turn CON save to end
+//     blindness early is still a separate unimplemented simplification.
 //   - Wake-on-damage / end-on-save: PHB p.222 has no such rider for
 //     Color Spray (unlike Sleep). The condition just lasts the
-//     duration (1 min canon, full combat in v1).
+//     duration (1 min canon, now tracked via sourceTurnExpires).
 //   - Undead immunity / "can't see" attribute: not separately tracked.
 //     v1 models immunity via the existing `blinded`/`unconscious`
 //     conditions on the target (a creature already blinded or
@@ -112,6 +115,7 @@ export const metadata = {
   colorSprayCanonBlindedV1: true,                          // canon: applies blinded (was unconscious in Batch 2)
   colorSprayAlliesValidTargetsV1: true,                    // canon: allies in cone are valid HP-pool targets
   colorSprayTempHpNotCountedV1: true,                      // canon: temp HP does not reduce the pool
+  colorSprayBlindedDurationV1Implemented: true,            // Session 81: 1-min tracked via sourceTurnExpires
   colorSprayWakeOnDamageV1Simplified: true,                // wake-on-damage NOT modelled (PHB has no such rider — kept for backward-compat flag name)
   colorSprayUpcastV1Implemented: false,                    // +2d10/slot-level NOT modelled
 } as const;
@@ -279,12 +283,20 @@ export function execute(
 
       // applySpellEffect for condition tracking (consistent with the
       // Batch 2 pattern). sourceIsConcentration: false — Color Spray
-      // is NOT concentration (PHB p.222: instantaneous; 1-min rider
-      // not tracked in v1, condition persists for the combat).
+      // is NOT concentration (PHB p.222: instantaneous; 1-min rider).
+      // Session 81 (RFC-COMBINING-EFFECTS Phase 2): the 1-min duration
+      // is now tracked via sourceTurnExpires (10 rounds), so the blinded
+      // condition is removed by reevaluateEffects once the cap elapses.
+      // The end-of-turn CON save to end blindness early (PHB p.222) is
+      // still a separate unimplemented simplification (same gap as
+      // Blindness/Deafness / Sunburst).
+      const round = state.battlefield.round;
       applySpellEffect(target, {
         casterId: caster.id, spellName: 'Color Spray',
         effectType: 'condition_apply', payload: { condition: 'blinded' },
         sourceIsConcentration: false,
+        appliedTurn: round,
+        sourceTurnExpires: round + 10,  // 1 min = 10 rounds
       });
 
       emit(state, 'condition_add', caster.id,

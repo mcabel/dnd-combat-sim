@@ -26,10 +26,15 @@
 //   - Blindness on failed save (PHB p.284: "blinded for 1 minute"):
 //     v1 applies the blinded condition via condition_apply (mirror
 //     Blindness/Deafness's pattern, Session 18). The 1-minute
-//     duration is NOT tracked — the condition persists for the
-//     entire combat in v1 (matching the Blindness/Deafness v1
-//     simplification). Documented via
-//     `sunburstBlindnessDurationV1Simplified: true`.
+//     duration is tracked via sourceTurnExpires (Session 81,
+//     RFC-COMBINING-EFFECTS Phase 2): the blinded condition_apply
+//     effect gets appliedTurn + sourceTurnExpires = round + 10, so
+//     reevaluateEffects removes it once the 1-min cap elapses
+//     (matching Blindness/Deafness). The end-of-turn save to end
+//     blindness early is still a separate unimplemented
+//     simplification (see below). Documented via
+//     `sunburstBlindnessDurationV1Simplified: false` and
+//     `sunburstBlindnessDurationV1Implemented: true`.
 //   - End-of-turn CON save to end blindness (PHB p.284: "makes
 //     another Constitution saving throw at the end of each of its
 //     turns"): NOT modelled — v1 has no end-of-turn save hook for
@@ -84,7 +89,8 @@ export const metadata = {
   concentration: false,
   saveAbility: 'con' as const,
   castingTime: 'action',
-  sunburstBlindnessDurationV1Simplified: true,                      // 1-min not tracked (persists for combat)
+  sunburstBlindnessDurationV1Simplified: false,                     // Session 81: 1-min tracked via sourceTurnExpires
+  sunburstBlindnessDurationV1Implemented: true,                     // Session 81: sourceTurnExpires = round + 10
   sunburstEndOfTurnSaveV1Implemented: false,                        // end-of-turn save skipped
   sunburstUndeadOozeDisadvantageV1Simplified: true,                 // no creature-type tag in v1
   sunburstUpcastV1Implemented: true,                                // +2d6/slot-level modelled
@@ -245,18 +251,25 @@ export function execute(
     );
 
     // On failed save: apply blinded condition (mirror Blindness/Deafness).
-    // NOT concentration — sourceIsConcentration: false. The condition
-    // persists for the entire combat in v1 (1-min duration not tracked).
+    // NOT concentration — sourceIsConcentration: false. PHB p.284: blinded
+    // for 1 minute. Session 81 (RFC-COMBINING-EFFECTS Phase 2): the 1-min
+    // duration is now tracked via sourceTurnExpires (10 rounds), so the
+    // pipeline's reevaluateEffects removes the blinded condition once the
+    // duration elapses. The "save at end of each turn" rider is still a
+    // separate unimplemented simplification (same as Blindness/Deafness).
     if (!save.success) {
       // Skip if already blinded (re-apply would be a no-op but the log
       // would be misleading).
       if (!target.conditions.has('blinded')) {
+        const round = state.battlefield.round;
         applySpellEffect(target, {
           casterId: caster.id,
           spellName: 'Sunburst',
           effectType: 'condition_apply',
           payload: { condition: 'blinded' },
           sourceIsConcentration: false,   // PHB p.284: NOT concentration
+          appliedTurn: round,
+          sourceTurnExpires: round + 10,  // 1 min = 10 rounds
         });
         emit(
           state, 'condition_add', caster.id,
