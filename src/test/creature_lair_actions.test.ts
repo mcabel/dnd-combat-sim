@@ -95,7 +95,7 @@ console.log('\n--- 1-3. Adult Red Dragon lair actions ---');
   if (c.lairActions) {
     eq('2. initiativeCount = 20', c.lairActions.initiativeCount, 20);
     assert('3. has 4 action options', c.lairActions.actions.length === 4);
-    console.log(`    First action: ${c.lairActions.actions[0].substring(0, 80)}...`);
+    console.log(`    First action: ${c.lairActions.actions[0].rawText.substring(0, 80)}...`);
   }
 }
 

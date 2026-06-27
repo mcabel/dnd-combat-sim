@@ -682,6 +682,103 @@ export type AIProfile = 'attackNearest' | 'attackWeakest' | 'smart' | 'defend';
 // Assigned explicitly at spawn for creatures like Giant Fly (magic item mount).
 // NOT based on INT score; a low-INT predator like a T-Rex uses 'attackNearest'.
 
+/**
+ * ── Session 91 RFC-LAIRACTIONS Phase 1: structured LairAction schema ──
+ *
+ * Replaces the v1 `lairActions.actions: string[]` (Session 60 stub) with a
+ * structured per-action object. Each of the ~324 parsed lair-action options
+ * (115 legendary groups) is read individually and tagged per [DD-4]:
+ *   - `isSpell: true` ONLY when the action explicitly casts a named spell
+ *     (detected via `@spell` tag or "casts <spell>" phrasing). These are
+ *     blocked by Globe of Invulnerability and are counterable.
+ *   - `isMagical: true` by default for all actions (MM: "magical effects").
+ *     `isMagical: false` is reserved for purely physical effects (rare; the
+ *     MM describes all lair actions as magical). Bypasses GoI but is
+ *     suppressed by Antimagic Field (forward-compat).
+ *
+ * The structured fields (saveDC, damage, conditions, summons, …) are
+ * extracted from the 5eTools inline tags (`@dc`, `@damage`, `@condition`,
+ * `@spell`, `@creature`, …) present in the raw lair-action text. ~85% of
+ * actions yield at least one structured field; the rest are `bespoke`.
+ *
+ * Out-of-scope (flavor/social) and deferred (awaiting-subsystem) actions are
+ * tagged here so Phase 2's dispatcher can log-and-skip them. Stable IDs
+ * (`lair_oos_NNN` / `lair_def_NNN`) come from the Phase 0 registry
+ * (`docs/LAIR-ACTIONS-OUT-OF-SCOPE.md`) and appear in runtime logs for
+ * searchability.
+ *
+ * Phase 1 is data-layer only: the engine stub still fires at round start and
+ * logs `rawText` (no mechanical effect). Phase 2 wires `resolveLairActions`
+ * + the category dispatcher; Phase 4 wires AI scoring.
+ */
+export type LairActionCategory =
+  | 'save_damage'        // @dc + @damage (e.g., Red Dragon magma: DC 15 DEX, 6d6 fire)
+  | 'save_condition'     // @dc + @condition, no @damage (e.g., Red Dragon tremor: DC 15 DEX, prone)
+  | 'save_only'          // @dc, no @damage/@condition (e.g., Kraken current: DC 23 STR or pushed)
+  | 'damage_no_save'     // @damage, no @dc (e.g., Kraken vulnerability — debuff; pure auto-damage is rare)
+  | 'summon'             // @creature + "up to N" (e.g., Lichen Lich shambling mound)
+  | 'cast_spell'         // isSpell: true, spellName set (e.g., Aboleth phantasmal force)
+  | 'buff_ally'          // advantage/vulnerability granted to allies (e.g., Mummy Lord undead advantage)
+  | 'debuff_enemy'       // disadvantage/vulnerability imposed on enemies (e.g., Kraken lightning vulnerability)
+  | 'visibility'         // obscured/fog/darkness (in-scope non-deferred; deferred ones use category 'deferred')
+  | 'spell_slot_regen'   // regain spell slot (e.g., Lich d8)
+  | 'movement'           // push/pull/knock/fall (folded into save_only when a save gates it)
+  | 'deferred'           // in-scope-mechanically but awaiting a subsystem (gravity, magical-darkness, …)
+  | 'bespoke'            // doesn't fit any category — needs a hand-written handler (Phase 3+)
+  | 'flavor';            // out-of-scope (social/narrative — no combat mechanical effect)
+
+export interface LairAction {
+  /** Stable deterministic id: `${sourceCreature}::${index}` (0-based within the group). */
+  id: string;
+  /** Legendary group name (e.g., "Red Dragon"). The monster's `legendaryGroup.name`. */
+  sourceCreature: string;
+  /** Cleaned English text — 5eTools `{@tag arg|…}` tags reduced to their first arg. For logging/fallback. */
+  rawText: string;
+  /** true → log only, never executed (flavor/social). See docs/LAIR-ACTIONS-OUT-OF-SCOPE.md. */
+  outOfScope: boolean;
+  /** Stable registry id (`lair_oos_NNN`) when outOfScope. */
+  outOfScopeId?: string;
+  /** Subsystem tag when deferred ('gravity' | 'magical-darkness' | 'visibility' | 'dmg-hazard' | 'meta-time' | 'meta-initiative'). */
+  deferred?: string;
+  /** Stable registry id (`lair_def_NNN`) when deferred. */
+  deferredId?: string;
+
+  // ── [DD-4] Magical / spell tagging (per-action, no blanket rule) ──
+  /** Default true (MM: "magical effects"). False only for purely physical effects (rare → flag [VERIFY]). */
+  isMagical: boolean;
+  /** true ONLY when the action explicitly casts a named spell. Drives GoI/Counterspell/Dispel interactions. */
+  isSpell: boolean;
+  /** Canonical spell name when isSpell (e.g., 'mirage arcane'). */
+  spellName?: string;
+  /** Base spell level when isSpell — for the GoI threshold check. Upcast level if the text specifies one. */
+  castLevel?: number;
+
+  // ── Extracted structure (all optional — presence depends on category) ──
+  /** Saving-throw DC extracted from `{@dc N}`. */
+  saveDC?: number;
+  /** Save ability inferred from text ("Dexterity saving throw" → 'dex'). */
+  saveAbility?: AbilityScore;
+  /** Damage roll from `{@damage NdN}` + type from surrounding text ("fire damage"). */
+  damage?: { count: number; sides: number; type: string };
+  /** Conditions from `{@condition X}` (deduped, order of first appearance). */
+  conditions?: Condition[];
+  /** Summoned creature + count from `{@creature X}` + "up to N"/"N corpses rise as". */
+  summons?: { creature: string; count: number | string };
+  /** Range in feet inferred from "within N feet (of it)". */
+  rangeFt?: number;
+  /** Radius in feet inferred from "N-foot-radius" / "N-foot-radius sphere". */
+  radiusFt?: number;
+  /** Duration in rounds: 1 = "until initiative count 20 on the next round"; 10 = "1 minute"; Infinity = "until dismissed". */
+  durationRounds?: number;
+  /** true = affects the lair creature's enemies; false = allies/self. Inferred from "each creature other than the [creature]" vs "the [creature] casts Haste on themself". */
+  targetsEnemies: boolean;
+  /** Creature-type filter (pipe-separated) from "each gnoll or hyena" → 'gnoll|hyena'. */
+  targetFilter?: string;
+
+  /** Dispatcher routing tag (Phase 2+). `cast_spell` when isSpell; else by tag presence. */
+  category: LairActionCategory;
+}
+
 export interface Combatant {
   // Identity
   id: string;
@@ -1087,25 +1184,32 @@ export interface Combatant {
 
   /**
    * ── Session 60: Lair Actions (Batch 5a — metadata + basic engine hook) ──
-   * 137 pre-2024 creatures have lair actions (from legendarygroups.json).
-   * PHB/MM: "On initiative count 20 (losing initiative ties), the [creature]
-   * takes a lair action to cause one of the following effects."
+   * ── Session 91: RFC-LAIRACTIONS Phase 1 — structured schema + tagging ──
    *
-   * v1 implementation:
-   *   - Parser extracts the lair action entries from legendarygroups.json
-   *     (matched via the creature's `legendaryGroup` field).
-   *   - Engine hook in runCombat fires on initiative count 20: logs that the
-   *     creature "takes a lair action" (metadata-only — does NOT apply the
-   *     actual mechanical effects yet, since each lair action is a bespoke
-   *     effect requiring individual implementation).
-   *   - The parsed `actions` array stores the flattened text of each lair
-   *     action option for future mechanical implementation.
+   * 115 legendary groups (from legendarygroups.json) carry lair actions
+   * (~324 parsed options). PHB/MM: "On initiative count 20 (losing initiative
+   * ties), the [creature] takes a lair action to cause one of the following
+   * effects."
    *
-   * Future work: implement per-action mechanical effects (damage, conditions,
-   * spell casting) — HIGH-risk, needs per-action bespoke code.
+   * Phase 1 (this session) restructured `actions` from `string[]` →
+   * `LairAction[]`. Each option is now a structured object with:
+   *   - extracted mechanical fields (saveDC, damage, conditions, summons, …)
+   *     pulled from the 5eTools inline tags (`@dc`, `@damage`, `@condition`,
+   *     `@spell`, `@creature`, …);
+   *   - per-action `isMagical` / `isSpell` / `spellName` / `castLevel`
+   *     tagging per [DD-4] (no blanket rule — each action read individually);
+   *   - `outOfScope` / `deferred` registry tags with stable IDs
+   *     (`lair_oos_NNN` / `lair_def_NNN`) for log searchability;
+   *   - a `category` for the Phase 2+ dispatcher to route on.
+   *
+   * The engine stub (combat.ts round-start hook) still fires and logs
+   * `action.rawText` — no mechanical effect yet (Phase 2 wires
+   * `resolveLairActions` + category handlers; Phase 4 wires AI scoring).
+   *
+   * Future work (Phases 2–6): see docs/RFC-LAIRACTIONS.md §8.
    */
   lairActions?: {
-    actions: string[];           // flattened text of each lair action option
+    actions: LairAction[];       // structured per-action objects (Session 91; was string[])
     initiativeCount: number;     // usually 20 (PHB default)
   };
 

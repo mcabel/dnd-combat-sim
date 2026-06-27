@@ -15,6 +15,10 @@ import {
   ActionBudget,
   CreatureSize,
   ShapechangerForm,
+  LairAction,
+  LairActionCategory,
+  AbilityScore,
+  Condition,
 } from '../types/core';
 
 // ---- 5etools raw shapes (minimal — only what we need) -------
@@ -670,18 +674,25 @@ function parseMonsterSpellcasting(
 
 /**
  * Session 60 Batch 5a: parse lair actions from legendarygroups.json.
- * 137 pre-2024 creatures have lair actions. The data is in a separate file
- * (not in the bestiary), matched via the creature's `legendaryGroup` field
- * ({ name, source }) → legendarygroups.json `legendaryGroup` array entry.
+ * Session 91 RFC-LAIRACTIONS Phase 1: structured schema + per-action tagging.
  *
- * Extracts:
- *   - actions: flattened text of each lair action option (from the
- *     `lairActions` array — strings + {type:'list', items:[...]} objects)
- *   - initiativeCount: usually 20 (PHB default — "On initiative count 20")
+ * 115 legendary groups (from legendarygroups.json) carry lair actions (~324
+ * parsed options). The data lives in a separate file (not the bestiary),
+ * matched via the creature's `legendaryGroup` field ({ name, source }).
  *
- * v1: the engine logs lair actions on initiative count 20 but does NOT apply
- * mechanical effects (each lair action is a bespoke effect requiring individual
- * implementation — HIGH-risk, deferred).
+ * Phase 1 extracts, per flattened action option:
+ *   - `rawText`: cleaned English text (5eTools `{@tag arg|…}` → first arg)
+ *   - structured fields from inline tags: `saveDC` (@dc), `damage` (@damage +
+ *     type), `conditions` (@condition), `summons` (@creature + "up to N"),
+ *     `rangeFt` / `radiusFt` / `durationRounds` (text inference)
+ *   - per-action `isMagical` / `isSpell` / `spellName` / `castLevel` tagging
+ *     per [DD-4] (no blanket rule — each action read individually)
+ *   - `outOfScope` / `deferred` registry tags with stable IDs
+ *     (`lair_oos_NNN` / `lair_def_NNN`) from docs/LAIR-ACTIONS-OUT-OF-SCOPE.md
+ *   - a `category` for the Phase 2+ dispatcher to route on
+ *
+ * The engine stub (combat.ts round-start hook) still fires and logs
+ * `action.rawText` — no mechanical effect yet (Phase 2 wires dispatch).
  */
 let _legendaryGroupsCache: Map<string, any> | null = null;
 
@@ -706,6 +717,384 @@ function loadLegendaryGroups(): Map<string, any> {
   return _legendaryGroupsCache;
 }
 
+/**
+ * Base spell level lookup for the 31 distinct spells referenced by lair-action
+ * `@spell` tags (extracted from legendarygroups.json). Keyed by lowercase
+ * canonical name. Used to populate `castLevel` for GoI threshold checks.
+ *
+ * A static map is used (rather than importing the GENERIC_SPELLS registry) to
+ * keep the parser self-contained and avoid load-order coupling — the parser
+ * runs at bestiary-load time, before the spell registry is necessarily ready.
+ * If a lair action references a spell not in this map, `castLevel` is left
+ * undefined (the dispatcher can fall back to a registry lookup in Phase 2).
+ */
+const LAIR_SPELL_LEVELS: Record<string, number> = {
+  'haste': 3, 'hold monster': 5, 'antimagic field': 8, 'banishment': 4,
+  'cloud of daggers': 2, 'command': 1, 'confusion': 4, 'creation': 5,
+  'darkness': 2, 'dispel magic': 3, 'fireball': 3, 'fog cloud': 1,
+  'forcecage': 7, 'giant insect': 4, 'greater restoration': 5,
+  'insect plague': 5, 'lesser restoration': 2, 'lightning bolt': 3,
+  'major image': 3, 'mirage arcane': 7, 'misty step': 2, 'moonbeam': 2,
+  'phantasmal force': 2, 'power word kill': 9, 'remove curse': 3,
+  'simulacrum': 7, 'sleet storm': 3, 'slow': 3, 'spike growth': 2,
+  'wall of force': 5, 'wish': 9,
+};
+
+/** The 13 distinct conditions that appear in lair-action `@condition` tags. */
+const LAIR_VALID_CONDITIONS: Set<string> = new Set([
+  'blinded', 'charmed', 'deafened', 'exhaustion', 'frightened', 'grappled',
+  'incapacitated', 'invisible', 'petrified', 'poisoned', 'prone',
+  'restrained', 'stunned',
+]);
+
+/** Known 5e damage types, used to type-extract `@damage` rolls. */
+const LAIR_DAMAGE_TYPES: string[] = [
+  'fire', 'cold', 'lightning', 'thunder', 'poison', 'acid', 'psychic',
+  'necrotic', 'radiant', 'force', 'bludgeoning', 'piercing', 'slashing',
+];
+
+/**
+ * Phase 0 registry — the 15 known out-of-scope / deferred lair actions with
+ * stable IDs (docs/LAIR-ACTIONS-OUT-OF-SCOPE.md). Matched by legendary-group
+ * name + a distinctive phrase regex against the raw (un-cleaned) action text.
+ *
+ * The heuristic classifier (below) runs as a safety net: if it flags an
+ * action the registry doesn't list, that action gets a generated ID
+ * (`lair_oos_auto_*` / `lair_def_auto_*`) and surfaces for registry update.
+ */
+interface LairRegistryEntry {
+  sourceCreature: string;
+  match: RegExp;
+  kind: 'oos' | 'deferred';
+  id: string;
+  deferredTag?: string;
+}
+const LAIR_REGISTRY: LairRegistryEntry[] = [
+  // ── Out-of-scope (flavor / social / narrative — permanently excluded) ──
+  { sourceCreature: 'Balhannoth', match: /warps reality|terrain.{0,40}reshapes to assume/i, kind: 'oos', id: 'lair_oos_001' },
+  { sourceCreature: 'Ki-rin', match: /conjures? up one or more temporary objects made of stone or metal/i, kind: 'oos', id: 'lair_oos_003' },
+  { sourceCreature: 'Merrenoloth', match: /strong wind propels the vessel/i, kind: 'oos', id: 'lair_oos_004' },
+  // ── Deferred (mechanical, awaiting a subsystem) ──
+  { sourceCreature: 'Black Dragon', match: /Magical darkness spreads/i, kind: 'deferred', id: 'lair_def_001', deferredTag: 'magical-darkness' },
+  { sourceCreature: 'Nafas', match: /sphere of multiversal dust/i, kind: 'deferred', id: 'lair_def_002', deferredTag: 'visibility' },
+  { sourceCreature: 'Olhydra', match: /becomes murky and opaque/i, kind: 'deferred', id: 'lair_def_003', deferredTag: 'visibility' },
+  { sourceCreature: 'Storm Giant Quintessent', match: /sphere of fog/i, kind: 'deferred', id: 'lair_def_004', deferredTag: 'visibility' },
+  { sourceCreature: 'Sphinx', match: /reroll initiative/i, kind: 'deferred', id: 'lair_def_006', deferredTag: 'meta-initiative' },
+  { sourceCreature: 'Baphomet', match: /gravity is reversed/i, kind: 'deferred', id: 'lair_def_007', deferredTag: 'gravity' },
+  { sourceCreature: 'Sphinx', match: /flow of time within the lair is altered/i, kind: 'deferred', id: 'lair_def_008', deferredTag: 'meta-time' },
+  // [VERIFY-2] Juiblex green slime → recommended deferred: 'dmg-hazard' (next sequential id)
+  { sourceCreature: 'Juiblex', match: /green slime/i, kind: 'deferred', id: 'lair_def_009', deferredTag: 'dmg-hazard' },
+];
+
+/**
+ * Session 91 RFC-LAIRACTIONS Phase 1: extract structured fields + per-action
+ * magical/spell tagging from a single flattened lair-action text.
+ *
+ * Pure function — exported for direct unit testing (the parser test exercises
+ * it both via spawnMonster end-to-end AND directly on synthetic strings).
+ * `parseLairActions()` calls this once per flattened action option.
+ *
+ * Tagging per [DD-4] (no blanket rule):
+ *   - `isSpell: true` when an `@spell` tag is present OR the text matches a
+ *     "casts <known-spell>" pattern. `spellName` + `castLevel` populated from
+ *     the LAIR_SPELL_LEVELS lookup. These are blocked by GoI + counterable.
+ *   - `isMagical: true` by default for ALL actions (MM: lair actions are
+ *     "magical effects"). `isMagical: false` is reserved for purely physical
+ *     effects (rare — none currently identified in the 324-action corpus).
+ */
+export function extractLairAction(
+  rawText: string,
+  sourceCreature: string,
+  index: number,
+): LairAction {
+  // ── 1. Clean the text: reduce {@tag arg|…} → first arg (canonical name). ──
+  const cleaned = rawText
+    .replace(/\{@(\w+)\s+([^}]+)\}/g, (_m, _tag, args) => {
+      const firstArg = String(args).split('|')[0].trim();
+      return firstArg;
+    })
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  // ── 2. [DD-4] isSpell / spellName / castLevel ──
+  // Per [DD-4]: "no blanket rule — read each action individually." An `@spell`
+  // tag usually means the lair action CASTS that spell (isSpell=true). But a
+  // minority of `@spell` tags are REMEDY-REFERENCES — the spell is named as a
+  // counter to the lair action's effect (e.g., Sphinx "A greater restoration
+  // spell cast on the target ends this effect"), NOT cast by the action. Those
+  // are tagged isSpell=false (the lair creature is not casting that spell).
+  //
+  // Detection: scan every `@spell` tag; isSpell=true if ANY tag is in a
+  // casting context (not a remedy-reference). Remedy signals: "ends this
+  // effect", "cast on the target ends", "can be ended/removed/reversed by",
+  // "dispelled by", "only a <spell> spell can…".
+  let isSpell = false;
+  let spellName: string | undefined;
+  let castLevel: number | undefined;
+  const spellTagRe = /\{@spell\s+([^}|]+)(?:\|[^}]*)?\}/gi;
+  let sm: RegExpExecArray | null;
+  while ((sm = spellTagRe.exec(rawText)) !== null) {
+    const name = sm[1].trim();
+    const tagStart = sm.index;
+    const tagEnd = tagStart + sm[0].length;
+    const beforeCtx = rawText.substring(Math.max(0, tagStart - 30), tagStart);
+    const afterCtx = rawText.substring(tagEnd, Math.min(rawText.length, tagEnd + 80));
+    const isRemedyRef = /ends?\s+this\s+effect|cast\s+on\s+(?:the\s+)?target\s+ends|can\s+(?:be\s+)?(?:ended|removed|reversed|undone)|dispelled\s+by|only\s+(?:a\s+)?(?:this\s+)?spell|if\s+(?:a\s+)?(?:this\s+)?spell|\bspell\s+can\b|\bspell\s+cast\s+on/i.test(beforeCtx + ' ' + afterCtx);
+    if (!isRemedyRef) {
+      isSpell = true;
+      spellName = name;
+      castLevel = LAIR_SPELL_LEVELS[name.toLowerCase()];
+      break; // first non-remedy @spell wins
+    }
+  }
+  if (!isSpell) {
+    // "casts <spell>" / "casts the <spell> spell" phrasing without an @spell
+    // tag — only accept known spells (avoids false positives like "casts a
+    // shadow"). This is rare; the @spell tag covers the vast majority.
+    const castsMatch = cleaned.match(/\bcasts?\s+(?:the\s+)?([a-z][a-z\s'-]+?)(?:\s+spell)?(?:\s+on|\s*,|\s*\.|\s+affecting|$)/i);
+    if (castsMatch) {
+      const candidate = castsMatch[1].trim().toLowerCase();
+      if (LAIR_SPELL_LEVELS[candidate] !== undefined) {
+        isSpell = true;
+        spellName = candidate;
+        castLevel = LAIR_SPELL_LEVELS[candidate];
+      }
+    }
+  }
+
+  // ── 3. saveDC from {@dc N} ──
+  const dcMatch = rawText.match(/\{@dc\s+(\d+)\}/i);
+  const saveDC = dcMatch ? parseInt(dcMatch[1], 10) : undefined;
+
+  // ── 4. saveAbility from "<Ability> saving throw" ──
+  let saveAbility: AbilityScore | undefined;
+  const abilityMap: Record<string, AbilityScore> = {
+    strength: 'str', dexterity: 'dex', constitution: 'con',
+    intelligence: 'int', wisdom: 'wis', charisma: 'cha',
+  };
+  const abilityMatch = cleaned.match(
+    /\b(strength|dexterity|constitution|intelligence|wisdom|charisma)\s+saving\s+throw/i,
+  );
+  if (abilityMatch) saveAbility = abilityMap[abilityMatch[1].toLowerCase()];
+
+  // ── 5. damage from {@damage NdN} + type from surrounding text ──
+  let damage: { count: number; sides: number; type: string } | undefined;
+  const dmgMatch = rawText.match(/\{@damage\s+(\d+)d(\d+)\}/i);
+  if (dmgMatch) {
+    const count = parseInt(dmgMatch[1], 10);
+    const sides = parseInt(dmgMatch[2], 10);
+    let type = 'untyped';
+    for (const t of LAIR_DAMAGE_TYPES) {
+      if (new RegExp('\\b' + t + '\\b', 'i').test(cleaned)) { type = t; break; }
+    }
+    damage = { count, sides, type };
+  }
+
+  // ── 6. conditions from {@condition X} (deduped, order of first appearance) ──
+  let conditions: Condition[] | undefined;
+  {
+    const condRe = /\{@condition\s+([^}|]+)(?:\|[^}]*)?\}/gi;
+    const seen = new Set<string>();
+    const list: Condition[] = [];
+    let cm: RegExpExecArray | null;
+    while ((cm = condRe.exec(rawText)) !== null) {
+      const c = cm[1].trim().toLowerCase() as Condition;
+      if (!seen.has(c) && LAIR_VALID_CONDITIONS.has(c)) {
+        seen.add(c);
+        list.push(c);
+      }
+    }
+    if (list.length > 0) conditions = list;
+  }
+
+  // ── 7. summons from {@creature X} + "up to N" / "N <creatures> rise as" ──
+  // Fallback: "creating a/summoning a <creature>" (Lichen Lich shambling mound,
+  // which has no @creature tag — [VERIFY-1] recommended summon classification).
+  let summons: { creature: string; count: number | string } | undefined;
+  const creatureMatch = rawText.match(/\{@creature\s+([^}|]+)(?:\|[^}]*)?\}/i);
+  if (creatureMatch) {
+    const creature = creatureMatch[1].trim();
+    let count: number | string = 1;
+    const upToMatch = cleaned.match(/up to (\d+)/i);
+    if (upToMatch) count = parseInt(upToMatch[1], 10);
+    else {
+      const nMatch = cleaned.match(/(\d+)\s+(?:corpses|bodies|spirits|skeletons|zombies|creatures|knights|warriors|cultists)\b/i);
+      if (nMatch) count = parseInt(nMatch[1], 10);
+    }
+    summons = { creature, count };
+  } else {
+    // Fallback: "creating a/summons a/conjures a <creature-name>" — only when
+    // the text also mentions "obeys" / "appears in an unoccupied space" /
+    // "acts on the creature's turn" (strong summon signals).
+    if (/\b(?:creating|summons?|conjures?)\s+(?:a|an|one|up to \d+)\s+([a-z][a-z\s'-]+?)(?:\.|,| that| which| obeys| appears)/i.test(cleaned)
+        && /\b(?:obeys|appears in an unoccupied space|acts on .* turn|under .* control)\b/i.test(cleaned)) {
+      const nameMatch = cleaned.match(/\b(?:creating|summons?|conjures?)\s+(?:a|an|one|up to \d+)\s+([a-z][a-z\s'-]+?)(?:\.|,| that| which| obeys| appears)/i);
+      if (nameMatch) {
+        summons = { creature: nameMatch[1].trim(), count: 1 };
+      }
+    }
+  }
+
+  // ── 8. rangeFt from "within N feet" ──
+  const rangeMatch = cleaned.match(/within\s+(\d+)\s*feet/i);
+  const rangeFt = rangeMatch ? parseInt(rangeMatch[1], 10) : undefined;
+
+  // ── 9. radiusFt from "N-foot-radius" / "N-foot-radius sphere" ──
+  const radiusMatch = cleaned.match(/(\d+)[- ]?(?:foot|feet)[- ]?radius/i);
+  const radiusFt = radiusMatch ? parseInt(radiusMatch[1], 10) : undefined;
+
+  // ── 10. durationRounds ──
+  let durationRounds: number | undefined;
+  if (/until\s+initiative\s+count\s+20\s+on\s+the\s+round\s+after\s+next/i.test(cleaned)) {
+    durationRounds = 2;
+  } else if (/until\s+initiative\s+count\s+20\s+on\s+the\s+next\s+round/i.test(cleaned)) {
+    durationRounds = 1;
+  } else if (/\b1\s+minute\b/i.test(cleaned)) {
+    durationRounds = 10;
+  } else if (/until\s+(?:it\s+)?(?:dismissed|dispelled|dies|the\s+\w+\s+dies)/i.test(cleaned)) {
+    durationRounds = Infinity;
+  } else if (/for\s+1\s+hour|\bdies after 1 hour\b/i.test(cleaned)) {
+    // Lichen Lich shambling mound (1 hour >> combat) → treat as persistent summon.
+    durationRounds = Infinity;
+  }
+
+  // ── 11. targetsEnemies (best-effort; refined in Phase 4 scoring) ──
+  let targetsEnemies = true;
+  if (/\bfriendly\s+creature/i.test(cleaned)) targetsEnemies = false;
+  else if (/\b(?:themself|itself)\b/i.test(cleaned)
+           && /\b(?:casts|gains|targets .* itself)\b/i.test(cleaned)
+           && !/\beach\s+creature\b/i.test(cleaned)) {
+    targetsEnemies = false;
+  }
+
+  // ── 12. targetFilter from "each <type> or <type>" ──
+  let targetFilter: string | undefined;
+  {
+    const tfMatch = cleaned.match(
+      /\beach\s+((?:non-)?(?:undead|humanoid|beast|fiend|fey|celestial|dragon|aberration|monstrosity|ooze|elemental|plant|construct|giant|gnoll|hyena|goblinoid|elf|dwarf|human|tiefling|halfling|gnome|half-orc)(?:\s+or\s+(?:undead|humanoid|beast|fiend|fey|celestial|dragon|aberration|monstrosity|ooze|elemental|plant|construct|giant|gnoll|hyena|goblinoid|elf|dwarf|human|tiefling|halfling|gnome|half-orc))*)/i,
+    );
+    if (tfMatch) {
+      targetFilter = tfMatch[1].toLowerCase().replace(/\s+or\s+/g, '|').trim();
+    }
+  }
+
+  // ── 13. [DD-4] isMagical — default true (MM: "magical effects"). ──
+  // `isMagical: false` is reserved for purely physical effects (rare; none
+  // currently identified in the 324-action corpus). Flagged [VERIFY] if found.
+  const isMagical = true;
+
+  // ── 14. outOfScope / deferred — registry-first, heuristic safety-net. ──
+  let outOfScope = false;
+  let outOfScopeId: string | undefined;
+  let deferred: string | undefined;
+  let deferredId: string | undefined;
+
+  // Registry match (by sourceCreature + distinctive phrase).
+  for (const entry of LAIR_REGISTRY) {
+    if (entry.sourceCreature === sourceCreature && entry.match.test(rawText)) {
+      if (entry.kind === 'oos') {
+        outOfScope = true;
+        outOfScopeId = entry.id;
+      } else {
+        deferred = entry.deferredTag;
+        deferredId = entry.id;
+      }
+      break;
+    }
+  }
+
+  // Heuristic safety-net (only when no registry match).
+  if (!outOfScope && !deferred) {
+    const hasMechanicalTag = /\{@(?:dc|damage|condition|creature|spell|hit|dice|status|hazard)\s/i.test(rawText);
+    // Out-of-scope: no mechanical tag AND a flavor signal.
+    if (!hasMechanicalTag) {
+      if (/after 10 minutes|terrain.{0,30}reshapes|conjures? up one or more (?:temporary|permanent) objects|propels the vessel/i.test(cleaned)) {
+        outOfScope = true;
+        outOfScopeId = `lair_oos_auto_${sourceCreature.replace(/[^a-z0-9]/gi, '_')}_${index}`;
+      }
+    }
+    // Deferred: mechanical but awaiting a subsystem (matched by keyword).
+    if (!outOfScope) {
+      if (/reverse gravity|gravity is reversed/i.test(cleaned)) {
+        deferred = 'gravity';
+        deferredId = `lair_def_auto_${sourceCreature.replace(/[^a-z0-9]/gi, '_')}_${index}`;
+      } else if (/magical darkness|can't see through.{0,40}darkness|heavily obscured/i.test(cleaned)) {
+        deferred = 'magical-darkness';
+        deferredId = `lair_def_auto_${sourceCreature.replace(/[^a-z0-9]/gi, '_')}_${index}`;
+      } else if (/\{@hazard\s/i.test(rawText)) {
+        deferred = 'dmg-hazard';
+        deferredId = `lair_def_auto_${sourceCreature.replace(/[^a-z0-9]/gi, '_')}_${index}`;
+      } else if (/flow of time.{0,30}(altered|changed)|reroll initiative/i.test(cleaned)) {
+        deferred = /reroll initiative/i.test(cleaned) ? 'meta-initiative' : 'meta-time';
+        deferredId = `lair_def_auto_${sourceCreature.replace(/[^a-z0-9]/gi, '_')}_${index}`;
+      }
+    }
+  }
+
+  // ── 15. category (dispatcher routing tag — Phase 2+). ──
+  let category: LairActionCategory;
+  if (outOfScope) {
+    category = 'flavor';
+  } else if (deferred) {
+    category = 'deferred';
+  } else if (isSpell) {
+    category = 'cast_spell';
+  } else if (summons) {
+    category = 'summon';
+  } else if (saveDC && damage) {
+    category = 'save_damage';
+  } else if (saveDC && conditions && conditions.length > 0) {
+    category = 'save_condition';
+  } else if (saveDC) {
+    category = 'save_only';
+  } else if (damage) {
+    category = 'damage_no_save';
+  } else if (/regain.{0,30}spell\s+slot|spell\s+slot.{0,30}regain/i.test(cleaned)) {
+    category = 'spell_slot_regen';
+  } else if (/\b(magic|magical)\b/i.test(cleaned) && /regain.{0,20}hit\s+points|regains?\s+\d+\s+\(/i.test(cleaned)) {
+    // e.g., Merrenoloth "The vessel regains 22 (4d10) hit points" — a buff_ally heal.
+    category = 'buff_ally';
+  } else if (/vulnerability/i.test(cleaned)) {
+    category = 'debuff_enemy';
+  } else if (/\badvantage\b/i.test(cleaned)
+             && /\b(?:saving throw|attack|allies|friendly|undead)\b/i.test(cleaned)) {
+    category = 'buff_ally';
+  } else if (/\bdisadvantage\b/i.test(cleaned)) {
+    category = 'debuff_enemy';
+  } else if (/\bheavily obscured\b/i.test(cleaned) || /\bfog\b/i.test(cleaned)) {
+    category = 'visibility';
+  } else if (/\b(?:pushed|pulled|knocked|fall|moves?\s+up\s+to)\b/i.test(cleaned)) {
+    category = 'movement';
+  } else {
+    category = 'bespoke';
+  }
+
+  return {
+    id: `${sourceCreature}::${index}`,
+    sourceCreature,
+    rawText: cleaned,
+    outOfScope,
+    outOfScopeId,
+    deferred,
+    deferredId,
+    isMagical,
+    isSpell,
+    spellName,
+    castLevel,
+    saveDC,
+    saveAbility,
+    damage,
+    conditions,
+    summons,
+    rangeFt,
+    radiusFt,
+    durationRounds,
+    targetsEnemies,
+    targetFilter,
+    category,
+  };
+}
+
 function parseLairActions(
   raw: Raw5etoolsMonster,
 ): Combatant['lairActions'] {
@@ -716,6 +1105,8 @@ function parseLairActions(
 
   // Flatten the lairActions array: strings stay as-is, {type:'list', items:[...]}
   // objects get their items extracted, {type:'entries', entries:[...]} get flattened.
+  // (Unchanged from Session 60 — preserves the exact action count for backward
+  // compat with existing tests, e.g. Adult Red Dragon = 4 options.)
   const flat = (e: any): string => {
     if (typeof e === 'string') return e;
     if (Array.isArray(e)) return e.map(flat).join(' ');
@@ -726,7 +1117,7 @@ function parseLairActions(
 
   // The lairActions array is: [intro text, {type:'list', items:[action1, action2, ...]}, ...]
   // Extract the individual action options (the items in the list).
-  const actions: string[] = [];
+  const rawActions: string[] = [];
   for (const entry of lg.lairActions) {
     if (typeof entry === 'string') {
       // Intro text — skip (not an action option)
@@ -736,22 +1127,28 @@ function parseLairActions(
       // List of action options
       for (const item of entry.items) {
         const text = flat(item).trim();
-        if (text) actions.push(text);
+        if (text) rawActions.push(text);
       }
     } else if (entry.entries) {
       // Nested entries — flatten
       const text = flat(entry).trim();
-      if (text) actions.push(text);
+      if (text) rawActions.push(text);
     }
   }
 
-  if (actions.length === 0) return undefined;
+  if (rawActions.length === 0) return undefined;
 
   // Extract initiative count from the intro text (usually "On initiative count 20")
   let initiativeCount = 20; // PHB default
   const introText = lg.lairActions.find((e: any) => typeof e === 'string') as string || '';
   const initMatch = introText.match(/initiative\s+count\s+(\d+)/i);
   if (initMatch) initiativeCount = parseInt(initMatch[1], 10);
+
+  // Build structured LairAction[] via the per-action extractor.
+  const sourceCreature = raw.legendaryGroup.name;
+  const actions: LairAction[] = rawActions.map((text, idx) =>
+    extractLairAction(text, sourceCreature, idx),
+  );
 
   return { actions, initiativeCount };
 }

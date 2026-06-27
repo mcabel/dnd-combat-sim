@@ -77,3 +77,59 @@ The remaining **~294 actions** (~95%) are in-scope and will be mechanically reso
 - **Adding entries:** when a new legendary group is added to `bestiaryData/legendarygroups.json`, the Phase 1 parser pass should categorize its lair actions. Any new out-of-scope/deferred entries get the next sequential ID.
 - **Reclassifying:** when a deferred subsystem is implemented (e.g., `visibility` lands), all `lair_def_*` entries with that tag move to in-scope and become executable. Update this doc to mark them resolved.
 - **Search:** the stable IDs (`lair_oos_NNN`, `lair_def_NNN`) appear in runtime logs and in the `LairAction.id` field, so a `grep lair_oos_003` finds both the registry entry and any log lines where that action fired.
+
+---
+
+## Phase 1 Update (Session 91)
+
+The Phase 1 parser pass (`src/parser/fivetools.ts:extractLairAction`) re-ran the
+categorization over all **324** flattened lair-action options (115 legendary
+groups). Findings vs the Phase 0 starter registry above:
+
+- **Actual total = 324** (the Phase 0 estimate of 309 was a pre-flattening
+  count; the parser's flattening yields 324, including ~15 intro-text artifacts
+  from "Additional Lair Actions" sections — a pre-existing parser behavior
+  preserved for backward compat; Phase 2 may refine).
+- **Out-of-scope = 6** (was 5): the 3 registry entries above (Balhannoth,
+  Ki-rin stone/metal, Merrenoloth) plus 2 newly-identified Ki-rin
+  object-creation actions (`lair_oos_auto_Ki_rin_0` = pillows/clothing,
+  `lair_oos_auto_Ki_rin_2` = wood — both permanent object-creation with no
+  combat use, caught by the heuristic safety-net). The Phase 0 "duplicate"
+  entries (lair_oos_002, lair_oos_005) do not correspond to separate actions
+  in the flattened data.
+- **Deferred = 16** (was 8): the 8 registry entries above (Black Dragon
+  magical-darkness, Nafas/Olhydra/Storm Giant fog visibility, Sphinx
+  meta-initiative + meta-time, Baphomet gravity) + the Juiblex green-slime
+  `[VERIFY-2]` entry assigned `lair_def_009` (`deferred: 'dmg-hazard'`) +
+  7 heuristic-caught duplicates/variants (e.g., Demogorgon/Morkoth darkness,
+  additional fog actions) tagged with `lair_def_auto_*` IDs.
+- **`[VERIFY-1]` Lichen Lich shambling mound** → classified as **`summon`**
+  (in-scope) per the recommendation, via the "creating a X … obeys … appears
+  in an unoccupied space" fallback pattern (`durationRounds: Infinity` since
+  the 1-hour duration >> combat).
+- **`[VERIFY-2]` Juiblex green slime** → classified as **`deferred: 'dmg-hazard'`**
+  (`lair_def_009`) per the recommendation.
+
+The full per-action tagging table (324 rows) is in
+`docs/LAIR-ACTIONS-TAGGING-TABLE.md`, regenerable via
+`scripts/gen_lair_tagging_table.ts`.
+
+### Updated summary
+
+| Classification | Count | Runtime behavior |
+|---|---|---|
+| Out-of-scope (`lair_oos_*` + `lair_oos_auto_*`) | 6 | Logged with ID, never executed |
+| Deferred (`lair_def_*` + `lair_def_auto_*`) | 16 | Logged with tag, executed when subsystem lands |
+| **Total non-executable** | **22** | of 324 total (~7%) |
+| **In-scope (executable in Phase 2+)** | **302** | (~93%) |
+
+### Review items for the next pass
+
+- The 7 `lair_def_auto_*` heuristic-caught deferred actions should be reviewed
+  and, if confirmed, promoted to stable `lair_def_NNN` IDs in this registry.
+- The 40 `isSpell: true` actions should be spot-audited before Phase 2 dispatch
+  wires the GoI/Counterspell interaction (the remedy-reference exclusion handles
+  the known Sphinx cases, but other edge cases may exist).
+- The ~15 intro-text artifacts (e.g., "At your discretion, a legendary…") should
+  be filtered out in Phase 2's flattening refinement so they don't pollute the
+  action pool.
