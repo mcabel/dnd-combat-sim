@@ -2233,6 +2233,21 @@ export interface Combatant {
     movePerTurn: number;  // how far the zone can move each turn (ft)
   };
 
+  // ── Session 89: Aura of Vitality per-turn re-heal ──
+  // PHB p.216: "You can use a bonus action to cause one creature in the
+  // aura (including you) to regain 2d6 hit points." Set when the spell is
+  // cast; checked at the start of each of the caster's subsequent turns.
+  // Cleared when concentration breaks (removeEffectsFromCaster) or when
+  // the spell expires. The per-turn heal targets the most-wounded ally
+  // (including self) within 30 ft.
+  // v1 simplification: the heal fires automatically at the start of the
+  // caster's turn (no bonus action cost — mirrors the Eyebite pattern).
+  _auraOfVitalityActive?: {
+    healDie: number;       // 6 (d6)
+    healDieCount: number;  // 2 (2d6)
+    rangeFt: number;       // 30
+  };
+
   // ---- Short-rest subsystem (PHB p.186) -------------------------
   // Hit Dice: a character has hit dice equal to their level. On a short
   // rest, they can spend one or more Hit Dice to regain HP. For each Hit

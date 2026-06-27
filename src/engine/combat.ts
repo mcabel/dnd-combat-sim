@@ -852,7 +852,7 @@ import { shouldCast as shouldCastInsectPlague,    execute as executeInsectPlague
 import { shouldCast as shouldCastStormOfVengeance, execute as executeStormOfVengeance } from '../spells/storm_of_vengeance';
 import { shouldCast as shouldCastGoodberry,       execute as executeGoodberry }       from '../spells/goodberry';
 import { shouldCast as shouldCastWitherAndBloom,  execute as executeWitherAndBloom }  from '../spells/wither_and_bloom';
-import { shouldCast as shouldCastAuraOfVitality,  execute as executeAuraOfVitality }  from '../spells/aura_of_vitality';
+import { shouldCast as shouldCastAuraOfVitality,  execute as executeAuraOfVitality,  shouldCastPulse as shouldCastPulseAuraOfVitality,  executePulse as executePulseAuraOfVitality }  from '../spells/aura_of_vitality';
 import { shouldCast as shouldCastMassHealingWord, execute as executeMassHealingWord } from '../spells/mass_healing_word';
 import { shouldCast as shouldCastMassCureWounds,  execute as executeMassCureWounds }  from '../spells/mass_cure_wounds';
 import { shouldCast as shouldCastHeal,            execute as executeHeal }            from '../spells/heal';
@@ -7279,6 +7279,24 @@ export function runCombat(
               `${newTarget.name} resists Eyebite re-target — not ${optionLabel.toLowerCase()}!`,
               newTarget.id);
           }
+        }
+      }
+
+      // ── Session 89: Aura of Vitality per-turn re-heal (PHB p.216) ──
+      // "You can use a bonus action to cause one creature in the aura
+      //  (including you) to regain 2d6 hit points."
+      // v1 simplification: the heal fires automatically at the START of
+      // the caster's turn (no bonus action cost — mirrors the Eyebite
+      // pattern). The aura follows the caster (30-ft radius from current
+      // position). Targets the most-wounded ally (including self) in range.
+      // Gates on: _auraOfVitalityActive flag + concentration active +
+      // concentrating on 'Aura of Vitality' + caster alive/conscious.
+      if (actor._auraOfVitalityActive && actor.concentration?.active &&
+          actor.concentration.spellName === 'Aura of Vitality' &&
+          !actor.isDead && !actor.isUnconscious) {
+        const pulseTarget = shouldCastPulseAuraOfVitality(actor, battlefield);
+        if (pulseTarget) {
+          executePulseAuraOfVitality(actor, pulseTarget, state);
         }
       }
 

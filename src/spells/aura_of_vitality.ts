@@ -14,12 +14,15 @@
 //   - Canon: cast action → 30-ft aura → bonus-action heal 1 creature/turn
 //     for 10 turns (concentration). v1 has no per-turn bonus-action hook,
 //     so on cast we heal up to 3 most-wounded allies within 30 ft (2d6
-//     each). Per-turn re-heal NOT modelled — concentration is still
-//     tracked (so the spell ends if concentration breaks) but the aura
-//     has no further mechanical effect after the initial burst.
-//   - Flag: auraOfVitalityPerTurnRehealV1Simplified
-//
-// Upcast: +1d6 heal per slot level above 3rd (not modelled in v1).
+//     each).
+//   - Session 89: per-turn re-heal is NOW modelled. At the start of each
+//     of the caster's subsequent turns, the engine auto-heals the most-
+//     wounded ally in the 30-ft aura for 2d6. This mirrors the Eyebite
+//     pattern (start-of-turn auto-processing, no bonus action cost — v1
+//     simplification). The initial 3-ally burst on cast is preserved.
+//   - Upcast: +1d6 heal per slot level above 3rd (not modelled in v1).
+//   - Flag: auraOfVitalityPerTurnRehealV1Simplified is now false;
+//     auraOfVitalityPerTurnRehealV1Implemented is true.
 //
 // Spell module pattern (multi-target heal, mirrors prayer_of_healing.ts):
 //   shouldCast(caster, bf) → Combatant[] | null
@@ -45,7 +48,16 @@ export const metadata = {
   healDieCount: 2,
   concentration: true,
   castingTime: 'bonusAction',
-  auraOfVitalityPerTurnRehealV1Simplified: true,
+  /**
+   * v1 simplification flag for per-turn re-heal. NOW FALSE — the per-turn
+   * re-heal is implemented (Session 89) via start-of-turn auto-processing
+   * in combat.ts (mirrors the Eyebite pattern). The initial 3-ally burst
+   * on cast is preserved (v1 simplification — canon heals 1/turn from
+   * turn 1, v1 heals 3 on cast + 1/turn from turn 2).
+   */
+  auraOfVitalityPerTurnRehealV1Simplified: false as const,
+  /** Session 89: per-turn re-heal is NOW implemented. */
+  auraOfVitalityPerTurnRehealV1Implemented: true as const,
 } as const;
 
 // ---- Local log helper ---------------------------------------
@@ -125,12 +137,15 @@ export function shouldCast(caster: Combatant, bf: Battlefield): Combatant[] | nu
  * Execute Aura of Vitality:
  *  1. Consume a 3rd-level spell slot.
  *  2. Start concentration on 'Aura of Vitality'.
- *  3. For each target: roll 2d6 → applyHeal (capped at maxHP).
- *  4. Log: spell cast + concentration + per-target heal events.
+ *  3. Set _auraOfVitalityActive flag for per-turn re-heal processing.
+ *  4. For each target: roll 2d6 → applyHeal (capped at maxHP).
+ *  5. Log: spell cast + concentration + per-target heal events.
  *
- * v1 simplification: per-turn bonus-action re-heal NOT modelled. The
- * concentration persists for combat but has no further mechanical effect
- * after the initial 3-ally burst.
+ * Session 89: the per-turn re-heal is now modelled. The _auraOfVitalityActive
+ * flag is set here and checked at the start of each subsequent turn by
+ * combat.ts's turn-start processing (mirrors the Eyebite pattern). The
+ * flag stores the heal die/count/range so the per-turn pulse is
+ * self-contained.
  *
  * @param caster  The casting Combatant (Cleric / Druid / Paladin)
  * @param targets Wounded allies within 30 ft (up to 3, self-first)
@@ -143,6 +158,14 @@ export function execute(
 ): void {
   consumeSpellSlot(caster, 3);
   startConcentration(caster, 'Aura of Vitality');
+
+  // Session 89: set the per-turn re-heal flag. The engine's turn-start
+  // processing checks this flag + concentration to fire the per-turn heal.
+  caster._auraOfVitalityActive = {
+    healDie: metadata.healDie,
+    healDieCount: metadata.healDieCount,
+    rangeFt: metadata.rangeFt,
+  };
 
   const names = targets.map(t => t.name).join(', ');
   emit(
@@ -182,9 +205,96 @@ export function execute(
   }
 }
 
+// ---- Per-turn re-heal (Session 89) --------------------------
+
+/**
+ * Find the most-wounded ally (including self) within the Aura of Vitality
+ * 30-ft radius. Called at the start of each of the caster's subsequent
+ * turns while Aura of Vitality is active.
+ *
+ * Target priority: lowest currentHP (most wounded), tie-broken by closest.
+ * Full-HP allies are excluded (healing them wastes the pulse).
+ *
+ * @param caster The Aura of Vitality concentrator.
+ * @param bf     The battlefield.
+ * @returns The most-wounded ally in range, or null if none need healing.
+ */
+export function shouldCastPulse(
+  caster: Combatant,
+  bf: Battlefield,
+): Combatant | null {
+  const candidates: Array<{ c: Combatant; hpPct: number; dist: number }> = [];
+
+  for (const c of bf.combatants.values()) {
+    if (c.isDead) continue;  // dead allies can't be healed
+    if (c.faction !== caster.faction) continue;
+
+    const distFt = chebyshev3D(caster.pos, c.pos) * 5;
+    if (distFt > metadata.rangeFt) continue;
+
+    if (c.currentHP >= c.maxHP) continue;  // skip full-HP
+
+    candidates.push({ c, hpPct: c.currentHP / c.maxHP, dist: distFt });
+  }
+
+  if (candidates.length === 0) return null;
+
+  // Sort: lowest HP% first (most wounded), tie-break by closest.
+  candidates.sort((a, b) => {
+    if (Math.abs(a.hpPct - b.hpPct) > 0.01) return a.hpPct - b.hpPct;
+    return a.dist - b.dist;
+  });
+
+  return candidates[0].c;
+}
+
+/**
+ * Execute a single per-turn Aura of Vitality heal pulse.
+ *
+ * Heals the target for 2d6 (capped at maxHP). Does NOT consume a spell slot
+ * (the slot was consumed on cast). Does NOT consume a bonus action (v1
+ * simplification — mirrors the Eyebite pattern; the heal fires automatically
+ * at the start of the caster's turn).
+ *
+ * @param caster The Aura of Vitality concentrator.
+ * @param target The most-wounded ally in range (from shouldCastPulse).
+ * @param state  Current EngineState (for logging).
+ */
+export function executePulse(
+  caster: Combatant,
+  target: Combatant,
+  state: EngineState,
+): void {
+  if (target.isDead) return;  // dead allies can't be healed
+
+  let heal = 0;
+  for (let i = 0; i < metadata.healDieCount; i++) {
+    heal += rollDie(metadata.healDie);
+  }
+
+  const wasUnconscious = target.isUnconscious;
+  const healed = applyHeal(target, heal);
+
+  if (wasUnconscious && healed > 0) {
+    emit(
+      state, 'condition_remove', target.id,
+      `${target.name} regains consciousness!`,
+      target.id,
+    );
+  }
+
+  emit(
+    state, 'heal', caster.id,
+    `Aura of Vitality pulse: ${healed} HP restored to ${target.name} (rolled ${heal}; now ${target.currentHP}/${target.maxHP})`,
+    target.id, healed,
+  );
+}
+
 // ---- Cleanup ------------------------------------------------
 
 export function cleanup(_c: Combatant): void {
   // No-op — concentration break handled by engine's concentration subsystem.
-  // The initial heal is instantaneous; the per-turn reheal is not modelled.
+  // The _auraOfVitalityActive flag is cleared by removeEffectsFromCaster
+  // (which sets concentration = null) — the turn-start check gates on
+  // concentration?.active, so clearing concentration disables the pulse.
 }

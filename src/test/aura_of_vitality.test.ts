@@ -127,8 +127,10 @@ eq('heal die is d6', metadata.healDie, 6);
 eq('heal die count is 2', metadata.healDieCount, 2);
 eq('IS concentration', metadata.concentration, true);
 eq('casting time is bonusAction', metadata.castingTime, 'bonusAction');
-assert('v1 per-turn reheal simplified flag set',
-  (metadata as any).auraOfVitalityPerTurnRehealV1Simplified === true);
+assert('v1 per-turn reheal simplified flag is NOW false (Session 89)',
+  (metadata as any).auraOfVitalityPerTurnRehealV1Simplified === false);
+assert('v1 per-turn reheal implemented flag is true (Session 89)',
+  (metadata as any).auraOfVitalityPerTurnRehealV1Implemented === true);
 
 // ============================================================
 // 2. shouldCast — precondition gates
