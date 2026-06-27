@@ -160,6 +160,11 @@ export function execute(caster: Combatant, target: Combatant, state: EngineState
     saveDC,
     conditionOnFail: 'incapacitated',
     currentCondition: 'poisoned',
+    // Session 84: Contagion is a 5th-level spell (no upcast). Used by the
+    // combat.ts save-fail tracker loop to check Globe of Invulnerability
+    // protection on each per-turn save roll (PHB p.245 — base GoI blocks
+    // L5 and below). Mirrors the sourceSlotLevel pattern on zone effects.
+    slotLevel: 5,
   };
 }
 

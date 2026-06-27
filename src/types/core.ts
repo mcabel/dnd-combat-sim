@@ -663,6 +663,16 @@ export interface SaveFailTracker {
   saveDC: number;                 // the DC from the original cast
   conditionOnFail: Condition;     // condition to apply after max fails
   currentCondition: Condition;    // currently applied condition
+  // Session 84 (GoI save-fail tracker): the spell's slot level, used by
+  // the combat.ts save-fail tracker loop to check Globe of Invulnerability
+  // protection on each per-turn save roll (PHB p.245). Contagion = 5,
+  // Flesh to Stone = 6 (both fixed-level — "Upcast: none"). Optional for
+  // backward compat (manual tracker constructions in tests omit it);
+  // defaults to 0 in combat.ts (0 = cantrip-level = never blocked, so
+  // legacy trackers without slotLevel preserve pre-Session 84 behavior).
+  // Mirrors the `sourceSlotLevel` pattern on damage_zone / terrain_zone
+  // effects (Sessions 78-83).
+  slotLevel?: number;
 }
 
 // ---- Combatant ----------------------------------------------

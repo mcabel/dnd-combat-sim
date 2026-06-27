@@ -6708,79 +6708,107 @@ export function runCombat(
         }
 
         if (actor._saveFailTracker) {
-          const save = rollSave(actor, tracker.saveAbility, tracker.saveDC);
-          log(state,
-            save.success ? 'save_success' : 'save_fail',
-            tracker.casterId,
-            `${actor.name} ${save.success ? 'succeeds on' : 'fails'} DC ${tracker.saveDC} ${tracker.saveAbility.toUpperCase()} save vs ${tracker.spellName} (start-of-turn tracker: ${tracker.fails} fails / ${tracker.successes} successes → ${save.success ? 'success' : 'fail'} #${save.success ? tracker.successes + 1 : tracker.fails + 1}) (rolled ${save.total})`,
-            actor.id, save.roll);
-
-          if (save.success) {
-            tracker.successes++;
-            if (tracker.successes >= tracker.maxCount) {
-              // 3 successes: remove all effects from this tracker spell and clear it.
-              // Remove matching active effects and their conditions.
-              // ── RFC-COMBINING-EFFECTS Phase 4: source-tracked conditions ──
-              // Call undoEffect for each matching effect to clean up
-              // _conditionSources and other structural state, then remove
-              // from activeEffects, then re-derive conditions via pipeline.
-              const matchingEffects = actor.activeEffects.filter(
-                e => e.casterId === tracker.casterId && e.spellName === tracker.spellName
-              );
-              for (const me of matchingEffects) {
-                undoEffect(actor, me);
-              }
-              actor.activeEffects = actor.activeEffects.filter(
-                e => !(e.casterId === tracker.casterId && e.spellName === tracker.spellName)
-              );
-              // Re-derive conditions from the pipeline after removing effects.
-              reevaluateEffects(actor, battlefield);
-              log(state, 'condition_remove', tracker.casterId,
-                `${actor.name} overcomes ${tracker.spellName}! (3 successful saves — ${tracker.currentCondition} removed)`,
-                actor.id);
-              delete actor._saveFailTracker;
-            }
+          // Session 84 (GoI save-fail tracker): PHB p.245 — "Any spell of
+          // 5th level or lower cast from outside the barrier can't affect
+          // creatures or objects within it... the spell has no effect on
+          // them." This applies to the per-turn save rolls of the Contagion
+          // / Flesh to Stone save-fail tracker. A GoI-protected creature is
+          // NOT forced to make the per-turn save while GoI is active — the
+          // tracker is PAUSED (no fail/success increment). When GoI expires
+          // (concentration breaks), the save roll resumes on the next turn.
+          // Mirrors the damage_zone tick GoI pattern (Session 78 + Session
+          // 82 casterId fix). The tracker's caster's own GoI does NOT
+          // block their own tracker (casterId → barrier skipped).
+          //
+          // NOTE: The poisoned (Contagion) / restrained (Flesh to Stone)
+          // conditions applied as ActiveEffects are NOT suppressed by this
+          // check — only the per-turn save roll is paused. Full condition
+          // suppression requires pipeline-level GoI checks (deferred). This
+          // is consistent with the damage_zone tick, which skips damage but
+          // leaves the effect in place (so it can resume if GoI expires).
+          const trackerSlotLevel = tracker.slotLevel ?? 0;
+          if (trackerSlotLevel > 0 && actor.id !== tracker.casterId &&
+              isProtectedByGoI(actor, trackerSlotLevel, state.battlefield, tracker.casterId)) {
+            log(state, 'action', tracker.casterId,
+              `${actor.name} is protected by Globe of Invulnerability — ${tracker.spellName} save-fail tracker save negated (L${trackerSlotLevel} ≤ GoI threshold). Tracker paused (no fail/success increment).`,
+              actor.id);
+            // Do NOT roll the save, do NOT increment fails/successes.
+            // Tracker remains intact — resumes when GoI expires.
           } else {
-            tracker.fails++;
-            if (tracker.fails >= tracker.maxCount) {
-              // 3 fails: escalate condition.
-              // Remove the current condition effects from this spell.
-              // ── RFC-COMBINING-EFFECTS Phase 4: source-tracked conditions ──
-              // Call undoEffect for each matching effect to clean up
-              // _conditionSources and other structural state.
-              const matchingEffects2 = actor.activeEffects.filter(
-                e => e.casterId === tracker.casterId && e.spellName === tracker.spellName
-              );
-              for (const me of matchingEffects2) {
-                undoEffect(actor, me);
+            const save = rollSave(actor, tracker.saveAbility, tracker.saveDC);
+            log(state,
+              save.success ? 'save_success' : 'save_fail',
+              tracker.casterId,
+              `${actor.name} ${save.success ? 'succeeds on' : 'fails'} DC ${tracker.saveDC} ${tracker.saveAbility.toUpperCase()} save vs ${tracker.spellName} (start-of-turn tracker: ${tracker.fails} fails / ${tracker.successes} successes → ${save.success ? 'success' : 'fail'} #${save.success ? tracker.successes + 1 : tracker.fails + 1}) (rolled ${save.total})`,
+              actor.id, save.roll);
+
+            if (save.success) {
+              tracker.successes++;
+              if (tracker.successes >= tracker.maxCount) {
+                // 3 successes: remove all effects from this tracker spell and clear it.
+                // Remove matching active effects and their conditions.
+                // ── RFC-COMBINING-EFFECTS Phase 4: source-tracked conditions ──
+                // Call undoEffect for each matching effect to clean up
+                // _conditionSources and other structural state, then remove
+                // from activeEffects, then re-derive conditions via pipeline.
+                const matchingEffects = actor.activeEffects.filter(
+                  e => e.casterId === tracker.casterId && e.spellName === tracker.spellName
+                );
+                for (const me of matchingEffects) {
+                  undoEffect(actor, me);
+                }
+                actor.activeEffects = actor.activeEffects.filter(
+                  e => !(e.casterId === tracker.casterId && e.spellName === tracker.spellName)
+                );
+                // Re-derive conditions from the pipeline after removing effects.
+                reevaluateEffects(actor, battlefield);
+                log(state, 'condition_remove', tracker.casterId,
+                  `${actor.name} overcomes ${tracker.spellName}! (3 successful saves — ${tracker.currentCondition} removed)`,
+                  actor.id);
+                delete actor._saveFailTracker;
               }
-              actor.activeEffects = actor.activeEffects.filter(
-                e => !(e.casterId === tracker.casterId && e.spellName === tracker.spellName)
-              );
-              // Re-derive conditions from the pipeline after removing effects.
-              reevaluateEffects(actor, battlefield);
-              // Apply the escalation condition.
-              // For Flesh to Stone: petrified is NOT concentration-sourced (permanent).
-              //   Use the TARGET's own ID as casterId so that removeEffectsFromCaster
-              //   on the original caster won't remove the petrified condition.
-              //   The petrification is self-sustaining once reached (PHB p.241).
-              // For Contagion: incapacitated is NOT concentration-sourced (permanent).
-              //   Use the original casterId — Contagion has no concentration, so
-              //   removeEffectsFromCaster won't be called for it in normal flow.
-              const escalationCasterId = tracker.spellName === 'Flesh to Stone'
-                ? actor.id   // petrified is self-sustaining; not tied to caster
-                : tracker.casterId;
-              applySpellEffect(actor, {
-                casterId: escalationCasterId,
-                spellName: tracker.spellName,
-                effectType: 'condition_apply',
-                payload: { condition: tracker.conditionOnFail },
-                sourceIsConcentration: false,
-              });
-              log(state, 'condition_add', tracker.casterId,
-                `${actor.name} succumbs to ${tracker.spellName}! (3 failed saves — ${tracker.currentCondition} → ${tracker.conditionOnFail})`,
-                actor.id);
-              delete actor._saveFailTracker;
+            } else {
+              tracker.fails++;
+              if (tracker.fails >= tracker.maxCount) {
+                // 3 fails: escalate condition.
+                // Remove the current condition effects from this spell.
+                // ── RFC-COMBINING-EFFECTS Phase 4: source-tracked conditions ──
+                // Call undoEffect for each matching effect to clean up
+                // _conditionSources and other structural state.
+                const matchingEffects2 = actor.activeEffects.filter(
+                  e => e.casterId === tracker.casterId && e.spellName === tracker.spellName
+                );
+                for (const me of matchingEffects2) {
+                  undoEffect(actor, me);
+                }
+                actor.activeEffects = actor.activeEffects.filter(
+                  e => !(e.casterId === tracker.casterId && e.spellName === tracker.spellName)
+                );
+                // Re-derive conditions from the pipeline after removing effects.
+                reevaluateEffects(actor, battlefield);
+                // Apply the escalation condition.
+                // For Flesh to Stone: petrified is NOT concentration-sourced (permanent).
+                //   Use the TARGET's own ID as casterId so that removeEffectsFromCaster
+                //   on the original caster won't remove the petrified condition.
+                //   The petrification is self-sustaining once reached (PHB p.241).
+                // For Contagion: incapacitated is NOT concentration-sourced (permanent).
+                //   Use the original casterId — Contagion has no concentration, so
+                //   removeEffectsFromCaster won't be called for it in normal flow.
+                const escalationCasterId = tracker.spellName === 'Flesh to Stone'
+                  ? actor.id   // petrified is self-sustaining; not tied to caster
+                  : tracker.casterId;
+                applySpellEffect(actor, {
+                  casterId: escalationCasterId,
+                  spellName: tracker.spellName,
+                  effectType: 'condition_apply',
+                  payload: { condition: tracker.conditionOnFail },
+                  sourceIsConcentration: false,
+                });
+                log(state, 'condition_add', tracker.casterId,
+                  `${actor.name} succumbs to ${tracker.spellName}! (3 failed saves — ${tracker.currentCondition} → ${tracker.conditionOnFail})`,
+                  actor.id);
+                delete actor._saveFailTracker;
+              }
             }
           }
         }

@@ -229,6 +229,12 @@ export function execute(
     saveDC,
     conditionOnFail: 'petrified',
     currentCondition: 'restrained',
+    // Session 84: Flesh to Stone is a 6th-level spell (no upcast). Used by
+    // the combat.ts save-fail tracker loop to check Globe of Invulnerability
+    // protection on each per-turn save roll (PHB p.245). Base GoI (threshold
+    // 5) does NOT block L6; an upcast GoI at L7+ (threshold 6+) DOES block.
+    // Mirrors the sourceSlotLevel pattern on zone effects.
+    slotLevel: 6,
   };
 }
 
