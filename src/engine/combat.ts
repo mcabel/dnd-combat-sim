@@ -3177,8 +3177,14 @@ export function executePlannedAction(
         if (effectiveTarget.isDead || effectiveTarget.isUnconscious) break;
         resolveAttack(actor, effectiveTarget, plan.action, state);
         if (attackCount > 1 && i < attackCount - 1) {
+          // Session 80: Eldritch Blast multi-beam uses the same attackCount
+          // pattern as Extra Attack / Thirsting Blade. Log beam number.
+          const isEB = plan.action.name === 'Eldritch Blast';
+          const label = isEB
+            ? `Eldritch Beam ${i + 2}/${attackCount}`
+            : `attack ${i + 2}/${attackCount} (Extra Attack / Thirsting Blade)`;
           log(state, 'action', actor.id,
-            `${actor.name} makes attack ${i + 2}/${attackCount} (Extra Attack / Thirsting Blade)`,
+            `${actor.name} makes ${label}`,
             effectiveTarget.id ?? undefined);
         }
       }
@@ -6388,6 +6394,7 @@ export function runCombat(
           tickAdvantages(actor);  // expire until_next_turn / decrement rounds entries
           actor.usedSneakAttackThisTurn = false;
           actor.helpedThisTurn = false;
+          actor._graspOfHadarUsedThisTurn = false;  // Session 80: Grasp of Hadar once-per-turn
           actor.budget.movementFt = actor.flySpeed ?? actor.speed;
 
           const rider = battlefield.combatants.get(actor.carriedBy!);
@@ -6417,6 +6424,7 @@ export function runCombat(
       // Reset per-turn flags
       actor.usedSneakAttackThisTurn = false;
       actor.helpedThisTurn = false;
+      actor._graspOfHadarUsedThisTurn = false;  // Session 80: Grasp of Hadar once-per-turn
 
       // Capture rage damage flag (set by attacks on OTHER creatures' turns) then clear it
       // so damage DURING this turn isn't double-counted in the next tick.

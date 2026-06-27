@@ -129,16 +129,20 @@ export const ELDRITCH_INVOCATIONS: Record<string, EldritchInvocation> = {
   //  toward you, pulling it up to 10 feet."
   //
   // Post-hit hook: pulls 10 ft toward caster via pullToward (mirror of
-  // Repelling Blast but reversed direction). v1 simplification: always
-  // pulls the full 10 ft; no "once per turn" limit (the engine fires
-  // on every EB hit, which for v1 is 1 beam per cast — the once-per-turn
-  // limit would only matter with multi-beam EB, which is a future task).
+  // Repelling Blast but reversed direction). Session 80: now enforces
+  // the "once on each of your turns" limit (PHB p.111) — only fires on
+  // the first beam hit each turn. A _graspOfHadarUsedThisTurn flag on
+  // the combatant tracks usage; reset at start of each turn.
   // PHB p.111: "Large or smaller" — v1 ignores the size restriction
   // (same as Repelling Blast).
   'Grasp of Hadar': {
     name: 'Grasp of Hadar',
     description: 'Once on each of your turns when you hit a creature with your Eldritch Blast, you can move that creature in a straight line toward you, pulling it up to 10 feet.',
     onEldritchBlastHit: (attacker, target, state) => {
+      // Session 80: PHB p.111 "once on each of your turns" — now enforced
+      // with multi-beam EB. Only fires on the FIRST beam hit each turn.
+      if (attacker._graspOfHadarUsedThisTurn) return;
+      attacker._graspOfHadarUsedThisTurn = true;
       const oldPos: Vec3 = { ...target.pos };
       pullToward(target, attacker.pos, 10);
       if (target.pos.x !== oldPos.x || target.pos.y !== oldPos.y) {

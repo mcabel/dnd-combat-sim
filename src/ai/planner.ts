@@ -380,7 +380,7 @@ import {
   canReach, bestAdjacentPos, bestRangedPosition,
   adjacentEnemyCount, livingEnemiesOf, livingAlliesOf, posKey, distanceFt, chebyshev3D
 } from '../engine/movement';
-import { makeImprovisedUnarmed, makeImprovisedWeapon, effectiveSpeed } from '../engine/utils';
+import { makeImprovisedUnarmed, makeImprovisedWeapon, effectiveSpeed, cantripTier } from '../engine/utils';
 import { hasLineOfSight } from '../engine/los';
 import { bestAttackAction } from './actions';
 
@@ -6024,6 +6024,17 @@ export function planTurn(self: Combatant, battlefield: Battlefield): TurnPlan {
     if (best !== undefined) {
       plan.action.attackCount = best;
     }
+  }
+
+  // ── Session 80: Eldritch Blast multi-beam (PHB p.237) ──
+  // Eldritch Blast scales by adding MORE BEAMS (not bigger dice).
+  // Beam count: 1 at levels 1-4, 2 at 5-10, 3 at 11-16, 4 at 17+.
+  // This follows the same attackCount pattern as Extra Attack /
+  // Thirsting Blade — the engine loops resolveAttack per beam.
+  if (plan.action && plan.action.action?.name === 'Eldritch Blast'
+      && plan.action.action.slotLevel === 0) {
+    const tier = cantripTier(self);
+    plan.action.attackCount = tier + 1;  // 1/2/3/4 beams
   }
 
   // === MOVEMENT ===

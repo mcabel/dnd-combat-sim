@@ -18,35 +18,34 @@
 //   ones. Make a separate attack roll for each beam.
 //
 // ────────────────────────────────────────────────────────────
-// v1 SIMPLIFICATION (this module):
+// v1 IMPLEMENTATION (Session 80):
 // ────────────────────────────────────────────────────────────
-// Eldritch Blast is the FIRST cantrip whose scaling produces
-// MULTIPLE separate attack rolls rather than a single larger
-// damage roll. resolveAttack in combat.ts resolves ONE attack
-// roll per Action; multi-beam routing requires either:
-//   (a) the AI planner to emit multiple `cast` PlannedActions
-//       (one per beam) — this is a Core-Engine/AI-planner task,
-//       NOT a cantrip-module task; OR
-//   (b) a new "multi-attack cantrip" registry that loops the
-//       attack-roll + damage per beam.
-// Both are out of scope for Cantrip-7 (this session). For v1
-// this module provides METADATA ONLY for a SINGLE beam:
-//   damageDice: '1d10'  ·  damageType: 'force'  ·  range: 120 ft
-//   scales: true (flag set so the AI/UI knows the spell scales)
-//   scalingLevels/scalingDice describe the per-beam damage IF
-//     it scaled — but Eldritch Blast's beams stay 1d10 each at
-//     all levels; the scaling is in BEAM COUNT, not die size.
-//   The multi-beam behavior is documented via `scalesByBeamCount`
-//     (true) and `beamCountByLevel` so the AI planner can read
-//     this metadata in a future batch and emit the right number
-//     of attack actions.
+// Multi-beam is now implemented using the existing attackCount
+// pattern (same as Extra Attack / Thirsting Blade). The AI
+// planner computes the beam count from cantripTier() + 1 and
+// sets plan.action.attackCount. The engine's existing attack
+// loop then calls resolveAttack once per beam, with each beam
+// being an independent attack roll.
 //
-// The engine routing for a single Eldritch Blast beam is identical
-// to Fire Bolt: a ranged spell attack (attackType='spell') with
-// 1d10 force damage, resolved by resolveAttack. No post-hit rider
-// → no CANTRIP_EFFECTS entry needed. The `force` damage type is
-// new to the cantrip roster (no prior cantrip deals force damage)
-// and serves as good coverage for damage-type testing.
+// Key design decisions:
+//   - noCantripScaling: true on the Action prevents the engine
+//     from scaling the die (1d10 → 2d10 etc). Each beam stays
+//     1d10 regardless of caster level — the scaling is in beam
+//     COUNT, not die size.
+//   - v1 simplification: all beams target the same enemy. RAW
+//     allows targeting different enemies, but that requires AI
+//     planner support for per-beam targeting (deferred).
+//   - Grasp of Hadar: now enforces once-per-turn (PHB p.111:
+//     "once on each of your turns"). A flag on the combatant
+//     tracks usage; reset at start of each turn.
+//   - Repelling Blast / Lance of Lethargy: fire on every beam
+//     hit (no "once per turn" restriction in the spell text).
+//   - Agonizing Blast: +CHA mod per beam (no restriction).
+//
+// The engine routing for each beam is identical to a single
+// Eldritch Blast: a ranged spell attack (attackType='spell')
+// with 1d10 force damage, resolved by resolveAttack. No
+// post-hit rider → no CANTRIP_EFFECTS entry needed.
 // ============================================================
 
 // ---- Metadata -----------------------------------------------
@@ -90,7 +89,7 @@ export const metadata = {
    */
   scalesByBeamCount: true as const,
   beamCountByLevel: { 5: 2, 11: 3, 17: 4 } as const,
-  multiBeamV1Implemented: false as const,
+  multiBeamV1Implemented: true as const,   // Session 80: multi-beam via attackCount pattern
   /** Components: V + S (no M). */
   components: { v: true, s: true, m: false } as const,
   /**

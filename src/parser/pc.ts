@@ -401,6 +401,7 @@ export function pcToCombatant(
         costType:    tmpl.bonusAction ? 'bonusAction' : 'action',
         legendaryCost: 0,
         description: name,
+        ...(tmpl.noCantripScaling ? { noCantripScaling: true } : {}),
       };
       spellActions.push(spellAction);
     }

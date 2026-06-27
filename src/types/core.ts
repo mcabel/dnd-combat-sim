@@ -1249,6 +1249,7 @@ export interface Combatant {
   // Per-turn flags (reset by engine at start of each turn)
   usedSneakAttackThisTurn: boolean;  // Rogue: once per turn only
   helpedThisTurn: boolean;     // Familiar/ally used Help action this turn; grants advantage to next attack
+  _graspOfHadarUsedThisTurn?: boolean;  // Session 80: Grasp of Hadar once per turn (PHB p.111)
 
   // Combat capability flags
   //

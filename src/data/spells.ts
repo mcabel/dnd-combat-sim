@@ -44,6 +44,12 @@ export interface SpellTemplate {
    * attempting to cast.  Spells with outOfCombat=true are never selected.
    */
   outOfCombat?: boolean;
+  /**
+   * True if cantrip damage should NOT scale with caster level (e.g. Eldritch
+   * Blast, which scales by adding MORE BEAMS rather than bigger dice). When
+   * true, the engine skips cantripTier scaling on this spell's damage dice.
+   */
+  noCantripScaling?: boolean;
 }
 
 // ---- Helpers ------------------------------------------------
@@ -5052,6 +5058,9 @@ export const SPELL_DB: Record<string, SpellTemplate> = {
     // Ranged spell attack, 120 ft, 1d10 force. Riders (Repelling Blast,
     // Agonizing Blast, Grasp of Hadar, Lance of Lethargy) fire from
     // _invocations.ts based on the attacker's eldritchInvocations list.
+    // Session 80: noCantripScaling=true — EB scales by adding MORE BEAMS
+    // (not bigger dice). Each beam stays 1d10; the attackCount pattern
+    // in the planner sets beam count from cantripTier() + 1.
     attackType: 'spell',
     rangeNormal: 120,
     damage: { count: 1, sides: 10, bonus: 0, average: avg(1, 10, 0) },
@@ -5060,6 +5069,7 @@ export const SPELL_DB: Record<string, SpellTemplate> = {
     isControl: false,
     requiresConcentration: false,
     slotLevel: 0,
+    noCantripScaling: true,
   },
 
   'ray of frost': {

@@ -169,8 +169,8 @@ console.log('\n--- 3. multi-beam scaling metadata ---');
   eq('3b. beamCountByLevel[5] = 2', metadata.beamCountByLevel[5], 2);
   eq('3c. beamCountByLevel[11] = 3', metadata.beamCountByLevel[11], 3);
   eq('3d. beamCountByLevel[17] = 4', metadata.beamCountByLevel[17], 4);
-  // v1: multi-beam is NOT yet implemented.
-  eq('3e. multiBeamV1Implemented = false', metadata.multiBeamV1Implemented, false);
+  // Session 80: multi-beam IS now implemented (attackCount pattern).
+  eq('3e. multiBeamV1Implemented = true', metadata.multiBeamV1Implemented, true);
 }
 
 // ============================================================
@@ -350,7 +350,8 @@ console.log('\n--- 13. v1 multi-beam simplification ---');
   // PlannedActions (one per beam) in a future batch. For now, the engine
   // resolves a single 1d10 force attack.
   eq('13a. v1 single beam (damage.count = 1)', ELDRITCH_BLAST_ACTION.damage?.count, 1);
-  eq('13b. metadata.multiBeamV1Implemented = false', metadata.multiBeamV1Implemented, false);
+  // Session 80: multi-beam IS now implemented.
+  eq('13b. metadata.multiBeamV1Implemented = true', metadata.multiBeamV1Implemented, true);
   eq('13c. metadata.scalesByBeamCount = true (signals future work)', metadata.scalesByBeamCount, true);
 }
 
