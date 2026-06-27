@@ -22,10 +22,13 @@
 //     Documented via `massSuggestionBehaviourV2Implemented`.
 //   - Target cap: canon "up to twelve". v1 caps at 12 highest-threat
 //     enemies within 60 ft. Upcast +1/slot-level NOT modelled.
-//   - Duration: canon 24 hr (no concentration). v1 has no duration tracker
-//     — charmed persists for the entire combat. NOT concentration
-//     (sourceIsConcentration: false). Documented via
-//     `massSuggestionDurationV1Simplified`.
+//   - Duration: canon 24 hr (no concentration). Tracked via
+//     sourceTurnExpires (Session 82, RFC-COMBINING-EFFECTS Phase 2):
+//     the suggestion effect gets appliedTurn + sourceTurnExpires =
+//     round + 14400 (24 hr = 14400 rounds), so reevaluateEffects
+//     removes it once the 24-hr cap elapses. NOT concentration
+//     (sourceIsConcentration: false). (Combat rarely reaches 24 h,
+//     but the value is set for correctness / long-running sim scenarios.)
 //   - Range: canon 60 ft. v1 uses chebyshev3D * 5 (square approx).
 //   - "Can hear and understand you" / language restriction: NOT enforced.
 //   - Charm-immunity (constructs/undead): NOT enforced (no creature-type tag).
@@ -60,7 +63,8 @@ export const metadata = {
   saveAbility: 'wis' as const,
   castingTime: 'action',
   massSuggestionBehaviourV2Implemented: true,              // suggestion → charmed + disadv on attacks ("Don't fight")
-  massSuggestionDurationV1Simplified: true,                 // 24-hr not tracked
+  massSuggestionDurationV1Simplified: false,                // Session 82: 24-hr tracked via sourceTurnExpires
+  massSuggestionDurationV1Implemented: true,                // Session 82: sourceTurnExpires = round + 14400
   massSuggestionUpcastV1Implemented: false,                 // +1 target/slot-level NOT modelled
 } as const;
 
@@ -170,12 +174,15 @@ export function execute(
     );
 
     if (!save.success && !target.conditions.has('charmed')) {
+      const round = state.battlefield.round;
       applySpellEffect(target, {
         casterId: caster.id,
         spellName: 'Mass Suggestion',
         effectType: 'suggestion',
         payload: {},
         sourceIsConcentration: false,   // PHB p.258: NOT concentration (24-hr)
+        appliedTurn: round,
+        sourceTurnExpires: round + 14400,  // 24 hr = 14400 rounds (PHB p.258)
       });
       emit(
         state, 'condition_add', caster.id,

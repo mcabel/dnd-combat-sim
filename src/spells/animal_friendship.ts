@@ -20,8 +20,14 @@
 //   - INT ≥4 immunity (PHB p.212): Session 27 canon fix — NOW ENFORCED.
 //     Targets with `int >= 4` are skipped (spell has no effect on them).
 //     Documented via `animalFriendshipInt4ImmunityV1Implemented`.
-//   - Duration: canon 24 hr (no concentration). v1 has no duration tracker
-//     — charmed persists for the v1 combat. NOT concentration.
+//   - Duration: canon 24 hr (no concentration). Tracked via
+//     sourceTurnExpires (Session 82, RFC-COMBINING-EFFECTS Phase 2):
+//     the charmed condition_apply effect gets appliedTurn +
+//     sourceTurnExpires = round + 14400 (24 hr = 14400 rounds), so
+//     reevaluateEffects removes it once the 24-hr cap elapses
+//     (mirroring charm_person's 1-hr pattern, scaled to 24 hr).
+//     NOT concentration. (Combat rarely reaches 24 h, but the value
+//     is set for correctness / long-running sim scenarios.)
 //   - Upcast: +1 target/slot-level NOT modelled.
 //
 // Migration note (Session 25 / Batch 2): migrated from the generic
@@ -47,6 +53,7 @@ export const metadata = {
   concentration: false, saveAbility: 'wis' as const, castingTime: 'action',
   animalFriendshipBeastTypeCheckV1Implemented: true,   // Session 27 TG-004: beast-only enforced
   animalFriendshipInt4ImmunityV1Implemented: true,    // Session 27: INT≥4 immunity enforced
+  animalFriendshipDurationV1Implemented: true,        // Session 82: 24-hr tracked via sourceTurnExpires
   animalFriendshipUpcastV1Implemented: false,
 } as const;
 
@@ -90,7 +97,8 @@ export function execute(caster: Combatant, target: Combatant, state: EngineState
   emit(state, save.success ? 'save_success' : 'save_fail', caster.id,
     `${target.name} ${save.success ? 'succeeds on' : 'fails'} DC ${saveDC} WIS save vs Animal Friendship (rolled ${save.total})`, target.id, save.roll);
   if (save.success) { emit(state, 'action', caster.id, `${target.name} resists Animal Friendship — not charmed!`, target.id); return; }
-  applySpellEffect(target, { casterId: caster.id, spellName: 'Animal Friendship', effectType: 'condition_apply', payload: { condition: 'charmed' }, sourceIsConcentration: false });
+  const round = state.battlefield.round;
+  applySpellEffect(target, { casterId: caster.id, spellName: 'Animal Friendship', effectType: 'condition_apply', payload: { condition: 'charmed' }, sourceIsConcentration: false, appliedTurn: round, sourceTurnExpires: round + 14400 });   // 24 hr = 14400 rounds (PHB p.212)
   emit(state, 'condition_add', caster.id, `${target.name} is CHARMED by Animal Friendship! (beast-only + INT<4 enforced)`, target.id);
 }
 
