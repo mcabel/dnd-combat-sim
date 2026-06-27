@@ -2110,6 +2110,10 @@ export function monsterToCombatant(
     rejuvenation,          // Session 53 Batch 4h: undefined for non-Rejuvenation creatures
     monsterSpellcasting,   // Session 60 Batch 5b step 1: metadata-only (945 creatures)
     lairActions,           // Session 60 Batch 5a: metadata + engine hook (137 creatures)
+    // Session 92 RFC-LAIRACTIONS Phase 2 [DD-1]: default `true` when lairActions
+    // is defined. A dragon encountered outside its lair can be set to `false`
+    // via scenario JSON, the character-builder toggle, or direct mutation.
+    isInLair: lairActions ? true : undefined,
     shapechangerForms,     // Session 61 RFC-SHAPECHANGER Phase 1: 76 creatures
     _currentForm: shapechangerForms ? 'true' : undefined,  // scratch: starts in true form
     budget: freshBudget(speeds.ground),

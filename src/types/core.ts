@@ -1214,6 +1214,70 @@ export interface Combatant {
   };
 
   /**
+   * ── Session 92 RFC-LAIRACTIONS Phase 2: in-lair flag ([DD-1]) ──
+   *
+   * Default `true` when `lairActions` is defined (set by `monsterToCombatant`
+   * in `src/parser/fivetools.ts`). Can be overridden to `false` via:
+   *   - scenario JSON (a dragon ambushed in a field)
+   *   - character-builder monster-import path (settable toggle, default on)
+   *   - direct mutation in tests
+   *
+   * When `isInLair === false`, the engine's `resolveLairActions(state)` skips
+   * this creature entirely — even though `lairActions` is still populated on
+   * the data, no lair action fires at the initiative-count-20 boundary.
+   *
+   * When `undefined`, the engine treats the creature as NOT in its lair (same
+   * as `false`) — EXCEPT in the parser-default path, where `monsterToCombatant`
+   * explicitly sets `isInLair = true` whenever `lairActions` is non-undefined,
+   * so parsed lair creatures are always in-lair unless overridden.
+   */
+  isInLair?: boolean;
+
+  /**
+   * ── Session 92 RFC-LAIRACTIONS Phase 2: numeric initiative ([DD-2]) ──
+   *
+   * PHB/MM: "On initiative count 20 (losing initiative ties), the [creature]
+   * takes a lair action." Resolving lair actions at the correct point in the
+   * turn order requires the numeric initiative score, not just the relative
+   * ordering of IDs.
+   *
+   * Populated by `rollInitiative()` (`src/engine/utils.ts:911`) — every
+   * combatant gets its rolled initiative stored here in addition to the
+   * ordered ID array that function returns. Can also be set manually in
+   * tests / scenarios that pre-roll initiative (e.g. `c.initiativeScore = 25`).
+   *
+   * The round loop in `runCombat` (`src/engine/combat.ts`) uses this to find
+   * the boundary between creatures with initiative ≥ 20 and those with < 20;
+   * lair actions fire AFTER the ≥-20 creatures and BEFORE the <-20 creatures.
+   *
+   * When `undefined` (legacy scenarios passing only `initiative: string[]`
+   * without scores), the boundary check treats the score as 0 → lair actions
+   * fire at the START of the round (the original Session 60 stub behavior —
+   * graceful degradation, not PHB-accurate).
+   */
+  initiativeScore?: number;
+
+  /**
+   * ── Session 92 RFC-LAIRACTIONS Phase 2: lair-action history ([DD-5]) ──
+   *
+   * PHB: "It can't use the same effect two rounds in a row." Per-creature
+   * rolling window of the last 2 chosen action IDs (`LairAction.id`).
+   *
+   * `resolveLairActions(state)` excludes any action whose ID is in this list
+   * from the candidate set. After each lair action, the chosen ID is appended
+   * and the list is truncated to length 2.
+   *
+   * Edge case: if all available actions are in the history (only possible
+   * when the creature has ≤2 options), the creature SKIPS its lair action
+   * that round (PHB: "can't use the same effect two rounds in a row" — there
+   * is no legal option).
+   *
+   * Scratch field — never serialized, cleared implicitly at combat start
+   * (a fresh `Combatant` object has `undefined` here).
+   */
+  _lairActionHistory?: string[];
+
+  /**
    * ── Session 61: Shapechanger (monster trait, Phase 1) ──
    * 76 pre-2024 creatures have a "Shapechanger" trait. Per the RFC
    * (docs/RFC-SHAPECHANGER.md), Phase 1 covers only the monster trait

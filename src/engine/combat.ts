@@ -8,6 +8,7 @@
 import {
   Combatant, Battlefield, TurnPlan, PlannedAction, Action, Vec3,
   ReactionTrigger, ReactionOutcome, Condition,
+  LairAction,
 } from '../types/core';
 import {
   rollAttack, rollDamage, rollSave, applyDamage, applyHeal,
@@ -6428,6 +6429,161 @@ export interface CombatOptions {
   verbose?: boolean;       // print events as they happen
 }
 
+// ============================================================
+// Session 92 — RFC-LAIRACTIONS Phase 2: engine dispatch infrastructure
+//
+// Replaces the Session 60 round-start stub (which logged `rawText` with no
+// mechanical effect) with a structured dispatcher that:
+//   1. Fires at the initiative-count-20 boundary within the per-actor turn
+//      loop (PHB: "On initiative count 20, losing initiative ties"). Creatures
+//      with `initiativeScore ≥ 20` act BEFORE lair actions; creatures with
+//      `< 20` act AFTER. (RFC [DD-2]; see `runCombat` round-loop restructure.)
+//   2. Honors the per-creature `isInLair` flag ([DD-1]) — `false` skips the
+//      creature entirely (a dragon fought in a field takes no lair action).
+//   3. Sorts multiple lair creatures by descending CR (tie-break: name asc)
+//      so the highest-CR creature's lair action fires first ([DD-3]).
+//   4. Enforces the per-creature "can't use the same effect two rounds in a
+//      row" rule via `_lairActionHistory` (last 2 IDs) — [DD-5]. If all
+//      available actions are in history (≤2 options), the creature SKIPS its
+//      lair action that round.
+//   5. Logs out-of-scope (`lair_oos_*`) and deferred (`lair_def_*`) actions
+//      with their stable IDs/tags — does NOT execute them mechanically
+//      (RFC §4 / [DD-7]).
+//   6. For in-scope actions, delegates to `executeLairAction` — Phase 2 stub
+//      that logs the chosen action + category + (spell tag if isSpell). NO
+//      mechanical effect yet (Phase 3 wires real handlers per category).
+//
+// Phase 4 will replace the deterministic "lowest action.id" selection with
+// `scoreLairAction` (expected-value estimator, RFC §7). The selector is
+// isolated in `selectLairAction()` for easy replacement.
+// ============================================================
+
+/**
+ * Resolve lair actions for the current round at the initiative-count-20
+ * boundary. Called by `runCombat` once per round.
+ *
+ * Collects all in-lair creatures with lair actions (sorted by descending CR,
+ * tie-broken by name), then for each:
+ *   - filters candidates by 2-entry history,
+ *   - prefers in-scope actions (excludes out-of-scope/deferred unless those
+ *     are the only options left),
+ *   - selects via `selectLairAction` (Phase 2: lowest ID; Phase 4: max score),
+ *   - logs or dispatches the chosen action,
+ *   - appends the chosen ID to `_lairActionHistory` (truncated to length 2).
+ */
+function resolveLairActions(state: EngineState): void {
+  const bf = state.battlefield;
+
+  // Collect in-lair creatures with at least one lair action, alive & conscious.
+  // Sort: descending CR (highest first), tie-break alphabetical name ([DD-3]).
+  const actors = [...bf.combatants.values()]
+    .filter(c => c.isInLair === true)               // [DD-1] explicit true
+    .filter(c => c.lairActions && c.lairActions.actions.length > 0)
+    .filter(c => !c.isDead && !c.isUnconscious)
+    .sort((a, b) =>
+      (b.cr ?? -1) - (a.cr ?? -1) || a.name.localeCompare(b.name)
+    );
+
+  for (const actor of actors) {
+    const allActions = actor.lairActions!.actions;
+    const history = actor._lairActionHistory ?? [];
+
+    // Candidates = actions whose id is NOT in the 2-entry history.
+    let candidates = allActions.filter(a => !history.includes(a.id));
+
+    if (candidates.length === 0) {
+      // All available actions are in history → "can't repeat" → skip.
+      // (Only reachable when the creature has ≤2 distinct options.)
+      log(state, 'action', actor.id,
+        `${actor.name} has no available lair actions this round ` +
+        `(all in 2-round history — skipping per PHB "can't use the same effect two rounds in a row").`,
+        undefined);
+      continue;
+    }
+
+    // Prefer in-scope (non-out-of-scope, non-deferred) actions. Only fall
+    // back to out-of-scope/deferred if those are the SOLE remaining options.
+    const inScope = candidates.filter(a => !a.outOfScope && !a.deferred);
+    if (inScope.length > 0) candidates = inScope;
+
+    // Select (Phase 2: deterministic lowest ID; Phase 4 will replace with
+    // `scoreLairAction` and pick max score, tie-break lowest ID).
+    const chosen = selectLairAction(candidates);
+
+    // Execute / log.
+    if (chosen.outOfScope) {
+      log(state, 'action', actor.id,
+        `${actor.name} takes a lair action [${chosen.outOfScopeId ?? 'lair_oos_?'}] ` +
+        `(out of scope — logged, not executed): ${chosen.rawText.substring(0, 100)}` +
+        `${chosen.rawText.length > 100 ? '...' : ''}`,
+        undefined);
+    } else if (chosen.deferred) {
+      log(state, 'action', actor.id,
+        `${actor.name} takes a lair action [${chosen.deferredId ?? 'lair_def_?'}] ` +
+        `(deferred: ${chosen.deferred} — logged, not executed): ${chosen.rawText.substring(0, 100)}` +
+        `${chosen.rawText.length > 100 ? '...' : ''}`,
+        undefined);
+    } else {
+      executeLairAction(actor, chosen, state);
+    }
+
+    // Update history (keep last 2 IDs).
+    actor._lairActionHistory = [...history, chosen.id].slice(-2);
+  }
+}
+
+/**
+ * Phase 2 lair-action selector — deterministic, picks the candidate with the
+ * lowest `id` (alphabetical). This gives stable, reproducible behavior so the
+ * history / dispatcher tests can assert on exact action IDs.
+ *
+ * Phase 4 will replace this with `scoreLairAction(action, lairCreature, bf)`
+ * returning a numeric expected-value estimate (RFC §7), then pick max-score
+ * with the same lowest-id tie-break.
+ */
+function selectLairAction(candidates: LairAction[]): LairAction {
+  // Defensive copy so the caller's array isn't mutated.
+  const sorted = [...candidates].sort((a, b) => a.id.localeCompare(b.id));
+  return sorted[0];
+}
+
+/**
+ * Phase 2 stub category dispatcher. Logs the chosen action + category
+ * (+ spell tag if `isSpell`) and explicitly notes "not yet implemented" so
+ * downstream readers can see the action fired but had no mechanical effect.
+ *
+ * Phase 3 wires real handlers per `action.category`:
+ *   - `save_damage`     → roll save per target, `applyDamage`
+ *   - `save_condition`  → roll save, `applySpellEffect({effectType:'condition_apply'})`
+ *   - `save_only`       → roll save, bespoke per-action handler (push/fall)
+ *   - `damage_no_save`  → `applyDamage` per target
+ *   - `summon`          → `summonSpell` dispatch pattern
+ *   - `cast_spell`      → look up spell in registry → call `execute()`
+ *                         (also fires `incoming_spell` reaction trigger for
+ *                          Counterspell + checks `isProtectedByGoI` [DD-4])
+ *   - `buff_ally` / `debuff_enemy` → `applySpellEffect` with advantage / vuln
+ *   - `visibility`      → `terrain_zone` effect with obscurement payload
+ *   - `spell_slot_regen`→ restore slot on the lair creature
+ *   - `movement`        → push/pull via position mutation
+ *   - `bespoke`         → hand-written handler per `action.id`
+ */
+function executeLairAction(
+  creature: Combatant,
+  action: LairAction,
+  state: EngineState,
+): void {
+  const text = action.rawText;
+  const initCount = creature.lairActions?.initiativeCount ?? 20;
+  const spellTag = action.isSpell
+    ? `, spell: ${action.spellName ?? 'unknown'} (lvl ${action.castLevel ?? '?'})`
+    : '';
+  log(state, 'action', creature.id,
+    `${creature.name} takes a lair action (initiative count ${initCount}) ` +
+    `[${action.category}${spellTag}]: ${text.substring(0, 100)}` +
+    `${text.length > 100 ? '...' : ''} (Phase 2 stub — not yet implemented)`,
+    undefined);
+}
+
 /**
  * Run a full combat encounter.
  *
@@ -6455,36 +6611,37 @@ export function runCombat(
     // Reset disengage flags at start of round
     state.disengagedThisTurn.clear();
 
-    // ── Session 60 Batch 5a: Lair Actions (initiative count 20) ──
-    // ── Session 91 RFC-LAIRACTIONS Phase 1: actions are now LairAction[] ──
-    // PHB/MM: "On initiative count 20 (losing initiative ties), the [creature]
-    // takes a lair action to cause one of the following effects." Lair actions
-    // fire at the START of the round (before any creature's turn), simulating
-    // initiative count 20. v1: logs the lair action but does NOT apply
-    // mechanical effects (each lair action is a bespoke effect requiring
-    // individual implementation — HIGH-risk, deferred to Phase 2+).
+    // ── Session 92 RFC-LAIRACTIONS Phase 2: Lair Actions at init-count-20 ──
     //
-    // Phase 1 (Session 91): `actions` is now `LairAction[]` (structured). The
-    // stub reads `pick.rawText` to preserve the v1 log format — no mechanical
-    // effect yet. Phase 2 replaces this stub with `resolveLairActions(state)`
-    // (initiative-count-20 boundary, history, category dispatch, scoring).
-    for (const c of battlefield.combatants.values()) {
-      if (c.isDead || c.isUnconscious) continue;
-      if (!c.lairActions) continue;
-      // Pick a random lair action option (PHB: "can't use the same effect
-      // two rounds in a row" — v1 simplification: random pick each round;
-      // Phase 2 wires the per-creature history + AI scoring).
-      const actions = c.lairActions.actions;
-      if (actions.length === 0) continue;
-      const pick = actions[Math.floor(Math.random() * actions.length)];
-      const text = pick.rawText;
-      log(state, 'action', c.id,
-        `${c.name} takes a lair action (initiative count ${c.lairActions.initiativeCount}): ${text.substring(0, 100)}${text.length > 100 ? '...' : ''}`,
-        undefined);
-    }
+    // PHB/MM: "On initiative count 20 (losing initiative ties), the [creature]
+    // takes a lair action." The lair-action checkpoint fires INSIDE the
+    // per-actor turn loop, AFTER all creatures with `initiativeScore ≥ 20`
+    // have taken their turn and BEFORE the first creature with `< 20`
+    // (RFC [DD-2], §6.1).
+    //
+    // The boundary is detected by checking the first actor whose
+    // `initiativeScore` is < 20 (or undefined — treated as 0 for backward
+    // compat with legacy scenarios that pass only an ID array without scores,
+    // preserving the original "fire at round start" behavior).
+    //
+    // Edge cases:
+    //   - All creatures have initiative ≥ 20 → lair actions fire at the END
+    //     of the round (handled by the post-loop fallback below).
+    //   - All creatures have initiative < 20 (or undefined) → fires BEFORE
+    //     the first actor's turn (the original Session 60 stub behavior).
+    //   - No lair creatures present → `resolveLairActions` is a no-op.
+    let lairActionsFiredThisRound = false;
 
     for (const actorId of initiative) {
       const actor = battlefield.combatants.get(actorId);
+
+      // ── Lair-action checkpoint: fire AFTER ≥-20 creatures, BEFORE <-20 ──
+      // (PHB "losing initiative ties" — lair actions resolve AFTER ties at 20.)
+      if (!lairActionsFiredThisRound && actor && (actor.initiativeScore ?? 0) < 20) {
+        resolveLairActions(state);
+        lairActionsFiredThisRound = true;
+      }
+
       if (!actor || actor.isDead) continue;
 
       // Death saving throw: unconscious PCs roll at the start of their turn
@@ -7400,6 +7557,17 @@ export function runCombat(
         if (verbose) console.log(`\n🏆 ${victor === 'party' ? 'Heroes' : 'Enemies'} win in round ${round}!\n`);
         return state.log;
       }
+    }
+
+    // ── Session 92: Lair-action fallback (RFC [DD-2] edge case) ──
+    // If EVERY actor this round had `initiativeScore ≥ 20` (or the initiative
+    // list was empty), the in-loop checkpoint never fired. PHB: lair actions
+    // still resolve at count 20 → fire them at the END of the round (after
+    // all turns). This is correct per PHB ("losing initiative ties" —
+    // creatures at 20 still act before the lair action).
+    if (!lairActionsFiredThisRound) {
+      resolveLairActions(state);
+      lairActionsFiredThisRound = true;   // (bookkeeping; loop will reset next round)
     }
 
     // ── End-of-round checks ─────────────────────────────────────

@@ -929,6 +929,13 @@ export function rollInitiative(battlefield: Battlefield): string[] {
       ? rollWithAdvantage(20)
       : rollDie(20);
     const roll = initRoll + initBonus;
+    // ── Session 92 RFC-LAIRACTIONS Phase 2 [DD-2]: store numeric score ──
+    // The round loop in `runCombat` uses `initiativeScore` to find the
+    // boundary between creatures with initiative ≥ 20 and those with < 20;
+    // lair actions fire AFTER the ≥-20 creatures and BEFORE the <-20 ones.
+    // (Previously `rollInitiative` computed scores but discarded them,
+    // returning only the ordered ID array — see RFC §2.5.)
+    c.initiativeScore = roll;
     entries.push({ id, init: roll, tieBreaker: Math.random() });
   }
 
