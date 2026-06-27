@@ -6968,6 +6968,25 @@ export function runCombat(
             const spellAction = actor.actions.find(a => a.name === mz.spellName);
             const saveDC = spellAction?.saveDC ?? 13;
 
+            // Session 83 (GoI moving-zone on-enter): PHB p.245 — "Any spell of
+            // 5th level or lower cast from outside the barrier can't affect
+            // creatures or objects within it." This applies when the moving
+            // zone enters a creature's position — a GoI-protected creature is
+            // NOT affected (no damage, no damage_zone effect). Mirrors the
+            // on-cast filterGoIProtectedTargets pattern. Uses spellAction's
+            // slotLevel for the level check, and actor.id (zone caster) for
+            // the caster-inside fix (Session 81/82). Also: the damage_zone
+            // effect created below now carries sourceSlotLevel so the per-tick
+            // GoI check works for moving zones too (was missing — defaulted to
+            // 0 = never blocked).
+            const mzSlotLevel = spellAction?.slotLevel ?? 0;
+            if (mzSlotLevel > 0 && e.id !== actor.id && isProtectedByGoI(e, mzSlotLevel, state.battlefield, actor.id)) {
+              log(state, 'action', actor.id,
+                `${e.name} is protected by Globe of Invulnerability — ${mz.spellName} moving-zone damage negated (L${mzSlotLevel} ≤ GoI threshold).`,
+                e.id);
+              continue;  // skip — GoI-protected
+            }
+
             // Determine spell parameters based on spell name
             let dieCount = 0;
             let dieSides = 0;
@@ -7017,6 +7036,9 @@ export function runCombat(
               e.id, dealt);
 
             // Apply a damage_zone effect so the enemy takes start-of-turn damage
+            // Session 83: sourceSlotLevel is set so the per-tick GoI check
+            // (damage_zone tick loop, line ~6592) works for moving zones.
+            // Previously missing → defaulted to 0 = never blocked by GoI.
             applySpellEffect(e, {
               casterId: actor.id,
               spellName: mz.spellName,
@@ -7028,6 +7050,7 @@ export function runCombat(
                 ...(saveAbility ? { saveDC, saveAbility } : {}),
               },
               sourceIsConcentration: true,
+              sourceSlotLevel: mzSlotLevel,
             });
 
             log(state, 'condition_add', actor.id,
