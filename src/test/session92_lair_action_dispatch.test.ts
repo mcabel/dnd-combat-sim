@@ -178,9 +178,12 @@ console.log('\n--- 3. isInLair === true fires lair actions ---');
 }
 
 // ============================================================
-// 4. Phase 2 stub handler: in-scope action log format
+// 4. Phase 3 dispatcher: in-scope action log format
+//    (Phase 3a implements save_damage — the Red Dragon's first action is
+//     save_damage, so it now fires real mechanical events instead of the
+//     "Phase 2 stub" log. This test verifies the header log format.)
 // ============================================================
-console.log('\n--- 4. Phase 2 stub handler logs "not yet implemented" ---');
+console.log('\n--- 4. Phase 3 dispatcher: header log format ---');
 {
   const dragon = spawn('Adult Red Dragon', { x: 0, y: 0, z: 0 });
   dragon.faction = 'party';
@@ -197,12 +200,16 @@ console.log('\n--- 4. Phase 2 stub handler logs "not yet implemented" ---');
   assert('4a. at least one lair log', ll.length >= 1);
   if (ll.length > 0) {
     const desc = ll[0].description;
-    assert('4b. log mentions "Phase 2 stub"', desc.includes('Phase 2 stub'));
-    assert('4c. log mentions "not yet implemented"', desc.includes('not yet implemented'));
     // The category should appear in square brackets, e.g. "[save_damage]"
-    assert('4d. log includes [category] tag', /\[[a-z_]+\]/.test(desc),
+    assert('4b. log includes [category] tag', /\[[a-z_]+\]/.test(desc),
       `no [category] tag in: ${desc.substring(0, 120)}`);
-    assert('4e. log includes "initiative count 20"', desc.includes('initiative count 20'));
+    assert('4c. log includes "initiative count 20"', desc.includes('initiative count 20'));
+    // Phase 3a: save_damage is now implemented — the header does NOT say
+    // "Phase 2 stub" for save_damage actions. (It DOES still say "not yet
+    // implemented" for unimplemented categories like bespoke/buff_ally.)
+    assert('4d. header does NOT mention "Phase 2 stub" (save_damage implemented)',
+      !desc.includes('Phase 2 stub'),
+      `unexpected stub marker: ${desc.substring(0, 120)}`);
     console.log(`    Example: ${desc.substring(0, 140)}...`);
   }
 }

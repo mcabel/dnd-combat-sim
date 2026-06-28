@@ -8,7 +8,7 @@
 import {
   Combatant, Battlefield, TurnPlan, PlannedAction, Action, Vec3,
   ReactionTrigger, ReactionOutcome, Condition,
-  LairAction,
+  LairAction, DamageType,
 } from '../types/core';
 import {
   rollAttack, rollDamage, rollSave, applyDamage, applyHeal,
@@ -908,6 +908,13 @@ import {
   lookupMonsterBespokeByPlanType,
   attachMonsterBespokeSyntheticState,
 } from '../ai/monster_bespoke_registry';
+
+// ── Session 93 — RFC-LAIRACTIONS Phase 3a: spell_slot_regen handler ──
+// `initMonsterSpellSlots` lazily populates `monster.monsterSpellSlots` from
+// `monsterSpellcasting.slots` (idempotent — no-op if already populated). The
+// Lich's lair action "rolls a d8 and regains a spell slot of that level or
+// lower" needs the tracker initialized before it can restore a spent slot.
+import { initMonsterSpellSlots } from '../ai/monster_spellcasting';
 
 // ---- Combat log ---------------------------------------------
 
@@ -6548,24 +6555,29 @@ function selectLairAction(candidates: LairAction[]): LairAction {
 }
 
 /**
- * Phase 2 stub category dispatcher. Logs the chosen action + category
- * (+ spell tag if `isSpell`) and explicitly notes "not yet implemented" so
- * downstream readers can see the action fired but had no mechanical effect.
+ * Phase 3 category dispatcher. Routes the chosen lair action to its
+ * per-category handler. Phase 3a (Session 93) implements the damage/save
+ * family:
+ *   - `save_damage`      → {@link handleLairSaveDamage}
+ *   - `save_condition`   → {@link handleLairSaveCondition}
+ *   - `damage_no_save`   → {@link handleLairDamageNoSave}
+ *   - `spell_slot_regen` → {@link handleLairSpellSlotRegen}
  *
- * Phase 3 wires real handlers per `action.category`:
- *   - `save_damage`     → roll save per target, `applyDamage`
- *   - `save_condition`  → roll save, `applySpellEffect({effectType:'condition_apply'})`
- *   - `save_only`       → roll save, bespoke per-action handler (push/fall)
- *   - `damage_no_save`  → `applyDamage` per target
- *   - `summon`          → `summonSpell` dispatch pattern
- *   - `cast_spell`      → look up spell in registry → call `execute()`
- *                         (also fires `incoming_spell` reaction trigger for
- *                          Counterspell + checks `isProtectedByGoI` [DD-4])
- *   - `buff_ally` / `debuff_enemy` → `applySpellEffect` with advantage / vuln
- *   - `visibility`      → `terrain_zone` effect with obscurement payload
- *   - `spell_slot_regen`→ restore slot on the lair creature
- *   - `movement`        → push/pull via position mutation
- *   - `bespoke`         → hand-written handler per `action.id`
+ * The remaining categories still fall through to a "not yet implemented"
+ * log line (no mechanical effect) — to be wired in Phase 3b+:
+ *   - `save_only`        → bespoke per-action (push/fall/banish) — Phase 3b
+ *   - `summon`           → `summonSpell` dispatch pattern — Phase 3b
+ *   - `cast_spell`       → registry + `execute()` + GoI/Counterspell — Phase 3b
+ *   - `buff_ally` / `debuff_enemy` → `applySpellEffect` — Phase 3b
+ *   - `visibility`       → `terrain_zone` — Phase 3b
+ *   - `movement`         → `pushAway` — Phase 3b
+ *   - `bespoke`          → hand-written per `action.id` — Phase 3b
+ *
+ * Each handler emits a header log line of the form:
+ *   `<name> takes a lair action (initiative count <N>) [<category>]: <text…>`
+ * followed by the per-target mechanical events (save_success/save_fail,
+ * damage, condition_add, etc.) so the lair action is visible in the combat
+ * log with its mechanical effects.
  */
 function executeLairAction(
   creature: Combatant,
@@ -6577,11 +6589,404 @@ function executeLairAction(
   const spellTag = action.isSpell
     ? `, spell: ${action.spellName ?? 'unknown'} (lvl ${action.castLevel ?? '?'})`
     : '';
+
+  // Header log — announces the lair action + category. Handlers then emit
+  // their own per-target mechanical events.
   log(state, 'action', creature.id,
     `${creature.name} takes a lair action (initiative count ${initCount}) ` +
     `[${action.category}${spellTag}]: ${text.substring(0, 100)}` +
-    `${text.length > 100 ? '...' : ''} (Phase 2 stub — not yet implemented)`,
+    `${text.length > 100 ? '...' : ''}`,
     undefined);
+
+  // Dispatch by category.
+  switch (action.category) {
+    case 'save_damage':
+      handleLairSaveDamage(creature, action, state);
+      return;
+    case 'save_condition':
+      handleLairSaveCondition(creature, action, state);
+      return;
+    case 'damage_no_save':
+      handleLairDamageNoSave(creature, action, state);
+      return;
+    case 'spell_slot_regen':
+      handleLairSpellSlotRegen(creature, action, state);
+      return;
+    default:
+      // Phase 3b+ categories — still stubbed.
+      log(state, 'action', creature.id,
+        `  → [${action.category}] handler not yet implemented (Phase 3b+) — no mechanical effect`,
+        undefined);
+      return;
+  }
+}
+
+// ============================================================
+// Session 93 — RFC-LAIRACTIONS Phase 3a: damage/save family handlers
+//
+// These four handlers cover 110 + 23 + 5 + 2 = 140 of the 324 lair actions
+// (43% of the total corpus). They reuse existing engine infrastructure:
+//   - `rollSave` (utils.ts:147) — handles advantage/disadvantage, Bardic
+//     Inspiration, Bless/Bane, Warding Bond, Diamond Soul, Legendary
+//     Resistance, Magic Resistance, condition penalties (poisoned, exhaustion
+//     level 3+), and listed-save-bonus override.
+//   - `applyDamageWithTempHP` (utils.ts:1316) — handles immunity, vulnerability,
+//     resistance, temp HP absorption, regeneration suppression.
+//   - `addCondition` (utils.ts:551) — handles condition immunity, Nature's
+//     Ward, cascade (paralyzed/stunned/petrified → incapacitated), auto-break
+//     concentration.
+//   - `livingEnemiesOf` / `livingAlliesOf` (movement.ts:492/498) — faction
+//     filtering.
+//   - `combatantsWithinRadiusFt` (movement.ts:510) — radius targeting.
+//   - `initMonsterSpellSlots` (monster_spellcasting.ts:837) — lazily
+//     populates the runtime slot tracker for the Lich's spell_slot_regen.
+//
+// Targeting model (RFC §6.2 + §7):
+//   - `targetsEnemies === true`  → lair creature's enemies are targets.
+//   - `targetsEnemies === false` → lair creature's allies (incl. self) are targets.
+//   - `rangeFt`     → max distance from the lair creature (Chebyshev ft).
+//   - `radiusFt`    → AoE radius centered on the lair creature (when the
+//                     action text says "within N feet of it"). For actions
+//                     that center on a chosen point ("centered on a point
+//                     the dragon chooses within 120 feet of it"), we use the
+//                     lair creature's position as a simplification — the
+//                     magma/cloud/etc. still hits all valid targets within
+//                     rangeFt of the lair creature. This is a v1
+//                     simplification (true point-selection AI is Phase 4).
+//   - `targetFilter` → creature-type filter (pipe-separated, e.g. 'gnoll|hyena').
+//                     Matched against `creatureType` (lowercased substring).
+//
+// Save model (RFC §6.3):
+//   - `saveDC` + `saveAbility` extracted from `@dc N` + "Dexterity saving throw".
+//   - On FAILED save: full damage + condition applied.
+//   - On SUCCESSFUL save: half damage (PHB default for "half on a successful
+//     save" — most lair actions follow this convention; the raw text usually
+//     says "or half as much damage") and NO condition.
+//   - The half-damage-on-success rule is a v1 simplification. A small number
+//     of lair actions say "no damage on a successful save" — Phase 5 will
+//     add a per-action `halfOnSave: boolean` field to disambiguate. For now,
+//     the half-damage default is the safer choice (PHB p.205: "A spell's
+//     description specifies whether it targets creatures and what happens to
+//     a target that succeeds. ... Half damage is the default for damaging
+//     spells, but check the spell.")
+// ============================================================
+
+/**
+ * Resolve a `save_damage` lair action. Each enemy (or ally, if
+ * `!targetsEnemies`) within `rangeFt` rolls `saveAbility` vs `saveDC`; on
+ * failure takes full `damage` (via `applyDamageWithTempHP` — immunity/
+ * resistance/vulnerability apply), on success takes half.
+ *
+ * Example: Adult Red Dragon "Magma erupts (DC 15 DEX, 6d6 fire)".
+ */
+function handleLairSaveDamage(
+  creature: Combatant,
+  action: LairAction,
+  state: EngineState,
+): void {
+  const bf = state.battlefield;
+  if (action.saveDC === undefined || action.saveAbility === undefined) {
+    log(state, 'action', creature.id,
+      `  → save_damage: missing saveDC/saveAbility — no effect`, undefined);
+    return;
+  }
+  if (!action.damage) {
+    log(state, 'action', creature.id,
+      `  → save_damage: missing damage roll — no effect`, undefined);
+    return;
+  }
+
+  const targets = selectLairActionTargets(creature, action, bf);
+  if (targets.length === 0) {
+    log(state, 'action', creature.id,
+      `  → save_damage: no valid targets in range — no effect`, undefined);
+    return;
+  }
+
+  for (const target of targets) {
+    // Skip the lair creature itself (a dragon doesn't magma itself).
+    if (target.id === creature.id) continue;
+    if (target.isDead || target.isUnconscious) continue;
+
+    const save = rollSave(target, action.saveAbility, action.saveDC);
+    const dmgRoll = rollLairDamage(action.damage);
+    const dmgFinal = save.success ? Math.floor(dmgRoll / 2) : dmgRoll;
+    const dmgType = (action.damage.type as DamageType) ?? undefined;
+
+    log(state, save.success ? 'save_success' : 'save_fail', creature.id,
+      `${target.name} ${save.success ? 'succeeds' : 'fails'} ${action.saveAbility.toUpperCase()} save ` +
+      `(rolled ${save.roll} vs DC ${action.saveDC}) — takes ${dmgFinal} ${action.damage.type} damage ` +
+      `(${save.success ? 'half of ' : ''}${dmgRoll})`,
+      target.id, dmgFinal);
+
+    if (dmgFinal > 0) {
+      const applied = applyDamageWithTempHP(target, dmgFinal, dmgType);
+      log(state, 'damage', creature.id,
+        `${action.id}: ${target.name} takes ${applied} ${action.damage.type} damage`,
+        target.id, applied);
+    }
+
+    // Death check (mirror spell-effect pattern).
+    if (target.currentHP === 0 && !target.isDead) {
+      // applyDamage already set isDead/isUnconscious + conditions.
+      log(state, target.isPlayer ? 'unconscious' : 'death', creature.id,
+        `${target.name} drops to 0 HP from ${creature.name}'s lair action!`,
+        target.id, 0);
+    }
+  }
+}
+
+/**
+ * Resolve a `save_condition` lair action. Each enemy (or ally) within
+ * `rangeFt` rolls `saveAbility` vs `saveDC`; on FAILURE has all of
+ * `action.conditions` applied (via `addCondition` — immunity/cascade apply).
+ * On success: no effect.
+ *
+ * Example: Adult Brass Dragon "DC 15 STR or knocked prone".
+ */
+function handleLairSaveCondition(
+  creature: Combatant,
+  action: LairAction,
+  state: EngineState,
+): void {
+  const bf = state.battlefield;
+  if (action.saveDC === undefined || action.saveAbility === undefined) {
+    log(state, 'action', creature.id,
+      `  → save_condition: missing saveDC/saveAbility — no effect`, undefined);
+    return;
+  }
+  if (!action.conditions || action.conditions.length === 0) {
+    log(state, 'action', creature.id,
+      `  → save_condition: missing conditions — no effect`, undefined);
+    return;
+  }
+
+  const targets = selectLairActionTargets(creature, action, bf);
+  if (targets.length === 0) {
+    log(state, 'action', creature.id,
+      `  → save_condition: no valid targets in range — no effect`, undefined);
+    return;
+  }
+
+  for (const target of targets) {
+    if (target.id === creature.id) continue;
+    if (target.isDead || target.isUnconscious) continue;
+
+    const save = rollSave(target, action.saveAbility, action.saveDC);
+    log(state, save.success ? 'save_success' : 'save_fail', creature.id,
+      `${target.name} ${save.success ? 'succeeds' : 'fails'} ${action.saveAbility.toUpperCase()} save ` +
+      `(rolled ${save.roll} vs DC ${action.saveDC})`,
+      target.id);
+
+    if (save.success) continue;
+
+    // Save failed → apply each condition (addCondition checks immunity).
+    for (const cond of action.conditions) {
+      const wasPresent = target.conditions.has(cond);
+      addCondition(target, cond);
+      log(state, 'condition_add', creature.id,
+        `${target.name} gains ${cond} condition${wasPresent ? ' (already present)' : ''} from ${action.id}`,
+        target.id);
+    }
+  }
+}
+
+/**
+ * Resolve a `damage_no_save` lair action. Each enemy (or ally) within
+ * `rangeFt` takes full `damage` (no save — immunity/resistance/vulnerability
+ * still apply via `applyDamageWithTempHP`).
+ *
+ * Example: Adult White Dragon "Jagged ice shards fall, striking up to three
+ * creatures (3d6 piercing)".
+ */
+function handleLairDamageNoSave(
+  creature: Combatant,
+  action: LairAction,
+  state: EngineState,
+): void {
+  const bf = state.battlefield;
+  if (!action.damage) {
+    log(state, 'action', creature.id,
+      `  → damage_no_save: missing damage roll — no effect`, undefined);
+    return;
+  }
+
+  const targets = selectLairActionTargets(creature, action, bf);
+  if (targets.length === 0) {
+    log(state, 'action', creature.id,
+      `  → damage_no_save: no valid targets in range — no effect`, undefined);
+    return;
+  }
+
+  // "up to N creatures" — cap at N if specified in the damage.count field
+  // (the White Dragon shards hit "up to three creatures" — count=3 in the
+  // damage dice, so we use damage.count as the target cap). This is a
+  // heuristic — the RFC didn't extract a separate targetCount field.
+  let targetCap = targets.length;
+  // The "up to N" pattern is hard to extract from raw text reliably; for
+  // now, the cap is just the number of valid targets in range. Phase 5
+  // should add a proper `maxTargets` field when parsing "up to N creatures".
+  targetCap = targets.length;
+
+  const dmgType = (action.damage.type as DamageType) ?? undefined;
+  let hit = 0;
+  for (const target of targets.slice(0, targetCap)) {
+    if (target.id === creature.id) continue;
+    if (target.isDead || target.isUnconscious) continue;
+
+    const dmgRoll = rollLairDamage(action.damage);
+    log(state, 'damage', creature.id,
+      `${action.id}: ${target.name} takes ${dmgRoll} ${action.damage.type} damage (no save)`,
+      target.id, dmgRoll);
+
+    const applied = applyDamageWithTempHP(target, dmgRoll, dmgType);
+    if (applied !== dmgRoll) {
+      log(state, 'damage', creature.id,
+        `  (after immunity/resistance/temp HP: ${applied} effective)`,
+        target.id, applied);
+    }
+    hit++;
+
+    if (target.currentHP === 0 && !target.isDead) {
+      log(state, target.isPlayer ? 'unconscious' : 'death', creature.id,
+        `${target.name} drops to 0 HP from ${creature.name}'s lair action!`,
+        target.id, 0);
+    }
+  }
+  if (hit === 0) {
+    log(state, 'action', creature.id,
+      `  → damage_no_save: no valid targets hit — no effect`, undefined);
+  }
+}
+
+/**
+ * Resolve a `spell_slot_regen` lair action. The Lich's lair action:
+ *   "The lich rolls a d8 and regains a spell slot of that level or lower.
+ *    If it has no spent spell slots of that level or lower, nothing happens."
+ *
+ * Implementation: roll d8 → that's the rolled slot level. Walk levels from
+ * `rolledLevel` DOWN to 1; the first level where `monsterSpellSlots[lvl]`
+ * has `remaining < max` (a spent slot) gets `remaining += 1`. If no level
+ * has a spent slot, log "nothing happens" (the lair action is wasted).
+ *
+ * If the monster has no `monsterSpellSlots` tracker (e.g., it was never
+ * initialized because it hasn't cast a slotted spell yet), call
+ * `initMonsterSpellSlots` first to populate it from `monsterSpellcasting.slots`.
+ */
+function handleLairSpellSlotRegen(
+  creature: Combatant,
+  action: LairAction,
+  state: EngineState,
+): void {
+  // Lazily populate the runtime tracker (idempotent — no-op if already set).
+  initMonsterSpellSlots(creature);
+
+  if (!creature.monsterSpellSlots) {
+    log(state, 'action', creature.id,
+      `  → spell_slot_regen: ${creature.name} has no spell slots — nothing happens`, undefined);
+    return;
+  }
+
+  // Roll d8 → slot level to regain (PHB/Lich lair action).
+  const rolledLevel = rollDie(8);
+  log(state, 'action', creature.id,
+    `  → rolls d8 for spell slot regen: ${rolledLevel}`,
+    undefined, rolledLevel);
+
+  // Walk from rolledLevel DOWN to 1; first level with a spent slot regains it.
+  let regainedLevel: number | null = null;
+  for (let lvl = rolledLevel; lvl >= 1; lvl--) {
+    const slot = creature.monsterSpellSlots[lvl];
+    if (slot && slot.remaining < slot.max) {
+      slot.remaining += 1;
+      regainedLevel = lvl;
+      break;
+    }
+  }
+
+  if (regainedLevel === null) {
+    log(state, 'action', creature.id,
+      `  → no spent spell slots of level ≤ ${rolledLevel} — nothing happens`, undefined);
+    return;
+  }
+
+  const slot = creature.monsterSpellSlots[regainedLevel];
+  log(state, 'heal', creature.id,
+    `${creature.name} regains a level-${regainedLevel} spell slot ` +
+    `(now ${slot.remaining}/${slot.max})`,
+    creature.id, regainedLevel);
+}
+
+// ---- Phase 3a helpers ---------------------------------------
+
+/**
+ * Select the targets for a lair action based on its `targetsEnemies`,
+ * `rangeFt`, and `targetFilter` fields.
+ *
+ * Returns a list of living, non-dead combatants (does NOT exclude the lair
+ * creature itself — handlers do that themselves to keep this helper generic).
+ *
+ * Targeting model (v1 simplification — Phase 4 will add true point-selection AI):
+ *   - If `targetsEnemies`: lair creature's enemies (`livingEnemiesOf`).
+ *     Else: lair creature's allies including itself (`livingAlliesOf` + self).
+ *   - If `rangeFt` set: only those within `rangeFt` of the lair creature
+ *     (Chebyshev distance in feet — 1 square = 5 ft, so distance = chebyshev3D * 5).
+ *     This models "the dragon chooses a point within 120 ft of it" as "the
+ *     dragon's lair action affects all enemies within 120 ft of the dragon" —
+ *     a v1 simplification that over-approximates the AoE (a real dragon would
+ *     center the effect on the densest cluster, not on itself).
+ *   - `radiusFt` is NOT used for targeting. It represents the AoE size at the
+ *     CHOSEN point (e.g., the magma geyser is a 5-ft-radius cylinder), which
+ *     would require point-selection AI to place correctly. Phase 4 will add a
+ *     `chooseLairActionPoint(action, candidates, bf)` helper that picks the
+ *     point maximizing targets hit, at which point `radiusFt` becomes the
+ *     targeting constraint. For now, we hit everyone in `rangeFt`.
+ *   - If `targetFilter` set: only those whose `creatureType` (lowercased)
+ *     contains any of the pipe-separated filter substrings.
+ *   - If `rangeFt` is undefined: all living enemies/allies (the action affects
+ *     the whole lair — e.g., Androsphinx "every creature in the lair" or
+ *     Mummy Lord "each undead in the lair").
+ */
+function selectLairActionTargets(
+  creature: Combatant,
+  action: LairAction,
+  bf: Battlefield,
+): Combatant[] {
+  // Base faction filter.
+  let candidates: Combatant[] = action.targetsEnemies
+    ? livingEnemiesOf(creature, bf)
+    : [...livingAlliesOf(creature, bf), creature];  // ally-affecting actions include self
+
+  // Range filter (Chebyshev feet from the lair creature).
+  // (radiusFt is intentionally NOT applied here — see doc comment above.)
+  if (action.rangeFt !== undefined) {
+    candidates = candidates.filter(t =>
+      chebyshev3D(creature.pos, t.pos) * 5 <= action.rangeFt!
+    );
+  }
+
+  // Creature-type filter (e.g., 'undead', 'gnoll|hyena').
+  if (action.targetFilter) {
+    const filters = action.targetFilter.toLowerCase().split('|').map(s => s.trim());
+    candidates = candidates.filter(t => {
+      const ct = (t.creatureType ?? '').toLowerCase();
+      return filters.some(f => ct.includes(f));
+    });
+  }
+
+  return candidates;
+}
+
+/**
+ * Roll a lair-action damage dice expression.
+ * `LairAction.damage = { count, sides, type }` — roll `count`d`sides` and sum.
+ * (No bonus field on LairAction damage — lair-action damage is always flat
+ * NdN + type, no flat bonuses in the parsed 5eTools data.)
+ */
+function rollLairDamage(dmg: { count: number; sides: number; type: string }): number {
+  let total = 0;
+  for (let i = 0; i < dmg.count; i++) total += rollDie(dmg.sides);
+  return total;
 }
 
 /**
