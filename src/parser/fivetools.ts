@@ -909,6 +909,11 @@ export function extractLairAction(
   // "affects up to N creatures". When set, the handler caps the target list
   // at this many (chosen by lowest HP first). For other categories this is
   // undefined (the handler ignores it).
+  //
+  // Phase 7 (Session 98): also catch "targets one creature" /
+  // "targets a creature" / "targets one creature within N feet" — these
+  // single-target patterns (Balhannoth::0/::1, Elder Brain::1/::2) need
+  // maxTargets=1 so the teleport/speed-zero effect only hits one target.
   let maxTargets: number | undefined;
   {
     // Match "up to <number-word-or-digit> creatures". 5eTools text usually
@@ -921,6 +926,18 @@ export function extractLairAction(
     if (m) {
       const k = m[1].toLowerCase();
       maxTargets = /^\d+$/.test(k) ? parseInt(k, 10) : wordMap[k];
+    }
+  }
+  // Phase 7 (Session 98): single-target actions — "targets one creature" /
+  // "targets a creature" / "targets one creature within N feet of it".
+  // These are the Balhannoth teleport + Elder Brain speed-zero patterns.
+  // (Important: maxTargets only constrains the handler — the save_only handler
+  // honors it by picking the first valid target only. The damage_no_save
+  // handler sorts by lowest HP first; for save_only, picking the first valid
+  // target is sufficient — the lair creature's choice is arbitrary.)
+  if (maxTargets === undefined) {
+    if (/\btargets\s+(?:one|a|an)\s+creature\b/i.test(cleaned)) {
+      maxTargets = 1;
     }
   }
 
@@ -940,6 +957,18 @@ export function extractLairAction(
   if (pushMatch) {
     pushFt = parseInt(pushMatch[2], 10);
     pushDirection = /pulled/i.test(pushMatch[1]) ? 'pull' : 'push';
+  }
+  // Phase 7 (Session 98): "move N feet closer to the [creature]" —
+  // Thessalkraken::2's lure pattern. Treated as a pull (toward the lair
+  // creature) with N ft. The "if able to do so" qualifier is ignored (v1
+  // doesn't model movement-blocking conditions like restrained for lair
+  // action forced movement).
+  if (pushFt === undefined) {
+    const closerMatch = cleaned.match(/move\s+(\d+)\s+feet\s+closer\s+to/i);
+    if (closerMatch) {
+      pushFt = parseInt(closerMatch[1], 10);
+      pushDirection = 'pull';
+    }
   }
   // Half-effect on success: two phrasings:
   //   1. "N feet on a successful save" (general pattern)
@@ -985,6 +1014,11 @@ export function extractLairAction(
   // condition" / "is restrained" / "becomes paralyzed". The handler applies
   // each condition to failed-save targets via addCondition (with immunity
   // cascade). Skip conditions already in `conditions` (avoid double-apply).
+  //
+  // Phase 7 (Session 98): also catch "liquid in their eyes/its eyes/the eyes"
+  // → blinded (Kyrilla::2 drowning-pools pattern). The text says "avoid
+  // getting liquid in their eyes and mouths" — the implication is that on a
+  // FAILED save, the creature gets liquid in its eyes (blinded).
   {
     const condList: Condition[] = [];
     if (/\bstunned\b/i.test(cleaned) && !conditions?.includes('stunned')) condList.push('stunned');
@@ -997,7 +1031,62 @@ export function extractLairAction(
     if (/\bincapacitated\b/i.test(cleaned) && !conditions?.includes('incapacitated')) condList.push('incapacitated');
     if (/\bpoisoned\b/i.test(cleaned) && !conditions?.includes('poisoned')) condList.push('poisoned');
     if (/\bprone\b/i.test(cleaned) && !conditions?.includes('prone')) condList.push('prone');
+    // Phase 7: "liquid in their eyes/its eyes/the eyes" → blinded (Kyrilla::2).
+    if (!conditions?.includes('blinded') && !condList.includes('blinded')
+        && /\b(?:in\s+(?:their|its|the)\s+eyes|eyes?\s+and\s+mouths?)\b/i.test(cleaned)) {
+      condList.push('blinded');
+    }
     if (condList.length > 0) applyConditions = condList;
+  }
+
+  // ── 6c. Phase 7 (Session 98): additional save_only bespoke-effect fields. ──
+  // Three new patterns identified by enumerating the 27 remaining
+  // unrecognized save_only actions after Phase 6:
+  //
+  //   1. teleport-to-source (Balhannoth::0/::1): "teleports to an unoccupied
+  //      space of the [creature]'s choice within N feet of it". The handler
+  //      relocates the failed-save target to an adjacent square of the lair
+  //      creature (within teleportFt).
+  //
+  //   2. speed-zero / can't-leave-space (Elder Brain::1/::2): "its speed is
+  //      reduced to 0" / "be unable to leave its current space". The handler
+  //      applies the `restrained` condition for durationRounds.
+  //
+  //   3. disadvantage-on-attacks (Belashyrra::2): "imposing disadvantage on
+  //      the creature's attack rolls". The handler grants the failed-save
+  //      target a `disadvantage` self-grant on `attack` rolls for
+  //      durationRounds.
+  let teleportToSource: boolean | undefined;
+  let teleportFt: number | undefined;
+  let speedZero: boolean | undefined;
+  let disadvOnAttacks: boolean | undefined;
+
+  // Teleport-to-source: "teleports to an unoccupied space ... within N feet
+  // of it/him/her/them". Capture N for teleportFt (default 60 if pattern
+  // matches but N is absent — defensive).
+  {
+    const tpMatch = cleaned.match(/teleports?\s+to\s+an?\s+unoccupied\s+space.*?within\s+(\d+)\s+feet\s+of\s+(?:it|him|her|them)/i);
+    if (tpMatch) {
+      teleportToSource = true;
+      teleportFt = parseInt(tpMatch[1], 10);
+    } else if (/teleports?\s+to\s+an?\s+unoccupied\s+space/i.test(cleaned)) {
+      // Teleport pattern present but no distance — default to 60 ft.
+      teleportToSource = true;
+      teleportFt = 60;
+    }
+  }
+
+  // Speed-zero: "its speed is reduced to 0" / "speed is reduced to 0" /
+  // "unable to leave its current space" (Elder Brain::2 variant).
+  if (/speed\s+(?:is\s+)?(?:reduced\s+to|becomes)\s+0\b/i.test(cleaned)
+      || /unable\s+to\s+leave\s+(?:its|her|his|their)\s+current\s+space/i.test(cleaned)) {
+    speedZero = true;
+  }
+
+  // Disadvantage-on-attacks: "imposing disadvantage on the creature's attack
+  // rolls" / "disadvantage on attack rolls".
+  if (/disadvantage\s+on\s+(?:the\s+creature'?s\s+)?attack\s+rolls/i.test(cleaned)) {
+    disadvOnAttacks = true;
   }
 
   // ── 7. summons from {@creature X} + "up to N" / "N <creatures> rise as" ──
@@ -1192,6 +1281,11 @@ export function extractLairAction(
     successPushFt,
     banished,
     applyConditions,
+    // Phase 7 (Session 98): additional save_only bespoke-effect fields.
+    teleportToSource,
+    teleportFt,
+    speedZero,
+    disadvOnAttacks,
     category,
   };
 }

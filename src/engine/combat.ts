@@ -6744,30 +6744,55 @@ function scoreLairAction(
     }
 
     case 'save_only': {
-      // Phase 6 (Session 97): score based on the bespoke effect's real value.
+      // Phase 6 (Session 97) + Phase 7 (Session 98): score based on the
+      // bespoke effect's real value.
       //   - Push/pull: controlPush per target (repositioning control).
       //   - Banished: buffVulnerability per target (removes target from combat —
       //     very high value, similar to a vulnerability debuff).
       //   - Apply-conditions: Σ conditionWeight per target (stunned=40, etc.).
-      //   - No recognized effect (the ~23 unmatched): low controlPush value
-      //     (forces a save roll but has no mechanical outcome).
+      //   - Teleport-to-source: buffVulnerability per target (positional
+      //     control similar to banish — the target is removed from its
+      //     preferred position and dropped next to the lair creature).
+      //   - Speed-zero (restrained): conditionRestrained per target (25).
+      //   - Disadvantage-on-attacks: debuffDisadvantage per target (6).
+      //   - No recognized effect (the remaining unmatched): low controlPush
+      //     value (forces a save roll but has no mechanical outcome).
       if (action.saveDC === undefined || action.saveAbility === undefined) return 0;
       const hasPush = action.pushFt !== undefined && action.pushFt > 0;
       const hasBanish = action.banished === true;
       const hasConds = action.applyConditions !== undefined && action.applyConditions.length > 0;
+      const hasTeleport = action.teleportToSource === true;
+      const hasSpeedZero = action.speedZero === true;
+      const hasDisadv = action.disadvOnAttacks === true;
       let perTargetValue: number = W.controlPush;  // default: low control value
       if (hasBanish) {
         perTargetValue = W.buffVulnerability;  // banish ≈ removing target from combat
+      } else if (hasTeleport) {
+        // Teleport-to-source ≈ positional control similar to banish (the
+        // target is dropped next to the lair creature, removing it from its
+        // preferred position). Use buffVulnerability (20) — slightly less
+        // than a damage-dealing banish but still very high value.
+        perTargetValue = W.buffVulnerability;
       } else if (hasConds) {
         // Sum the condition weights (stunned=40, restrained=25, etc.).
         perTargetValue = 0;
         for (const cond of action.applyConditions!) {
           perTargetValue += conditionWeight(cond);
         }
+      } else if (hasSpeedZero) {
+        perTargetValue = W.conditionRestrained;  // 25 — restrained condition
+      } else if (hasDisadv) {
+        perTargetValue = W.debuffDisadvantage;  // 6 — attack-roll debuff
       } else if (hasPush) {
         perTargetValue = W.controlPush;  // push/pull repositioning
       }
-      for (const t of targets) {
+      // Phase 7 (Session 98): honor maxTargets (single-target teleport/
+      // speed-zero actions only score for the first target).
+      const scoredTargets = (action.maxTargets !== undefined && action.maxTargets > 0
+                            && targets.length > action.maxTargets)
+        ? targets.slice(0, action.maxTargets)
+        : targets;
+      for (const t of scoredTargets) {
         const pFail = estimateSaveFailProb(t, action.saveAbility, action.saveDC);
         score += pFail * perTargetValue;
         // Half-effect on success (push successPushFt): add the partial value.
@@ -8174,7 +8199,7 @@ function handleLairSaveOnly(
     return;
   }
 
-  const targets = selectLairActionTargets(creature, action, bf)
+  let targets = selectLairActionTargets(creature, action, bf)
     .filter(t => t.id !== creature.id)
     .filter(t => !t.isDead && !t.isUnconscious);
 
@@ -8184,12 +8209,29 @@ function handleLairSaveOnly(
     return;
   }
 
-  // Phase 6 (Session 97): determine which bespoke effect(s) to apply.
-  // The handler checks each field; if none are set, falls back to the
-  // "not yet implemented" log (the remaining ~23 unmatched save_only actions).
+  // Phase 7 (Session 98): honor `maxTargets` — the single-target patterns
+  // (Balhannoth teleport, Elder Brain speed-zero) parse to maxTargets=1.
+  // The handler picks the first valid target (the lair creature's choice is
+  // arbitrary; the lowest-HP sort used by damage_no_save is unnecessary here
+  // since these effects don't deal damage — they just relocate/debuff).
+  if (action.maxTargets !== undefined && action.maxTargets > 0
+      && targets.length > action.maxTargets) {
+    targets = targets.slice(0, action.maxTargets);
+    log(state, 'action', creature.id,
+      `  → save_only: ${targets.length === 1 ? 'single-target action — picking first valid target' : `capping to ${action.maxTargets} targets`}`,
+      undefined);
+  }
+
+  // Phase 6 (Session 97) + Phase 7 (Session 98): determine which bespoke
+  // effect(s) to apply. The handler checks each field; if none are set, falls
+  // back to the "not yet implemented" log (the remaining unmatched save_only
+  // actions — Phase 8+ per-action.id handlers).
   const hasPush = action.pushFt !== undefined && action.pushFt > 0;
   const hasBanish = action.banished === true;
   const hasConds = action.applyConditions !== undefined && action.applyConditions.length > 0;
+  const hasTeleport = action.teleportToSource === true;
+  const hasSpeedZero = action.speedZero === true;
+  const hasDisadv = action.disadvOnAttacks === true;
 
   for (const target of targets) {
     const save = rollSave(target, action.saveAbility, action.saveDC);
@@ -8269,12 +8311,82 @@ function handleLairSaveOnly(
       applied = true;
     }
 
+    // 4. Phase 7 (Session 98): teleport-to-source (Balhannoth).
+    //    Relocate target to an adjacent square of the lair creature (5 ft
+    //    away — within teleportFt default 60 ft). Phase 8+ may add point-
+    //    selection for optimal placement (e.g., next to a hazardous terrain
+    //    feature, or to set up an OA-bait).
+    if (hasTeleport) {
+      const origPos = { ...target.pos };
+      // Pick the first adjacent square that's within teleportFt of the lair
+      // creature (which any adjacent square is, since teleportFt ≥ 5).
+      // Adjacency: 8 neighbors (Chebyshev distance 1 square = 5 ft).
+      // For simplicity, pick the square directly toward the lair creature
+      // (mirroring pullToward's "stop 1 square short" behavior).
+      const dx = creature.pos.x - target.pos.x;
+      const dy = creature.pos.y - target.pos.y;
+      const dist = Math.max(Math.abs(dx), Math.abs(dy));
+      let dest: Vec3;
+      if (dist === 0) {
+        // Already on top of the lair creature — pick any adjacent square.
+        dest = { x: creature.pos.x + 1, y: creature.pos.y, z: creature.pos.z };
+      } else {
+        // Stop 1 square short of the lair creature (adjacent).
+        const dirX = dx === 0 ? 0 : Math.sign(dx);
+        const dirY = dy === 0 ? 0 : Math.sign(dy);
+        const stopShort = Math.max(0, dist - 1);
+        dest = {
+          x: target.pos.x + dirX * stopShort,
+          y: target.pos.y + dirY * stopShort,
+          z: creature.pos.z,
+        };
+      }
+      target.pos = { ...dest };
+      log(state, 'move', creature.id,
+        `  → ${target.name} TELEPORTED from (${origPos.x},${origPos.y}) to (${dest.x},${dest.y}) — within ${action.teleportFt ?? 60} ft of ${creature.name}`,
+        target.id);
+      applied = true;
+    }
+
+    // 5. Phase 7 (Session 98): speed-zero / can't-leave-space (Elder Brain).
+    //    Apply the `restrained` condition for durationRounds (default 1).
+    //    Restrained models both "speed 0" and "can't be moved" (PHB p.292:
+    //    "A restrained creature's speed becomes 0, and it can't benefit from
+    //    any bonus to its speed." / "Attack rolls against the creature have
+    //    advantage, and the creature's attack rolls have disadvantage." /
+    //    "The creature has disadvantage on Dexterity saving throws.")
+    //    The "can't teleport" clause is not modeled (Phase 8+).
+    if (hasSpeedZero) {
+      const wasPresent = target.conditions.has('restrained');
+      addCondition(target, 'restrained');
+      log(state, 'condition_add', creature.id,
+        `  → ${target.name} ANCHORED — speed reduced to 0 (restrained)${wasPresent ? ' (already present)' : ''} from ${action.id}`,
+        target.id);
+      applied = true;
+    }
+
+    // 6. Phase 7 (Session 98): disadvantage-on-attacks (Belashyrra).
+    //    Grant the target a `disadvantage` self-grant on `attack` rolls for
+    //    durationRounds (default 1). This models "imposing disadvantage on
+    //    the creature's attack rolls" — the perception-alteration makes the
+    //    target misjudge the position of its enemies.
+    if (hasDisadv) {
+      const duration = action.durationRounds ?? 1;
+      grantSelf(target, 'disadvantage', 'attack', `Lair:${action.id}`, 'rounds', duration);
+      log(state, 'action', creature.id,
+        `  → ${target.name} DISADVANTAGE on attack rolls for ${duration} round(s) from ${action.id} (perception altered)`,
+        target.id);
+      applied = true;
+    }
+
     if (!applied) {
       // No recognized bespoke effect — log as "not yet implemented" (the
-      // remaining ~23 unmatched save_only actions: time-alteration, perception-
-      // alteration, teleport, drowning, etc. — Phase 7+ per-action.id handlers).
+      // remaining unmatched save_only actions: time-alteration (Sphinx aging),
+      // environment-interaction (Strahd doors, Githzerai Anarch object-move),
+      // misclassified summon (Captain N'ghathrod), and reactive-damage-triggers
+      // (Lich/Illithilich warding bond) — Phase 8+ per-action.id handlers).
       log(state, 'action', creature.id,
-        `  → save_only: ${target.name} failed — bespoke effect for ${action.id} not yet implemented (Phase 7: per-action.id handler)`,
+        `  → save_only: ${target.name} failed — bespoke effect for ${action.id} not yet implemented (Phase 8: per-action.id handler)`,
         target.id);
     }
   }

@@ -836,6 +836,39 @@ export interface LairAction {
    */
   applyConditions?: Condition[];
 
+  // ── Phase 7 (Session 98): additional save_only bespoke-effect fields ──
+  // Extends Phase 6's push/banish/conditions trio with three more common
+  // patterns identified by enumerating the remaining 27 unrecognized
+  // save_only actions across the bestiary.
+  /**
+   * Teleport-to-source flag. When true, the handler teleports the failed-save
+   * target to an unoccupied position within `teleportFt` (default 60 ft) of
+   * the lair creature. Modeled on Balhannoth::0/::1 ("teleports to an
+   * unoccupied space of the balhannoth's choice within 60 feet of it"). The
+   * destination is chosen as an adjacent square to the lair creature (5 ft
+   * away — definitely within range; Phase 8+ may add point-selection for
+   * optimal placement).
+   */
+  teleportToSource?: boolean;
+  /** Teleport destination radius from the lair creature in feet (default 60). */
+  teleportFt?: number;
+  /**
+   * Speed-zero flag. When true, the handler applies the `restrained` condition
+   * to failed-save targets for `durationRounds` (default 1). Modeled on
+   * Elder Brain::1 ("its speed is reduced to 0, and it can't teleport") and
+   * Elder Brain::2 ("be unable to leave its current space"). The `restrained`
+   * condition models both: speed 0 + can't be moved. (Phase 8+ may add a
+   * separate `cantTeleport` flag if teleport-interception becomes common.)
+   */
+  speedZero?: boolean;
+  /**
+   * Disadvantage-on-attacks flag. When true, the handler grants the
+   * failed-save target a `disadvantage` self-grant on `attack` rolls for
+   * `durationRounds` (default 1). Modeled on Belashyrra::2 ("imposing
+   * disadvantage on the creature's attack rolls against those targets").
+   */
+  disadvOnAttacks?: boolean;
+
   /** Dispatcher routing tag (Phase 2+). `cast_spell` when isSpell; else by tag presence. */
   category: LairActionCategory;
 }
