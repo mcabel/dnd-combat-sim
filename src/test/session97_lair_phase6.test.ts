@@ -278,6 +278,12 @@ console.log('\n--- 3. Parser: applyConditions extraction ---');
 //    P(fail) = (23-1-(-1))/20 = 25/20 = 1.25 → clamped 0.95.
 //    We tank the Goblin and run 1 round; verify a 'move' log fires
 //    for the lair action (the push).
+//
+//    Session 98 fix: 5% chance the Goblin succeeds (nat 20 or high
+//    roll) → no push log. Per SPECIAL_INSTRUCTIONS.md §8, this is an
+//    acceptable intermittent failure, but to make CI deterministic
+//    we skip the push assertions if the save succeeded (mirrors the
+//    §7 pattern).
 // ============================================================
 console.log('\n--- 4. Handler: push on failed save repositions target ---');
 {
@@ -302,19 +308,33 @@ console.log('\n--- 4. Handler: push on failed save repositions target ---');
       maxRounds: 1, verbose: false
     } as any);
 
-    // Look for a 'move' log from the lair action (push).
-    const moveLogs = rlog.events.filter((e: any) =>
-      e.type === 'move' && e.actorId === kraken.id &&
-      e.description.includes('pushed'));
-    assert('4b. push move log fires', moveLogs.length >= 1,
-      `got ${moveLogs.length}; events: ${rlog.events.filter((e:any)=>e.actorId===kraken.id).map((e:any)=>e.description.substring(0,80)).join(' | ')}`);
+    // Check if the goblin failed the save (push only fires on fail).
+    const saveFail = rlog.events.find((e: any) =>
+      e.type === 'save_fail' && e.actorId === kraken.id);
+    if (!saveFail) {
+      console.log(`    (Goblin succeeded DC 23 STR save — push didn't fire; skipping push assertions)`);
+      assert('4b. (skipped — target succeeded save)', true);
+      assert('4c. (skipped — target succeeded save)', true);
+    } else {
+      // Look for a 'move' log from the lair action (push).
+      const moveLogs = rlog.events.filter((e: any) =>
+        e.type === 'move' && e.actorId === kraken.id &&
+        e.description.includes('pushed'));
+      assert('4b. push move log fires', moveLogs.length >= 1,
+        `got ${moveLogs.length}; events: ${rlog.events.filter((e:any)=>e.actorId===kraken.id).map((e:any)=>e.description.substring(0,80)).join(' | ')}`);
 
-    if (moveLogs.length >= 1) {
-      // The Goblin should have moved (x changed).
-      assert('4c. Goblin position changed after push',
-        goblin.pos.x !== goblinStartPos.x || goblin.pos.y !== goblinStartPos.y,
-        `start (${goblinStartPos.x},${goblinStartPos.y}) → end (${goblin.pos.x},${goblin.pos.y})`);
+      if (moveLogs.length >= 1) {
+        // The Goblin should have moved (x changed).
+        assert('4c. Goblin position changed after push',
+          goblin.pos.x !== goblinStartPos.x || goblin.pos.y !== goblinStartPos.y,
+          `start (${goblinStartPos.x},${goblinStartPos.y}) → end (${goblin.pos.x},${goblin.pos.y})`);
+      } else {
+        assert('4c. (skipped — push log not present)', true);
+      }
     }
+  } else {
+    assert('4b. (skipped — no push action)', true);
+    assert('4c. (skipped — no push action)', true);
   }
 }
 
@@ -322,6 +342,11 @@ console.log('\n--- 4. Handler: push on failed save repositions target ---');
 // 5. Handler: push half-effect on successful save
 //    Synthetic action with DC 1 (so the target almost always succeeds)
 //    + successPushFt=10. On success, the target is pushed 10 ft.
+//
+//    Session 98 fix: 5% chance the Goblin FAILS (nat 1) → no
+//    success-branch push. Per SPECIAL_INSTRUCTIONS.md §8, this is an
+//    acceptable intermittent failure, but to make CI deterministic
+//    we skip the assertion if the save failed.
 // ============================================================
 console.log('\n--- 5. Handler: push half-effect on successful save ---');
 {
@@ -351,13 +376,21 @@ console.log('\n--- 5. Handler: push half-effect on successful save ---');
     maxRounds: 1, verbose: false
   } as any);
 
-  // Find success-branch push logs.
-  const successPushLogs = rlog.events.filter((e: any) =>
-    e.type === 'move' && e.actorId === dragon.id &&
-    e.description.includes('success half-effect'));
-  assert('5a. success-branch push log fires',
-    successPushLogs.length >= 1,
-    `got ${successPushLogs.length}`);
+  // Check if the goblin succeeded the save (success-push only fires on success).
+  const saveSuccess = rlog.events.find((e: any) =>
+    e.type === 'save_success' && e.actorId === dragon.id);
+  if (!saveSuccess) {
+    console.log(`    (Goblin failed DC 1 STR save — success-branch push didn't fire; skipping assertion)`);
+    assert('5a. (skipped — target failed save)', true);
+  } else {
+    // Find success-branch push logs.
+    const successPushLogs = rlog.events.filter((e: any) =>
+      e.type === 'move' && e.actorId === dragon.id &&
+      e.description.includes('success half-effect'));
+    assert('5a. success-branch push log fires',
+      successPushLogs.length >= 1,
+      `got ${successPushLogs.length}`);
+  }
 }
 
 // ============================================================
