@@ -6670,6 +6670,26 @@ function scoreLairAction(
     .filter(t => t.id !== lairCreature.id)
     .filter(t => !t.isDead && !t.isUnconscious);
 
+  // Phase 5 (Session 96): cap targets at `maxTargets` for damage_no_save.
+  // The handler picks the lowest-HP targets when capping, but the scorer is
+  // a pure estimator — it scores ALL valid targets in range, on the
+  // assumption that the handler's pick is approximately average (the
+  // difference between "the N lowest-HP enemies" and "any N enemies" is small
+  // relative to the per-target EV; and the capping is rare — only the ~5
+  // `damage_no_save` actions have `maxTargets`). However, we still cap the
+  // COUNT so that an action with `maxTargets: 3` in a 10-enemy field isn't
+  // scored as if it hits all 10. Use the first N targets (the order is
+  // already deterministic — the order returned by `selectLairActionTargets`).
+  const scoredTargets = (action.maxTargets !== undefined && action.maxTargets > 0
+                        && targets.length > action.maxTargets)
+    ? targets.slice(0, action.maxTargets)
+    : targets;
+
+  // Phase 5 (Session 96): `halfOnSave` controls the success-branch EV for
+  // save_damage. Default true (half dmg on success — PHB p.205). When false,
+  // a successful save negates all damage (success → 0 dmg).
+  const halfOnSave = action.halfOnSave !== false;
+
   let score = 0;
 
   // 3. Score by category.
@@ -6680,10 +6700,12 @@ function scoreLairAction(
         return 0;   // handler will log "missing" — no value
       }
       const avgDmg = action.damage.count * (action.damage.sides + 1) / 2;
-      for (const t of targets) {
+      for (const t of scoredTargets) {
         const pFail = estimateSaveFailProb(t, action.saveAbility, action.saveDC);
-        // v1 handler: full damage on fail, half on success.
-        const expectedDmg = pFail * avgDmg + (1 - pFail) * avgDmg / 2;
+        // v1 handler: full damage on fail, half on success (default).
+        // Phase 5: when halfOnSave === false, success → 0 dmg.
+        const successDmg = halfOnSave ? avgDmg / 2 : 0;
+        const expectedDmg = pFail * avgDmg + (1 - pFail) * successDmg;
         const mult = damageTypeMultiplier(t, action.damage.type);
         score += expectedDmg * mult * W.damagePerEnemy;
       }
@@ -6709,7 +6731,12 @@ function scoreLairAction(
     case 'damage_no_save': {
       if (!action.damage) return 0;
       const avgDmg = action.damage.count * (action.damage.sides + 1) / 2;
-      for (const t of targets) {
+      // Phase 5 (Session 96): honor `maxTargets` — score only the targets the
+      // handler will actually hit. The handler picks lowest-HP-first when
+      // capping, but the scorer uses the first N targets (the order from
+      // `selectLairActionTargets` is deterministic — the EV difference is
+      // negligible relative to per-target avg damage).
+      for (const t of scoredTargets) {
         const mult = damageTypeMultiplier(t, action.damage.type);
         score += avgDmg * mult * W.damagePerEnemy;
       }
@@ -6831,12 +6858,15 @@ function scoreLairAction(
   //    self) and the action deals damage, subtract the expected damage to
   //    allies. (Most lair actions are `targetsEnemies: true`, so this is
   //    rare — but a self-damaging lair action should be deprioritized.)
+  //    Phase 5 (Session 96): honor `halfOnSave` — when false, a successful
+  //    save negates all ally damage (success → 0 dmg).
   if (!action.targetsEnemies && action.damage &&
       action.saveDC !== undefined && action.saveAbility !== undefined) {
     const avgDmg = action.damage.count * (action.damage.sides + 1) / 2;
+    const successDmg = halfOnSave ? avgDmg / 2 : 0;
     for (const t of targets) {
       const pFail = estimateSaveFailProb(t, action.saveAbility, action.saveDC);
-      const expectedDmg = pFail * avgDmg + (1 - pFail) * avgDmg / 2;
+      const expectedDmg = pFail * avgDmg + (1 - pFail) * successDmg;
       const mult = damageTypeMultiplier(t, action.damage.type);
       score -= expectedDmg * mult * W.damagePerEnemy;
     }
@@ -7124,13 +7154,19 @@ function handleLairSaveDamage(
 
     const save = rollSave(target, action.saveAbility, action.saveDC);
     const dmgRoll = rollLairDamage(action.damage);
-    const dmgFinal = save.success ? Math.floor(dmgRoll / 2) : dmgRoll;
+    // Phase 5 (Session 96): `halfOnSave` controls what happens on a successful
+    // save. Default true (PHB p.205 — "half damage on a successful save").
+    // When false, a successful save negates ALL damage (action text says
+    // "no damage on a successful save"). Treat undefined as true (backward
+    // compat with synthetic test actions).
+    const halfOnSave = action.halfOnSave !== false;
+    const dmgFinal = save.success ? (halfOnSave ? Math.floor(dmgRoll / 2) : 0) : dmgRoll;
     const dmgType = (action.damage.type as DamageType) ?? undefined;
 
     log(state, save.success ? 'save_success' : 'save_fail', creature.id,
       `${target.name} ${save.success ? 'succeeds' : 'fails'} ${action.saveAbility.toUpperCase()} save ` +
       `(rolled ${save.roll} vs DC ${action.saveDC}) — takes ${dmgFinal} ${action.damage.type} damage ` +
-      `(${save.success ? 'half of ' : ''}${dmgRoll})`,
+      `(${save.success ? (halfOnSave ? 'half of ' : 'no damage (negated by save) — ') : ''}${dmgRoll})`,
       target.id, dmgFinal);
 
     if (dmgFinal > 0) {
@@ -7232,19 +7268,28 @@ function handleLairDamageNoSave(
     return;
   }
 
-  // "up to N creatures" — cap at N if specified in the damage.count field
-  // (the White Dragon shards hit "up to three creatures" — count=3 in the
-  // damage dice, so we use damage.count as the target cap). This is a
-  // heuristic — the RFC didn't extract a separate targetCount field.
-  let targetCap = targets.length;
-  // The "up to N" pattern is hard to extract from raw text reliably; for
-  // now, the cap is just the number of valid targets in range. Phase 5
-  // should add a proper `maxTargets` field when parsing "up to N creatures".
-  targetCap = targets.length;
+  // Phase 5 (Session 96): `maxTargets` caps the target list. Parsed from
+  // "up to N creatures" / "striking up to N creatures" — the White Dragon
+  // shards hit "up to three creatures". When undefined, all valid targets
+  // in range take damage (v1 behavior). When defined, choose the lowest-
+  // current-HP targets first (concentrates damage where it'll drop a target;
+  // mirrors the v1 selector's "lowest HP" tie-break in the generic spell
+  // targeter).
+  let chosenTargets = targets;
+  if (action.maxTargets !== undefined && action.maxTargets > 0
+      && targets.length > action.maxTargets) {
+    chosenTargets = [...targets]
+      .filter(t => t.id !== creature.id && !t.isDead && !t.isUnconscious)
+      .sort((a, b) => a.currentHP - b.currentHP)
+      .slice(0, action.maxTargets);
+    log(state, 'action', creature.id,
+      `  → damage_no_save: ${targets.length} valid targets in range; ` +
+      `capping to ${action.maxTargets} (lowest HP first)`, undefined);
+  }
 
   const dmgType = (action.damage.type as DamageType) ?? undefined;
   let hit = 0;
-  for (const target of targets.slice(0, targetCap)) {
+  for (const target of chosenTargets) {
     if (target.id === creature.id) continue;
     if (target.isDead || target.isUnconscious) continue;
 
@@ -7451,9 +7496,13 @@ function rollLairDamage(dmg: { count: number; sides: number; type: string }): nu
  * [DD-4] GoI / Counterspell interactions:
  *   - `isSpell: true` actions are blocked by Globe of Invulnerability when
  *     `castLevel ≤ GoI threshold` and the lair creature is outside the barrier.
- *     The spell module's execute() runs GoI checks internally for each target,
- *     so we don't pre-filter here. (Forward-compat: when Antimagic Field lands,
- *     it'll suppress spell-cast lair actions the same way.)
+ *     Phase 5 (Session 96): an EXPLICIT pre-filter now runs before dispatch —
+ *     if EVERY potential target in range is GoI-protected (caster outside
+ *     barrier), the cast is skipped entirely with a "blocked by GoI" log line.
+ *     When only SOME targets are protected, the cast still fires (the spell
+ *     module's internal GoI checks will exclude the protected ones — this
+ *     matches the regular spell-cast flow's "single-target block, AoE
+ *     exclusion is best-effort" semantics).
  *   - Counterspell: the lair creature is the "caster". We do NOT fire
  *     `triggerReactions(state, lairCreature, 'incoming_spell')` here because
  *     lair actions resolve at init count 20 OUTSIDE any actor's turn — the
@@ -7477,10 +7526,57 @@ function handleLairCastSpell(
   action: LairAction,
   state: EngineState,
 ): void {
+  const bf = state.battlefield;
   if (!action.isSpell || !action.spellName) {
     log(state, 'action', creature.id,
       `  → cast_spell: missing spellName — no effect`, undefined);
     return;
+  }
+
+  const castLevel = action.castLevel ?? 1;
+
+  // ── Phase 5 (Session 96) [DD-4]: GoI pre-filter ───────────────────
+  // Globe of Invulnerability (PHB p.245): spells of L5 or lower cast from
+  // OUTSIDE the barrier can't affect creatures within it. The lair creature
+  // is the caster; if every potential target in range is GoI-protected
+  // (with the lair creature outside their barrier), the cast has no effect
+  // and we skip the dispatch entirely. This makes the GoI block visible in
+  // the lair-action log (the generic execute() runs GoI checks internally
+  // but only logs at the per-target level, which can be hard to surface in
+  // a lair-action context).
+  //
+  // Cantrips (castLevel ≤ 0) are NEVER blocked by GoI (PHB p.245: "Any spell
+  // of 5th level or lower" — cantrips are level 0). The lair creature's own
+  // GoI doesn't block their own spell (the creature is INSIDE their own
+  // barrier) — `isProtectedByGoI(target, level, bf, casterId)` handles this
+  // via the `casterId` spatial check.
+  if (castLevel > 0) {
+    const potentialTargets = selectLairActionTargets(creature, action, bf)
+      .filter(t => t.id !== creature.id)
+      .filter(t => !t.isDead && !t.isUnconscious);
+
+    if (potentialTargets.length > 0) {
+      const blockedTargets = potentialTargets.filter(t =>
+        isProtectedByGoI(t, castLevel, bf, creature.id));
+      if (blockedTargets.length === potentialTargets.length) {
+        // EVERY target is GoI-protected → cast has no effect.
+        log(state, 'action', creature.id,
+          `  → cast_spell: "${action.spellName}" (L${castLevel}) blocked by ` +
+          `Globe of Invulnerability — all ${blockedTargets.length} target(s) ` +
+          `protected (lair creature outside barrier)`,
+          undefined);
+        return;
+      }
+      if (blockedTargets.length > 0) {
+        // SOME targets protected — log the partial block; the spell module's
+        // internal GoI checks will exclude the protected ones at execution.
+        log(state, 'action', creature.id,
+          `  → cast_spell: "${action.spellName}" (L${castLevel}) — ` +
+          `${blockedTargets.length}/${potentialTargets.length} target(s) ` +
+          `blocked by Globe of Invulnerability (partial; spell still fires)`,
+          undefined);
+      }
+    }
   }
 
   const desc = lookupGenericSpell(action.spellName);
@@ -7489,7 +7585,7 @@ function handleLairCastSpell(
     // implemented at all. v1: log + skip. Phase 5 will dispatch dedicated
     // modules via a unified cast helper.
     log(state, 'action', creature.id,
-      `  → cast_spell: "${action.spellName}" (L${action.castLevel ?? '?'}) ` +
+      `  → cast_spell: "${action.spellName}" (L${castLevel}) ` +
       `not in GENERIC_SPELLS registry — logged, not executed (Phase 5 will wire dedicated spell modules)`,
       undefined);
     return;
@@ -7497,7 +7593,7 @@ function handleLairCastSpell(
 
   // Log the spell-cast intent with the cast level.
   log(state, 'action', creature.id,
-    `  → casts ${desc.name} (L${action.castLevel ?? desc.level}) via lair action`,
+    `  → casts ${desc.name} (L${castLevel}) via lair action`,
     undefined);
 
   // Execute the spell. The generic registry's execute() takes (caster, state)

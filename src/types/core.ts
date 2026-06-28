@@ -760,6 +760,35 @@ export interface LairAction {
   saveAbility?: AbilityScore;
   /** Damage roll from `{@damage NdN}` + type from surrounding text ("fire damage"). */
   damage?: { count: number; sides: number; type: string };
+  /**
+   * Phase 5 (Session 96): for `save_damage` actions, what happens on a
+   * SUCCESSFUL save.
+   *   - `true`  → half damage (PHB p.205 default — most lair actions say
+   *               "or half as much damage on a successful one").
+   *   - `false` → no damage (the ~5% of actions that say "no damage on a
+   *               successful save" — e.g., Adult Black Dragon "Miasmal
+   *               Tide" / Adult Bronze Dragon "Lights").
+   *
+   * Only meaningful for `category === 'save_damage'` (the only category with
+   * both a save AND damage). Undefined elsewhere; the scorer + handler treat
+   * undefined as `true` (the PHB default) for backward compat with synthetic
+   * test actions that don't set it.
+   */
+  halfOnSave?: boolean;
+  /**
+   * Phase 5 (Session 96): for `damage_no_save` actions, the maximum number of
+   * targets the action can hit. Parsed from phrases like "up to three
+   * creatures" / "striking up to three creatures". When undefined, the
+   * handler applies the damage to ALL valid targets in range (the v1
+   * behavior). When defined, the handler caps at `maxTargets` targets
+   * (chosen by lowest current HP first — concentrates damage where it'll
+   * drop a target; mirrors the v1 selector's "lowest HP" tie-break in the
+   * generic spell targeter).
+   *
+   * The scorer also uses this to cap the expected-value estimate (an action
+   * that hits 5 enemies but caps at 3 should be scored for 3, not 5).
+   */
+  maxTargets?: number;
   /** Conditions from `{@condition X}` (deduped, order of first appearance). */
   conditions?: Condition[];
   /** Summoned creature + count from `{@creature X}` + "up to N"/"N corpses rise as". */

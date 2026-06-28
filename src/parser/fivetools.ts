@@ -890,6 +890,40 @@ export function extractLairAction(
     damage = { count, sides, type };
   }
 
+  // ── 5b. Phase 5 (Session 96): halfOnSave for save_damage actions. ──
+  // Default true (PHB p.205 — "Half damage is the default for damaging spells").
+  // Set false ONLY when the action explicitly says "no damage on a successful
+  // save" / "takes no damage on a successful save" / "takes the full damage
+  // only on a failed save" etc. The ~5% of actions with this phrasing include:
+  //   - Adult Black Dragon "Miasmal Tide" (acid stream)
+  //   - Adult Bronze Dragon "Lights" (DC 15 WIS or blinded; on success no dmg)
+  //   - Adult Copper Dragon "Slow Gas" (DC 15 CON, no dmg on success)
+  // Most actions say "or half as much damage on a successful one" → stays true.
+  let halfOnSave = true;
+  if (/no damage on a successful save|takes? no damage on a successful|deals? no damage on a successful/i.test(cleaned)) {
+    halfOnSave = false;
+  }
+
+  // ── 5c. Phase 5 (Session 96): maxTargets for damage_no_save actions. ──
+  // Parsed from "up to N creatures" / "striking up to N creatures" /
+  // "affects up to N creatures". When set, the handler caps the target list
+  // at this many (chosen by lowest HP first). For other categories this is
+  // undefined (the handler ignores it).
+  let maxTargets: number | undefined;
+  {
+    // Match "up to <number-word-or-digit> creatures". 5eTools text usually
+    // uses word-form numbers ("up to three creatures") so we map words → ints.
+    const wordMap: Record<string, number> = {
+      one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7,
+      eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12,
+    };
+    const m = cleaned.match(/up to (?:a maximum of )?(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+creatures/i);
+    if (m) {
+      const k = m[1].toLowerCase();
+      maxTargets = /^\d+$/.test(k) ? parseInt(k, 10) : wordMap[k];
+    }
+  }
+
   // ── 6. conditions from {@condition X} (deduped, order of first appearance) ──
   let conditions: Condition[] | undefined;
   {
@@ -1084,6 +1118,8 @@ export function extractLairAction(
     saveDC,
     saveAbility,
     damage,
+    halfOnSave,
+    maxTargets,
     conditions,
     summons,
     rangeFt,
