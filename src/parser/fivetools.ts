@@ -924,6 +924,44 @@ export function extractLairAction(
     }
   }
 
+  // ── 5d. Phase 6 (Session 97): save_only bespoke-effect fields. ──
+  // These are ONLY meaningful for save_only actions (the only category where
+  // the bespoke effect isn't already handled by a dedicated category handler).
+  // Parse: pushFt / pushDirection / successPushFt, banished, applyConditions.
+  let pushFt: number | undefined;
+  let pushDirection: 'push' | 'pull' | undefined;
+  let successPushFt: number | undefined;
+  let banished: boolean | undefined;
+  let applyConditions: Condition[] | undefined;
+
+  // Push/pull: "pushed up to N feet" / "pulled up to N feet".
+  // Also captures "pushed N feet" (no "up to") for tighter phrasings.
+  const pushMatch = cleaned.match(/(pushed|pulled)\s+(?:up\s+to\s+)?(\d+)\s+feet/i);
+  if (pushMatch) {
+    pushFt = parseInt(pushMatch[2], 10);
+    pushDirection = /pulled/i.test(pushMatch[1]) ? 'pull' : 'push';
+  }
+  // Half-effect on success: two phrasings:
+  //   1. "N feet on a successful save" (general pattern)
+  //   2. "On a success, ... pushed N feet" (Kraken's phrasing)
+  const successPushMatch = cleaned.match(/(\d+)\s+feet\s+on\s+a\s+successful\s+save/i);
+  if (successPushMatch) {
+    successPushFt = parseInt(successPushMatch[1], 10);
+  } else {
+    const onSuccessMatch = cleaned.match(/on\s+a\s+success,?\s+(?:the\s+\w+\s+(?:is|are)\s+)?(?:pushed|pulled)\s+(\d+)\s+feet/i);
+    if (onSuccessMatch) {
+      successPushFt = parseInt(onSuccessMatch[1], 10);
+    }
+  }
+
+  // Banished: "is banished" / "be banished" / "banished to".
+  if (/\bbanish(?:ed|ment)?\b/i.test(cleaned)) {
+    banished = true;
+  }
+
+  // (applyConditions is parsed AFTER the @condition tag extraction below —
+  // it references `conditions` to avoid double-tagging.)
+
   // ── 6. conditions from {@condition X} (deduped, order of first appearance) ──
   let conditions: Condition[] | undefined;
   {
@@ -939,6 +977,27 @@ export function extractLairAction(
       }
     }
     if (list.length > 0) conditions = list;
+  }
+
+  // ── 6b. Phase 6 (Session 97): applyConditions for save_only actions. ──
+  // For save_only actions whose rawText mentions a condition in prose (not via
+  // @condition tag — those are save_condition). Patterns: "has the stunned
+  // condition" / "is restrained" / "becomes paralyzed". The handler applies
+  // each condition to failed-save targets via addCondition (with immunity
+  // cascade). Skip conditions already in `conditions` (avoid double-apply).
+  {
+    const condList: Condition[] = [];
+    if (/\bstunned\b/i.test(cleaned) && !conditions?.includes('stunned')) condList.push('stunned');
+    if (/\brestrained\b/i.test(cleaned) && !conditions?.includes('restrained')) condList.push('restrained');
+    if (/\bparalyzed\b/i.test(cleaned) && !conditions?.includes('paralyzed')) condList.push('paralyzed');
+    if (/\bpetrified\b/i.test(cleaned) && !conditions?.includes('petrified')) condList.push('petrified');
+    if (/\bblinded\b/i.test(cleaned) && !conditions?.includes('blinded')) condList.push('blinded');
+    if (/\bdeafened\b/i.test(cleaned) && !conditions?.includes('deafened')) condList.push('deafened');
+    if (/\bfrightened\b/i.test(cleaned) && !conditions?.includes('frightened')) condList.push('frightened');
+    if (/\bincapacitated\b/i.test(cleaned) && !conditions?.includes('incapacitated')) condList.push('incapacitated');
+    if (/\bpoisoned\b/i.test(cleaned) && !conditions?.includes('poisoned')) condList.push('poisoned');
+    if (/\bprone\b/i.test(cleaned) && !conditions?.includes('prone')) condList.push('prone');
+    if (condList.length > 0) applyConditions = condList;
   }
 
   // ── 7. summons from {@creature X} + "up to N" / "N <creatures> rise as" ──
@@ -1127,6 +1186,12 @@ export function extractLairAction(
     durationRounds,
     targetsEnemies,
     targetFilter,
+    // Phase 6 (Session 97): save_only bespoke-effect fields.
+    pushFt,
+    pushDirection,
+    successPushFt,
+    banished,
+    applyConditions,
     category,
   };
 }
@@ -1182,9 +1247,45 @@ function parseLairActions(
 
   // Build structured LairAction[] via the per-action extractor.
   const sourceCreature = raw.legendaryGroup.name;
-  const actions: LairAction[] = rawActions.map((text, idx) =>
+  let actions: LairAction[] = rawActions.map((text, idx) =>
     extractLairAction(text, sourceCreature, idx),
   );
+
+  // Phase 6 (Session 97) Phase 1 review: filter intro-text flattening artifacts.
+  // The "Additional Lair Actions" variant (At your discretion, a legendary
+  // (Adult Black Dragon...) black dragon can use one or more of the following
+  // additional lair actions...) is INTRO TEXT for a variant rule, not an
+  // action. The 5eTools JSON nests it in a `entries` list alongside the real
+  // actions, so `flat()` extracts it as an action string. The parser then
+  // mis-classifies it as a `summon` action (because of the `@creature` tags
+  // for Adult/Ancient variants) — the Phase 3b handler skips the spawn (the
+  // summons name matches the source creature name), and the Phase 4 scorer
+  // scores it -1000 (never picked). But it still consumes an action slot and
+  // an action ID, which:
+  //   1. Shifts the IDs of the real "additional" actions (e.g., Black Dragon::3
+  //      instead of Black Dragon::2).
+  //   2. Confuses the 2-entry history (the artifact is never picked, but it's
+  //      still a "candidate" that clogs the selection).
+  //
+  // Filter: drop any action whose rawText starts with "At your discretion" —
+  // this is the intro-text signature. The 48 artifacts all match this pattern.
+  // (Verified: no real lair action starts with "At your discretion" — they
+  // all start with the action's subject, e.g., "Magma erupts...", "A cloud...")
+  //
+  // Re-index the remaining actions so IDs are contiguous (Black Dragon::0,
+  // ::1, ::2 instead of ::0, ::1, ::2, ::3-with-::3-being-the-artifact).
+  // This changes the IDs of some "additional" actions — the session92/93/94/95/96
+  // tests that assert on exact IDs for the Adult Red Dragon's 4 actions are
+  // unaffected (the Red Dragon has no "additional" variant → no artifact).
+  // The Black Dragon, Blue Dragon, Brass Dragon, Bronze Dragon, Copper Dragon,
+  // Green Dragon, Silver Dragon, White Dragon each lose their ::3 (or ::2)
+  // artifact action and their real "additional" actions shift down by 1.
+  // This is the intended behavior — the artifact was never a real action.
+  const INTRO_TEXT_RE = /^(at your discretion|on initiative count|the following|when\s+\w+\s+is\s+in\s+its\s+lair)/i;
+  actions = actions.filter(a => !INTRO_TEXT_RE.test(a.rawText.trim()));
+
+  // Re-index IDs to be contiguous after filtering.
+  actions = actions.map((a, idx) => ({ ...a, id: `${sourceCreature}::${idx}` }));
 
   return { actions, initiativeCount };
 }

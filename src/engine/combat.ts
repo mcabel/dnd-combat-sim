@@ -32,7 +32,7 @@ import {
 import {
   chebyshev3D, distanceFt, euclideanDistFt, canReach, estimateMoveCostFt,
   opportunityAttackTriggered, selectOAAction,
-  livingEnemiesOf, livingAlliesOf, posKey, pushAway
+  livingEnemiesOf, livingAlliesOf, posKey, pushAway, pullToward
 } from './movement';
 import { planTurn, planLegendaryAction, shouldTakeOpportunityAttack } from '../ai/planner';
 import { shouldSmite, applyDivineSmite, tickRage, consumeSpellSlot, hasSpellSlot, hasInnateSpellUse } from '../ai/resources';
@@ -6744,14 +6744,36 @@ function scoreLairAction(
     }
 
     case 'save_only': {
-      // v1: no bespoke effect applied (handler logs "not yet implemented").
-      // Score conservatively as a small control value: P(fail) × controlPush
-      // per target. This lets save_only actions still be picked over no-op
-      // bespoke actions when they'd at least force a save roll.
+      // Phase 6 (Session 97): score based on the bespoke effect's real value.
+      //   - Push/pull: controlPush per target (repositioning control).
+      //   - Banished: buffVulnerability per target (removes target from combat —
+      //     very high value, similar to a vulnerability debuff).
+      //   - Apply-conditions: Σ conditionWeight per target (stunned=40, etc.).
+      //   - No recognized effect (the ~23 unmatched): low controlPush value
+      //     (forces a save roll but has no mechanical outcome).
       if (action.saveDC === undefined || action.saveAbility === undefined) return 0;
+      const hasPush = action.pushFt !== undefined && action.pushFt > 0;
+      const hasBanish = action.banished === true;
+      const hasConds = action.applyConditions !== undefined && action.applyConditions.length > 0;
+      let perTargetValue: number = W.controlPush;  // default: low control value
+      if (hasBanish) {
+        perTargetValue = W.buffVulnerability;  // banish ≈ removing target from combat
+      } else if (hasConds) {
+        // Sum the condition weights (stunned=40, restrained=25, etc.).
+        perTargetValue = 0;
+        for (const cond of action.applyConditions!) {
+          perTargetValue += conditionWeight(cond);
+        }
+      } else if (hasPush) {
+        perTargetValue = W.controlPush;  // push/pull repositioning
+      }
       for (const t of targets) {
         const pFail = estimateSaveFailProb(t, action.saveAbility, action.saveDC);
-        score += pFail * W.controlPush;
+        score += pFail * perTargetValue;
+        // Half-effect on success (push successPushFt): add the partial value.
+        if (hasPush && action.successPushFt !== undefined && action.successPushFt > 0) {
+          score += (1 - pFail) * W.controlPush * 0.5;
+        }
       }
       break;
     }
@@ -7927,9 +7949,11 @@ function handleLairDebuffEnemy(
  *     each side + center = 5 squares wide; we use 2*radiusFt/5 + 1).
  *   - `blocksVision: true`, `blocksMovement: false`, `isMagicalDarkness: false`
  *     (normal obscurement, not magical darkness).
- *   - The obstacle persists for `durationRounds` rounds. v1 doesn't auto-remove
- *     on expiry (no per-source obstacle tracking) — the obstacle remains for
- *     the rest of combat. Phase 5 will add expiry tracking.
+ *   - Phase 6 (Session 97): the obstacle auto-expires after `durationRounds`
+ *     rounds via `sourceTurnExpires` on the ActiveEffect. The effect_pipeline's
+ *     `reevaluateEffects` runs at the start of each combatant's turn and calls
+ *     `removeBattlefieldObstacle` for expired `battlefield_obstacle` effects.
+ *     Default durationRounds = 1 ("until initiative count 20 on the next round").
  *
  * Examples:
  *   - Bronze Dragon::0 → "fog cloud" (already a cast_spell action — this
@@ -7967,6 +7991,11 @@ function handleLairVisibility(
   // Apply an ActiveEffect on the lair creature so the obstacle can be
   // cleaned up if the lair creature dies (via removeEffectsFromCaster).
   // v1: sourceIsConcentration = false (lair actions don't require conc).
+  // Phase 6 (Session 97): set sourceTurnExpires so the obstacle auto-expires
+  // after durationRounds. The effect_pipeline's reevaluateEffects (called at
+  // the start of each combatant's turn) removes expired effects and calls
+  // removeBattlefieldObstacle for battlefield_obstacle effects.
+  const durationRounds = action.durationRounds ?? 1;
   const effect: Omit<ActiveEffect, 'id'> = {
     casterId: creature.id,
     spellName: `Lair:${action.id}`,
@@ -7980,12 +8009,16 @@ function handleLairVisibility(
     },
     sourceIsConcentration: false,
     appliedTurn: bf.round,
+    // Expire at the END of the durationRounds-th round after application.
+    // (appliedTurn = round N → sourceTurnExpires = N + durationRounds - 1
+    //  so a 1-round obstacle expires at the start of round N+1.)
+    sourceTurnExpires: bf.round + durationRounds - 1,
   };
   applySpellEffect(creature, effect);
 
   log(state, 'action', creature.id,
     `  → visibility: ${radiusFt}-ft-radius obscurement centered on ${creature.name} ` +
-    `(blocks vision, ${action.durationRounds ?? 1}-round duration)`,
+    `(blocks vision, ${durationRounds}-round duration, auto-expires at round ${bf.round + durationRounds})`,
     undefined);
 }
 
@@ -8151,6 +8184,13 @@ function handleLairSaveOnly(
     return;
   }
 
+  // Phase 6 (Session 97): determine which bespoke effect(s) to apply.
+  // The handler checks each field; if none are set, falls back to the
+  // "not yet implemented" log (the remaining ~23 unmatched save_only actions).
+  const hasPush = action.pushFt !== undefined && action.pushFt > 0;
+  const hasBanish = action.banished === true;
+  const hasConds = action.applyConditions !== undefined && action.applyConditions.length > 0;
+
   for (const target of targets) {
     const save = rollSave(target, action.saveAbility, action.saveDC);
     log(state, save.success ? 'save_success' : 'save_fail', creature.id,
@@ -8159,15 +8199,84 @@ function handleLairSaveOnly(
       target.id);
 
     if (save.success) {
-      // On success: no effect (most save_only actions). Some actions have a
-      // "half-effect on success" (Kraken push 10 ft on success) — Phase 5.
+      // Half-effect on success: push (Kraken "10 feet on a successful save").
+      if (hasPush && action.successPushFt !== undefined && action.successPushFt > 0) {
+        const origPos = { ...target.pos };
+        const newPos = action.pushDirection === 'pull'
+          ? pullToward(target, creature.pos, action.successPushFt)
+          : pushAway(target, creature.pos, action.successPushFt);
+        if (newPos.x !== origPos.x || newPos.y !== origPos.y) {
+          log(state, 'move', creature.id,
+            `  → ${target.name} ${action.pushDirection === 'pull' ? 'pulled' : 'pushed'} ${action.successPushFt} ft ` +
+            `(success half-effect) → (${newPos.x},${newPos.y})`,
+            target.id);
+          target.pos = newPos;
+        }
+      }
       continue;
     }
 
-    // On failure: log the bespoke effect as "not yet implemented".
-    log(state, 'action', creature.id,
-      `  → save_only: ${target.name} failed — bespoke effect for ${action.id} not yet implemented (Phase 5: per-action.id handler)`,
-      target.id);
+    // On failure: apply the bespoke effect(s).
+    let applied = false;
+
+    // 1. Push/pull.
+    if (hasPush) {
+      const pushDist = action.pushFt!;
+      const origPos = { ...target.pos };
+      const newPos = action.pushDirection === 'pull'
+        ? pullToward(target, creature.pos, pushDist)
+        : pushAway(target, creature.pos, pushDist);
+      if (newPos.x !== origPos.x || newPos.y !== origPos.y) {
+        log(state, 'move', creature.id,
+          `  → ${target.name} ${action.pushDirection === 'pull' ? 'pulled' : 'pushed'} ${pushDist} ft ` +
+          `→ (${newPos.x},${newPos.y})`,
+          target.id);
+        target.pos = newPos;
+      }
+      applied = true;  // push was applied (even if position unchanged at map edge)
+    }
+
+    // 2. Banished (incapacitated for durationRounds; non-native permanently removed).
+    if (hasBanish) {
+      const creatureType = (target.creatureType ?? '').toLowerCase();
+      const NON_NATIVE = new Set(['fey', 'elemental', 'celestial', 'fiend', 'undead']);
+      if (NON_NATIVE.has(creatureType)) {
+        // Permanently removed (mirrors the Banishment spell module).
+        target.isDead = true;
+        target.currentHP = 0;
+        log(state, 'death', creature.id,
+          `  → ${target.name} BANISHED to its home plane (${creatureType}) — permanently removed!`,
+          target.id, 0);
+      } else {
+        // Demiplane: incapacitated for durationRounds.
+        addCondition(target, 'incapacitated');
+        log(state, 'condition_add', creature.id,
+          `  → ${target.name} BANISHED to a demiplane (incapacitated) from ${action.id}`,
+          target.id);
+      }
+      applied = true;
+    }
+
+    // 3. Apply-conditions (stunned, restrained, etc.).
+    if (hasConds) {
+      for (const cond of action.applyConditions!) {
+        const wasPresent = target.conditions.has(cond);
+        addCondition(target, cond);
+        log(state, 'condition_add', creature.id,
+          `  → ${target.name} gains ${cond} condition${wasPresent ? ' (already present)' : ''} from ${action.id}`,
+          target.id);
+      }
+      applied = true;
+    }
+
+    if (!applied) {
+      // No recognized bespoke effect — log as "not yet implemented" (the
+      // remaining ~23 unmatched save_only actions: time-alteration, perception-
+      // alteration, teleport, drowning, etc. — Phase 7+ per-action.id handlers).
+      log(state, 'action', creature.id,
+        `  → save_only: ${target.name} failed — bespoke effect for ${action.id} not yet implemented (Phase 7: per-action.id handler)`,
+        target.id);
+    }
   }
 }
 

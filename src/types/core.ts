@@ -804,6 +804,38 @@ export interface LairAction {
   /** Creature-type filter (pipe-separated) from "each gnoll or hyena" → 'gnoll|hyena'. */
   targetFilter?: string;
 
+  // ── Phase 6 (Session 97): save_only bespoke-effect fields ──
+  // Parsed from rawText for save_only actions whose bespoke effect is one of
+  // the common mechanical patterns. When set, the handler applies the real
+  // effect instead of logging "not yet implemented".
+  /**
+   * Push/pull distance in feet, parsed from "pushed up to N feet" /
+   * "pulled up to N feet". When set, the handler calls pushAway (or
+   * pullToward when `pulls: true`) on failed-save targets. Direction:
+   * 'push' (away from lair creature) or 'pull' (toward lair creature).
+   * Half-effect on success: `successPushFt` (Kraken pushes 10 ft on success).
+   */
+  pushFt?: number;
+  /** Direction for pushFt: 'push' (default, away from lair creature) or 'pull' (toward). */
+  pushDirection?: 'push' | 'pull';
+  /** Push/pull distance on SUCCESSFUL save (half-effect). Kraken: "10 feet on a successful save". */
+  successPushFt?: number;
+  /**
+   * Banishment flag. When true, the handler applies `incapacitated` to
+   * failed-save targets for `durationRounds` (default 10 = 1 minute).
+   * Non-native creature types (fey/elemental/celestial/fiend/undead) are
+   * permanently removed (mirrors the Banishment spell module). Set when
+   * rawText contains "banished".
+   */
+  banished?: boolean;
+  /**
+   * Apply-this-condition flag. When set (to a non-empty array), the handler
+   * applies each condition to failed-save targets via addCondition (with
+   * immunity cascade). Parsed from "has the stunned condition" /
+   * "is restrained" etc. in save_only rawText.
+   */
+  applyConditions?: Condition[];
+
   /** Dispatcher routing tag (Phase 2+). `cast_spell` when isSpell; else by tag presence. */
   category: LairActionCategory;
 }

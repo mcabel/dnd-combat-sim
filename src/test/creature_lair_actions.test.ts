@@ -11,7 +11,7 @@
 // Coverage (12 assertions):
 //   1. Adult Red Dragon has lairActions
 //   2. Adult Red Dragon initiativeCount = 20
-//   3. Adult Red Dragon has 4 action options
+//   3. Adult Red Dragon has 3 action options (Phase 6 S97: intro-text artifact filtered)
 //   4. Aboleth has lairActions
 //   5. Aboleth has 3 action options
 //   6. Goblin has NO lairActions (no legendaryGroup)
@@ -94,7 +94,7 @@ console.log('\n--- 1-3. Adult Red Dragon lair actions ---');
   assert('1. Adult Red Dragon has lairActions', c.lairActions !== undefined);
   if (c.lairActions) {
     eq('2. initiativeCount = 20', c.lairActions.initiativeCount, 20);
-    assert('3. has 4 action options', c.lairActions.actions.length === 4);
+    assert('3. has 3 action options', c.lairActions.actions.length === 3);
     console.log(`    First action: ${c.lairActions.actions[0].rawText.substring(0, 80)}...`);
   }
 }

@@ -80,7 +80,7 @@ function lair(name: string): LairAction[] {
 console.log('\n--- 1. Adult Red Dragon (save_damage + save_condition) ---');
 {
   const actions = lair('Adult Red Dragon');
-  eq('1a. Red Dragon has 4 actions', actions.length, 4);
+  eq('1a. Red Dragon has 3 actions', actions.length, 3);
   eq('1b. id format', actions[0].id, 'Red Dragon::0');
   eq('1c. sourceCreature', actions[0].sourceCreature, 'Red Dragon');
 
@@ -117,12 +117,13 @@ console.log('\n--- 1. Adult Red Dragon (save_damage + save_condition) ---');
   eq('1v. gas radiusFt', gas.radiusFt, 20);
   eq('1w. gas durationRounds', gas.durationRounds, 1);
 
-  // [3] is the "Additional Lair Actions" intro-text artifact (pre-existing
-  // parser behavior preserved for backward compat). It carries an @creature
-  // self-reference → category 'summon'. Not a real summon; documented as a
-  // known data artifact (RFC Phase 2 may refine the flattening).
-  eq('1x. [3] not out-of-scope/deferred', actions[3].outOfScope, false);
-  eq('1y. [3] not deferred', actions[3].deferred, undefined);
+  // Phase 6 (Session 97): the [3] "Additional Lair Actions" intro-text
+  // artifact is now FILTERED by parseLairActions (the regex /^(at your
+  // discretion|on initiative count|the following|when\s+\w+\s+is\s+in\s+its\s+lair)/i
+  // drops it before ID assignment). The Adult Red Dragon now has exactly 3
+  // real actions (::0 magma, ::1 tremor, ::2 volcanic gases). The artifact
+  // previously consumed the ::3 slot and was never picked (scorer -1000).
+  // This is the intended Phase 1 review cleanup.
 }
 
 // ============================================================
@@ -218,7 +219,7 @@ console.log('\n--- 4. Kraken (save_only + debuff + save_damage) ---');
 console.log('\n--- 5. Adult Black Dragon (deferred: magical-darkness) ---');
 {
   const actions = lair('Adult Black Dragon');
-  eq('5a. Black Dragon has 4 actions', actions.length, 4);
+  eq('5a. Black Dragon has 3 actions', actions.length, 3);
 
   // [0] pools: DC 15 STR, prone
   eq('5b. [0] category save_condition', actions[0].category, 'save_condition');

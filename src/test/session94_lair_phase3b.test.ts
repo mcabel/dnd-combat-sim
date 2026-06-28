@@ -847,11 +847,17 @@ console.log('\n--- 15. save_only: Kraken DC 23 STR ---');
       assert('15d. save event mentions DC 23', saveEvt.description.includes('DC 23'));
     }
 
-    // "not yet implemented" log fires (bespoke effect pending).
-    const notImplLog = rlog.events.find((e: any) =>
-      e.type === 'action' && e.actorId === kraken.id &&
-      e.description.includes('not yet implemented'));
-    assert('15e. "not yet implemented" log fires', notImplLog !== undefined);
+    // Phase 6 (Session 97): the Kraken's push save_only action is now
+    // IMPLEMENTED (pushFt=60, successPushFt=10). The "not yet implemented"
+    // log no longer fires — instead, a "pushed" move log fires on fail.
+    // (Previously §15e asserted the "not yet implemented" log; now we assert
+    // the push move log fires, confirming the Phase 6 handler is wired.)
+    const pushLog = rlog.events.find((e: any) =>
+      (e.type === 'move' || e.type === 'action') && e.actorId === kraken.id &&
+      e.description.includes('pushed'));
+    assert('15e. push move log fires (Phase 6: Kraken push now implemented)',
+      pushLog !== undefined,
+      `no push log; events: ${rlog.events.filter((e:any)=>e.actorId===kraken.id).map((e:any)=>e.description.substring(0,80)).join(' | ')}`);
   }
 }
 
