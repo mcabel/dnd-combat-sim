@@ -2524,6 +2524,15 @@ export interface Battlefield {
   // applied/removed. Checked by the terrainFn passed to estimateMoveCostFt
   // in executeMove().
   difficultTerrainCells?: Set<string>;
+  // ── Session 94 RFC-LAIRACTIONS Phase 3b: bestiary reference for the
+  // lair-action `summon` handler. Optional — when populated (e.g., by the
+  // scenario loader or test harness), the summon handler can spawn the named
+  // creature via monsterToCombatant. When absent, the handler logs "bestiary
+  // not available — cannot spawn" and skips the spawn (no mechanical effect).
+  // Typed as `Map<string, unknown>` (not `Map<string, Raw5etoolsMonster>`) to
+  // avoid a circular import between types/core.ts and parser/fivetools.ts.
+  // The summon handler casts entries to the proper type at use-site.
+  bestiaryMap?: Map<string, unknown>;
 }
 
 // ---- TurnPlan (output of AI) --------------------------------

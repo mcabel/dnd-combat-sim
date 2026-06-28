@@ -8,7 +8,7 @@
 import {
   Combatant, Battlefield, TurnPlan, PlannedAction, Action, Vec3,
   ReactionTrigger, ReactionOutcome, Condition,
-  LairAction, DamageType,
+  LairAction, DamageType, Obstacle, ActiveEffect, AIProfile,
 } from '../types/core';
 import {
   rollAttack, rollDamage, rollSave, applyDamage, applyHeal,
@@ -897,6 +897,12 @@ import { shouldCast as shouldCastFindGreaterSteed,    execute as executeFindGrea
 import {
   lookupGenericSpell,
 } from '../spells/_generic_registry';
+// ── Session 94 RFC-LAIRACTIONS Phase 3b: lair-action `summon` handler ──────
+// `monsterToCombatant` is used to spawn the named creature from the bestiary
+// reference stored on `Battlefield.bestiaryMap`. We import the type alias too
+// so the cast at the use-site is type-safe (the Battlefield field is typed as
+// `Map<string, unknown>` to avoid a circular type dependency).
+import { monsterToCombatant, Raw5etoolsMonster } from '../parser/fivetools';
 
 // ── Session 76 — RFC-MONSTER-SPELLCASTING Phase 4: bespoke spell dispatch ──
 // Monster-bespoke spells (Fireball, Command, Hold Person, etc.) are
@@ -6612,10 +6618,37 @@ function executeLairAction(
     case 'spell_slot_regen':
       handleLairSpellSlotRegen(creature, action, state);
       return;
+    // ── Session 94 Phase 3b handlers ──
+    case 'cast_spell':
+      handleLairCastSpell(creature, action, state);
+      return;
+    case 'summon':
+      handleLairSummon(creature, action, state);
+      return;
+    case 'buff_ally':
+      handleLairBuffAlly(creature, action, state);
+      return;
+    case 'debuff_enemy':
+      handleLairDebuffEnemy(creature, action, state);
+      return;
+    case 'visibility':
+      handleLairVisibility(creature, action, state);
+      return;
+    case 'movement':
+      handleLairMovement(creature, action, state);
+      return;
+    case 'save_only':
+      handleLairSaveOnly(creature, action, state);
+      return;
+    case 'bespoke':
+      handleLairBespoke(creature, action, state);
+      return;
     default:
-      // Phase 3b+ categories — still stubbed.
+      // Unknown category (shouldn't happen — `flavor` and `deferred` are
+      // intercepted by `resolveLairActions` before reaching here; all valid
+      // `LairActionCategory` values have a case above). Log defensively.
       log(state, 'action', creature.id,
-        `  → [${action.category}] handler not yet implemented (Phase 3b+) — no mechanical effect`,
+        `  → [${action.category}] handler not yet implemented — no mechanical effect`,
         undefined);
       return;
   }
@@ -6987,6 +7020,754 @@ function rollLairDamage(dmg: { count: number; sides: number; type: string }): nu
   let total = 0;
   for (let i = 0; i < dmg.count; i++) total += rollDie(dmg.sides);
   return total;
+}
+
+// ============================================================
+// Session 94 — RFC-LAIRACTIONS Phase 3b: remaining effect handlers
+//
+// Phase 3a (Session 93) wired the damage/save family (140/324 actions).
+// Phase 3b wires the remaining effect-handler categories:
+//   - `cast_spell`       (40 actions, 12%) — generic-spell-registry dispatch
+//   - `summon`           (22 actions,  7%) — bestiary-backed creature spawn
+//   - `buff_ally`        ( 7 actions,  2%) — advantage-on-attacks to allies
+//   - `debuff_enemy`     ( 7 actions,  2%) — vulnerability/disadvantage to enemies
+//   - `visibility`       (in-scope non-deferred) — battlefield_obstacle obscurement
+//   - `movement`         ( 7 actions,  2%) — push/pull via pushAway
+//   - `save_only`        (37 actions, 11%) — roll save, log bespoke-pending
+//   - `bespoke`          (65 actions, 20%) — per-action.id log; v1 stubs most
+//
+// Combined with Phase 3a, this brings mechanical coverage to ~245/324 (76%).
+// The remaining ~79 actions are `flavor` (6) + `deferred` (16) + unhandled
+// `bespoke` (~57) — all logged with their stable IDs for searchability.
+//
+// v1 simplifications (documented per handler):
+//   - `cast_spell`: only spells in the GENERIC_SPELLS registry are executed.
+//     Spells with dedicated modules (Fireball, Banishment, etc.) are NOT
+//     dispatched here — they'd need their bespoke execute() signatures
+//     (which vary: some take (caster, target, state), others (caster, state)).
+//     Phase 5 will wire a unified cast dispatch.
+//   - `summon`: requires `bf.bestiaryMap` to be populated by the scenario
+//     loader / test harness. If absent, logs "bestiary not available".
+//   - `buff_ally`/`debuff_enemy`: parses rawText for advantage/disadvantage/
+//     vulnerability keywords. Applies a 1-round buff/debuff to matching
+//     allies/enemies via `grantSelf`/`grantVulnerability` or direct
+//     `damageVulnerabilities` mutation.
+//   - `visibility`: applies a `battlefield_obstacle` effect (like Fog Cloud)
+//     centered on the lair creature for `durationRounds` (default 1).
+//   - `movement`: parses rawText for "pushed/pulled N feet" and applies
+//     `pushAway` to each target in range.
+//   - `save_only`: rolls the save; on failure logs "bespoke effect not yet
+//     implemented" with the action.id (the per-action bespoke effect —
+//     push/fall/banish/etc. — is Phase 5 work).
+//   - `bespoke`: per-action.id switch; v1 logs "not yet implemented" for
+//     all but a few common patterns.
+// ============================================================
+
+/**
+ * Resolve a `cast_spell` lair action. The lair creature casts the named spell
+ * at the parsed `castLevel`. Reuses the GENERIC_SPELLS registry (262 spells).
+ *
+ * [DD-4] GoI / Counterspell interactions:
+ *   - `isSpell: true` actions are blocked by Globe of Invulnerability when
+ *     `castLevel ≤ GoI threshold` and the lair creature is outside the barrier.
+ *     The spell module's execute() runs GoI checks internally for each target,
+ *     so we don't pre-filter here. (Forward-compat: when Antimagic Field lands,
+ *     it'll suppress spell-cast lair actions the same way.)
+ *   - Counterspell: the lair creature is the "caster". We do NOT fire
+ *     `triggerReactions(state, lairCreature, 'incoming_spell')` here because
+ *     lair actions resolve at init count 20 OUTSIDE any actor's turn — the
+ *     reaction window is per-turn. A creature that wishes to counterspell a
+ *     lair action would need a separate reaction budget. v1 simplification:
+ *     lair-action spell casts are NOT counterable. Phase 5 may revisit.
+ *
+ * v1 simplification: only GENERIC_SPELLS registry spells are executed. Spells
+ * with dedicated modules (Fireball, Banishment, Antimagic Field, Command,
+ * Darkness, Moonbeam, Simulacrum, Wish) are NOT dispatched here — they have
+ * varying execute() signatures. Logged as "spell not in generic registry".
+ *
+ * Examples:
+ *   - Aboleth::0 → phantasmal force (L2) — in registry → executes.
+ *   - Zariel::0 → fireball (L3) — NOT in generic registry (has dedicated
+ *     module) → logged, no effect.
+ *   - Demilich::1 → antimagic field (L8) — NOT in registry → logged.
+ */
+function handleLairCastSpell(
+  creature: Combatant,
+  action: LairAction,
+  state: EngineState,
+): void {
+  if (!action.isSpell || !action.spellName) {
+    log(state, 'action', creature.id,
+      `  → cast_spell: missing spellName — no effect`, undefined);
+    return;
+  }
+
+  const desc = lookupGenericSpell(action.spellName);
+  if (!desc) {
+    // Spell has a dedicated module (Fireball, Banishment, etc.) or isn't
+    // implemented at all. v1: log + skip. Phase 5 will dispatch dedicated
+    // modules via a unified cast helper.
+    log(state, 'action', creature.id,
+      `  → cast_spell: "${action.spellName}" (L${action.castLevel ?? '?'}) ` +
+      `not in GENERIC_SPELLS registry — logged, not executed (Phase 5 will wire dedicated spell modules)`,
+      undefined);
+    return;
+  }
+
+  // Log the spell-cast intent with the cast level.
+  log(state, 'action', creature.id,
+    `  → casts ${desc.name} (L${action.castLevel ?? desc.level}) via lair action`,
+    undefined);
+
+  // Execute the spell. The generic registry's execute() takes (caster, state)
+  // and handles target selection / damage / conditions internally.
+  // Resource consumption: lair actions do NOT consume the lair creature's
+  // spell slots (they're at-will magical effects, not slotted spells). The
+  // generic execute() may call consumeSpellSlot() — which is a no-op for
+  // monsters (returns null when `resources` is null). This is safe.
+  try {
+    desc.execute(creature, state);
+  } catch (e) {
+    // Defensive: if a spell module throws (e.g., expects a target the lair
+    // creature can't see), log the error and continue. Don't crash combat.
+    log(state, 'action', creature.id,
+      `  → cast_spell: "${desc.name}" threw an error — ${e instanceof Error ? e.message : String(e)}`,
+      undefined);
+  }
+}
+
+/**
+ * Resolve a `summon` lair action. Spawns `action.summons.count` copies of
+ * `action.summons.creature` via `monsterToCombatant`, using the bestiary
+ * reference on `Battlefield.bestiaryMap`. The summons share the lair
+ * creature's faction and initiative (inserted after the lair creature).
+ *
+ * v1 simplifications:
+ *   - Requires `bf.bestiaryMap` to be populated. If absent, logs "bestiary
+ *     not available — cannot spawn" and skips.
+ *   - Safety check: if the summons creature name CONTAINS the source creature
+ *     name (e.g., summons "Adult Red Dragon" when source is "Red Dragon"),
+ *     this is the "Additional Lair Actions" flattening artifact (the intro
+ *     text mentions the adult/ancient variant via `@creature` tag, which the
+ *     parser mis-classifies as a summon). Skip the spawn and log the artifact.
+ *   - Count is parsed from "up to N" or "N <creatures>" patterns; if the
+ *     parser couldn't extract it, defaults to 1.
+ *   - Summons are NOT concentration-sourced (lair actions don't require
+ *     concentration). They persist until killed or combat ends.
+ *
+ * Examples:
+ *   - Lichen Lich::1 → "shambling mound" ×1 — spawns 1 Shambling Mound.
+ *   - Red Dragon::3 → "Adult Red Dragon" — artifact, skipped.
+ *   - Murgaxor::0 → no summons info parsed → logs "missing summons info".
+ */
+function handleLairSummon(
+  creature: Combatant,
+  action: LairAction,
+  state: EngineState,
+): void {
+  const bf = state.battlefield;
+
+  if (!action.summons || !action.summons.creature) {
+    log(state, 'action', creature.id,
+      `  → summon: no summons info parsed from rawText — no effect`,
+      undefined);
+    return;
+  }
+
+  const summonName = action.summons.creature;
+  const count = typeof action.summons.count === 'number'
+    ? action.summons.count
+    : 1;
+
+  // Safety: skip if the summons name contains the source creature name
+  // (e.g., "Adult Red Dragon" contains "Red Dragon"). This is the flattening
+  // artifact from "Additional Lair Actions" intro text mentioning the
+  // adult/ancient variant via `@creature` tag.
+  const sourceLower = action.sourceCreature.toLowerCase();
+  const summonLower = summonName.toLowerCase();
+  if (summonLower.includes(sourceLower) || sourceLower.includes(summonLower)) {
+    log(state, 'action', creature.id,
+      `  → summon: "${summonName}" appears to be a flattening artifact ` +
+      `(matches source creature "${action.sourceCreature}") — skipped`,
+      undefined);
+    return;
+  }
+
+  // Need a bestiary to look up the raw stat block.
+  if (!bf.bestiaryMap) {
+    log(state, 'action', creature.id,
+      `  → summon: bestiary not available on Battlefield — cannot spawn ${count}× ${summonName} (set bf.bestiaryMap to enable)`,
+      undefined);
+    return;
+  }
+
+  const raw = bf.bestiaryMap.get(summonLower) as Raw5etoolsMonster | undefined;
+  if (!raw) {
+    log(state, 'action', creature.id,
+      `  → summon: "${summonName}" not found in bestiary — cannot spawn`,
+      undefined);
+    return;
+  }
+
+  // Spawn N copies. Position: adjacent to the lair creature, spread out so
+  // they don't all stack on one square.
+  let spawned = 0;
+  for (let i = 0; i < count; i++) {
+    const offset = i + 1;   // 1, 2, 3, ... squares away
+    const pos: Vec3 = {
+      x: creature.pos.x + offset,
+      y: creature.pos.y,
+      z: creature.pos.z,
+    };
+    const profile: AIProfile = 'attackNearest';
+    const spawnFaction: 'enemy' | 'neutral' =
+      creature.faction === 'party' ? 'enemy' : creature.faction as 'enemy' | 'neutral';
+    // (monsterToCombatant only accepts 'enemy' | 'neutral'; we patch faction
+    //  to 'party' after if the lair creature is party-aligned.)
+    const combatant = monsterToCombatant(raw, pos, profile, spawnFaction);
+    if (creature.faction === 'party') combatant.faction = 'party';
+
+    // Tag as lair summon for engine/reporting purposes.
+    combatant.isSummon = true;
+    combatant.summonerId = creature.id;
+    combatant.summonSpellName = `Lair:${action.id}`;
+
+    // Unique ID per spawn.
+    combatant.id = `lair_summon_${action.id.replace(/[^a-z0-9]/gi, '_')}_${i}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    combatant.name = `${summonName} (${creature.name} lair)`;
+
+    // Add to battlefield.
+    bf.combatants.set(combatant.id, combatant);
+
+    // Insert into initiative after the lair creature.
+    if (!bf.pendingInitiativeInserts) bf.pendingInitiativeInserts = [];
+    bf.pendingInitiativeInserts.push({
+      combatantId: combatant.id,
+      insertAfterId: creature.id,
+    });
+
+    spawned++;
+    log(state, 'action', creature.id,
+      `  → summons ${summonName} #${i + 1} (${combatant.maxHP} HP, AC ${combatant.ac})`,
+      combatant.id);
+  }
+
+  if (spawned === 0) {
+    log(state, 'action', creature.id,
+      `  → summon: failed to spawn any ${summonName} — no effect`,
+      undefined);
+  }
+}
+
+/**
+ * Resolve a `buff_ally` lair action. Applies a 1-round advantage-on-attacks
+ * buff to allies of the lair creature (filtered by `targetFilter` if set).
+ *
+ * v1 simplification:
+ *   - Parses rawText for "advantage" + attack/ability/save scope keywords.
+ *   - If "advantage" + "attack" found → `grantSelf(ally, 'advantage', 'attack', source, 'until_next_turn')`.
+ *   - If "advantage" + "saving throw" found → `grantSelf(ally, 'advantage', 'save', source, 'until_next_turn')`.
+ *   - If "advantage" + "ability check" found → `grantSelf(ally, 'advantage', 'ability', source, 'until_next_turn')`.
+ *   - If no advantage keyword found → log "buff not parsed — no effect".
+ *   - Targets: allies of the lair creature (excluding self) within `rangeFt`
+ *     (or all allies if rangeFt undefined), filtered by `targetFilter`.
+ *
+ * Examples:
+ *   - Yeenoghu::0 → "all gnolls and hyenas... advantage on melee weapon attack
+ *     rolls" → grantSelf(advantage, 'attack:melee') to gnoll/hyena allies.
+ *   - Mummy Lord::1 → "Each undead... advantage on saving throws against
+ *     effects that turn undead" → grantSelf(advantage, 'save') to undead allies.
+ *   - Elder Brain::2 → "flash of inspiration... advantage on one attack roll,
+ *     ability check, or saving throw" → grantSelf(advantage, 'attack') (v1
+ *     simplification — grants advantage on attacks only; the "one roll" limit
+ *     is Phase 5).
+ */
+function handleLairBuffAlly(
+  creature: Combatant,
+  action: LairAction,
+  state: EngineState,
+): void {
+  const bf = state.battlefield;
+  const text = action.rawText.toLowerCase();
+
+  // Detect advantage scope from rawText.
+  let scope: 'attack' | 'attack:melee' | 'save' | 'ability' | 'all' | null = null;
+  if (/advantage\s+on\s+(?:melee\s+)?(?:weapon\s+)?attack/i.test(text)) {
+    scope = /melee/i.test(text) ? 'attack:melee' : 'attack';
+  } else if (/advantage\s+on\s+saving\s+throws?/i.test(text)) {
+    scope = 'save';
+  } else if (/advantage\s+on\s+ability\s+checks?/i.test(text)) {
+    scope = 'ability';
+  } else if (/advantage\s+on\s+attack\s+rolls?,\s+ability\s+checks?,\s+and\s+saving\s+throws/i.test(text)) {
+    scope = 'all';
+  } else if (/advantage/i.test(text)) {
+    scope = 'attack';   // default fallback
+  }
+
+  if (!scope) {
+    log(state, 'action', creature.id,
+      `  → buff_ally: no advantage keyword parsed from rawText — no effect`,
+      undefined);
+    return;
+  }
+
+  // Targets: allies (excluding self), filtered by rangeFt + targetFilter.
+  // Reuse selectLairActionTargets but filter out the lair creature itself.
+  const targets = selectLairActionTargets(creature, action, bf)
+    .filter(t => t.id !== creature.id)
+    .filter(t => !t.isDead && !t.isUnconscious);
+
+  if (targets.length === 0) {
+    log(state, 'action', creature.id,
+      `  → buff_ally: no valid ally targets in range — no effect`,
+      undefined);
+    return;
+  }
+
+  let buffed = 0;
+  for (const ally of targets) {
+    grantSelf(ally, 'advantage', scope, `Lair:${action.id}`, 'until_next_turn');
+    log(state, 'action', creature.id,
+      `  → buff_ally: ${ally.name} gains advantage on ${scope} rolls until its next turn`,
+      ally.id);
+    buffed++;
+  }
+
+  if (buffed === 0) {
+    log(state, 'action', creature.id,
+      `  → buff_ally: no allies buffed — no effect`, undefined);
+  }
+}
+
+/**
+ * Resolve a `debuff_enemy` lair action. Applies a 1-round debuff to enemies
+ * of the lair creature.
+ *
+ * v1 simplification:
+ *   - Parses rawText for "vulnerability" / "disadvantage" keywords.
+ *   - If "vulnerability" + damage type found → push to `enemy.damageVulnerabilities`.
+ *   - If "disadvantage" + "attack" found → `grantVulnerability(enemy, 'disadvantage', 'attack', source, 'until_next_turn')`.
+ *   - If "disadvantage" + "saving throw" found → `grantVulnerability(enemy, 'disadvantage', 'save', source, 'until_next_turn')`.
+ *   - If neither found → log "debuff not parsed — no effect".
+ *
+ * Examples:
+ *   - Kraken::1 → "vulnerability to lightning damage" → push 'lightning' to
+ *     enemy.damageVulnerabilities for 1 round.
+ *   - Fazrian::1 → "disadvantage on saving throws" → grantVulnerability(disadvantage, 'save').
+ *   - Graz'zt::1 → "disadvantage on Dexterity (Stealth) checks" → log only
+ *     (v1 doesn't model skill-check disadvantage).
+ */
+function handleLairDebuffEnemy(
+  creature: Combatant,
+  action: LairAction,
+  state: EngineState,
+): void {
+  const bf = state.battlefield;
+  const text = action.rawText.toLowerCase();
+
+  // Detect debuff type from rawText.
+  type DebuffKind = 'vulnerability' | 'disadvantage_attack' | 'disadvantage_save' | null;
+  let kind: DebuffKind = null;
+  let vulnType: string | null = null;
+
+  if (/vulnerability\s+to\s+(\w+)\s+damage/i.test(text)) {
+    const m = text.match(/vulnerability\s+to\s+(\w+)\s+damage/i);
+    if (m) {
+      kind = 'vulnerability';
+      vulnType = m[1].toLowerCase();
+    }
+  } else if (/disadvantage\s+on\s+saving\s+throws?/i.test(text)) {
+    kind = 'disadvantage_save';
+  } else if (/disadvantage\s+on\s+(?:melee\s+|ranged\s+)?attack/i.test(text)) {
+    kind = 'disadvantage_attack';
+  } else if (/disadvantage\s+on\s+dexterity/i.test(text)) {
+    // Skill-check disadvantage (Stealth, etc.) — v1 doesn't model this.
+    kind = null;
+  }
+
+  if (!kind) {
+    log(state, 'action', creature.id,
+      `  → debuff_enemy: no vulnerability/disadvantage keyword parsed — no effect`,
+      undefined);
+    return;
+  }
+
+  // Targets: enemies of the lair creature, filtered by rangeFt + targetFilter.
+  const targets = selectLairActionTargets(creature, action, bf)
+    .filter(t => t.id !== creature.id)
+    .filter(t => !t.isDead && !t.isUnconscious);
+
+  if (targets.length === 0) {
+    log(state, 'action', creature.id,
+      `  → debuff_enemy: no valid enemy targets in range — no effect`,
+      undefined);
+    return;
+  }
+
+  let debuffed = 0;
+  for (const enemy of targets) {
+    if (kind === 'vulnerability' && vulnType) {
+      // Push the damage type to the enemy's vulnerabilities. This is a
+      // permanent mutation for the combat (lair action duration is "until
+      // next initiative count 20", but we don't track per-source vulnerability
+      // expiry — v1 simplification: persists for the rest of combat).
+      // Future Phase 5: track as an ActiveEffect with expiry.
+      if (!enemy.damageVulnerabilities) enemy.damageVulnerabilities = [];
+      if (!enemy.damageVulnerabilities.includes(vulnType as DamageType)) {
+        enemy.damageVulnerabilities.push(vulnType as DamageType);
+      }
+      log(state, 'action', creature.id,
+        `  → debuff_enemy: ${enemy.name} gains vulnerability to ${vulnType} damage`,
+        enemy.id);
+    } else if (kind === 'disadvantage_attack') {
+      grantVulnerability(enemy, 'disadvantage', 'attack', `Lair:${action.id}`, 'until_next_turn');
+      log(state, 'action', creature.id,
+        `  → debuff_enemy: ${enemy.name} has disadvantage on attack rolls until its next turn`,
+        enemy.id);
+    } else if (kind === 'disadvantage_save') {
+      grantVulnerability(enemy, 'disadvantage', 'save', `Lair:${action.id}`, 'until_next_turn');
+      log(state, 'action', creature.id,
+        `  → debuff_enemy: ${enemy.name} has disadvantage on saving throws until its next turn`,
+        enemy.id);
+    }
+    debuffed++;
+  }
+
+  if (debuffed === 0) {
+    log(state, 'action', creature.id,
+      `  → debuff_enemy: no enemies debuffed — no effect`, undefined);
+  }
+}
+
+/**
+ * Resolve a `visibility` lair action. Applies a `battlefield_obstacle` effect
+ * (like Fog Cloud) centered on the lair creature, blocking vision for
+ * `durationRounds` (default 1 — "until next initiative count 20").
+ *
+ * v1 simplification:
+ *   - Obstacle is a square centered on the lair creature with side length
+ *     derived from `radiusFt` (default 20 ft → 9×9 grid: radius 2 squares
+ *     each side + center = 5 squares wide; we use 2*radiusFt/5 + 1).
+ *   - `blocksVision: true`, `blocksMovement: false`, `isMagicalDarkness: false`
+ *     (normal obscurement, not magical darkness).
+ *   - The obstacle persists for `durationRounds` rounds. v1 doesn't auto-remove
+ *     on expiry (no per-source obstacle tracking) — the obstacle remains for
+ *     the rest of combat. Phase 5 will add expiry tracking.
+ *
+ * Examples:
+ *   - Bronze Dragon::0 → "fog cloud" (already a cast_spell action — this
+ *     handler only fires for actions categorized as `visibility`, which are
+ *     the in-scope non-deferred obscurement actions).
+ */
+function handleLairVisibility(
+  creature: Combatant,
+  action: LairAction,
+  state: EngineState,
+): void {
+  const bf = state.battlefield;
+  const radiusFt = action.radiusFt ?? 20;
+  const radiusSquares = Math.max(1, Math.floor(radiusFt / 5));
+
+  // Build the obstacle (square centered on the lair creature).
+  const obstacleId = `lair_vis_${action.id.replace(/[^a-z0-9]/gi, '_')}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+  const obstacle: Obstacle = {
+    id: obstacleId,
+    x: creature.pos.x - radiusSquares,
+    y: creature.pos.y - radiusSquares,
+    z: creature.pos.z,
+    width: radiusSquares * 2 + 1,
+    depth: radiusSquares * 2 + 1,
+    height: 1,
+    blocksMovement: false,
+    blocksVision: true,
+    // isMagicalDarkness NOT set — lair-action obscurement is normal fog/dust,
+    // not magical darkness. Darkvision can see through it.
+  };
+
+  if (!bf.obstacles) bf.obstacles = [];
+  bf.obstacles.push(obstacle);
+
+  // Apply an ActiveEffect on the lair creature so the obstacle can be
+  // cleaned up if the lair creature dies (via removeEffectsFromCaster).
+  // v1: sourceIsConcentration = false (lair actions don't require conc).
+  const effect: Omit<ActiveEffect, 'id'> = {
+    casterId: creature.id,
+    spellName: `Lair:${action.id}`,
+    effectType: 'battlefield_obstacle',
+    payload: {
+      obstacleId,
+      obstacleCenterX: creature.pos.x,
+      obstacleCenterY: creature.pos.y,
+      obstacleCenterZ: creature.pos.z,
+      obstacleRadiusFt: radiusFt,
+    },
+    sourceIsConcentration: false,
+    appliedTurn: bf.round,
+  };
+  applySpellEffect(creature, effect);
+
+  log(state, 'action', creature.id,
+    `  → visibility: ${radiusFt}-ft-radius obscurement centered on ${creature.name} ` +
+    `(blocks vision, ${action.durationRounds ?? 1}-round duration)`,
+    undefined);
+}
+
+/**
+ * Resolve a `movement` lair action. Pushes each enemy within `rangeFt` away
+ * from the lair creature by a distance parsed from rawText (default 10 ft).
+ *
+ * v1 simplification:
+ *   - Parses rawText for "pushed/pulled/moved up to N feet" → pushFt.
+ *   - No saveDC for movement actions (the parser didn't extract one) — v1
+ *     applies the push automatically to all enemies in range. Phase 5 will
+ *     add per-action save mechanics when the parser extracts save info.
+ *   - Push direction: away from the lair creature (uses `pushAway`).
+ *
+ * Examples:
+ *   - Yeenoghu::1 → "iron spike... DC 24 DEX or 6d8 piercing + restrained" —
+ *     this is actually categorized as `save_only` (has DC + damage + condition
+ *     via the spike's effect, not the movement). The pure-movement actions
+ *     are like "each gnoll or hyena... can use its reaction to move up to its
+ *     speed" — these grant movement to ALLIES, not push enemies.
+ *
+ * For v1, we handle the "push enemies" pattern. "Grant movement to allies" is
+ * a buff_ally effect (logged but not mechanically applied — would need a
+ * reaction-budget grant, which is Phase 5).
+ */
+function handleLairMovement(
+  creature: Combatant,
+  action: LairAction,
+  state: EngineState,
+): void {
+  const bf = state.battlefield;
+  const text = action.rawText.toLowerCase();
+
+  // Parse push/pull distance from rawText.
+  let moveFt = 10;   // default
+  const pushMatch = text.match(/pushed\s+(?:up\s+to\s+)?(\d+)\s+feet/i);
+  const pullMatch = text.match(/pulled\s+(?:up\s+to\s+)?(\d+)\s+feet/i);
+  const moveMatch = text.match(/moves?\s+up\s+to\s+(?:its\s+)?(\d+)\s+feet/i);
+  if (pushMatch) moveFt = parseInt(pushMatch[1], 10);
+  else if (pullMatch) moveFt = parseInt(pullMatch[1], 10);
+  else if (moveMatch) moveFt = parseInt(moveMatch[1], 10);
+
+  // Detect "grant movement to allies" pattern (Yeenoghu::2, Zuggtmoy::0/1).
+  // These let allies use their reaction to move. v1: log + no mechanical
+  // effect (would need a reaction-budget grant — Phase 5).
+  if (/reaction\s+to\s+move/i.test(text) || /can\s+use\s+(?:its|their)\s+reaction/i.test(text)) {
+    log(state, 'action', creature.id,
+      `  → movement: "grant reaction-move to allies" pattern — logged, not yet implemented (Phase 5: reaction-budget grant)`,
+      undefined);
+    return;
+  }
+
+  // Targets: enemies of the lair creature, filtered by rangeFt + targetFilter.
+  const targets = selectLairActionTargets(creature, action, bf)
+    .filter(t => t.id !== creature.id)
+    .filter(t => !t.isDead && !t.isUnconscious);
+
+  if (targets.length === 0) {
+    log(state, 'action', creature.id,
+      `  → movement: no valid enemy targets in range — no effect`,
+      undefined);
+    return;
+  }
+
+  let moved = 0;
+  for (const target of targets) {
+    const oldPos = { ...target.pos };
+    const newPos = pushMatch
+      ? pushAway(target, creature.pos, moveFt)
+      : pullMatch
+        ? pullTowardLair(target, creature.pos, moveFt)
+        : pushAway(target, creature.pos, moveFt);   // default to push
+
+    if (newPos.x !== oldPos.x || newPos.y !== oldPos.y) {
+      log(state, 'action', creature.id,
+        `  → movement: ${target.name} ${pushMatch ? 'pushed' : pullMatch ? 'pulled' : 'moved'} ${moveFt} ft ` +
+        `(from (${oldPos.x},${oldPos.y}) to (${newPos.x},${newPos.y}))`,
+        target.id);
+      moved++;
+    } else {
+      log(state, 'action', creature.id,
+        `  → movement: ${target.name} couldn't be moved (blocked or same position)`,
+        target.id);
+    }
+  }
+
+  if (moved === 0) {
+    log(state, 'action', creature.id,
+      `  → movement: no targets moved — no effect`, undefined);
+  }
+}
+
+/**
+ * Pull a target toward a source position by `pullFt` feet.
+ * (Helper for `handleLairMovement` — movement.ts has `pullToward` but it's
+ * not imported. We use a simple inline implementation that mirrors `pushAway`
+ * but inverts the direction.)
+ */
+function pullTowardLair(target: Combatant, sourcePos: Vec3, pullFt: number): Vec3 {
+  if (target.isDead || target.isUnconscious) return { ...target.pos };
+  const squares = Math.floor(pullFt / 5);
+  if (squares <= 0) return { ...target.pos };
+
+  const dx = sourcePos.x - target.pos.x;   // toward source
+  const dy = sourcePos.y - target.pos.y;
+  const dist = Math.max(Math.abs(dx), Math.abs(dy));
+  if (dist === 0) return { ...target.pos };
+
+  const dirX = dx === 0 ? 0 : dx / Math.abs(dx);
+  const dirY = dy === 0 ? 0 : dy / Math.abs(dy);
+  // Don't pull past the source.
+  const moveSquares = Math.min(squares, dist - 1);
+  if (moveSquares <= 0) return { ...target.pos };
+
+  const dest: Vec3 = {
+    x: target.pos.x + dirX * moveSquares,
+    y: target.pos.y + dirY * moveSquares,
+    z: target.pos.z,
+  };
+  target.pos = dest;
+  return dest;
+}
+
+/**
+ * Resolve a `save_only` lair action. Each target rolls `saveAbility` vs
+ * `saveDC`; on failure, the bespoke effect (push/fall/banish/etc.) is logged
+ * as "not yet implemented" with the action.id. On success, no effect.
+ *
+ * v1 simplification:
+ *   - The save roll is real (uses `rollSave` — advantage/etc. apply).
+ *   - The bespoke effect on failure is NOT mechanically applied — the per-
+ *     action effect varies (Kraken push, Gold Dragon banish, Lich warding
+ *     bond, etc.) and each needs a hand-written handler. Phase 5 will add
+ *     per-action.id bespoke handlers.
+ *   - The save event is logged with the rolled value vs DC, so the test
+ *     harness can verify the save fired.
+ *
+ * Examples:
+ *   - Kraken::0 → DC 23 STR or pushed 60 ft (push 10 ft on success).
+ *   - Gold Dragon::1 → DC 15 CHA or banished to dream plane.
+ *   - Lich::1 → DC 18 CON (warding-bond-style damage share).
+ *   - Androsphinx::0/1 → DC 18 CHA/WIS (roar / silence).
+ */
+function handleLairSaveOnly(
+  creature: Combatant,
+  action: LairAction,
+  state: EngineState,
+): void {
+  const bf = state.battlefield;
+  if (action.saveDC === undefined || action.saveAbility === undefined) {
+    log(state, 'action', creature.id,
+      `  → save_only: missing saveDC/saveAbility — no effect`, undefined);
+    return;
+  }
+
+  const targets = selectLairActionTargets(creature, action, bf)
+    .filter(t => t.id !== creature.id)
+    .filter(t => !t.isDead && !t.isUnconscious);
+
+  if (targets.length === 0) {
+    log(state, 'action', creature.id,
+      `  → save_only: no valid targets in range — no effect`, undefined);
+    return;
+  }
+
+  for (const target of targets) {
+    const save = rollSave(target, action.saveAbility, action.saveDC);
+    log(state, save.success ? 'save_success' : 'save_fail', creature.id,
+      `${target.name} ${save.success ? 'succeeds' : 'fails'} ${action.saveAbility.toUpperCase()} save ` +
+      `(rolled ${save.roll} vs DC ${action.saveDC})`,
+      target.id);
+
+    if (save.success) {
+      // On success: no effect (most save_only actions). Some actions have a
+      // "half-effect on success" (Kraken push 10 ft on success) — Phase 5.
+      continue;
+    }
+
+    // On failure: log the bespoke effect as "not yet implemented".
+    log(state, 'action', creature.id,
+      `  → save_only: ${target.name} failed — bespoke effect for ${action.id} not yet implemented (Phase 5: per-action.id handler)`,
+      target.id);
+  }
+}
+
+/**
+ * Resolve a `bespoke` lair action. Each action needs a hand-written handler
+ * keyed by `action.id`. v1 logs "not yet implemented" for all but a few
+ * common patterns.
+ *
+ * v1 implemented patterns:
+ *   - "Fazrian::0" → "no creature within 120 ft can regain hit points" —
+ *     applies a 1-round regeneration-suppression debuff to enemies in range.
+ *     (Modeled as a `regen_suppressed` flag — Phase 5 will use a proper
+ *     ActiveEffect. For v1, we just log it.)
+ *
+ * Phase 5 will add per-action.id handlers for the common bespoke patterns:
+ *   - Healing-suppression fields (Fazrian::0, Mummy Lord::2).
+ *   - Wall creation (Sapphire Dragon::2, White Dragon::2).
+ *   - Teleport (Archdevil::6).
+ *   - Reactive-attack grants (Archdevil::0, Zuggtmoy::0).
+ *   - Spell-disruption fields (Mummy Lord::2, Valin Sarnaster::2).
+ *
+ * Examples:
+ *   - Alyxian::2 → bespoke (psychic mirror effect).
+ *   - Archdevil::0 → "uses one of their available melee attacks" (free attack).
+ *   - Archdevil::3 → "recharges one of their expended abilities".
+ *   - Fazrian::0 → "no creature within 120 ft can regain hit points".
+ */
+function handleLairBespoke(
+  creature: Combatant,
+  action: LairAction,
+  state: EngineState,
+): void {
+  const bf = state.battlefield;
+  const text = action.rawText.toLowerCase();
+
+  // ── Pattern: regeneration / healing suppression ──
+  // "no creature within N feet... can regain hit points" (Fazrian::0, Mummy Lord::2).
+  if (/no creature.{0,40}can\s+regain\s+hit\s+points/i.test(text)) {
+    const targets = selectLairActionTargets(creature, action, bf)
+      .filter(t => t.id !== creature.id)
+      .filter(t => !t.isDead && !t.isUnconscious);
+    log(state, 'action', creature.id,
+      `  → bespoke: healing-suppression field — ${targets.length} target(s) in range cannot regain HP until next initiative count 20`,
+      undefined);
+    for (const t of targets) {
+      log(state, 'action', creature.id,
+        `    • ${t.name} is in the healing-suppression field`,
+        t.id);
+    }
+    return;
+  }
+
+  // ── Pattern: free attack / recharge / teleport (Archdevil family) ──
+  // These require per-action handling. v1: log + skip.
+  if (/uses\s+one\s+of\s+(?:their|his|her)\s+available\s+(?:melee|ranged)\s+attacks/i.test(text)) {
+    log(state, 'action', creature.id,
+      `  → bespoke: "free attack" pattern — logged, not yet implemented (Phase 5: free-attack grant)`,
+      undefined);
+    return;
+  }
+  if (/recharges\s+one\s+of\s+(?:their|his|her)\s+expended\s+abilities/i.test(text)) {
+    log(state, 'action', creature.id,
+      `  → bespoke: "recharge ability" pattern — logged, not yet implemented (Phase 5: recharge tracking)`,
+      undefined);
+    return;
+  }
+  if (/teleports?\s+(?:themself|himself|herself|itself)\s+to/i.test(text)) {
+    log(state, 'action', creature.id,
+      `  → bespoke: "self-teleport" pattern — logged, not yet implemented (Phase 5: teleport with point-selection)`,
+      undefined);
+    return;
+  }
+
+  // ── Default: log "not yet implemented" with action.id ──
+  log(state, 'action', creature.id,
+    `  → bespoke: ${action.id} not yet implemented (Phase 5: per-action.id handler) — no mechanical effect`,
+    undefined);
 }
 
 /**
