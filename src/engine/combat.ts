@@ -9,6 +9,7 @@ import {
   Combatant, Battlefield, TurnPlan, PlannedAction, Action, Vec3,
   ReactionTrigger, ReactionOutcome, Condition,
   LairAction, DamageType, Obstacle, ActiveEffect, AIProfile,
+  AbilityScore,
 } from '../types/core';
 import {
   rollAttack, rollDamage, rollSave, applyDamage, applyHeal,
@@ -6466,9 +6467,10 @@ export interface CombatOptions {
 //      that logs the chosen action + category + (spell tag if isSpell). NO
 //      mechanical effect yet (Phase 3 wires real handlers per category).
 //
-// Phase 4 will replace the deterministic "lowest action.id" selection with
-// `scoreLairAction` (expected-value estimator, RFC §7). The selector is
-// isolated in `selectLairAction()` for easy replacement.
+// Phase 4 (Session 95) replaced the deterministic "lowest action.id"
+// selection with `scoreLairAction` (expected-value estimator, RFC §7).
+// The selector picks max-score, tie-broken by lowest `action.id` for
+// determinism. Scoring is a pure function — no dice, no state mutation.
 // ============================================================
 
 /**
@@ -6480,7 +6482,7 @@ export interface CombatOptions {
  *   - filters candidates by 2-entry history,
  *   - prefers in-scope actions (excludes out-of-scope/deferred unless those
  *     are the only options left),
- *   - selects via `selectLairAction` (Phase 2: lowest ID; Phase 4: max score),
+ *   - selects via `selectLairAction` (Phase 4: max expected-value score, RFC §7),
  *   - logs or dispatches the chosen action,
  *   - appends the chosen ID to `_lairActionHistory` (truncated to length 2).
  */
@@ -6519,9 +6521,9 @@ function resolveLairActions(state: EngineState): void {
     const inScope = candidates.filter(a => !a.outOfScope && !a.deferred);
     if (inScope.length > 0) candidates = inScope;
 
-    // Select (Phase 2: deterministic lowest ID; Phase 4 will replace with
-    // `scoreLairAction` and pick max score, tie-break lowest ID).
-    const chosen = selectLairAction(candidates);
+    // Select via `scoreLairAction` (Phase 4 RFC §7): max expected-value
+    // estimate, tie-break lowest `action.id` for determinism.
+    const chosen = selectLairAction(candidates, actor, bf);
 
     // Execute / log.
     if (chosen.outOfScope) {
@@ -6545,19 +6547,398 @@ function resolveLairActions(state: EngineState): void {
   }
 }
 
+// ============================================================
+// Session 95 — RFC-LAIRACTIONS Phase 4: AI scoring + selection
+//
+// Phase 4 replaces the Phase 2 deterministic lowest-ID selector with an
+// expected-value estimator (`scoreLairAction`) per RFC §7. The selector
+// picks the candidate with the MAX score, tie-broken by lowest `action.id`
+// for determinism (so tests can assert on exact picked IDs).
+//
+// Scoring is a PURE function of (action, lairCreature, bf) — no dice rolls,
+// no state mutation. It models the EXPECTED value of choosing the action:
+//   - For damage actions: Σ over targets of P(save fail) × avgDamage × mult.
+//   - For condition actions: Σ over targets of P(fail) × Σ conditionWeight.
+//   - For summons: expected DPR × 3 rounds × count (bestiary-dependent).
+//   - For buffs/debuffs: per-target weight × target count.
+//   - For control/visibility/regen: flat weights.
+//
+// Out-of-scope and deferred actions score -1000 (handled by
+// `resolveLairActions` before reaching here, but defensive). The flattening
+// artifact (summons name matches source creature name) also scores -1000.
+//
+// Weights live in `LAIR_ACTION_SCORE_WEIGHTS` for easy tuning. Initial
+// values are the RFC §7 defaults; Phase 5 may tune against bestiary
+// integration tests.
+// ============================================================
+
 /**
- * Phase 2 lair-action selector — deterministic, picks the candidate with the
- * lowest `id` (alphabetical). This gives stable, reproducible behavior so the
- * history / dispatcher tests can assert on exact action IDs.
- *
- * Phase 4 will replace this with `scoreLairAction(action, lairCreature, bf)`
- * returning a numeric expected-value estimate (RFC §7), then pick max-score
- * with the same lowest-id tie-break.
+ * Phase 4 weights for the lair-action scoring rubric (RFC §7).
+ * Initial values are reasonable defaults; tuning is a Phase 5 task.
  */
-function selectLairAction(candidates: LairAction[]): LairAction {
-  // Defensive copy so the caller's array isn't mutated.
-  const sorted = [...candidates].sort((a, b) => a.id.localeCompare(b.id));
-  return sorted[0];
+const LAIR_ACTION_SCORE_WEIGHTS = {
+  damagePerEnemy: 1.0,       // expected HP loss per enemy
+  conditionStunned: 40,      // flat value per enemy afflicted
+  conditionRestrained: 25,
+  conditionPetrified: 60,
+  conditionPoisoned: 15,
+  conditionProne: 10,
+  conditionOther: 12,
+  summonExpectedDpr: 1.0,    // summon's expected damage/round × 3 rounds
+  buffAdvantage: 4,           // per ally buffed (≈ +4 to hit)
+  buffVulnerability: 20,      // per enemy made vulnerable (≈ +50% dmg)
+  debuffDisadvantage: 6,      // per enemy debuffed
+  controlPush: 5,             // per enemy repositioned (situational)
+  visibilitySelf: 8,          // obscuring the lair creature (defensive)
+  spellSlotRegen: 15,         // per slot level regained
+  outOfScope: -1000,
+  deferred: -1000,
+} as const;
+
+/**
+ * Phase 4 lair-action selector. Scores each candidate via
+ * {@link scoreLairAction} and returns the highest-scoring action, tie-broken
+ * by lowest `action.id` for determinism (RFC §7).
+ *
+ * Replaces the Phase 2 deterministic lowest-ID selector. The scoring is a
+ * pure expected-value estimator — it does NOT roll dice or mutate state.
+ */
+function selectLairAction(
+  candidates: LairAction[],
+  lairCreature: Combatant,
+  bf: Battlefield,
+): LairAction {
+  // Defensive: short-circuit on a single candidate (no scoring needed).
+  if (candidates.length === 1) return candidates[0];
+
+  let best: { action: LairAction; score: number } | null = null;
+  for (const action of candidates) {
+    const score = scoreLairAction(action, lairCreature, bf);
+    if (best === null ||
+        score > best.score ||
+        (score === best.score && action.id.localeCompare(best.action.id) < 0)) {
+      best = { action, score };
+    }
+  }
+  return best!.action;
+}
+
+/**
+ * Phase 4 lair-action scorer (RFC §7). Returns a numeric expected-value
+ * estimate for the given action under the current battlefield state.
+ *
+ * Algorithm:
+ * 1. Out-of-scope / deferred actions → -1000 (never picked unless sole
+ *    option — `resolveLairActions` already filters these, but defensive).
+ * 2. Compute target set (enemies or allies of the lair creature, filtered
+ *    by `targetFilter` and `rangeFt`). Excludes the lair creature itself
+ *    (a dragon doesn't magma itself).
+ * 3. Score by category, summing expected value per the weights in
+ *    {@link LAIR_ACTION_SCORE_WEIGHTS}.
+ * 4. Self-harm penalty: if `!targetsEnemies` and the action deals damage,
+ *    subtract the expected damage to allies (incl. self).
+ *
+ * v1 simplifications:
+ *   - P(save fail) is a simple linear model: `(DC - 1 - mod) / 20`, clamped
+ *     to [0.05, 0.95]. Does NOT model advantage/disadvantage or save
+ *     bonuses (Bardic Inspiration, Bless, etc.) — those are runtime-only
+ *     and the scorer is a pure estimator.
+ *   - Damage-type multiplier: immunity → 0, vulnerability → 2, resistance
+ *     → 0.5, else → 1.0.
+ *   - Summon DPR is estimated from CR (linear `2.5×CR + 2`). Phase 5 may
+ *     inspect the summon's actual attack damage dice.
+ *   - `cast_spell` value is `level × 10` (coarse — Phase 5 will inspect
+ *     the spell module for actual damage / condition / effect).
+ *   - `spell_slot_regen` value uses avg(d8) = 4.5 (assumes at least one
+ *     spent slot — likely true by round 2+).
+ *   - `bespoke` default score is 1 (handler logs "not yet implemented" for
+ *     most patterns — low value to avoid preferring no-op actions).
+ */
+function scoreLairAction(
+  action: LairAction,
+  lairCreature: Combatant,
+  bf: Battlefield,
+): number {
+  const W = LAIR_ACTION_SCORE_WEIGHTS;
+
+  // 1. Out-of-scope / deferred → -1000.
+  if (action.outOfScope) return W.outOfScope;
+  if (action.deferred) return W.deferred;
+
+  // 2. Compute target set (excluding the lair creature itself).
+  const targets = selectLairActionTargets(lairCreature, action, bf)
+    .filter(t => t.id !== lairCreature.id)
+    .filter(t => !t.isDead && !t.isUnconscious);
+
+  let score = 0;
+
+  // 3. Score by category.
+  switch (action.category) {
+    case 'save_damage': {
+      if (!action.damage ||
+          action.saveDC === undefined || action.saveAbility === undefined) {
+        return 0;   // handler will log "missing" — no value
+      }
+      const avgDmg = action.damage.count * (action.damage.sides + 1) / 2;
+      for (const t of targets) {
+        const pFail = estimateSaveFailProb(t, action.saveAbility, action.saveDC);
+        // v1 handler: full damage on fail, half on success.
+        const expectedDmg = pFail * avgDmg + (1 - pFail) * avgDmg / 2;
+        const mult = damageTypeMultiplier(t, action.damage.type);
+        score += expectedDmg * mult * W.damagePerEnemy;
+      }
+      break;
+    }
+
+    case 'save_condition': {
+      if (!action.conditions || action.conditions.length === 0 ||
+          action.saveDC === undefined || action.saveAbility === undefined) {
+        return 0;
+      }
+      let conditionValue = 0;
+      for (const cond of action.conditions) {
+        conditionValue += conditionWeight(cond);
+      }
+      for (const t of targets) {
+        const pFail = estimateSaveFailProb(t, action.saveAbility, action.saveDC);
+        score += pFail * conditionValue;
+      }
+      break;
+    }
+
+    case 'damage_no_save': {
+      if (!action.damage) return 0;
+      const avgDmg = action.damage.count * (action.damage.sides + 1) / 2;
+      for (const t of targets) {
+        const mult = damageTypeMultiplier(t, action.damage.type);
+        score += avgDmg * mult * W.damagePerEnemy;
+      }
+      break;
+    }
+
+    case 'save_only': {
+      // v1: no bespoke effect applied (handler logs "not yet implemented").
+      // Score conservatively as a small control value: P(fail) × controlPush
+      // per target. This lets save_only actions still be picked over no-op
+      // bespoke actions when they'd at least force a save roll.
+      if (action.saveDC === undefined || action.saveAbility === undefined) return 0;
+      for (const t of targets) {
+        const pFail = estimateSaveFailProb(t, action.saveAbility, action.saveDC);
+        score += pFail * W.controlPush;
+      }
+      break;
+    }
+
+    case 'summon': {
+      if (!action.summons || !action.summons.creature) return 0;
+      // Flattening artifact (summons name matches source creature name).
+      // The handler explicitly skips these — score -1000 so the selector
+      // never picks them unless they're the sole candidate.
+      const sourceLower = action.sourceCreature.toLowerCase();
+      const summonLower = action.summons.creature.toLowerCase();
+      if (summonLower.includes(sourceLower) || sourceLower.includes(summonLower)) {
+        return W.outOfScope;
+      }
+      // Without bestiaryMap, the handler logs "bestiary not available" —
+      // score 0 (no mechanical effect).
+      if (!bf.bestiaryMap) return 0;
+      const raw = bf.bestiaryMap.get(summonLower) as Raw5etoolsMonster | undefined;
+      if (!raw) return 0;
+      const count = typeof action.summons.count === 'number' ? action.summons.count : 1;
+      const dpr = estimateMonsterDpr(raw);
+      score += dpr * 3 * count * W.summonExpectedDpr;
+      break;
+    }
+
+    case 'cast_spell': {
+      // v1: estimate value based on spell level (higher level = more impact).
+      // Phase 5 will inspect the spell module for actual damage / conditions.
+      const level = action.castLevel ?? 1;
+      score += level * 10;
+      break;
+    }
+
+    case 'buff_ally': {
+      // v1: buffAdvantage per ally in range. (The handler grants advantage
+      // on attacks/saves/ability — the buff scope doesn't materially change
+      // the scoring; the per-ally weight dominates.)
+      score += targets.length * W.buffAdvantage;
+      break;
+    }
+
+    case 'debuff_enemy': {
+      // Parse rawText for vulnerability vs disadvantage.
+      const text = action.rawText.toLowerCase();
+      if (/vulnerability\s+to\s+\w+\s+damage/i.test(text)) {
+        score += targets.length * W.buffVulnerability;
+      } else if (/disadvantage\s+on/i.test(text)) {
+        score += targets.length * W.debuffDisadvantage;
+      } else {
+        return 0;   // unparseable — handler logs "no keyword"
+      }
+      break;
+    }
+
+    case 'visibility': {
+      // Single defensive value (obscuring the lair creature).
+      score += W.visibilitySelf;
+      break;
+    }
+
+    case 'movement': {
+      // Push/pull enemies. controlPush per target.
+      score += targets.length * W.controlPush;
+      break;
+    }
+
+    case 'spell_slot_regen': {
+      // v1: the handler rolls a d8 and regains the first spent slot ≤ that
+      // level. Expected slot level regained ≈ 4.5 (avg of d8). Assumes at
+      // least one spent slot (likely true by round 2+; if no slots are
+      // spent, the handler logs "nothing happens" — but the scorer can't
+      // know that without tracking spent slots, so we err optimistic).
+      score += 4.5 * W.spellSlotRegen;
+      break;
+    }
+
+    case 'bespoke': {
+      // Pattern-match common bespoke patterns; default to low value (1)
+      // since most aren't mechanically applied (handler logs "not yet
+      // implemented").
+      const text = action.rawText.toLowerCase();
+      if (/no creature.{0,40}can\s+regain\s+hit\s+points/i.test(text)) {
+        // Healing-suppression field (Fazrian::0, Mummy Lord::2) — similar
+        // value to a vulnerability debuff (prevents all healing in range).
+        score += targets.length * W.buffVulnerability;
+      } else {
+        // Unknown bespoke — low default (handler logs "not yet implemented").
+        score += 1;
+      }
+      break;
+    }
+
+    case 'flavor':
+    case 'deferred':
+    default:
+      // `flavor` and `deferred` are intercepted by `resolveLairActions`
+      // before reaching the scorer (they're filtered into the inScope
+      // fallback only when they're the sole candidates). The defensive
+      // -1000 here ensures they're never preferred over real actions.
+      return W.outOfScope;
+  }
+
+  // 4. Self-harm penalty: if `!targetsEnemies` (action affects allies incl.
+  //    self) and the action deals damage, subtract the expected damage to
+  //    allies. (Most lair actions are `targetsEnemies: true`, so this is
+  //    rare — but a self-damaging lair action should be deprioritized.)
+  if (!action.targetsEnemies && action.damage &&
+      action.saveDC !== undefined && action.saveAbility !== undefined) {
+    const avgDmg = action.damage.count * (action.damage.sides + 1) / 2;
+    for (const t of targets) {
+      const pFail = estimateSaveFailProb(t, action.saveAbility, action.saveDC);
+      const expectedDmg = pFail * avgDmg + (1 - pFail) * avgDmg / 2;
+      const mult = damageTypeMultiplier(t, action.damage.type);
+      score -= expectedDmg * mult * W.damagePerEnemy;
+    }
+  }
+
+  return score;
+}
+
+/**
+ * Estimate P(save fail) for a d20 save vs DC. Simple linear model:
+ *   P(fail) = clamp((DC - 1 - mod) / 20, 0.05, 0.95)
+ * (Natural 1 always fails, natural 20 always succeeds — clamp to [0.05, 0.95].)
+ *
+ * Does NOT model advantage/disadvantage or save bonuses (Bardic Inspiration,
+ * Bless, Magic Resistance, etc.) — those are runtime-only and the scorer is
+ * a pure estimator. Real `rollSave` (utils.ts:147) handles all those flags.
+ */
+function estimateSaveFailProb(
+  combatant: Combatant,
+  ability: AbilityScore,
+  dc: number,
+): number {
+  const score = combatant[ability];
+  const mod = abilityMod(score);
+  const pFail = (dc - 1 - mod) / 20;
+  return Math.max(0.05, Math.min(0.95, pFail));
+}
+
+/**
+ * Condition weight per RFC §7. Higher = more debilitating.
+ *
+ * Ordering: petrified (60) > stunned (40) > restrained (25) > poisoned (15)
+ * > prone (10) > other (12). (Petrified is technically the most severe — it
+ * permanently removes the target from combat. Stunned is similar but shorter-
+ * lived. RFC §7 sets these weights; we follow that ordering.)
+ */
+function conditionWeight(cond: Condition): number {
+  const W = LAIR_ACTION_SCORE_WEIGHTS;
+  switch (cond) {
+    case 'stunned':      return W.conditionStunned;
+    case 'petrified':    return W.conditionPetrified;
+    case 'restrained':   return W.conditionRestrained;
+    case 'poisoned':     return W.conditionPoisoned;
+    case 'prone':        return W.conditionProne;
+    default:             return W.conditionOther;
+  }
+}
+
+/**
+ * Damage-type multiplier for a target:
+ *   - Immune → 0 (no damage)
+ *   - Vulnerable → 2.0 (double damage)
+ *   - Resistant → 0.5 (half damage)
+ *   - Else → 1.0
+ *
+ * Immunity takes precedence over vulnerability and resistance (PHB p.197).
+ * Vulnerability takes precedence over resistance (PHB p.197).
+ */
+function damageTypeMultiplier(target: Combatant, type: string): number {
+  const t = type.toLowerCase() as DamageType;
+  if (target.immunities?.includes(t)) return 0;
+  if (target.damageVulnerabilities?.includes(t)) return 2;
+  if (target.resistances?.includes(t)) return 0.5;
+  return 1;
+}
+
+/**
+ * Estimate a monster's expected damage per round (DPR) from its raw 5eTools
+ * stat block. Uses a linear CR-based approximation:
+ *   DPR ≈ 2.5 × CR + 2
+ *
+ * This is calibrated against DMG p.274 "Monster Statistics by Challenge
+ * Rating" (CR 1 ≈ 5 DPR, CR 5 ≈ 15 DPR, CR 10 ≈ 27 DPR, CR 17 ≈ 45 DPR,
+ * CR 20 ≈ 52 DPR). It's a coarse heuristic — actual DPR depends on
+ * multiattack, hit chance, save DCs, etc. Phase 5 may inspect the summon's
+ * actual attack damage dice for a more precise estimate.
+ *
+ * CR is parsed from `raw.cr` (string like '17', '1/2', or `{ cr: '17' }`).
+ */
+function estimateMonsterDpr(raw: Raw5etoolsMonster): number {
+  const cr = parseCrForScoring(raw.cr);
+  if (cr === null) return 5;   // unknown CR → conservative default
+  return 2.5 * cr + 2;
+}
+
+/**
+ * Parse a 5eTools CR field into a number. Handles all three forms:
+ *   - `cr: '17'`            (string)
+ *   - `cr: '1/2'`           (fraction string)
+ *   - `cr: { cr: '17' }`    (object — used by some 5eTools entries)
+ *
+ * Mirrors `parseCR` in `parser/fivetools.ts:1484` but inlined here to avoid
+ * exporting the parser helper (which would require a wider refactor).
+ */
+function parseCrForScoring(cr: Raw5etoolsMonster['cr']): number | null {
+  if (cr === undefined) return null;
+  const raw = typeof cr === 'string' ? cr : cr.cr;
+  if (raw === '1/8') return 0.125;
+  if (raw === '1/4') return 0.25;
+  if (raw === '1/2') return 0.5;
+  const n = parseFloat(raw);
+  return isNaN(n) ? null : n;
 }
 
 /**

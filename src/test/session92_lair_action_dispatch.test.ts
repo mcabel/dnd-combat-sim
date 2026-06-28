@@ -257,21 +257,32 @@ console.log('\n--- 5. History: never repeats same effect 2 rounds in a row ---')
   }
 
   console.log(`    Fired action IDs by round: ${JSON.stringify(firedIds)}`);
-  // With the deterministic lowest-ID selector + 2-entry history:
-  //   round 1 → Red Dragon::0 (history was [])
-  //   round 2 → Red Dragon::1 (history was [::0])
-  //   round 3 → Red Dragon::2 (history was [::0, ::1])
+  // With the Phase 4 max-score selector (RFC §7) + 2-entry history:
+  //   round 1 → Red Dragon::0 (save_damage 6d6 fire, highest expected damage)
+  //   round 2 → Red Dragon::2 (poisoned+incapacitated save_condition, next-best EV)
+  //   round 3 → Red Dragon::1 (prone save_condition, last in-scope option left)
+  // (Red Dragon::3 is a summon flattening artifact — scored -1000 by the
+  //  scorer, never picked unless sole candidate.)
+  //
+  // Scoring rationale (Goblin target, dex 14 (+2 mod), con 10 (+0 mod)):
+  //   - ::0: P(fail DC 15 DEX) ≈ 0.6, avgDmg=21 → EV ≈ 0.6×21 + 0.4×10.5 = 16.8
+  //   - ::1: P(fail DC 15 DEX) ≈ 0.6, prone weight=10 → EV ≈ 6
+  //   - ::2: P(fail DC 13 CON) ≈ 0.6, poisoned(15)+incapacitated(12)=27 → EV ≈ 16.2
+  //   - ::3: flattening artifact → -1000
+  // Round 1: max(16.8, 6, 16.2, -1000) = ::0
+  // Round 2 (history=[::0]): max(6, 16.2, -1000) = ::2
+  // Round 3 (history=[::0, ::2]): max(6, -1000) = ::1
   eq('5d. round 1 picked Red Dragon::0', firedIds[0], 'Red Dragon::0');
-  eq('5e. round 2 picked Red Dragon::1', firedIds[1], 'Red Dragon::1');
-  eq('5f. round 3 picked Red Dragon::2', firedIds[2], 'Red Dragon::2');
+  eq('5e. round 2 picked Red Dragon::2', firedIds[1], 'Red Dragon::2');
+  eq('5f. round 3 picked Red Dragon::1', firedIds[2], 'Red Dragon::1');
   // Verify the 2-entry history is correctly maintained after 3 rounds.
   assert('5g. _lairActionHistory has length 2 after 3 rounds',
     dragon._lairActionHistory?.length === 2,
     `got ${JSON.stringify(dragon._lairActionHistory)}`);
-  eq('5h. history[0] is Red Dragon::1 (oldest of last 2)',
-    dragon._lairActionHistory?.[0], 'Red Dragon::1');
-  eq('5i. history[1] is Red Dragon::2 (most recent)',
-    dragon._lairActionHistory?.[1], 'Red Dragon::2');
+  eq('5h. history[0] is Red Dragon::2 (oldest of last 2)',
+    dragon._lairActionHistory?.[0], 'Red Dragon::2');
+  eq('5i. history[1] is Red Dragon::1 (most recent)',
+    dragon._lairActionHistory?.[1], 'Red Dragon::1');
 }
 
 // ============================================================
