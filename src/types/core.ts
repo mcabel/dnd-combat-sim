@@ -869,6 +869,55 @@ export interface LairAction {
    */
   disadvOnAttacks?: boolean;
 
+  // ── Phase 7 batch 2 (Session 99): additional save_only bespoke-effect flags. ──
+  // Four more patterns identified by enumerating the remaining ~7 unrecognized
+  // save_only actions after Phase 7 batch 1. These cover the rest of the
+  // save_only bestiary (Sphinx aging, Strahd doors, Githzerai Anarch object-
+  // move, Lich/Illithilich warding-bond tether, Captain N'ghathrod duplicate).
+  /**
+   * Warding Bond tether flag (Lich::1, Illithilich::1). When true, the lair
+   * action establishes a damage-share tether: the lair creature picks one
+   * target in range, and from then until the next initiative count 20,
+   * whenever the lair creature takes damage the tethered target must make
+   * a CON save (action.saveDC); on fail, the lair creature takes half the
+   * damage (rounded down) and the target takes the remainder. On success,
+   * the lair creature takes full damage and the target takes none.
+   *
+   * The save is NOT rolled at lair-action time — it's rolled reactively in
+   * the damage hook (`applyLairWardingBondTetherRedirect`). The handler
+   * (`handleLairSaveOnly`) just sets `Combatant.lairWardingBondTether` on
+   * the lair creature and returns.
+   */
+  lairWardingBondTether?: boolean;
+  /**
+   * Object-move flag (Githzerai Anarch::1/::2). When true, the lair action
+   * moves an object via a Wisdom check (DC 5/10/15/20/25 by object size).
+   * The @dc tag here is a check DC, NOT a save DC — the handler skips the
+   * save roll and logs "object-move — no combat-relevant object on
+   * battlefield" (v1 doesn't model battlefield objects). Phase 8+ may add
+   * an object-interaction model if scenarios with battlefield objects
+   * become common.
+   */
+  objectMove?: boolean;
+  /**
+   * Age-alteration flag (Sphinx::1). When true, the failed-save target
+   * becomes 1d20 years older or younger (sphinx's choice). The handler
+   * rolls the save (action.saveDC, CON); on fail, rolls 1d20 for the age
+   * delta and logs it (flavor-only — no age-based mechanics in 5e combat).
+   * A greater restoration spell can restore the age (not modeled in v1).
+   */
+  ageAlteration?: boolean;
+  /**
+   * Environment-manipulation flag (Strahd::1). When true, the lair action
+   * opens/closes doors and windows, optionally magically locking closed
+   * doors (STR check DC 20 to force open). The @dc tag here is the
+   * door-forcing check DC, NOT a save DC — the handler skips the save
+   * roll and logs "environment manipulation — doors/windows" (v1 doesn't
+   * model doors as battlefield obstacles). Phase 8+ may add an obstacle-
+   * creation model if door-blocking becomes tactically relevant.
+   */
+  environmentManipulation?: boolean;
+
   /** Dispatcher routing tag (Phase 2+). `cast_spell` when isSpell; else by tag presence. */
   category: LairActionCategory;
 }
@@ -1673,6 +1722,27 @@ export interface Combatant {
   // Grants +1 AC, +1 to saving throws, and resistance to all damage types.
   // Bond breaks when caster drops to 0 HP.  null = no bond active.
   wardingBond: { casterId: string } | null;
+
+  // ── Phase 7 batch 2 (Session 99): Lich/Illithilich Warding Bond TETHER. ──
+  // DIFFERENT from the Warding Bond SPELL above. This is a lair-action tether
+  // (Lich::1, Illithilich::1) where THIS creature (the lair creature) is the
+  // damagee and the tethered TARGET must make a CON save when this creature
+  // takes damage. On failed save, this creature takes half damage (rounded
+  // down) and the tethered target takes the remainder. On success, this
+  // creature takes full damage and the target takes none.
+  //
+  // Set by `handleLairSaveOnly` when `LairAction.lairWardingBondTether === true`.
+  // Cleared by `resolveLairActions` at the start of each lair-action checkpoint
+  // (the tether lasts "until initiative count 20 on the next round"). Also
+  // cleared lazily in `applyLairWardingBondTetherRedirect` when the tether
+  // target dies or the expiry round has passed.
+  // null = no tether active.
+  lairWardingBondTether?: {
+    targetId: string;        // the creature that must make the CON save
+    saveDC: number;          // 18 (Lich::1) / 18 (Illithilich::1)
+    sourceActionId: string;  // e.g. 'Lich::1' — for log searchability
+    expiresAtRound: number;  // state.battlefield.round + 1 (next init-20)
+  } | null;
 
   // Active spell effects currently applied to this creature.
   // Managed by src/engine/spell_effects.ts — use applySpellEffect / removeEffectsFromCaster

@@ -1089,6 +1089,50 @@ export function extractLairAction(
     disadvOnAttacks = true;
   }
 
+  // ── 6d. Phase 7 batch 2 (Session 99): four more save_only bespoke-effect flags. ──
+  // Identified by enumerating the remaining ~7 unrecognized save_only actions
+  // after Phase 7 batch 1. Each flag routes the handler to a specific code path
+  // (tether-setup / log-only / age-roll). The scorer uses the flags to assign
+  // appropriate expected-value weights.
+  let lairWardingBondTether: boolean | undefined;
+  let objectMove: boolean | undefined;
+  let ageAlteration: boolean | undefined;
+  let environmentManipulation: boolean | undefined;
+
+  // Warding Bond tether (Lich::1, Illithilich::1): "A crackling cord of
+  // negative energy tethers the [lich] to the target" + "Whenever the [lich]
+  // takes damage, the target must make a ... saving throw". The save is NOT
+  // rolled at lair-action time — it's rolled reactively when the lich takes
+  // damage. The handler sets `Combatant.lairWardingBondTether` on the lich.
+  if (/crackling\s+cord\s+of\s+negative\s+energy\s+tethers/i.test(cleaned)
+      || /whenever\s+the\s+\w+\s+takes\s+damage,?\s+the\s+target\s+must\s+make/i.test(cleaned)) {
+    lairWardingBondTether = true;
+  }
+
+  // Object-move (Githzerai Anarch::1): "magically move an object it can see
+  // within 150 feet of it by making a Wisdom check". The @dc tags here are
+  // check DCs by object size, NOT save DCs. The handler logs "object-move —
+  // no combat-relevant object" (v1 doesn't model battlefield objects).
+  if (/magically\s+move\s+an?\s+object/i.test(cleaned)) {
+    objectMove = true;
+  }
+
+  // Age-alteration (Sphinx::1): "become 1d20 years older or younger" /
+  // "years older or younger". The @dc 15 IS a real CON save vs aging. The
+  // handler rolls the save; on fail, rolls 1d20 for the age delta (flavor).
+  if (/\byears\s+(?:older|younger)\b/i.test(cleaned)
+      || /become\s+\{@dice\s+\d+d\d+\}\s+years/i.test(rawText)) {
+    ageAlteration = true;
+  }
+
+  // Environment-manipulation (Strahd::1): "targets any number of doors and
+  // windows" / "causing each one to either open or close". The @dc 20 here is
+  // the STR check to force open a locked door, NOT a save DC. The handler
+  // logs "environment manipulation — doors/windows" (v1 doesn't model doors).
+  if (/\bdoors\s+and\s+windows\b/i.test(cleaned)) {
+    environmentManipulation = true;
+  }
+
   // ── 7. summons from {@creature X} + "up to N" / "N <creatures> rise as" ──
   // Fallback: "creating a/summoning a <creature>" (Lichen Lich shambling mound,
   // which has no @creature tag — [VERIFY-1] recommended summon classification).
@@ -1113,6 +1157,23 @@ export function extractLairAction(
       const nameMatch = cleaned.match(/\b(?:creating|summons?|conjures?)\s+(?:a|an|one|up to \d+)\s+([a-z][a-z\s'-]+?)(?:\.|,| that| which| obeys| appears)/i);
       if (nameMatch) {
         summons = { creature: nameMatch[1].trim(), count: 1 };
+      }
+    }
+    // Phase 7 batch 2 (Session 99): "statistics of a/an [normal] <creature>"
+    // — Captain N'ghathrod::0 psionic duplicate pattern. The text says "The
+    // duplicate has the statistics of a normal mind flayer". This is a SUMMON
+    // misclassified as save_only (the @dc 15 is the dispel DC, not a save).
+    // Extract the creature name and clear saveDC/saveAbility so the category
+    // becomes `summon`.
+    if (!summons) {
+      const statsMatch = cleaned.match(/statistics of (?:a|an|the)\s+(?:normal\s+)?([a-z][a-z\s'-]+?)(?:\s+and\s+is|\s*,|\s*\.|$)/i);
+      if (statsMatch
+          && /\b(?:duplicate|copy|clone|apparition)\b/i.test(cleaned)) {
+        const creatureName = statsMatch[1].trim();
+        // Guard against obviously-wrong captures (too long = regex over-matched).
+        if (creatureName.length > 0 && creatureName.length <= 40 && creatureName.split(/\s+/).length <= 4) {
+          summons = { creature: creatureName, count: 1 };
+        }
       }
     }
   }
@@ -1286,6 +1347,11 @@ export function extractLairAction(
     teleportFt,
     speedZero,
     disadvOnAttacks,
+    // Phase 7 batch 2 (Session 99): four more save_only bespoke-effect flags.
+    lairWardingBondTether,
+    objectMove,
+    ageAlteration,
+    environmentManipulation,
     category,
   };
 }

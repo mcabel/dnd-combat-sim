@@ -741,11 +741,13 @@ console.log('\n--- 15. Full-combat: Elder Brain fires speed-zero lair action ---
 }
 
 // ============================================================
-// 16. Regression: unrecognized save_only now logs "Phase 8"
-//     (Updated from "Phase 7" to "Phase 8" — the fallback log message
-//     reflects that Phase 7 batch 1 is now implemented.)
+// 16. Regression: unrecognized save_only now logs "Phase 9"
+//     (Updated from "Phase 8" to "Phase 9" in Session 99 — the fallback log
+//     message reflects that Phase 7 batch 2 is now implemented and ALL
+//     bestiary save_only actions are recognized. The fallback now only fires
+//     for synthetic test actions with an unrecognized bespoke effect.)
 // ============================================================
-console.log('\n--- 16. Regression: unrecognized save_only logs "Phase 8" ---');
+console.log('\n--- 16. Regression: unrecognized save_only logs "Phase 9" ---');
 {
   const dragon = spawn('Adult Red Dragon', { x: 0, y: 0, z: 0 });
   asParty(dragon);
@@ -777,8 +779,8 @@ console.log('\n--- 16. Regression: unrecognized save_only logs "Phase 8" ---');
     `no log; events: ${rlog.events.filter((e:any)=>e.actorId===dragon.id).map((e:any)=>e.description.substring(0,80)).join(' | ')}`);
 
   if (notImplLog) {
-    assert('16b. log mentions "Phase 8" (updated from "Phase 7")',
-      notImplLog.description.includes('Phase 8'),
+    assert('16b. log mentions "Phase 9" (updated from "Phase 8" in Session 99)',
+      notImplLog.description.includes('Phase 9'),
       `log: ${notImplLog.description.substring(0, 120)}`);
   }
 }

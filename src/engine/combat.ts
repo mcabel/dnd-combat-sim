@@ -1555,6 +1555,8 @@ export function resolveAttack(
         target.id, dealt);
       if (dealt > 0) state.rageDamagedSinceLastTurn.add(target.id);
       applyWardingBondRedirect(target, dealt, state);
+      // Phase 7 batch 2 (Session 99): Lich/Illithilich Warding Bond tether.
+      applyLairWardingBondTetherRedirect(target, dealt, state);
       checkDeath(target, state);
     }
     // Apply post-save-FAIL cantrip riders (e.g. Vicious Mockery disadv on next
@@ -1604,6 +1606,8 @@ export function resolveAttack(
         target.id, dealt);
       if (dealt > 0) state.rageDamagedSinceLastTurn.add(target.id);
       applyWardingBondRedirect(target, dealt, state);
+      // Phase 7 batch 2 (Session 99): Lich/Illithilich Warding Bond tether.
+      applyLairWardingBondTetherRedirect(target, dealt, state);
       checkDeath(target, state, attacker);
     }
     return;
@@ -2489,6 +2493,8 @@ export function resolveAttack(
       fireEldritchBlastHitInvocations(attacker, target, state);
     }
     applyWardingBondRedirect(target, dealt, state);
+    // Phase 7 batch 2 (Session 99): Lich/Illithilich Warding Bond tether.
+    applyLairWardingBondTetherRedirect(target, dealt, state);
     checkDeath(target, state);
   }
 
@@ -2830,6 +2836,8 @@ function processFallDamage(state: EngineState): void {
 
     // Warding Bond redirect (if the falling creature has a bonded protector)
     applyWardingBondRedirect(c, dealt, state);
+    // Phase 7 batch 2 (Session 99): Lich/Illithilich Warding Bond tether.
+    applyLairWardingBondTetherRedirect(c, dealt, state);
 
     // Death check (the fall may have killed the creature)
     checkDeath(c, state);
@@ -6489,6 +6497,19 @@ export interface CombatOptions {
 function resolveLairActions(state: EngineState): void {
   const bf = state.battlefield;
 
+  // ── Phase 7 batch 2 (Session 99): expire Warding Bond tethers at the start ──
+  // of each lair-action checkpoint. The tether (Lich::1, Illithilich::1) lasts
+  // "until initiative count 20 on the next round" — i.e., it expires at the
+  // next init-20 checkpoint. Clearing here ensures a tether set in round N is
+  // active during round N's turns and expires at round N+1's checkpoint (before
+  // the Lich can establish a new tether). The lazy expiry in
+  // `applyLairWardingBondTetherRedirect` is a backstop for edge cases.
+  for (const c of bf.combatants.values()) {
+    if (c.lairWardingBondTether && state.battlefield.round >= c.lairWardingBondTether.expiresAtRound) {
+      c.lairWardingBondTether = null;
+    }
+  }
+
   // Collect in-lair creatures with at least one lair action, alive & conscious.
   // Sort: descending CR (highest first), tie-break alphabetical name ([DD-3]).
   const actors = [...bf.combatants.values()]
@@ -6744,8 +6765,8 @@ function scoreLairAction(
     }
 
     case 'save_only': {
-      // Phase 6 (Session 97) + Phase 7 (Session 98): score based on the
-      // bespoke effect's real value.
+      // Phase 6 (Session 97) + Phase 7 (Session 98) + Phase 7 batch 2 (Session 99):
+      // score based on the bespoke effect's real value.
       //   - Push/pull: controlPush per target (repositioning control).
       //   - Banished: buffVulnerability per target (removes target from combat —
       //     very high value, similar to a vulnerability debuff).
@@ -6755,8 +6776,49 @@ function scoreLairAction(
       //     preferred position and dropped next to the lair creature).
       //   - Speed-zero (restrained): conditionRestrained per target (25).
       //   - Disadvantage-on-attacks: debuffDisadvantage per target (6).
+      //   - Warding-bond tether (Phase 7b2): buffVulnerability per target —
+      //     the tether redirects ~half the lair creature's incoming damage to
+      //     the target (significant buff for the lair creature + debuff for
+      //     the target). The save is NOT rolled at lair-action time (deferred
+      //     to damage time), so no pFail multiplier.
+      //   - Object-move / environment-manipulation (Phase 7b2): log-only —
+      //     score 1 (flat, no mechanical effect).
+      //   - Age-alteration (Phase 7b2): flavor-only — score 1 * pFail per
+      //     target (the save is rolled but the age delta has no mechanical effect).
       //   - No recognized effect (the remaining unmatched): low controlPush
       //     value (forces a save roll but has no mechanical outcome).
+
+      // Phase 7 batch 2 (Session 99): Warding Bond tether — flat per-target
+      // value (no pFail — the tether is established unconditionally; the save
+      // is deferred to damage time).
+      if (action.lairWardingBondTether) {
+        if (action.saveDC === undefined) return 0;
+        const scoredTargets = (action.maxTargets !== undefined && action.maxTargets > 0
+                              && targets.length > action.maxTargets)
+          ? targets.slice(0, action.maxTargets)
+          : targets;
+        score += scoredTargets.length * W.buffVulnerability;
+        break;
+      }
+      // Phase 7 batch 2: object-move & environment-manipulation are log-only.
+      if (action.objectMove || action.environmentManipulation) {
+        score += 1;
+        break;
+      }
+      // Phase 7 batch 2: age-alteration is flavor-only.
+      if (action.ageAlteration) {
+        if (action.saveDC === undefined || action.saveAbility === undefined) return 0;
+        const scoredTargets = (action.maxTargets !== undefined && action.maxTargets > 0
+                              && targets.length > action.maxTargets)
+          ? targets.slice(0, action.maxTargets)
+          : targets;
+        for (const t of scoredTargets) {
+          const pFail = estimateSaveFailProb(t, action.saveAbility, action.saveDC);
+          score += pFail * 1;  // flavor-only — value 1
+        }
+        break;
+      }
+
       if (action.saveDC === undefined || action.saveAbility === undefined) return 0;
       const hasPush = action.pushFt !== undefined && action.pushFt > 0;
       const hasBanish = action.banished === true;
@@ -8168,6 +8230,128 @@ function pullTowardLair(target: Combatant, sourcePos: Vec3, pullFt: number): Vec
 }
 
 /**
+ * Phase 7 batch 2 (Session 99): Establish a Warding Bond TETHER (Lich::1,
+ * Illithilich::1). The lair creature picks one target in range and tethers
+ * them. From now until the next initiative count 20, whenever the lair
+ * creature takes damage, the tethered target must make a CON save (DC 18);
+ * on fail, the lair creature takes half damage and the target takes the rest.
+ *
+ * This function ONLY establishes the tether (sets `Combatant.lairWardingBondTether`
+ * on the lair creature). The reactive damage-split is handled by
+ * `applyLairWardingBondTetherRedirect`, which is called from the 4 damage
+ * hook sites (the same sites that call `applyWardingBondRedirect`).
+ *
+ * The tether is cleared by `resolveLairActions` at the start of each lair-
+ * action checkpoint (the tether lasts "until initiative count 20 on the next
+ * round"). It's also cleared lazily in the redirect hook when the target dies
+ * or the expiry round passes.
+ */
+function handleLairWardingBondTetherSetup(
+  creature: Combatant,
+  action: LairAction,
+  state: EngineState,
+): void {
+  const bf = state.battlefield;
+  if (action.saveDC === undefined) {
+    log(state, 'action', creature.id,
+      `  → save_only: warding-bond tether — missing saveDC — no effect`, undefined);
+    return;
+  }
+  let targets = selectLairActionTargets(creature, action, bf)
+    .filter(t => t.id !== creature.id)
+    .filter(t => !t.isDead && !t.isUnconscious);
+  if (targets.length === 0) {
+    log(state, 'action', creature.id,
+      `  → save_only: warding-bond tether — no valid targets in range — no effect`, undefined);
+    return;
+  }
+  // Single-target (maxTargets=1 from "targets one creature").
+  if (action.maxTargets !== undefined && action.maxTargets > 0
+      && targets.length > action.maxTargets) {
+    targets = targets.slice(0, action.maxTargets);
+    log(state, 'action', creature.id,
+      `  → save_only: single-target tether — picking first valid target`, undefined);
+  }
+  const target = targets[0];
+  // Establish the tether on the lair creature (the damagee). The CON save
+  // rolls when the lair creature takes damage (not now).
+  creature.lairWardingBondTether = {
+    targetId: target.id,
+    saveDC: action.saveDC,
+    sourceActionId: action.id,
+    expiresAtRound: state.battlefield.round + 1,
+  };
+  log(state, 'action', creature.id,
+    `  → save_only: WARDING BOND TETHER established — ${target.name} tethered to ${creature.name} ` +
+    `(CON DC ${action.saveDC} on ${creature.name}'s next damage-taken; expires at init-20 round ${state.battlefield.round + 1})`,
+    target.id);
+}
+
+/**
+ * Phase 7 batch 2 (Session 99): Reactive damage-split hook for the Warding
+ * Bond TETHER (Lich::1, Illithilich::1). Called at the 4 damage-hook sites
+ * (alongside `applyWardingBondRedirect`). When the damagee has a tether:
+ *   - The tethered target rolls CON vs tether.saveDC.
+ *   - On SUCCESS: no effect — the lair creature takes full damage (already
+ *     applied), the target takes none.
+ *   - On FAILURE: the lair creature takes half the damage (rounded down) and
+ *     the target takes the remainder. Since `dealt` was already applied to
+ *     the lair creature, we HEAL BACK the target's share (ceil(dealt/2)) and
+ *     apply that share to the target. The healback is correct because `dealt`
+ *     is the actual damage taken (post-temp-HP, post-resistance, capped at
+ *     current HP) — healing back `ceil(dealt/2)` leaves the lair creature
+ *     with `floor(dealt/2)` effective damage taken (exactly "half, rounded
+ *     down" per the text).
+ *
+ * The tether's damage type for the target share is `null` (untyped) —
+ * consistent with the existing `applyWardingBondRedirect` spell handler. The
+ * text says "the target takes the remaining damage" without specifying a type
+ * change, but we don't have the original damage type at this hook point. The
+ * target's resistance/immunity is NOT checked (acceptable v1 simplification).
+ */
+function applyLairWardingBondTetherRedirect(
+  lich: Combatant,
+  dealt: number,
+  state: EngineState,
+): void {
+  if (!lich.lairWardingBondTether || dealt <= 0) return;
+  const tether = lich.lairWardingBondTether;
+  // Lazy expiry: clear if the expiry round has passed (the next init-20 checkpoint).
+  if (state.battlefield.round >= tether.expiresAtRound) {
+    lich.lairWardingBondTether = null;
+    return;
+  }
+  const target = state.battlefield.combatants.get(tether.targetId);
+  if (!target || target.isDead || target.isUnconscious) {
+    // Target died/fled — tether breaks silently.
+    lich.lairWardingBondTether = null;
+    return;
+  }
+  // Target rolls CON save vs tether.saveDC.
+  const save = rollSave(target, 'con', tether.saveDC);
+  if (save.success) {
+    log(state, 'save_success', lich.id,
+      `${target.name} succeeds CON save vs Warding Bond tether (DC ${tether.saveDC}, rolled ${save.roll}) — ${lich.name} takes full damage`,
+      target.id);
+    return;
+  }
+  // Fail: Lich takes half (rounded down), target takes the remainder.
+  const lichHalf = Math.floor(dealt / 2);
+  const targetShare = dealt - lichHalf;
+  // Healback: restore the target's share to the Lich (capped at maxHP).
+  const lichHPBeforeHeal = lich.currentHP;
+  lich.currentHP = Math.min(lich.maxHP, lich.currentHP + targetShare);
+  const healed = lich.currentHP - lichHPBeforeHeal;
+  // Apply targetShare to the tether target (null type — see doc comment above).
+  const targetDealt = applyDamageWithTempHP(target, targetShare, null);
+  log(state, 'save_fail', lich.id,
+    `${target.name} fails CON save vs Warding Bond tether (DC ${tether.saveDC}, rolled ${save.roll}) — ` +
+    `${lich.name} takes ${lichHalf} (half${healed > 0 ? `, healed ${healed} back` : ''}), ${target.name} takes ${targetDealt} (remainder)`,
+    target.id, targetDealt);
+  checkDeath(target, state);
+}
+
+/**
  * Resolve a `save_only` lair action. Each target rolls `saveAbility` vs
  * `saveDC`; on failure, the bespoke effect (push/fall/banish/etc.) is logged
  * as "not yet implemented" with the action.id. On success, no effect.
@@ -8193,6 +8377,32 @@ function handleLairSaveOnly(
   state: EngineState,
 ): void {
   const bf = state.battlefield;
+
+  // ── Phase 7 batch 2 (Session 99): Warding Bond tether (Lich::1, Illithilich::1). ──
+  // The lair action ESTABLISHES the tether; the CON save is rolled reactively
+  // when the lair creature takes damage (not at lair-action time). So we skip
+  // the normal save loop entirely and just set `Combatant.lairWardingBondTether`.
+  if (action.lairWardingBondTether) {
+    handleLairWardingBondTetherSetup(creature, action, state);
+    return;
+  }
+
+  // ── Phase 7 batch 2: object-move & environment-manipulation have @dc tags ──
+  // that are CHECK DCs (not save DCs). The handler skips the save roll and
+  // logs the action (v1 doesn't model battlefield objects or doors).
+  if (action.objectMove) {
+    log(state, 'action', creature.id,
+      `  → save_only: ${action.id} object-move — no combat-relevant object on battlefield (v1: log-only, no mechanical effect)`,
+      undefined);
+    return;
+  }
+  if (action.environmentManipulation) {
+    log(state, 'action', creature.id,
+      `  → save_only: ${action.id} environment-manipulation — doors/windows open/close (v1: log-only, no obstacle model)`,
+      undefined);
+    return;
+  }
+
   if (action.saveDC === undefined || action.saveAbility === undefined) {
     log(state, 'action', creature.id,
       `  → save_only: missing saveDC/saveAbility — no effect`, undefined);
@@ -8232,6 +8442,27 @@ function handleLairSaveOnly(
   const hasTeleport = action.teleportToSource === true;
   const hasSpeedZero = action.speedZero === true;
   const hasDisadv = action.disadvOnAttacks === true;
+
+  // ── Phase 7 batch 2 (Session 99): age-alteration (Sphinx::1). ──
+  // The @dc 15 IS a real CON save vs aging. On fail, roll 1d20 for the age
+  // delta (flavor-only — no age-based mechanics in 5e combat). A greater
+  // restoration spell can restore the age (not modeled in v1).
+  if (action.ageAlteration) {
+    for (const target of targets) {
+      const save = rollSave(target, action.saveAbility, action.saveDC);
+      log(state, save.success ? 'save_success' : 'save_fail', creature.id,
+        `${target.name} ${save.success ? 'succeeds' : 'fails'} ${action.saveAbility.toUpperCase()} save ` +
+        `(rolled ${save.roll} vs DC ${action.saveDC})`,
+        target.id);
+      if (save.success) continue;
+      const ageDelta = rollDie(20);
+      const direction = rollDie(2) === 1 ? 'older' : 'younger';
+      log(state, 'action', creature.id,
+        `  → ${target.name} becomes ${ageDelta} years ${direction} (flavor-only — no age-based mechanics in 5e combat; greater restoration can restore)`,
+        target.id);
+    }
+    return;
+  }
 
   for (const target of targets) {
     const save = rollSave(target, action.saveAbility, action.saveDC);
@@ -8380,13 +8611,15 @@ function handleLairSaveOnly(
     }
 
     if (!applied) {
-      // No recognized bespoke effect — log as "not yet implemented" (the
-      // remaining unmatched save_only actions: time-alteration (Sphinx aging),
-      // environment-interaction (Strahd doors, Githzerai Anarch object-move),
-      // misclassified summon (Captain N'ghathrod), and reactive-damage-triggers
-      // (Lich/Illithilich warding bond) — Phase 8+ per-action.id handlers).
+      // No recognized bespoke effect — log as "not yet implemented". After
+      // Phase 7 batch 2 (Session 99), ALL bestiary save_only actions are
+      // recognized (teleport/speedZero/disadv/push/banish/conds/tether/
+      // objectMove/ageAlteration/environmentManipulation) or recategorized
+      // (Captain N'ghathrod::0 → summon). This fallback now only fires for
+      // synthetic test actions with an unrecognized bespoke effect — Phase 9+
+      // per-action.id handlers if new patterns emerge.
       log(state, 'action', creature.id,
-        `  → save_only: ${target.name} failed — bespoke effect for ${action.id} not yet implemented (Phase 8: per-action.id handler)`,
+        `  → save_only: ${target.name} failed — bespoke effect for ${action.id} not yet implemented (Phase 9: per-action.id handler)`,
         target.id);
     }
   }
