@@ -918,6 +918,102 @@ export interface LairAction {
    */
   environmentManipulation?: boolean;
 
+  // ── Phase 8 batch 1 (Session 100): bespoke-category recognition flags. ──
+  // Eight more patterns identified by enumerating the bespoke-category lair
+  // actions. Two are MECHANICAL (selfInvisible adds the `invisible` condition;
+  // dispelMagic removes low-level active effects from enemies). Six are LOG-
+  // ONLY for v1 (no obstacle/terrain/perception/eye-ray-table/vessel model).
+  /**
+   * Difficult-terrain flag (Beholder::0, Death Tyrant::0). When true, the
+   * lair action creates an area of difficult terrain (slimy ground, spectral
+   * eyes/tentacles, etc.) for `durationRounds` (default 1). v1 doesn't model
+   * difficult terrain — the handler logs "difficult-terrain field — no
+   * terrain model" (Phase 9+ may add a terrain-cost model if it becomes
+   * tactically relevant). Note: Merrenoloth::0 ("air within 60 ft is
+   * difficult terrain + flyer must save vs prone") is categorized as
+   * `save_condition` because of the @dc + prone — not this flag.
+   */
+  lairDifficultTerrain?: boolean;
+  /**
+   * Self-invisibility flag (Emerald Dragon::2). When true, the lair creature
+   * becomes invisible until initiative count 20 on the next round
+   * (`durationRounds: 1`). The handler applies an `invisible` ActiveEffect
+   * via `applySpellEffect` (mirrors Greater Invisibility / Superior
+   * Invisibility). The effect grants advantage on the lair creature's
+   * attacks and disadvantage on attacks against it (per `perception.ts` and
+   * `utils.ts:1007`). The effect does NOT end on attack/cast (matches the
+   * "until initiative count 20" duration — lair actions don't have
+   * concentration mechanics). Auto-expires via `sourceTurnExpires` after
+   * `durationRounds`.
+   */
+  lairSelfInvisible?: boolean;
+  /**
+   * Dispel-magic flag (Topaz Dragon::1, Zargon::1, Darkweaver::0). When
+   * set, the handler iterates each enemy's `activeEffects` and removes
+   * any with `sourceSlotLevel <= maxLevel` (or all if `maxLevel` is
+   * undefined). Mirrors the Dispel Magic spell's level-scaling dispel.
+   *   - Topaz Dragon::1: ends one spell of 5th level or lower (single
+   *     target — the dragon chooses one active spell it's aware of).
+   *   - Zargon::1: "All spells of 5th level or lower affecting the
+   *     targets end" — up to two targets, all spells ≤ 5th.
+   *   - Darkweaver::0: "the spell that created the light is dispelled"
+   *     (2nd level or lower light spell only — the handler treats this
+   *     as `maxLevel: 2` and additionally filters to light-creating
+   *     effects; v1 simplification: dispel any ≤ 2nd-level effect).
+   */
+  lairDispelMagic?: { maxLevel: number };
+  /**
+   * Wall/obstacle-creation flag (Baphomet::2, Crystal Dragon::1,
+   * Fraz-Urb'luu::0, Halaster Blackcloak::0/::1/::2, Sapphire Dragon::1/::2).
+   * When true, the lair action creates/removes walls, doors, passages, or
+   * magic gates. v1 doesn't model walls as battlefield obstacles — the
+   * handler logs "wall/door creation — no obstacle model" (Phase 9+ may
+   * add an obstacle model similar to `visibility` if wall-blocking becomes
+   * tactically relevant).
+   */
+  lairWallCreation?: boolean;
+  /**
+   * Ethereal-pass flag (Hag::0, Strahd von Zarovich::0). When true, the
+   * lair creature can pass through solid walls/doors/ceilings/floors as
+   * if they weren't there until initiative count 20 on the next round.
+   * v1 doesn't model walls — the handler logs "ethereal-pass — no wall
+   * model" (effectively a movement-unblock flag; Phase 9+ may add a
+   * `phaseThroughWalls` Combatant field if walls become a thing).
+   */
+  lairEtherealPass?: boolean;
+  /**
+   * Random-eye-ray flag (Beholder::2, Death Tyrant::2, Belashyrra::0).
+   * When true, the lair action opens a spectral eye on a surface and
+   * shoots one RANDOM eye ray from the lair creature's eye-ray table.
+   * v1 doesn't model the eye-ray tables (each beholder variant has 10
+   * different rays with different damage types) — the handler logs
+   * "random-eye-ray — eye-ray table not modeled" (Phase 9+ may add a
+   * per-creature eye-ray registry if it becomes tactically relevant).
+   */
+  lairRandomEyeRay?: boolean;
+  /**
+   * Undead-pinpoint-living flag (Mummy Lord::0, Valin Sarnaster::0).
+   * When true, each undead creature in the lair can pinpoint the
+   * location of each living creature within 120 ft for `durationRounds`
+   * (default 1). v1's perception model already factors `invisible` and
+   * `hidden` conditions, but doesn't have a "pinpoint all living"
+   * meta-perception flag — the handler logs "undead-pinpoint-living —
+   * perception meta-flag" (Phase 9+ may add a `pinpointLiving` Combatant
+   * field that bypasses invisibility/hidden checks for undead allies).
+   */
+  lairUndeadPinpointLiving?: boolean;
+  /**
+   * Vessel-heal flag (Merrenoloth::0, Merrenoloth::2). When true, the
+   * lair action heals the VESSEL/SHIP (not the Merrenoloth itself) for
+   * `{@dice NdN}` hit points. v1 doesn't model the vessel as a
+   * combatant — the handler logs "vessel-heal — no vessel combatant"
+   * (Phase 9+ may add a vehicle-combatant model if ship-combat becomes
+   * a scenario type). Distinct from `lairSelfHeal` (which would heal
+   * the lair creature directly — not yet implemented; Baernaloth::0's
+   * reactive self-heal is too complex for batch 1).
+   */
+  lairVesselHeal?: boolean;
+
   /** Dispatcher routing tag (Phase 2+). `cast_spell` when isSpell; else by tag presence. */
   category: LairActionCategory;
 }

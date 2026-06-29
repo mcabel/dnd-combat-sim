@@ -1133,6 +1133,123 @@ export function extractLairAction(
     environmentManipulation = true;
   }
 
+  // ── 6e. Phase 8 batch 1 (Session 100): bespoke-category recognition flags. ──
+  // Eight patterns identified by enumerating the bespoke-category lair actions.
+  // Two are MECHANICAL (selfInvisible adds the `invisible` condition;
+  // dispelMagic removes low-level enemy active effects). Six are LOG-ONLY for
+  // v1 (no obstacle/terrain/perception/eye-ray-table/vessel model). The flags
+  // let the handler route to a specific code path instead of the default
+  // "not yet implemented" log, and the scorer assigns appropriate weights.
+  let lairDifficultTerrain: boolean | undefined;
+  let lairSelfInvisible: boolean | undefined;
+  let lairDispelMagic: { maxLevel: number } | undefined;
+  let lairWallCreation: boolean | undefined;
+  let lairEtherealPass: boolean | undefined;
+  let lairRandomEyeRay: boolean | undefined;
+  let lairUndeadPinpointLiving: boolean | undefined;
+  let lairVesselHeal: boolean | undefined;
+
+  // Difficult-terrain (Beholder::0, Death Tyrant::0): "that area is difficult
+  // terrain until initiative count 20". v1 doesn't model difficult terrain;
+  // the handler logs "difficult-terrain field — no terrain model".
+  // (Merrenoloth::0's "is difficult terrain + save vs prone" is save_condition
+  // because of the @dc — not this flag.)
+  if (/\bdifficult\s+terrain\b/i.test(cleaned)) {
+    lairDifficultTerrain = true;
+  }
+
+  // Self-invisibility (Emerald Dragon::2): "becomes invisible until initiative
+  // count 20 on the next round". The handler applies an `invisible`
+  // ActiveEffect (mirrors Greater Invisibility) for `durationRounds` (1).
+  if (/\bbecomes?\s+invisible\s+until\s+initiative\s+count\s+20/i.test(cleaned)) {
+    lairSelfInvisible = true;
+  }
+
+  // Dispel-magic (Topaz Dragon::1, Zargon::1, Darkweaver::0): "ends the spell"
+  // / "All spells of Nth level or lower ... end" / "the spell that created the
+  // light is dispelled". Extract the max spell level. The handler iterates
+  // each enemy's activeEffects and removes those with sourceSlotLevel ≤ max.
+  //   - Darkweaver::0: "spell of 2nd level or lower" → maxLevel 2.
+  //   - Topaz Dragon::1: "spell of 5th level or lower" → maxLevel 5.
+  //   - Zargon::1: "spells of 5th level or lower" → maxLevel 5.
+  // The "spell(s) of Nth level or lower" pattern is the strong signal — BUT
+  // we must require a dispel/end signal word nearby, otherwise we false-positive
+  // on Mummy Lord::2 / Valin Sarnaster::2 ("tries to cast a spell of 4th level
+  // or lower ... is wracked with pain" — that's a spell-disruption FIELD that
+  // deals damage on a failed save, NOT a dispel).
+  {
+    const dispelMatch = cleaned.match(/\bspells?\s+of\s+(\d+)(?:st|nd|rd|th)?\s+level\s+or\s+lower\b/i);
+    if (dispelMatch) {
+      const lvl = parseInt(dispelMatch[1], 10);
+      // Sanity guard: lair-action dispel caps at 9th level (no 10th+ in 5e).
+      if (lvl >= 1 && lvl <= 9) {
+        // Require a dispel/end signal within ~80 chars of the level phrase.
+        // (Mummy Lord::2 says "tries to cast a spell of 4th level or lower ...
+        // is wracked with pain" — no dispel/end signal — does NOT trigger.)
+        const idx = cleaned.toLowerCase().indexOf(dispelMatch[0].toLowerCase());
+        const winStart = Math.max(0, idx - 80);
+        const winEnd = idx + dispelMatch[0].length + 80;
+        const window = cleaned.substring(winStart, winEnd).toLowerCase();
+        if (/\b(?:ends?|dispel(?:led)?|ending)\b/.test(window)) {
+          lairDispelMagic = { maxLevel: lvl };
+        }
+      }
+    }
+  }
+
+  // Wall/obstacle-creation (Baphomet::2, Crystal Dragon::1, Fraz-Urb'luu::0,
+  // Halaster Blackcloak::0/::1/::2, Sapphire Dragon::1/::2). v1 doesn't model
+  // walls — the handler logs "wall/door creation — no obstacle model".
+  // Match common phrasings (covers all 8 known actions):
+  //   - Baphomet::2: "seals one doorway or other entryway"
+  //   - Fraz-Urb'luu::0: "causes up to five doors within the lair to become walls"
+  //   - Crystal Dragon::1: "open a passage through a wall of ice or snow"
+  //   - Halaster::0: "turning the open space to solid, worked stone"
+  //   - Halaster::1: "causes one door or archway ... to disappear"
+  //   - Halaster::2: "deactivates or reactivates one of Undermountain's magic gates"
+  //   - Sapphire Dragon::1: "form the stone into any shape"
+  //   - Sapphire Dragon::2: "shape the stone to open or close a passage through a wall"
+  if (/\b(?:seals?\s+(?:one|a)\s+doorway|doors?\s+(?:within\s+the\s+lair\s+)?(?:to\s+)?become\s+walls|open\s+(?:a|the)\s+passage\s+through\s+a\s+wall|open\s+space\s+to\s+solid|form\s+the\s+stone|shape\s+the\s+stone|door\s+or\s+archway|deactivates?\s+or\s+reactivates?\s+one\s+of)\b/i.test(cleaned)) {
+    lairWallCreation = true;
+  }
+
+  // Ethereal-pass (Hag::0, Strahd::0): "can pass through solid walls, doors,
+  // ceilings, and floors as if ... weren't there". v1 doesn't model walls —
+  // the handler logs "ethereal-pass — no wall model".
+  if (/\bpass\s+through\s+solid\s+walls,?\s+doors,?\s+ceilings,?\s+and\s+floors\b/i.test(cleaned)) {
+    lairEtherealPass = true;
+  }
+
+  // Random-eye-ray (Beholder::2, Death Tyrant::2, Belashyrra::0): "An eye
+  // opens on a solid surface ... One random eye ray of the [creature] shoots
+  // from that eye ...". v1 doesn't model eye-ray tables — the handler logs
+  // "random-eye-ray — eye-ray table not modeled".
+  if (/\brandom\s+eye\s+ray\b/i.test(cleaned)
+      || /\beye\s+opens\s+on\s+a\s+solid\s+surface\b/i.test(cleaned)
+      || /\beye\s+opens\s+in\s+the\s+air\s+at\s+a\s+point\b/i.test(cleaned)) {
+    lairRandomEyeRay = true;
+  }
+
+  // Undead-pinpoint-living (Mummy Lord::0, Valin Sarnaster::0): "Each undead
+  // creature in the lair can pinpoint the location of each living creature
+  // within 120 feet of it". v1's perception model doesn't have a "pinpoint
+  // all living" meta-flag — the handler logs "undead-pinpoint-living —
+  // perception meta-flag".
+  if (/\bundead\s+creature\s+in\s+the\s+lair\s+can\s+pinpoint\b/i.test(cleaned)
+      || /\bpinpoint\s+the\s+location\s+of\s+each\s+living\s+creature\b/i.test(cleaned)) {
+    lairUndeadPinpointLiving = true;
+  }
+
+  // Vessel-heal (Merrenoloth::0, Merrenoloth::2): "The ship regains 22 (4d10)
+  // hit points" / "The vessel regains 22 (4d10) hit points". v1 doesn't model
+  // the vessel as a combatant — the handler logs "vessel-heal — no vessel
+  // combatant". Note: Baernaloth::0's reactive self-heal is NOT this flag
+  // (different mechanic — reactive trigger when others take damage).
+  if (/\b(?:ship|vessel)\s+regains?\s+\d+\s*\(\{@dice\s+\d+d\d+\}/i.test(cleaned)
+      || /\b(?:ship|vessel)\s+regains?\s+\d+\s*\(\d+d\d+\)/i.test(cleaned)) {
+    lairVesselHeal = true;
+  }
+
   // ── 7. summons from {@creature X} + "up to N" / "N <creatures> rise as" ──
   // Fallback: "creating a/summoning a <creature>" (Lichen Lich shambling mound,
   // which has no @creature tag — [VERIFY-1] recommended summon classification).
@@ -1352,6 +1469,15 @@ export function extractLairAction(
     objectMove,
     ageAlteration,
     environmentManipulation,
+    // Phase 8 batch 1 (Session 100): eight bespoke-category recognition flags.
+    lairDifficultTerrain,
+    lairSelfInvisible,
+    lairDispelMagic,
+    lairWallCreation,
+    lairEtherealPass,
+    lairRandomEyeRay,
+    lairUndeadPinpointLiving,
+    lairVesselHeal,
     category,
   };
 }

@@ -6940,12 +6940,42 @@ function scoreLairAction(
     case 'bespoke': {
       // Pattern-match common bespoke patterns; default to low value (1)
       // since most aren't mechanically applied (handler logs "not yet
-      // implemented").
+      // implemented"). Phase 8 batch 1 (Session 100) routes 8 new patterns
+      // via structured fields — score them appropriately. The inline-regex
+      // patterns (healing-suppression, free-attack, recharge, self-teleport)
+      // remain as fallbacks for actions whose patterns aren't yet structured.
       const text = action.rawText.toLowerCase();
       if (/no creature.{0,40}can\s+regain\s+hit\s+points/i.test(text)) {
         // Healing-suppression field (Fazrian::0, Mummy Lord::2) — similar
         // value to a vulnerability debuff (prevents all healing in range).
         score += targets.length * W.buffVulnerability;
+      } else if (action.lairSelfInvisible) {
+        // Self-invisibility (Emerald Dragon::2) — defensive buff: advantage
+        // on attacks + disadvantage on attacks vs the lair creature for 1
+        // round. ~visibilitySelf (8) per round × duration, but invisibility
+        // is strictly stronger (also grants advantage on attacks). Use
+        // buffVulnerability (20) as a reasonable estimate (similar to the
+        // save_only disadvOnAttacks pattern — both deny the enemy effective
+        // attacks for 1 round).
+        score += W.buffVulnerability;
+      } else if (action.lairDispelMagic) {
+        // Dispel-magic (Topaz Dragon::1, Zargon::1, Darkweaver::0) — value
+        // depends on how many enemy effects are active (unknown at score
+        // time). Estimate ~1 dispel per enemy on average × debuffDisadvantage
+        // (6) per dispel — dispelling is less valuable than preventing the
+        // effect in the first place (the effect already did some work).
+        score += targets.length * W.debuffDisadvantage;
+      } else if (action.lairDifficultTerrain
+                 || action.lairWallCreation
+                 || action.lairEtherealPass
+                 || action.lairRandomEyeRay
+                 || action.lairUndeadPinpointLiving
+                 || action.lairVesselHeal) {
+        // Log-only patterns — low default (1). The handler logs but doesn't
+        // apply mechanical effects in v1. Phase 9+ may add subsystems that
+        // make these meaningful (terrain cost, obstacle model, eye-ray
+        // table, perception meta-flag, vessel combatant).
+        score += 1;
       } else {
         // Unknown bespoke — low default (handler logs "not yet implemented").
         score += 1;
@@ -8678,26 +8708,140 @@ function handleLairBespoke(
   // These require per-action handling. v1: log + skip.
   if (/uses\s+one\s+of\s+(?:their|his|her)\s+available\s+(?:melee|ranged)\s+attacks/i.test(text)) {
     log(state, 'action', creature.id,
-      `  → bespoke: "free attack" pattern — logged, not yet implemented (Phase 5: free-attack grant)`,
+      `  → bespoke: "free attack" pattern — logged, not yet implemented (Phase 9: free-attack grant)`,
       undefined);
     return;
   }
   if (/recharges\s+one\s+of\s+(?:their|his|her)\s+expended\s+abilities/i.test(text)) {
     log(state, 'action', creature.id,
-      `  → bespoke: "recharge ability" pattern — logged, not yet implemented (Phase 5: recharge tracking)`,
+      `  → bespoke: "recharge ability" pattern — logged, not yet implemented (Phase 9: recharge tracking)`,
       undefined);
     return;
   }
   if (/teleports?\s+(?:themself|himself|herself|itself)\s+to/i.test(text)) {
     log(state, 'action', creature.id,
-      `  → bespoke: "self-teleport" pattern — logged, not yet implemented (Phase 5: teleport with point-selection)`,
+      `  → bespoke: "self-teleport" pattern — logged, not yet implemented (Phase 9: teleport with point-selection)`,
+      undefined);
+    return;
+  }
+
+  // ── Phase 8 batch 1 (Session 100): eight bespoke-category recognition flags. ──
+  // The parser extracted these as structured fields; route to specific handlers
+  // instead of the default "not yet implemented" log. Two are MECHANICAL
+  // (selfInvisible adds the `invisible` condition; dispelMagic removes low-
+  // level enemy active effects). Six are LOG-ONLY for v1 (no obstacle/terrain/
+  // perception/eye-ray-table/vessel model — Phase 9+ may add those subsystems).
+
+  // 1. Difficult-terrain field (Beholder::0, Death Tyrant::0) — log-only.
+  if (action.lairDifficultTerrain) {
+    const radiusFt = action.radiusFt ?? 50;
+    const durationRounds = action.durationRounds ?? 1;
+    log(state, 'action', creature.id,
+      `  → bespoke: difficult-terrain field — ${radiusFt}-ft area within ${action.rangeFt ?? 120} ft of ${creature.name} becomes difficult terrain for ${durationRounds} round(s) (v1: log-only, no terrain-cost model)`,
+      undefined);
+    return;
+  }
+
+  // 2. Self-invisibility (Emerald Dragon::2) — MECHANICAL: adds invisible condition.
+  if (action.lairSelfInvisible) {
+    const durationRounds = action.durationRounds ?? 1;
+    applySpellEffect(creature, {
+      casterId: creature.id,
+      spellName: `Lair:${action.id}`,
+      effectType: 'invisible',
+      payload: {},
+      sourceIsConcentration: false,
+      // No breaksOnAttackOrCast — lair-action invisibility persists for the
+      // full "until initiative count 20" duration (no concentration mechanic).
+      appliedTurn: bf.round,
+      sourceTurnExpires: bf.round + durationRounds - 1,
+    });
+    log(state, 'action', creature.id,
+      `  → bespoke: ${creature.name} becomes INVISIBLE for ${durationRounds} round(s) (advantage on attacks, disadvantage on attacks vs ${creature.name}; auto-expires at round ${bf.round + durationRounds})`,
+      creature.id);
+    return;
+  }
+
+  // 3. Dispel-magic (Topaz Dragon::1, Zargon::1, Darkweaver::0) — MECHANICAL:
+  // removes low-level active effects from enemies.
+  if (action.lairDispelMagic) {
+    const maxLevel = action.lairDispelMagic.maxLevel;
+    const targets = selectLairActionTargets(creature, action, bf)
+      .filter(t => t.id !== creature.id)
+      .filter(t => !t.isDead && !t.isUnconscious);
+    let totalRemoved = 0;
+    for (const t of targets) {
+      // Filter the target's activeEffects to those with sourceSlotLevel ≤ maxLevel.
+      // sourceSlotLevel may be undefined for some effects (e.g., racial traits) —
+      // treat undefined as level 0 (always dispellable) per Dispel Magic PHB p.236:
+      // "Any spell of 3rd level or lower on the target ends."
+      const dispellable = t.activeEffects.filter(e =>
+        (e.sourceSlotLevel ?? 0) <= maxLevel
+      );
+      for (const e of dispellable) {
+        removeEffectById(t.id, e.id, bf);
+        totalRemoved++;
+        log(state, 'action', creature.id,
+          `    • dispelled ${e.spellName} (level ${e.sourceSlotLevel ?? 0}) from ${t.name}`,
+          t.id);
+      }
+    }
+    log(state, 'action', creature.id,
+      `  → bespoke: dispel-magic field — ends ${totalRemoved} spell(s) of level ≤ ${maxLevel} on ${targets.length} target(s) (range ${action.rangeFt ?? '∞'} ft)`,
+      undefined);
+    return;
+  }
+
+  // 4. Wall/door creation (Baphomet::2, Crystal Dragon::1, Fraz-Urb'luu::0,
+  //    Halaster Blackcloak::0/::1/::2, Sapphire Dragon::1/::2) — log-only.
+  if (action.lairWallCreation) {
+    log(state, 'action', creature.id,
+      `  → bespoke: wall/door creation — ${action.id} creates/removes a wall, door, passage, or magic gate (v1: log-only, no obstacle model)`,
+      undefined);
+    return;
+  }
+
+  // 5. Ethereal-pass (Hag::0, Strahd::0) — log-only.
+  if (action.lairEtherealPass) {
+    const durationRounds = action.durationRounds ?? 1;
+    log(state, 'action', creature.id,
+      `  → bespoke: ethereal-pass — ${creature.name} can pass through walls/doors/ceilings/floors for ${durationRounds} round(s) (v1: log-only, no wall model)`,
+      undefined);
+    return;
+  }
+
+  // 6. Random-eye-ray (Beholder::2, Death Tyrant::2, Belashyrra::0) — log-only.
+  if (action.lairRandomEyeRay) {
+    log(state, 'action', creature.id,
+      `  → bespoke: random-eye-ray — ${action.id} opens a spectral eye and shoots one random eye ray (v1: log-only, eye-ray table not modeled)`,
+      undefined);
+    return;
+  }
+
+  // 7. Undead-pinpoint-living (Mummy Lord::0, Valin Sarnaster::0) — log-only.
+  if (action.lairUndeadPinpointLiving) {
+    const durationRounds = action.durationRounds ?? 1;
+    log(state, 'action', creature.id,
+      `  → bespoke: undead-pinpoint-living — each undead in the lair pinpoints each living creature within ${action.rangeFt ?? 120} ft for ${durationRounds} round(s) (v1: log-only, perception meta-flag)`,
+      undefined);
+    return;
+  }
+
+  // 8. Vessel-heal (Merrenoloth::0, Merrenoloth::2) — log-only.
+  if (action.lairVesselHeal) {
+    log(state, 'action', creature.id,
+      `  → bespoke: vessel-heal — the ship/vessel regains HP (v1: log-only, no vessel combatant)`,
       undefined);
     return;
   }
 
   // ── Default: log "not yet implemented" with action.id ──
+  // After Phase 8 batch 1 (Session 100), the bespoke fallback only fires for
+  // actions whose patterns haven't been recognized yet (Phase 9+ per-action.id
+  // handlers — e.g., Baernaloth::0 reactive self-heal, Time Dragon::1 time
+  // slow, Sphinx::3 plane shift, Alyxian::2 psychic mirror).
   log(state, 'action', creature.id,
-    `  → bespoke: ${action.id} not yet implemented (Phase 5: per-action.id handler) — no mechanical effect`,
+    `  → bespoke: ${action.id} not yet implemented (Phase 9: per-action.id handler) — no mechanical effect`,
     undefined);
 }
 
