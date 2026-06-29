@@ -1250,6 +1250,98 @@ export function extractLairAction(
     lairVesselHeal = true;
   }
 
+  // ── 6f. Phase 8 batch 2 (Session 101): six more bespoke-category recognition flags. ──
+  // Covers 12 of the 15 remaining unrecognized bespoke actions from Session 100's
+  // §19 coverage sweep. One is MECHANICAL (illusoryAttack rolls melee attack +
+  // damage). Five are LOG-ONLY (plane-shift / teleport-with-allies / anti-
+  // invisibility / recharge / bespoke-action-invocation).
+  let lairPlaneShift: boolean | undefined;
+  let lairTeleportAllies: boolean | undefined;
+  let lairAntiInvisibility: boolean | undefined;
+  let lairIllusoryAttack: { attackBonus: number; damage: { count: number; sides: number; bonus: number; type: string } } | undefined;
+  let lairRechargeAbility: boolean | undefined;
+  let lairBespokeActionInvocation: boolean | undefined;
+
+  // Plane-shift (Sphinx::3): "shifts itself and up to N other creatures ... to
+  // another plane of existence". Out-of-combat effect — log-only v1.
+  // Note: the count can be a digit OR a word-number ("seven", "five", etc.).
+  if (/\bshifts?\s+(?:itself|themself)\s+and\s+(?:up\s+to\s+)?(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+other\s+creatures?\b/i.test(cleaned)
+      && /\bplane\s+of\s+existence\b/i.test(cleaned)) {
+    lairPlaneShift = true;
+  }
+
+  // Teleport-with-allies (Gar Shatterkeel::0): "teleports ... bringing up to N
+  // willing creatures". Log-only v1 (lair creature can already move freely).
+  // The count can be a digit OR a word-number.
+  if (/\bteleports?\s+.{0,60}bringing\s+(?:up\s+to\s+)?(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+willing\s+creatures\b/i.test(cleaned)) {
+    lairTeleportAllies = true;
+  }
+
+  // Anti-invisibility field (Drow Matron Mother::0): "can't become hidden from
+  // her and gain no benefit from the invisible condition against her". Log-only
+  // v1 (perception meta-flag not modeled).
+  if (/\bcan'?t\s+become\s+hidden\b/i.test(cleaned)
+      && /\binvisible\s+condition\b/i.test(cleaned)) {
+    lairAntiInvisibility = true;
+  }
+
+  // Illusory-attack (Alyxian the Absolved::2 / Callous::2 / Dispossessed::2 /
+  // Tormented::2): "makes one melee weapon attack (N to hit) against it. On a
+  // hit, the attack deals M (XdY + Z) [type] damage." Extract attackBonus from
+  // "(N to hit)" and damage from "XdY + Z" + damage type from the surrounding
+  // text. MECHANICAL handler rolls the attack + applies damage.
+  // Note: the rawText has already been cleaned (5eTools {@dice} tags reduced to
+  // their first arg), so we match the dice pattern in `cleaned` directly.
+  {
+    const attackMatch = cleaned.match(/\bmakes?\s+one\s+melee\s+weapon\s+attack\s+\((\d+)\s+to\s+hit\)\s+against/i);
+    if (attackMatch) {
+      const attackBonus = parseInt(attackMatch[1], 10);
+      // Extract damage from "XdY + Z" followed by a damage type word. The dice
+      // is in the cleaned text as "10d8 + 4" or "1d8 + 4" (the {@dice} tag was
+      // reduced to its first arg by the cleaning step).
+      const dmgMatch = cleaned.match(/(\d+)d(\d+)\s*(?:\+\s*(\d+))?\s*\)?\s*(bludgeoning|piercing|slashing|fire|cold|lightning|thunder|poison|acid|psychic|necrotic|radiant|force)\s+damage/i);
+      if (dmgMatch) {
+        const count = parseInt(dmgMatch[1], 10);
+        const sides = parseInt(dmgMatch[2], 10);
+        const bonus = dmgMatch[3] ? parseInt(dmgMatch[3], 10) : 0;
+        const type = dmgMatch[4].toLowerCase();
+        // Sanity guard: count 1-20, sides 1-20, bonus 0-50 (within 5e bounds).
+        if (count >= 1 && count <= 20 && sides >= 1 && sides <= 20 && bonus >= 0 && bonus <= 50) {
+          lairIllusoryAttack = {
+            attackBonus,
+            damage: { count, sides, bonus, type },
+          };
+        }
+      }
+    }
+  }
+
+  // Recharge-ability (Greater Tyrant Shadow::1): "recharges its [Ability Name]
+  // ability". Log-only v1 (no per-ability recharge tracking). Distinct from
+  // the inline-regex `/recharges\s+one\s+of/` (Archdevil::3 "recharges one of
+  // their expended abilities") — this flag covers the specific "recharges its
+  // X ability" phrasing.
+  if (/\brecharges?\s+(?:its|his|her)\s+\w[\w\s]*\bability\b/i.test(cleaned)) {
+    lairRechargeAbility = true;
+  }
+
+  // Bespoke-action-invocation (Dyrrn::0, Morkoth::1, Zuggtmoy::2): "uses its
+  // [X] action" / "uses either her [X] or [Y]". Log-only v1 (each named action
+  // would need its own handler). Match "uses its/his/her [Name] action" — the
+  // strong signal is "uses ... action" with a possessive pronoun.
+  // (Excludes "uses one of their available attacks" — that's the inline-regex
+  // free-attack pattern, already handled.)
+  if (/\buses?\s+(?:its|his|her)\s+\w[\w\s]*\baction\b/i.test(cleaned)
+      && !/uses\s+one\s+of\s+(?:their|his|her)\s+available/i.test(cleaned)) {
+    lairBespokeActionInvocation = true;
+  }
+  // Also catch "uses either her X or her Y" (Zuggtmoy::2 pattern — no "action"
+  // word but clearly invokes a named ability).
+  if (/uses?\s+either\s+(?:its|his|her)\s+\w+/i.test(cleaned)
+      && !/uses\s+one\s+of\s+(?:their|his|her)\s+available/i.test(cleaned)) {
+    lairBespokeActionInvocation = true;
+  }
+
   // ── 7. summons from {@creature X} + "up to N" / "N <creatures> rise as" ──
   // Fallback: "creating a/summoning a <creature>" (Lichen Lich shambling mound,
   // which has no @creature tag — [VERIFY-1] recommended summon classification).
@@ -1478,6 +1570,13 @@ export function extractLairAction(
     lairRandomEyeRay,
     lairUndeadPinpointLiving,
     lairVesselHeal,
+    // Phase 8 batch 2 (Session 101): six more bespoke-category recognition flags.
+    lairPlaneShift,
+    lairTeleportAllies,
+    lairAntiInvisibility,
+    lairIllusoryAttack,
+    lairRechargeAbility,
+    lairBespokeActionInvocation,
     category,
   };
 }

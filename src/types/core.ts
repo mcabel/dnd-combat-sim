@@ -1014,6 +1014,84 @@ export interface LairAction {
    */
   lairVesselHeal?: boolean;
 
+  // ── Phase 8 batch 2 (Session 101): six more bespoke-category recognition flags. ──
+  // Covers 12 of the 15 remaining unrecognized bespoke actions from Session 100's
+  // §19 coverage sweep. One is MECHANICAL (illusoryAttack rolls a melee attack
+  // + applies damage). Five are LOG-ONLY for v1 (plane-shift / teleport-with-
+  // allies / anti-invisibility / recharge / bespoke-action-invocation).
+  /**
+   * Plane-shift flag (Sphinx::3). When true, the lair creature shifts itself
+   * and up to 7 other creatures to another plane of existence. This is an
+   * out-of-combat effect — the shifted creatures leave the battlefield. v1
+   * doesn't model plane-shift (no return mechanic, no planar battlefield) —
+   * the handler logs "plane-shift — out-of-combat effect (v1: log-only)".
+   * Phase 9+ may add a plane-shift model if planar combat becomes a scenario.
+   */
+  lairPlaneShift?: boolean;
+  /**
+   * Teleport-with-allies flag (Gar Shatterkeel::0). When true, the lair
+   * creature teleports anywhere within its lair, bringing up to N willing
+   * creatures with it. v1 doesn't model lair-boundary teleport (the lair
+   * creature can already move freely within the battlefield) — the handler
+   * logs "teleport-with-allies — repositions within lair (v1: log-only)".
+   * Phase 9+ may add a multi-creature teleport handler if tactical
+   * repositioning of allies becomes meaningful.
+   */
+  lairTeleportAllies?: boolean;
+  /**
+   * Anti-invisibility field flag (Drow Matron Mother::0). When true, hostile
+   * creatures within the lair can't become hidden from the lair creature and
+   * gain no benefit from the invisible condition against it, for
+   * `durationRounds` (default 1). v1's perception model doesn't have a
+   * "see-all-invisible" meta-flag — the handler logs "anti-invisibility
+   * field — hostile invisibility suppressed (v1: log-only, perception
+   * meta-flag)". Phase 9+ may add a `truesight`-like Combatant field.
+   */
+  lairAntiInvisibility?: boolean;
+  /**
+   * Illusory-attack flag (Alyxian the Absolved::2, Callous::2,
+   * Dispossessed::2, Tormented::2). When true, the lair action creates a
+   * temporary illusory form that makes one melee weapon attack against a
+   * target. The handler is MECHANICAL — it rolls a melee attack with
+   * `illusoryAttackBonus` vs the target's AC; on hit, applies
+   * `illusoryAttackDamage` (a DiceExpression). The form disappears after
+   * the attack regardless of hit/miss.
+   *   - All 4 Alyxian variants: attackBonus=7, damage=1d8+4 bludgeoning
+   *     (avg 8). The Absolved variant's text says "8 (10d8 + 4)" which is
+   *     a 5eTools formatting quirk — the "10d8" is likely a typo for "1d8"
+   *     (the other 3 variants all say "1d8 + 4"). The parser extracts the
+   *     dice from the {@dice} tag; the handler uses the parsed value.
+   */
+  lairIllusoryAttack?: {
+    attackBonus: number;
+    damage: { count: number; sides: number; bonus: number; type: string };
+  };
+  /**
+   * Recharge-ability flag (Greater Tyrant Shadow::1, plus the inline-regex
+   * Archdevil::3 pattern). When true, the lair creature recharges one of its
+   * expended abilities (a legendary action, a special attack, etc.). v1
+   * doesn't track per-ability recharge state — the handler logs
+   * "recharge-ability — recharges an expended ability (v1: log-only, no
+   * per-ability recharge tracking)". Phase 9+ may add a recharge model if
+   * ability-tracking becomes a scenario. Distinct from the inline-regex
+   * `/recharges\s+one\s+of/` pattern (Archdevil::3) which remains as a
+   * fallback — this flag covers the specific "recharges its [Ability Name]
+   * ability" phrasing (Greater Tyrant Shadow::1).
+   */
+  lairRechargeAbility?: boolean;
+  /**
+   * Bespoke-action-invocation flag (Dyrrn::0, Morkoth::1, Zuggtmoy::2).
+   * When true, the lair creature "uses its [X] action" — invoking a named
+   * bespoke action that's defined elsewhere in the creature's stat block
+   * (e.g., Dyrrn's "Corruption" action, Morkoth's "Hypnosis" action,
+   * Zuggtmoy's "Infestation Spores"/"Mind Control Spores"). v1 doesn't
+   * model bespoke-action invocation (each named action would need its own
+   * handler) — the handler logs "bespoke-action-invocation — uses its [X]
+   * action (v1: log-only, named action not modeled)". Phase 9+ may add
+   * per-creature named-action handlers if these become tactically relevant.
+   */
+  lairBespokeActionInvocation?: boolean;
+
   /** Dispatcher routing tag (Phase 2+). `cast_spell` when isSpell; else by tag presence. */
   category: LairActionCategory;
 }

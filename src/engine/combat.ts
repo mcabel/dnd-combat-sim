@@ -6945,9 +6945,11 @@ function scoreLairAction(
       // patterns (healing-suppression, free-attack, recharge, self-teleport)
       // remain as fallbacks for actions whose patterns aren't yet structured.
       const text = action.rawText.toLowerCase();
-      if (/no creature.{0,40}can\s+regain\s+hit\s+points/i.test(text)) {
-        // Healing-suppression field (Fazrian::0, Mummy Lord::2) — similar
-        // value to a vulnerability debuff (prevents all healing in range).
+      if (/no (?:creature|target).{0,40}can\s+regain\s+hit\s+points/i.test(text)) {
+        // Healing-suppression field (Fazrian::0, Mummy Lord::2, Demilich::2) —
+        // similar value to a vulnerability debuff (prevents all healing in
+        // range). Phase 8 batch 2 broadened to catch Demilich::2 ("No target
+        // can regain hit points").
         score += targets.length * W.buffVulnerability;
       } else if (action.lairSelfInvisible) {
         // Self-invisibility (Emerald Dragon::2) — defensive buff: advantage
@@ -6965,16 +6967,36 @@ function scoreLairAction(
         // (6) per dispel — dispelling is less valuable than preventing the
         // effect in the first place (the effect already did some work).
         score += targets.length * W.debuffDisadvantage;
+      } else if (action.lairIllusoryAttack) {
+        // Illusory-attack (Alyxian::2 x4 variants) — MECHANICAL: rolls a melee
+        // attack (bonus 7) vs target AC; on hit, applies 1d8+4 bludgeoning
+        // (avg 8.5). Score as expected damage per target × damagePerEnemy.
+        // (The Absolved variant's "10d8+4" is a 5eTools typo — the handler
+        // uses the parsed value, which could be 10d8+4 for Absolved. We score
+        // based on the parsed damage expression.)
+        const dmg = action.lairIllusoryAttack.damage;
+        const avgDmg = dmg.count * (dmg.sides + 1) / 2 + dmg.bonus;
+        // Estimate P(hit) ≈ 0.65 (typical for +7 vs AC ~15-18). The lair
+        // creature picks the target with lowest AC, so slightly higher.
+        const pHit = 0.65;
+        score += targets.length * avgDmg * pHit * W.damagePerEnemy;
       } else if (action.lairDifficultTerrain
                  || action.lairWallCreation
                  || action.lairEtherealPass
                  || action.lairRandomEyeRay
                  || action.lairUndeadPinpointLiving
-                 || action.lairVesselHeal) {
+                 || action.lairVesselHeal
+                 // Phase 8 batch 2 (Session 101) log-only flags:
+                 || action.lairPlaneShift
+                 || action.lairTeleportAllies
+                 || action.lairAntiInvisibility
+                 || action.lairRechargeAbility
+                 || action.lairBespokeActionInvocation) {
         // Log-only patterns — low default (1). The handler logs but doesn't
         // apply mechanical effects in v1. Phase 9+ may add subsystems that
         // make these meaningful (terrain cost, obstacle model, eye-ray
-        // table, perception meta-flag, vessel combatant).
+        // table, perception meta-flag, vessel combatant, plane-shift model,
+        // recharge tracking, named-action handlers).
         score += 1;
       } else {
         // Unknown bespoke — low default (handler logs "not yet implemented").
@@ -8688,8 +8710,10 @@ function handleLairBespoke(
   const text = action.rawText.toLowerCase();
 
   // ── Pattern: regeneration / healing suppression ──
-  // "no creature within N feet... can regain hit points" (Fazrian::0, Mummy Lord::2).
-  if (/no creature.{0,40}can\s+regain\s+hit\s+points/i.test(text)) {
+  // "no creature/target within N feet... can regain hit points" (Fazrian::0,
+  // Mummy Lord::2, Demilich::2). Phase 8 batch 2 broadened the regex from
+  // "no creature" to "no (creature|target)" to catch Demilich::2.
+  if (/no (?:creature|target).{0,40}can\s+regain\s+hit\s+points/i.test(text)) {
     const targets = selectLairActionTargets(creature, action, bf)
       .filter(t => t.id !== creature.id)
       .filter(t => !t.isDead && !t.isUnconscious);
@@ -8835,11 +8859,102 @@ function handleLairBespoke(
     return;
   }
 
+  // ── Phase 8 batch 2 (Session 101): six more bespoke-category recognition flags. ──
+  // One is MECHANICAL (illusoryAttack rolls a melee attack + applies damage).
+  // Five are LOG-ONLY (plane-shift / teleport-with-allies / anti-invisibility /
+  // recharge / bespoke-action-invocation).
+
+  // 9. Plane-shift (Sphinx::3) — log-only (out-of-combat effect).
+  if (action.lairPlaneShift) {
+    log(state, 'action', creature.id,
+      `  → bespoke: plane-shift — ${creature.name} shifts itself and up to 7 creatures to another plane (v1: log-only, out-of-combat effect)`,
+      undefined);
+    return;
+  }
+
+  // 10. Teleport-with-allies (Gar Shatterkeel::0) — log-only.
+  if (action.lairTeleportAllies) {
+    log(state, 'action', creature.id,
+      `  → bespoke: teleport-with-allies — ${creature.name} repositions within the lair, bringing up to 5 willing creatures (v1: log-only, no multi-teleport model)`,
+      undefined);
+    return;
+  }
+
+  // 11. Anti-invisibility field (Drow Matron Mother::0) — log-only.
+  if (action.lairAntiInvisibility) {
+    const durationRounds = action.durationRounds ?? 1;
+    log(state, 'action', creature.id,
+      `  → bespoke: anti-invisibility field — hostile creatures can't become hidden from ${creature.name} and gain no benefit from invisibility against it for ${durationRounds} round(s) (v1: log-only, perception meta-flag)`,
+      undefined);
+    return;
+  }
+
+  // 12. Illusory-attack (Alyxian::2 x4 variants) — MECHANICAL: rolls a melee
+  //     attack vs the target's AC; on hit, applies damage. The illusory form
+  //     disappears after the attack regardless of hit/miss.
+  if (action.lairIllusoryAttack) {
+    const targets = selectLairActionTargets(creature, action, bf)
+      .filter(t => t.id !== creature.id)
+      .filter(t => !t.isDead && !t.isUnconscious);
+    if (targets.length === 0) {
+      log(state, 'action', creature.id,
+        `  → bespoke: illusory-attack — no valid targets in range — no effect`,
+        undefined);
+      return;
+    }
+    // Pick the first valid target (the lair creature targets "one creature").
+    const target = targets[0];
+    const atkBonus = action.lairIllusoryAttack.attackBonus;
+    const dmg = action.lairIllusoryAttack.damage;
+    // Roll the melee attack (no advantage/disadvantage — the illusory form
+    // doesn't benefit from the lair creature's conditions).
+    const atk = rollAttack(atkBonus, false, false);
+    const hit = atk.total >= target.ac || atk.isCrit;
+    log(state, 'action', creature.id,
+      `  → bespoke: illusory-attack — watery form attacks ${target.name} (d20+${atkBonus}=${atk.total}${atk.isCrit ? ' CRIT' : ''} vs AC ${target.ac})`,
+      target.id, atk.roll);
+    if (hit) {
+      const dmgExpr = {
+        count: dmg.count,
+        sides: dmg.sides,
+        bonus: dmg.bonus,
+        average: dmg.count * (dmg.sides + 1) / 2 + dmg.bonus,
+      };
+      const dmgDealt = rollDamage(dmgExpr, atk.isCrit);
+      const actualDealt = applyDamageWithTempHP(target, dmgDealt, dmg.type as any);
+      log(state, 'damage', creature.id,
+        `    → ${target.name} takes ${actualDealt} ${dmg.type} damage from illusory attack${atk.isCrit ? ' (CRIT)' : ''}`,
+        target.id, actualDealt);
+      checkDeath(target, state);
+    } else {
+      log(state, 'action', creature.id,
+        `    → miss — the watery form disappears after the failed attack`,
+        target.id);
+    }
+    return;
+  }
+
+  // 13. Recharge-ability (Greater Tyrant Shadow::1) — log-only.
+  if (action.lairRechargeAbility) {
+    log(state, 'action', creature.id,
+      `  → bespoke: recharge-ability — ${creature.name} recharges one of its expended abilities (v1: log-only, no per-ability recharge tracking)`,
+      undefined);
+    return;
+  }
+
+  // 14. Bespoke-action-invocation (Dyrrn::0, Morkoth::1, Zuggtmoy::2) — log-only.
+  if (action.lairBespokeActionInvocation) {
+    log(state, 'action', creature.id,
+      `  → bespoke: bespoke-action-invocation — ${creature.name} uses a named bespoke action (v1: log-only, named action not modeled)`,
+      undefined);
+    return;
+  }
+
   // ── Default: log "not yet implemented" with action.id ──
-  // After Phase 8 batch 1 (Session 100), the bespoke fallback only fires for
-  // actions whose patterns haven't been recognized yet (Phase 9+ per-action.id
-  // handlers — e.g., Baernaloth::0 reactive self-heal, Time Dragon::1 time
-  // slow, Sphinx::3 plane shift, Alyxian::2 psychic mirror).
+  // After Phase 8 batch 2 (Session 101), the bespoke fallback only fires for
+  // 3 remaining unrecognized actions: Demogorgon::1 (illusory duplicate — needs
+  // attack-resolution hook), Githzerai Anarch::0/::2 (promote to cast_spell).
+  // Phase 9+ per-action.id handlers.
   log(state, 'action', creature.id,
     `  → bespoke: ${action.id} not yet implemented (Phase 9: per-action.id handler) — no mechanical effect`,
     undefined);
