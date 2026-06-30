@@ -199,8 +199,16 @@ function executeFOUntilHit(monk: Combatant, target: Combatant, bf: Battlefield, 
     if (monk.resources?.ki) monk.resources.ki.remaining = monk.resources.ki.max;
     const state = makeState(bf);
     executePlannedAction(monk, foPlan(monk, target, choice), state);
-    // Check if any attack hit (ki was consumed + damage was dealt OR a rider fired)
-    if (monk.resources?.ki && monk.resources.ki.remaining < monk.resources.ki.max) {
+    // A hit landed if the target took damage. (ki is ALWAYS spent when Flurry
+    // executes, regardless of whether the attacks hit — so checking ki
+    // consumption alone returns after attempt 0 even if both attacks rolled
+    // nat-1 misses. That left the rider + save-log assertions flaking ~0.25%
+    // of CI runs: open_hand_technique §19 "save log found" failed on c8c109f
+    // [test (4) red X]. Detecting an actual hit via damage dealt makes the
+    // retry loop retry until a hit, matching the function name + comment.
+    // Unarmed strikes always deal >0 dmg and test enemies have no resistances,
+    // so currentHP < maxHP is a reliable hit signal.)
+    if (target.currentHP < target.maxHP) {
       return state;
     }
   }
