@@ -183,8 +183,10 @@ console.log('\n--- 5. Full bestiary scan — 0 lair_def_auto_* remain ---');
       }
     }
   }
-  eq('0 lair_def_auto_* IDs remain in full bestiary', autoCount, 0,
-    `examples: ${autoExamples.join('; ')}`);
+  eq('0 lair_def_auto_* IDs remain in full bestiary', autoCount, 0);
+  if (autoCount > 0) {
+    console.log(`    examples: ${autoExamples.join('; ')}`);
+  }
   // Stable deferred entries: 23 (pre-S103) + 10 (promoted this session) = 33.
   // (Each bestiary variant counts separately: 4 white-dragon entries + 2 sea-fury
   //  + 2 imix + 2 olhydra::2 = 10 new; the 23 pre-existing include black-dragon

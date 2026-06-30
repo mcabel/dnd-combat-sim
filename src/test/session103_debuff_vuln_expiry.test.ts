@@ -125,7 +125,7 @@ function applyVulnEffect(target: Combatant, casterId: string, dt: DamageType,
 console.log('\n--- 1. applySpellEffect mirrors vuln type into damageVulnerabilities ---');
 {
   const g = spawn('Goblin');
-  g.damageVulnerabilities = undefined;   // clean slate
+  // (Goblin has no innate vuln — damageVulnerabilities is already undefined.)
   applyVulnEffect(g, 'caster1', 'fire', 1, true);
   assert('Goblin now has fire vuln', g.damageVulnerabilities?.includes('fire') === true,
     `dv=${JSON.stringify(g.damageVulnerabilities)}`);
@@ -141,7 +141,6 @@ console.log('\n--- 1. applySpellEffect mirrors vuln type into damageVulnerabilit
 console.log('\n--- 2. undoEffect splices vuln (addedVulnerability=true) ---');
 {
   const g = spawn('Goblin');
-  g.damageVulnerabilities = undefined;
   const eff = applyVulnEffect(g, 'caster1', 'fire', 1, true);
   assert('pre: fire vuln present', g.damageVulnerabilities?.includes('fire') === true);
   undoEffect(g, eff);
@@ -173,8 +172,8 @@ console.log('\n--- 3. undoEffect protects innate vuln (addedVulnerability=false)
 // ============================================================
 console.log('\n--- 4. applyDamageWithTempHP doubles damage of the vuln type ---');
 {
-  const g1 = spawn('Goblin'); g1.damageVulnerabilities = undefined; tankUp(g1, 100);
-  const g2 = spawn('Goblin'); g2.damageVulnerabilities = undefined; tankUp(g2, 100);
+  const g1 = spawn('Goblin'); tankUp(g1, 100);
+  const g2 = spawn('Goblin'); tankUp(g2, 100);
   // g1 gets the fire-vuln effect; g2 is the control (no effect).
   applyVulnEffect(g1, 'caster1', 'fire', 1, true);
   const hp1Before = g1.currentHP;
@@ -196,7 +195,6 @@ console.log('\n--- 4. applyDamageWithTempHP doubles damage of the vuln type ---'
 console.log('\n--- 5. reevaluateEffects expires damage_vulnerability effect ---');
 {
   const g = spawn('Goblin');
-  g.damageVulnerabilities = undefined;
   // Applied at round 1, sourceTurnExpires = 1 (1-round duration).
   applyVulnEffect(g, 'caster1', 'fire', 1, true);
   assert('pre: fire vuln present (round 1)', g.damageVulnerabilities?.includes('fire') === true);
@@ -217,7 +215,6 @@ console.log('\n--- 5. reevaluateEffects expires damage_vulnerability effect ---'
 console.log('\n--- 6. reevaluateEffects keeps effect before expiry round ---');
 {
   const g = spawn('Goblin');
-  g.damageVulnerabilities = undefined;
   // 3-round duration: applied round 1, sourceTurnExpires = 3.
   applyVulnEffect(g, 'caster1', 'cold', 3, true);
   const bf = makeBF([g]);
@@ -239,7 +236,7 @@ console.log('\n--- 6. reevaluateEffects keeps effect before expiry round ---');
 console.log('\n--- 7. removeEffectsFromCaster clears vuln on caster death ---');
 {
   const caster = spawn('Kraken'); asParty(caster); tankUp(caster);
-  const g = spawn('Goblin'); asEnemy(g); g.damageVulnerabilities = undefined;
+  const g = spawn('Goblin'); asEnemy(g);
   // Simulate the lair creature applying the vuln effect to the goblin.
   applyVulnEffect(g, caster.id, 'lightning', 5, true);
   assert('pre: goblin has lightning vuln', g.damageVulnerabilities?.includes('lightning') === true);
@@ -355,7 +352,6 @@ console.log('\n--- 10. Handler: disadvantage_save branch unaffected ---');
 console.log('\n--- 11. Two-source simultaneous expiry → vuln removed ---');
 {
   const g = spawn('Goblin');
-  g.damageVulnerabilities = undefined;
   // Caster A applies first (pushes fire, addedVulnerability=true).
   applyVulnEffect(g, 'casterA', 'fire', 1, true, 'Lair:A');
   // Caster B applies second (fire already present, addedVulnerability=false).
