@@ -7577,25 +7577,42 @@ function handleLairSpellSlotRegen(
  * "centered on a point the [creature] chooses/can see within N feet of it"
  * (the `centerOnPoint` parser flag).
  *
- * Algorithm (mirrors `findBestAoECluster` in src/ai/actions.ts):
- *   - Candidate centres = each candidate target's position. (All candidates
- *     are already within `rangeFt` of the lair creature, so every candidate
- *     centre is a legal "point within N feet of it" per the rules.)
- *   - For each candidate centre, count how many candidates fall within
- *     `radiusFt` (Chebyshev) of it.
- *   - Return the centre with the highest count. Ties are broken by:
- *       1. closest to the lair creature (minimises wasted range, deterministic)
- *       2. lowest (x, y, z) lexicographically (final deterministic tie-break)
+ * Algorithm (Session 104 — hybrid v1 + grid-sweep):
  *
- * v1 limitation (matches findBestAoECluster): candidate centres are real
- * creature positions only — a midpoint between two spread enemies that would
- * catch both is NOT considered. For tightly-clustered enemies this is optimal;
- * for two enemies exactly `radiusFt` apart, only one is caught (a midpoint
- * would catch both). A grid-sweep enhancement is deferred to a future session.
+ *   Phase 1 (v1 — creature-position centres, mirrors `findBestAoECluster` in
+ *   src/ai/actions.ts): candidate centres = each candidate target's position.
+ *   (All candidates are already within `rangeFt` of the lair creature, so
+ *   every candidate centre is a legal "point within N feet of it" per the
+ *   rules.) For each candidate centre, count how many candidates fall within
+ *   `radiusFt` (Chebyshev) of it. Pick the centre with the highest count.
+ *   Ties are broken by: (1) closest to the lair creature, (2) lowest (x,y,z)
+ *   lexicographically.
+ *
+ *   Phase 2 (Session 104 grid-sweep — midpoint enhancement): enumerate ALL
+ *   integer grid cells within `rangeFt`/5 squares (Chebyshev) of the lair
+ *   creature as additional candidate centres. For each cell, count candidates
+ *   within `radiusFt` (3D Chebyshev; cell z = lair creature z, lair actions
+ *   being typically ground-based). Pick the cell with the highest count using
+ *   the same tie-breaks.
+ *
+ *   Merge: return the grid-sweep result ONLY when it finds STRICTLY MORE
+ *   targets than v1. Otherwise return the v1 result. This preserves all
+ *   existing v1 behaviour (same target count → same v1 centre, which is a
+ *   "natural" creature position) while adding the midpoint-cluster capability
+ *   that v1 missed (e.g. two enemies exactly `radiusFt` apart are both caught
+ *   by a midpoint cell, but v1 catches only one).
+ *
+ *   The grid is 2D (x,y) with z = lair creature's z; 3D Chebyshev is used for
+ *   the distance check so flying candidates (z ≠ 0) are correctly
+ *   included/excluded. Cost: O((2·rangeSq+1)² · |candidates|) — for the
+ *   typical rangeFt=120 (rangeSq=24) and ≤10 candidates, ~24k operations per
+ *   lair-action call (fires once per round at initiative count 20 → negligible).
  *
  * Returns `{ center, targets }`. If `candidates` is empty, returns the lair
  * creature's own position with an empty target list (the handler logs
- * "no valid targets" and skips).
+ * "no valid targets" and skips). If `rangeFt` is undefined (no range
+ * constraint — should not happen for `centerOnPoint` actions, which always
+ * parse a range), the grid-sweep phase is skipped and v1 alone is used.
  */
 export function chooseLairActionPoint(
   lairCreature: Combatant,
@@ -7603,42 +7620,112 @@ export function chooseLairActionPoint(
   candidates: Combatant[],
 ): { center: Vec3; targets: Combatant[] } {
   const radiusFt = action.radiusFt!;
-  let best: { center: Vec3; targets: Combatant[] } | null = null;
 
+  // ---- Phase 1: v1 — creature-position centres ----
+  let v1Best: { center: Vec3; targets: Combatant[] } | null = null;
   for (const pivot of candidates) {
     const hit = candidates.filter(t =>
       chebyshev3D(pivot.pos, t.pos) * 5 <= radiusFt,
     );
-    if (best === null) {
-      best = { center: { ...pivot.pos }, targets: hit };
+    if (v1Best === null) {
+      v1Best = { center: { ...pivot.pos }, targets: hit };
       continue;
     }
-    const more = hit.length > best.targets.length;
-    const same = hit.length === best.targets.length;
+    const more = hit.length > v1Best.targets.length;
+    const same = hit.length === v1Best.targets.length;
     if (more) {
-      best = { center: { ...pivot.pos }, targets: hit };
+      v1Best = { center: { ...pivot.pos }, targets: hit };
     } else if (same) {
       // Tie-break 1: closer to the lair creature (Chebyshev feet).
       const dPivot = chebyshev3D(lairCreature.pos, pivot.pos) * 5;
-      const dBest = chebyshev3D(lairCreature.pos, best.center) * 5;
+      const dBest = chebyshev3D(lairCreature.pos, v1Best.center) * 5;
       if (dPivot < dBest) {
-        best = { center: { ...pivot.pos }, targets: hit };
+        v1Best = { center: { ...pivot.pos }, targets: hit };
       } else if (dPivot === dBest) {
         // Tie-break 2: lowest (x, y, z) lexicographically.
-        const p = pivot.pos, b = best.center;
+        const p = pivot.pos, b = v1Best.center;
         if (p.x < b.x || (p.x === b.x && p.y < b.y) ||
             (p.x === b.x && p.y === b.y && p.z < b.z)) {
-          best = { center: { ...pivot.pos }, targets: hit };
+          v1Best = { center: { ...pivot.pos }, targets: hit };
         }
       }
     }
   }
 
-  if (best === null) {
+  if (v1Best === null) {
     // No candidates — return the lair creature's position with empty targets.
     return { center: { ...lairCreature.pos }, targets: [] };
   }
-  return best;
+
+  // ---- Phase 2: Session 104 grid-sweep — midpoint enhancement ----
+  // Only run when v1 found fewer than ALL candidates (i.e. there's room to
+  // improve) AND rangeFt is defined (bounds the grid). If v1 already catches
+  // every candidate, the grid-sweep cannot improve — skip it (saves cost).
+  const rangeFt = action.rangeFt;
+  if (rangeFt === undefined || v1Best.targets.length >= candidates.length) {
+    return v1Best;
+  }
+
+  const rangeSq = Math.floor(rangeFt / 5);
+  const cx = lairCreature.pos.x, cy = lairCreature.pos.y, cz = lairCreature.pos.z;
+  let gridBest: { center: Vec3; targets: Combatant[] } | null = null;
+
+  for (let dx = -rangeSq; dx <= rangeSq; dx++) {
+    for (let dy = -rangeSq; dy <= rangeSq; dy++) {
+      const cellPos: Vec3 = { x: cx + dx, y: cy + dy, z: cz };
+      const hit = candidates.filter(t =>
+        chebyshev3D(cellPos, t.pos) * 5 <= radiusFt,
+      );
+      if (gridBest === null) {
+        gridBest = { center: cellPos, targets: hit };
+        continue;
+      }
+      const more = hit.length > gridBest.targets.length;
+      const same = hit.length === gridBest.targets.length;
+      if (more) {
+        gridBest = { center: cellPos, targets: hit };
+      } else if (same) {
+        // Tie-break 1: closer to the lair creature (2D Chebyshev feet; z delta = 0).
+        const dCellCheb = Math.max(Math.abs(dx), Math.abs(dy)) * 5;
+        const dBestCheb = Math.max(
+          Math.abs(gridBest.center.x - cx),
+          Math.abs(gridBest.center.y - cy),
+        ) * 5;
+        if (dCellCheb < dBestCheb) {
+          gridBest = { center: cellPos, targets: hit };
+        } else if (dCellCheb === dBestCheb) {
+          // Tie-break 2: closer to the lair creature (2D Euclidean feet).
+          // Chebyshev leaves many cells tied (all cells on a square ring at
+          // the same Chebyshev distance); Euclidean breaks those ties by
+          // preferring on-axis cells (e.g. (3,0) beats (3,-3) — both are 3
+          // squares Chebyshev from origin, but (3,0) is 3 ft Euclidean vs
+          // (3,-3) is ~4.24 ft). This is more natural: the lair creature
+          // prefers the truly closest point, not an arbitrary ring cell.
+          const dCellEuc = Math.sqrt(dx * dx + dy * dy) * 5;
+          const bdx = gridBest.center.x - cx, bdy = gridBest.center.y - cy;
+          const dBestEuc = Math.sqrt(bdx * bdx + bdy * bdy) * 5;
+          if (dCellEuc < dBestEuc) {
+            gridBest = { center: cellPos, targets: hit };
+          } else if (dCellEuc === dBestEuc) {
+            // Tie-break 3: lowest (x, y, z) lexicographically (final deterministic).
+            const b = gridBest.center;
+            if (cellPos.x < b.x ||
+                (cellPos.x === b.x && cellPos.y < b.y) ||
+                (cellPos.x === b.x && cellPos.y === b.y && cellPos.z < b.z)) {
+              gridBest = { center: cellPos, targets: hit };
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Merge: grid-sweep wins ONLY on strictly more targets. Otherwise v1 wins
+  // (preserves the "natural" creature-position centre for same-count cases).
+  if (gridBest !== null && gridBest.targets.length > v1Best.targets.length) {
+    return gridBest;
+  }
+  return v1Best;
 }
 
 /**

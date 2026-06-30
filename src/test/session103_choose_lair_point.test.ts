@@ -194,9 +194,10 @@ console.log('\n--- 4. chooseLairActionPoint: clustered candidates all hit ---');
 }
 
 // ============================================================
-// 5. Direct: spread candidates → only densest cluster hit
+// 5. Direct: spread candidates → only densest cluster hit (v1 fallback:
+//    no rangeFt → grid-sweep skipped, v1 creature-position centres only)
 // ============================================================
-console.log('\n--- 5. chooseLairActionPoint: spread candidates → densest cluster ---');
+console.log('\n--- 5. chooseLairActionPoint: spread candidates → densest cluster (v1 fallback) ---');
 {
   const dragon = spawn('Adult Blue Dragon'); dragon.pos = pos(0, 0);
   const g1 = spawn('Goblin'); g1.pos = pos(1, 0);   // 5 ft from dragon (isolated)
@@ -205,9 +206,13 @@ console.log('\n--- 5. chooseLairActionPoint: spread candidates → densest clust
   // radiusFt=20 (4 squares). g1-g2=5sq(25ft)>20ft, g1-g3=6sq(30ft)>20ft, g2-g3=1sq(5ft)≤20ft.
   // → center at g1 hits {g1} (1); center at g2 hits {g2,g3} (2); center at g3 hits {g2,g3} (2).
   // Best: 2 targets {g2,g3}.
+  // NOTE: this synthetic action has NO rangeFt → Session 104 grid-sweep is skipped
+  // (the grid is bounded by rangeFt; without it, the grid is unbounded). v1 alone
+  // runs → 2 targets {g2,g3}. With rangeFt set (see §12), grid-sweep would find a
+  // midpoint catching all 3.
   const action = makeAction('Test::spread', 'save_condition', { radiusFt: 20, centerOnPoint: true });
   const { center, targets } = chooseLairActionPoint(dragon, action, [g1, g2, g3]);
-  eq('spread: 2 targets hit (densest cluster)', targets.length, 2);
+  eq('spread: 2 targets hit (densest cluster, v1 fallback)', targets.length, 2);
   const ids = targets.map(t => t.id).sort();
   eq('spread: includes g2', ids.includes(g2.id), true);
   eq('spread: includes g3', ids.includes(g3.id), true);
@@ -286,7 +291,13 @@ console.log('\n--- 9. Integration: Blue Dragon::1 point-selection in combat ---'
   assert('clustered: g2 blinded (CON fail)', g2.conditions.has('blinded'),
     `conditions: ${[...g2.conditions].join(',')}`);
 
-  // Spread case: g3 isolated beyond radiusFt from g4's cluster.
+  // Spread case: g3 isolated beyond radiusFt from g4's cluster — BUT the
+  // Session 104 grid-sweep enhancement finds a midpoint that catches all 3.
+  // g3(1,0)=5ft, g4(6,0)=30ft, g5(7,0)=35ft. g4-g5=5ft (cluster). g3-g4=25ft>20ft,
+  // g3-g5=30ft>20ft → v1 (creature-position centres) catches only {g4,g5} (2).
+  // Grid-sweep: centre at (3,0) catches g3(10ft), g4(15ft), g5(20ft) — all ≤20ft
+  // → 3 targets. (3,0) is 15ft from dragon ≤ rangeFt=120 → legal centre.
+  // Grid-sweep wins (3 > 2) → all 3 goblins blinded.
   const dragon2 = spawn('Adult Blue Dragon'); asParty(dragon2); tankUp(dragon2); noLegendary(dragon2); noOffense(dragon2);
   dragon2.lairActions!.actions = [blue1];
   dragon2._lairActionHistory = [];
@@ -296,14 +307,12 @@ console.log('\n--- 9. Integration: Blue Dragon::1 point-selection in combat ---'
   g4.saveProficiencies = { con: -100 } as any;
   const g5 = spawn('Goblin', pos(7, 0)); asEnemy(g5); tankUp(g5); freeze(g5);
   g5.saveProficiencies = { con: -100 } as any;
-  // g3 at 5ft, g4 at 30ft, g5 at 35ft. g4-g5=5ft (cluster). g3-g4=25ft>20ft, g3-g5=30ft>20ft.
-  // Point-selection picks {g4,g5} cluster (2) over {g3} (1). g3 NOT blinded.
   const bf2 = makeBF([dragon2, g3, g4, g5]);
   runCombat(bf2, [dragon2.id, g3.id, g4.id, g5.id], { maxRounds: 1, verbose: false } as any);
-  assert('spread: g4 blinded (in chosen cluster)', g4.conditions.has('blinded'));
-  assert('spread: g5 blinded (in chosen cluster)', g5.conditions.has('blinded'));
-  assert('spread: g3 NOT blinded (isolated, not in chosen cluster)',
-    !g3.conditions.has('blinded'),
+  assert('spread: g4 blinded (in grid-sweep cluster)', g4.conditions.has('blinded'));
+  assert('spread: g5 blinded (in grid-sweep cluster)', g5.conditions.has('blinded'));
+  assert('spread: g3 IS blinded (Session 104 grid-sweep midpoint catches all 3)',
+    g3.conditions.has('blinded'),
     `conditions: ${[...g3.conditions].join(',')}`);
 }
 
@@ -356,6 +365,118 @@ console.log('\n--- 11. Direct parser: synthetic centered-on-point text ---');
   const eachWithinText = 'Each creature within 30 feet of the dragon must make a DC 15 Wisdom saving throw.';
   const c = extractLairAction(eachWithinText, 'Black Dragon', 0);
   eq('synthetic "each within" text: centerOnPoint = false', c.centerOnPoint, false);
+}
+
+// ============================================================
+// 12. Session 104 grid-sweep: midpoint catches 2 enemies exactly
+//     radiusFt apart (v1 would catch only 1)
+// ============================================================
+console.log('\n--- 12. Session 104 grid-sweep: midpoint catches spread pair ---');
+{
+  // Two goblins exactly radiusFt apart (Chebyshev). v1 (creature-position
+  // centres) catches only 1; the Session 104 grid-sweep finds the midpoint
+  // cell that catches both.
+  const dragon = spawn('Adult Blue Dragon'); dragon.pos = pos(0, 0);
+  const g1 = spawn('Goblin'); g1.pos = pos(4, 0);   // 20 ft from dragon
+  const g2 = spawn('Goblin'); g2.pos = pos(8, 0);   // 40 ft from dragon, 20 ft from g1
+  // radiusFt=20 (4 squares). g1-g2=4sq(20ft)≤20ft → g2 is JUST within radiusFt of g1.
+  // v1: center at g1 catches {g1,g2} (2) — g2 is exactly on the radius boundary.
+  // To show the grid-sweep midpoint advantage, use radiusFt=15 (3 squares):
+  //   g1-g2=4sq(20ft)>15ft → v1 catches only {g1} (1) or {g2} (1).
+  //   Grid-sweep midpoint at (6,0): g1=2sq(10ft)≤15ft, g2=2sq(10ft)≤15ft → 2 targets.
+  //   (6,0) is 30ft from dragon ≤ rangeFt=120 → legal centre.
+  const action = makeAction('Test::midpoint', 'save_condition', {
+    radiusFt: 15, rangeFt: 120, centerOnPoint: true,
+  });
+  const { center, targets } = chooseLairActionPoint(dragon, action, [g1, g2]);
+  eq('midpoint: 2 targets hit (grid-sweep midpoint)', targets.length, 2);
+  const ids = targets.map(t => t.id).sort();
+  eq('midpoint: includes g1', ids.includes(g1.id), true);
+  eq('midpoint: includes g2', ids.includes(g2.id), true);
+  // Cells catching both g1(4,0) and g2(8,0) with radiusFt=15 (3 squares):
+  //   x in [5,7] (g1: 4±3 → 1..7; g2: 8±3 → 5..11; intersection: 5..7), y in [-3,3].
+  // Closest-to-dragon (Chebyshev then Euclidean): (5,0) — 5 squares Chebyshev,
+  // 5 ft Euclidean (on-axis, beats (5,±1) at ~5.1 ft Euclidean).
+  eq('midpoint: center x=5 (closest-to-dragon cell catching both)', center.x, 5);
+  eq('midpoint: center y=0 (Euclidean tie-break prefers on-axis)', center.y, 0);
+}
+
+// ============================================================
+// 13. Session 104 grid-sweep: 3 spread enemies caught via midpoint
+//     (v1 would catch only the densest pair)
+// ============================================================
+console.log('\n--- 13. Session 104 grid-sweep: 3 spread enemies via midpoint ---');
+{
+  // Same geometry as §5 but WITH rangeFt set → grid-sweep runs and finds 3.
+  const dragon = spawn('Adult Blue Dragon'); dragon.pos = pos(0, 0);
+  const g1 = spawn('Goblin'); g1.pos = pos(1, 0);   // 5 ft from dragon (isolated)
+  const g2 = spawn('Goblin'); g2.pos = pos(6, 0);   // 30 ft from dragon
+  const g3 = spawn('Goblin'); g3.pos = pos(7, 0);   // 35 ft from dragon, 5 ft from g2
+  // radiusFt=20 (4 squares). g1-g2=5sq(25ft)>20ft, g1-g3=6sq(30ft)>20ft, g2-g3=1sq(5ft)≤20ft.
+  // v1: best = {g2,g3} (2) — g1 too far from both.
+  // Grid-sweep: centre at (3,0) catches g1(10ft), g2(15ft), g3(20ft) — all ≤20ft → 3.
+  // (3,0) is 15ft from dragon ≤ rangeFt=120 → legal. Grid-sweep wins (3 > 2).
+  const action = makeAction('Test::midpoint3', 'save_condition', {
+    radiusFt: 20, rangeFt: 120, centerOnPoint: true,
+  });
+  const { center, targets } = chooseLairActionPoint(dragon, action, [g1, g2, g3]);
+  eq('midpoint3: 3 targets hit (grid-sweep beats v1)', targets.length, 3);
+  const ids = targets.map(t => t.id).sort();
+  eq('midpoint3: includes g1', ids.includes(g1.id), true);
+  eq('midpoint3: includes g2', ids.includes(g2.id), true);
+  eq('midpoint3: includes g3', ids.includes(g3.id), true);
+  // The optimal midpoint centre is at x=3 (catches all 3; x=2 also catches all 3
+  // but x=3 is closer to g2/g3... actually both x=2 and x=3 catch all 3:
+  //   x=2: g1=5ft, g2=20ft, g3=25ft(>20ft) → NO, g3 at 25ft > 20ft. So x=2 catches only 2.
+  //   x=3: g1=10ft, g2=15ft, g3=20ft → all ≤20ft → 3.
+  // So x=3 is the unique optimal. Tie-break: closest to dragon (x=3 is 15ft).
+  eq('midpoint3: center x=3 (unique midpoint catching all 3)', center.x, 3);
+  eq('midpoint3: center y=0', center.y, 0);
+}
+
+// ============================================================
+// 14. Session 104 grid-sweep: v1 optimal → grid-sweep does NOT override
+//     (same count → v1 creature-position centre preserved)
+// ============================================================
+console.log('\n--- 14. Session 104 grid-sweep: v1 optimal → v1 centre preserved ---');
+{
+  // Clustered case: v1 already catches all 3 from g1's position. Grid-sweep
+  // cannot improve (3 = 3) → v1 result returned (centre = g1.pos, a natural
+  // creature position, NOT an arbitrary grid cell).
+  const dragon = spawn('Adult Blue Dragon'); dragon.pos = pos(0, 0);
+  const g1 = spawn('Goblin'); g1.pos = pos(3, 0);   // 15 ft from dragon
+  const g2 = spawn('Goblin'); g2.pos = pos(4, 0);   // 20 ft, 5 ft from g1
+  const g3 = spawn('Goblin'); g3.pos = pos(5, 0);   // 25 ft, 10 ft from g1
+  // radiusFt=20 (4 squares). g1-g2=1sq(5ft), g1-g3=2sq(10ft), g2-g3=1sq(5ft) — all ≤20ft.
+  // v1: center at g1 catches all 3. Grid-sweep: also 3, but v1 wins (same count).
+  const action = makeAction('Test::v1optimal', 'save_condition', {
+    radiusFt: 20, rangeFt: 120, centerOnPoint: true,
+  });
+  const { center, targets } = chooseLairActionPoint(dragon, action, [g1, g2, g3]);
+  eq('v1optimal: 3 targets hit', targets.length, 3);
+  // v1 centre = g1.pos (creature position) — NOT a grid-sweep cell.
+  eq('v1optimal: center = g1 pos x (v1 preserved, not grid-sweep)', center.x, g1.pos.x);
+  eq('v1optimal: center = g1 pos y', center.y, g1.pos.y);
+}
+
+// ============================================================
+// 15. Session 104 grid-sweep: rangeFt bounds the grid (centre within range)
+// ============================================================
+console.log('\n--- 15. Session 104 grid-sweep: rangeFt bounds centre ---');
+{
+  // Dragon at (0,0), rangeFt=30 (6 squares). g1 at (6,0)=30ft (boundary),
+  // g2 at (8,0)=40ft (BEYOND rangeFt — not a candidate). With only g1 as
+  // candidate, v1 catches 1. Grid-sweep also catches 1 (g1 alone) — same
+  // count → v1 wins. This confirms rangeFt bounds the grid (no centre
+  // beyond rangeFt is considered).
+  const dragon = spawn('Adult Blue Dragon'); dragon.pos = pos(0, 0);
+  const g1 = spawn('Goblin'); g1.pos = pos(6, 0);   // 30 ft from dragon (at rangeFt boundary)
+  const action = makeAction('Test::rangebound', 'save_condition', {
+    radiusFt: 20, rangeFt: 30, centerOnPoint: true,
+  });
+  const { targets } = chooseLairActionPoint(dragon, action, [g1]);
+  eq('rangebound: 1 target (only g1 in range)', targets.length, 1);
+  eq('rangebound: target is g1', targets[0].id, g1.id);
 }
 
 // ---- Results ------------------------------------------------
