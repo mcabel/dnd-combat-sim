@@ -112,6 +112,21 @@ export const metadata = {
   // member's to-hit for that action; using it per-action preserves granularity
   // a single averaged hitBonus would erase). See bestiaryHitChance below.
   hallowEnergyVulnerabilityV2BestiaryHitChance: true,
+  // Session 109: the S108 bestiaryHitChance used the GLOBAL bestiary mean AC
+  // (14.849) — a single constant for all encounters. S109 refines this to be
+  // ENCOUNTER-SPECIFIC: pickHallowDamageType now computes the average AC of
+  // living enemies on the CURRENT battlefield (the pool from which the Hallow
+  // target is drawn) and passes it to bestiaryHitChance. This gives a more
+  // accurate hitChance for the actual fight: vs a low-AC enemy swarm an attack
+  // roll lands more often (so doubling attack damage is more valuable), while
+  // vs a high-AC boss an attack lands less often (so a save-for-half spell may
+  // be the better type to double). Falls back to BESTIARY_MEAN_AC when no living
+  // enemies are present (preserves all S108 unit tests, which have no enemies on
+  // the battlefield → use the bestiary mean unchanged). The dispatch wiring
+  // (S106) is STILL unchanged — only the AC passed into the attack-roll
+  // hitChance inside actionDamageWeight is refined. S108 next-action #10: LOW
+  // risk (helper-only, dispatch unchanged). See encounterAvgAC below.
+  hallowEnergyVulnerabilityV2EncounterAC: true,
 } as const;
 
 function emit(state: EngineState, type: CombatEvent['type'], actorId: string, desc: string, targetId?: string, value?: number): void {
@@ -363,18 +378,23 @@ export function executeEnergyVulnerability(
 /**
  * Bestiary mean Armor Class, precomputed from bestiaryData/*.json (5904
  * monsters with numeric AC; computed via a one-off scan — see S108 handover).
- * Used by bestiaryHitChance() as the representative enemy AC when the actual
- * target is unknown at pickHallowDamageType call time. 14.849 ≈ 15 (the modal
- * AC; the distribution is roughly symmetric around the mean so the mean is a
- * faithful representative).
+ * Used by bestiaryHitChance() as the FALLBACK representative enemy AC when no
+ * living enemies are on the battlefield at pickHallowDamageType call time (S108
+ * used it unconditionally; S109 prefers the encounter-specific average AC when
+ * enemies are present, falling back to this constant otherwise). 14.849 ≈ 15
+ * (the modal AC; the distribution is roughly symmetric around the mean so the
+ * mean is a faithful representative).
  */
 const BESTIARY_MEAN_AC = 14.849;
 
 /**
- * Expected hit chance for an attack roll vs a representative bestiary monster,
- * using the bestiary mean AC. Replaces the S107 flat 0.65 (5e default ~65% hit
- * rate) with a data-driven, per-action value derived from the actual monster
- * AC distribution.
+ * Expected hit chance for an attack roll vs an enemy of the given AC. Replaces
+ * the S107 flat 0.65 (5e default ~65% hit rate) with a data-driven, per-action
+ * value. S108 called this with the bestiary mean AC (14.849) unconditionally;
+ * S109 calls it with the encounter-specific average AC of living enemies when
+ * any are present (falling back to BESTIARY_MEAN_AC otherwise — see
+ * encounterAvgAC). The `ac` parameter defaults to BESTIARY_MEAN_AC so direct
+ * callers (and the S108 §5g unit tests) preserve their behaviour.
  *
  * Formula: P(hit) = clamp((21 - max(2, AC - hitBonus)) / 20, 0.05, 0.95)
  *   - A hit requires d20 + hitBonus >= AC, i.e. d20 >= AC - hitBonus.
@@ -386,27 +406,76 @@ const BESTIARY_MEAN_AC = 14.849;
  * Using the MEAN AC (14.849) approximates E[P(hit | AC)] closely because the
  * hitChance function is near-linear in AC over the bestiary range (verified:
  * mean-AC approximation 0.5576 vs the full-distribution average 0.5573 for
- * hitBonus=5 — within 0.0003, well below any decision-relevant threshold).
+ * hitBonus=5 — within 0.0003, well below any decision-relevant threshold). S109
+ * uses the encounter-specific mean AC when available — this is MORE accurate
+ * than the global bestiary mean because it reflects the actual enemies on the
+ * field (a low-AC goblin swarm vs a high-AC dragon boss are very different hit
+ * profiles, and the damage-type pick should reflect that).
  *
- * Examples (BESTIARY_MEAN_AC = 14.849):
+ * Examples (BESTIARY_MEAN_AC = 14.849, the S108/S109 fallback):
  *   hitBonus +5 → (21 - max(2, 9.849))  / 20 = 11.151 / 20 = 0.5576
  *   hitBonus +8 → (21 - max(2, 6.849))  / 20 = 14.151 / 20 = 0.7076
  *   hitBonus +2 → (21 - max(2, 12.849)) / 20 = 8.151  / 20 = 0.4076
  *   hitBonus +0 → (21 - max(2, 14.849)) / 20 = 6.151  / 20 = 0.3076
+ *
+ * S109 encounter-specific examples (low-AC enemy pool AC 10):
+ *   hitBonus +5 vs AC 10 → (21 - max(2, 5)) / 20 = 16 / 20 = 0.80
+ *   hitBonus +2 vs AC 10 → (21 - max(2, 8)) / 20 = 13 / 20 = 0.65
  */
-export function bestiaryHitChance(hitBonus: number): number {
-  const minRoll = Math.max(2, BESTIARY_MEAN_AC - hitBonus);
+export function bestiaryHitChance(hitBonus: number, ac: number = BESTIARY_MEAN_AC): number {
+  const minRoll = Math.max(2, ac - hitBonus);
   const p = (21 - minRoll) / 20;
   return Math.max(0.05, Math.min(0.95, p));
+}
+
+/**
+ * Computes the average (mean) AC of living enemies on the current battlefield
+ * — the encounter-specific pool from which the Hallow target is drawn. S109
+ * refinement of the S108 bestiaryHitChance: instead of using the GLOBAL bestiary
+ * mean AC (14.849) for every encounter, pickHallowDamageType now passes this
+ * encounter-specific AC to bestiaryHitChance so the attack-roll hitChance
+ * reflects the actual enemies on the field. Falls back to BESTIARY_MEAN_AC when
+ * no living enemies are present (preserves all S108 unit tests, which have no
+ * enemies on the battlefield → use the bestiary mean unchanged).
+ *
+ * "Enemies" = combatants whose faction differs from the caster's, who are not
+ * dead/unconscious. The MEAN (not min/max/first) is used because the hitChance
+ * function is near-linear in AC over the bestiary range, so E[P(hit|AC)] ≈
+ * P(hit|E[AC]) — the mean AC is the faithful representative of the pool (the
+ * same reasoning S108 used to justify the bestiary MEAN over the full
+ * distribution, now applied to the encounter-specific pool).
+ *
+ * Used by pickHallowDamageType (S109). The dispatch wiring (S106 case 'hallow'
+ * in combat.ts) is unchanged — only the AC fed into the attack-roll hitChance
+ * inside actionDamageWeight is refined.
+ */
+export function encounterAvgAC(caster: Combatant, bf: Battlefield): number {
+  let sum = 0;
+  let count = 0;
+  for (const c of bf.combatants.values()) {
+    if (c.id === caster.id) continue;             // not the caster
+    if (c.faction === caster.faction) continue;    // only enemies (opposing faction)
+    if (c.isDead || c.isUnconscious) continue;     // only living enemies
+    // `ac` is typed as a required number on Combatant; guard against a
+    // non-finite value (NaN/Infinity would poison the mean) for safety.
+    if (typeof c.ac !== 'number' || !isFinite(c.ac)) continue;
+    sum += c.ac;
+    count++;
+  }
+  return count > 0 ? sum / count : BESTIARY_MEAN_AC;
 }
 
 /**
  * Computes the per-round expected-damage weight for a damage-dealing action:
  * `expectedDamage × availability × hitChance`. See the §S107 comment above for
  * the full model. Returns 0 for actions with no damage dice. S108 refines the
- * attack-roll hitChance from the flat 0.65 to bestiaryHitChance(hitBonus).
+ * attack-roll hitChance from the flat 0.65 to bestiaryHitChance(hitBonus). S109
+ * refines it further: the AC passed to bestiaryHitChance is now the
+ * encounter-specific average AC of living enemies (encounterAC, computed once
+ * by pickHallowDamageType via encounterAvgAC) instead of the global bestiary
+ * mean — so the hitChance reflects the actual enemies on the field.
  */
-function actionDamageWeight(a: Action): number {
+function actionDamageWeight(a: Action, encounterAC: number): number {
   const d = a.damage!;
   // Expected damage per hit: use pre-computed average if present, else compute
   // (some test factories create DiceExpression without the `average` field).
@@ -432,9 +501,13 @@ function actionDamageWeight(a: Action): number {
   let hitChance = 1.0;  // default: auto-hit (damage_no_save, etc.)
   if (a.hitBonus !== null && a.saveDC === null) {
     // Attack roll — S108 data-driven hitChance from the action's hitBonus vs
-    // the bestiary mean AC (replaces the S107 flat 0.65). A higher hitBonus
-    // lands more often, so doubling that action's damage is more valuable.
-    hitChance = bestiaryHitChance(a.hitBonus);
+    // a representative enemy AC (replaces the S107 flat 0.65). S109 refines
+    // the AC from the global bestiary mean to the ENCOUNTER-SPECIFIC average
+    // AC of living enemies (encounterAC, passed in by pickHallowDamageType via
+    // encounterAvgAC). A higher hitBonus lands more often, so doubling that
+    // action's damage is more valuable — and vs a low-AC enemy pool an attack
+    // roll lands more often still (so attack damage is worth more to double).
+    hitChance = bestiaryHitChance(a.hitBonus, encounterAC);
   } else if (a.saveDC !== null) {
     // Saving throw — save-for-half expected value ~0.75 (50% fail → full,
     // 50% succeed → half → 0.5×1.0 + 0.5×0.5 = 0.75).
@@ -451,12 +524,23 @@ function actionDamageWeight(a: Action): number {
  * null if no party member has a damage-dealing action. Used by the Hallow AI
  * dispatch (S106) to pick the Energy Vulnerability damage type.
  *
+ * S109 refinement: the attack-roll hitChance now uses the ENCOUNTER-SPECIFIC
+ * average AC of living enemies (encounterAvgAC) instead of the global bestiary
+ * mean (14.849). The encounter AC is computed ONCE here and passed to each
+ * actionDamageWeight call (the AC doesn't vary per action — only the hitBonus
+ * does). Falls back to the bestiary mean when no living enemies are present
+ * (preserves all S108 unit tests, which have no enemies on the battlefield).
+ *
  * Ties broken by first-seen order (deterministic). When all party actions have
  * identical damage dice + availability + hitChance, v2 weight ∝ action count,
  * so the v1 winner is preserved (existing S106 tests with uniform-damage
  * actions still pass).
  */
 export function pickHallowDamageType(caster: Combatant, bf: Battlefield): DamageType | null {
+  // S109: encounter-specific average AC of living enemies (bestiary mean
+  // fallback when none). Computed once — the AC is the same for all actions;
+  // only the per-action hitBonus varies.
+  const encounterAC = encounterAvgAC(caster, bf);
   const weights: Partial<Record<DamageType, number>> = {};
   for (const c of bf.combatants.values()) {
     if (c.faction !== caster.faction) continue;  // only party members
@@ -465,7 +549,7 @@ export function pickHallowDamageType(caster: Combatant, bf: Battlefield): Damage
       // Only count actions that actually deal damage (dice + type).
       if (a.damage && a.damageType) {
         const t = a.damageType;
-        const w = actionDamageWeight(a);
+        const w = actionDamageWeight(a, encounterAC);
         weights[t] = (weights[t] ?? 0) + w;
       }
     }

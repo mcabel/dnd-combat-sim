@@ -35,6 +35,7 @@ import {
   executeEnergyVulnerability,
   pickHallowDamageType,
   bestiaryHitChance,
+  encounterAvgAC,
   metadata as halMeta,
 } from '../spells/hallow';
 import { executePlannedAction, EngineState } from '../engine/combat';
@@ -194,6 +195,7 @@ eq('S105 implemented flag still true', (halMeta as any).hallowEnergyVulnerabilit
 eq('Daylight flag still true (unchanged)', (halMeta as any).hallowDaylightOnlyV1Implemented, true);
 eq('S107 v2 weighted flag = true', (halMeta as any).hallowEnergyVulnerabilityV2Weighted, true);
 eq('S108 v2 bestiary hitChance flag = true', (halMeta as any).hallowEnergyVulnerabilityV2BestiaryHitChance, true);
+eq('S109 v2 encounter AC flag = true', (halMeta as any).hallowEnergyVulnerabilityV2EncounterAC, true);
 
 // ============================================================
 // 2. pickHallowDamageType: single party member, single damage type
@@ -462,6 +464,139 @@ console.log('\n--- 5g. S108 bestiaryHitChance direct value verification ---');
     bestiaryHitChance(2) <= bestiaryHitChance(5) &&
     bestiaryHitChance(5) <= bestiaryHitChance(8) &&
     bestiaryHitChance(8) <= bestiaryHitChance(30));
+}
+
+// ============================================================
+// 5h. S109 encounter-specific AC: low-AC enemy pool flips save→attack
+//     (S109 refines the S108 bestiaryHitChance to use the AVERAGE AC of living
+//     enemies on the battlefield instead of the global bestiary mean 14.849.
+//     Party: 1 cold save spell (1d8+3, saveDC 15) FIRST + 1 fire attack
+//     (1d8+3, hitBonus +5) SECOND, both cantrips (availability 1.0). Enemy:
+//     goblin AC 10 (low AC → attack lands often).
+//     S108 (bestiary mean AC 14.849): fire hc = 0.5576, cold hc (save) = 0.75
+//       fire  = 7.5×1.0×0.5576 = 4.182
+//       cold  = 7.5×1.0×0.75   = 5.625  → cold wins (also first-seen).
+//     S109 (encounter AC 10): fire hc = (21-max(2,5))/20 = 16/20 = 0.80
+//       fire  = 7.5×1.0×0.80 = 6.0
+//       cold  = 7.5×1.0×0.75 = 5.625  → fire wins (NOT first-seen — the
+//     low-AC enemy makes the attack land 80% of the time, so doubling attack
+//     damage is more valuable than doubling the save-for-half spell). This is
+//     the S109 behavioural difference from S108: the encounter-specific AC
+//     flips the pick from cold (save) to fire (attack) when the enemy is
+//     low-AC.)
+// ============================================================
+console.log('\n--- 5h. S109 encounter AC: low-AC enemy flips save→attack ---');
+{
+  const caster = makeCaster('wiz', { pos: { x: 5, y: 5, z: 0 } });
+  // Cold save spell FIRST (S108 picks cold via weight + first-seen).
+  const wizard = makeCombatant('wizard', {
+    faction: 'party', pos: { x: 7, y: 5, z: 0 },
+    actions: [makeDamageActionV2('Cold Burst', 'cold',
+      { count: 1, sides: 8, bonus: 3, hitBonus: null, saveDC: 15, saveAbility: 'dex' as AbilityScore, slotLevel: 0 })],
+  });
+  // Fire attack SECOND (hitBonus +5).
+  const fighter = makeCombatant('fighter', {
+    faction: 'party', pos: { x: 6, y: 5, z: 0 },
+    actions: [makeDamageActionV2('Fire Slash', 'fire',
+      { count: 1, sides: 8, bonus: 3, hitBonus: 5, saveDC: null, slotLevel: 0 })],
+  });
+  // Enemy: goblin AC 10 (low AC → attack lands often → attack weight rises).
+  const goblin = makeCombatant('goblin', { pos: { x: 8, y: 5, z: 0 }, ac: 10 });
+  // S108 (bestiary mean 14.849): cold 5.625 > fire 4.182 → cold wins.
+  // S109 (encounter AC 10): fire 6.0 > cold 5.625 → fire wins (FLIP).
+  eq('S109 picks fire (low-AC enemy AC 10 → attack hc 0.80 > save 0.75) — NOT first-seen cold',
+    pickHallowDamageType(caster, makeBF([caster, wizard, fighter, goblin])), 'fire');
+}
+
+// ============================================================
+// 5i. S109 encounter-specific AC: high-AC enemy pool flips attack→save
+//     (The reverse of §5h: a high-AC enemy makes attack rolls land rarely,
+//     so the save-for-half spell becomes the better type to double. Party:
+//     1 fire attack (1d8+3, hitBonus +9) FIRST + 1 cold save spell (1d8+3,
+//     saveDC 15) SECOND, both cantrips. Enemy: golem AC 20 (high AC → attack
+//     lands rarely). hitBonus +9 is the minimum to-hit where the attack
+//     BARELY beats the save under the S108 bestiary mean (0.7576 > 0.75) — so
+//     S108 picks fire, but S109 (encounter AC 20) picks cold.
+//     S108 (bestiary mean AC 14.849): fire hc = (21-max(2,5.849))/20 = 0.7576
+//       fire  = 7.5×1.0×0.7576 = 5.682
+//       cold  = 7.5×1.0×0.75   = 5.625  → fire wins (barely; also first-seen).
+//     S109 (encounter AC 20): fire hc = (21-max(2,11))/20 = 10/20 = 0.50
+//       fire  = 7.5×1.0×0.50 = 3.75
+//       cold  = 7.5×1.0×0.75 = 5.625  → cold wins (NOT first-seen — the
+//     high-AC enemy makes the attack land only 50% of the time, so doubling
+//     the save-for-half spell is more valuable. This is the S109 reverse flip:
+//     the encounter-specific AC flips the pick from fire (attack) to cold
+//     (save) when the enemy is high-AC.)
+// ============================================================
+console.log('\n--- 5i. S109 encounter AC: high-AC enemy flips attack→save ---');
+{
+  const caster = makeCaster('wiz', { pos: { x: 5, y: 5, z: 0 } });
+  // Fire attack FIRST (hitBonus +9 — S108 picks fire via weight + first-seen).
+  const fighter = makeCombatant('fighter', {
+    faction: 'party', pos: { x: 6, y: 5, z: 0 },
+    actions: [makeDamageActionV2('Fire Slash', 'fire',
+      { count: 1, sides: 8, bonus: 3, hitBonus: 9, saveDC: null, slotLevel: 0 })],
+  });
+  // Cold save spell SECOND.
+  const wizard = makeCombatant('wizard', {
+    faction: 'party', pos: { x: 7, y: 5, z: 0 },
+    actions: [makeDamageActionV2('Cold Burst', 'cold',
+      { count: 1, sides: 8, bonus: 3, hitBonus: null, saveDC: 15, saveAbility: 'dex' as AbilityScore, slotLevel: 0 })],
+  });
+  // Enemy: golem AC 20 (high AC → attack lands rarely → attack weight drops).
+  const golem = makeCombatant('golem', { pos: { x: 8, y: 5, z: 0 }, ac: 20 });
+  // S108 (bestiary mean 14.849): fire 5.682 > cold 5.625 → fire wins (barely).
+  // S109 (encounter AC 20): cold 5.625 > fire 3.75 → cold wins (FLIP).
+  eq('S109 picks cold (high-AC enemy AC 20 → attack hc 0.50 < save 0.75) — NOT first-seen fire',
+    pickHallowDamageType(caster, makeBF([caster, fighter, wizard, golem])), 'cold');
+}
+
+// ============================================================
+// 5j. S109 encounterAvgAC: direct value verification
+//     (Verifies the encounter-specific AC helper that S109 added to
+//     pickHallowDamageType. Computes the MEAN AC of living enemies (opposing
+//     faction, not dead/unconscious), falling back to BESTIARY_MEAN_AC
+//     (14.849) when no living enemies are present. The MEAN (not min/max/first)
+//     is used — verified by the AC 8 + AC 22 → 15 case (min would give 8, max
+//     would give 22). Party members and the caster are excluded.)
+// ============================================================
+console.log('\n--- 5j. S109 encounterAvgAC direct value verification ---');
+{
+  const caster = makeCaster('wiz', { pos: { x: 5, y: 5, z: 0 } });
+  // Single enemy AC 10 → 10.
+  const goblin = makeCombatant('goblin', { pos: { x: 6, y: 5, z: 0 }, ac: 10 });
+  eq('encounterAvgAC: single enemy AC 10 → 10',
+    encounterAvgAC(caster, makeBF([caster, goblin])), 10);
+  // Two enemies AC 8 + AC 22 → MEAN 15 (not min 8, not max 22).
+  const e1 = makeCombatant('e1', { pos: { x: 6, y: 5, z: 0 }, ac: 8 });
+  const e2 = makeCombatant('e2', { pos: { x: 7, y: 5, z: 0 }, ac: 22 });
+  eq('encounterAvgAC: two enemies AC 8+22 → MEAN 15 (not min/max)',
+    encounterAvgAC(caster, makeBF([caster, e1, e2])), 15);
+  // No enemies (only caster + party ally) → BESTIARY_MEAN_AC fallback (14.849).
+  const ally = makeCombatant('ally', { faction: 'party', pos: { x: 6, y: 5, z: 0 }, ac: 99 });
+  approx('encounterAvgAC: no enemies → BESTIARY_MEAN_AC (14.849) fallback',
+    encounterAvgAC(caster, makeBF([caster, ally])), 14.849);
+  // Dead enemy skipped → only the living enemy's AC counts.
+  const live = makeCombatant('live', { pos: { x: 6, y: 5, z: 0 }, ac: 10 });
+  const dead = makeCombatant('dead', { pos: { x: 7, y: 5, z: 0 }, ac: 20, isDead: true });
+  eq('encounterAvgAC: dead enemy skipped → only living AC 10',
+    encounterAvgAC(caster, makeBF([caster, live, dead])), 10);
+  // Unconscious enemy skipped → only the living enemy's AC counts.
+  const live2 = makeCombatant('live2', { pos: { x: 6, y: 5, z: 0 }, ac: 12 });
+  const unconscious = makeCombatant('unconscious', { pos: { x: 7, y: 5, z: 0 }, ac: 18, isUnconscious: true });
+  eq('encounterAvgAC: unconscious enemy skipped → only living AC 12',
+    encounterAvgAC(caster, makeBF([caster, live2, unconscious])), 12);
+  // Party member skipped (not an enemy) → only the enemy's AC counts.
+  const enemy = makeCombatant('enemy', { pos: { x: 6, y: 5, z: 0 }, ac: 10 });
+  const partyAlly = makeCombatant('ally2', { faction: 'party', pos: { x: 7, y: 5, z: 0 }, ac: 99 });
+  eq('encounterAvgAC: party member skipped → only enemy AC 10',
+    encounterAvgAC(caster, makeBF([caster, enemy, partyAlly])), 10);
+  // Three enemies AC 10 + 12 + 18 → MEAN 13.333...
+  const m1 = makeCombatant('m1', { pos: { x: 6, y: 5, z: 0 }, ac: 10 });
+  const m2 = makeCombatant('m2', { pos: { x: 7, y: 5, z: 0 }, ac: 12 });
+  const m3 = makeCombatant('m3', { pos: { x: 8, y: 5, z: 0 }, ac: 18 });
+  approx('encounterAvgAC: three enemies AC 10+12+18 → MEAN 13.3333',
+    encounterAvgAC(caster, makeBF([caster, m1, m2, m3])), 40 / 3);
 }
 
 // ============================================================
