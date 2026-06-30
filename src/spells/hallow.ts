@@ -55,7 +55,7 @@
 // it (per coverage report).
 // ============================================================
 
-import { Combatant, Battlefield, DamageType, ActiveEffect } from '../types/core';
+import { Combatant, Battlefield, DamageType, ActiveEffect, Action, DiceExpression } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
 import { applySpellEffect } from '../engine/spell_effects';
 import { chebyshev3D } from '../engine/movement';
@@ -88,6 +88,15 @@ export const metadata = {
   // This expands Hallow's combat value beyond just undead/fiends — it's now
   // a general-purpose offensive debuff when no undead/fiend is present.
   hallowEnergyVulnerabilityV1Wired: true,
+  // Session 107: pickHallowDamageType now uses a v2 WEIGHTED model (damage
+  // dice × availability × hit chance) instead of the v1 action-count heuristic.
+  // v1 counted each damage-dealing action as 1 vote — a 1d6 cantrip counted
+  // the same as a 12d6 fireball. v2 weights by expected damage per round, so
+  // the type that benefits MOST from being doubled is picked (a 12d6 fireball
+  // outscores three 1d6 fire cantrips). The dispatch wiring (S106) is
+  // unchanged — only the type-selection heuristic is refined. See
+  // pickHallowDamageType + actionDamageWeight below for the model.
+  hallowEnergyVulnerabilityV2Weighted: true,
 } as const;
 
 function emit(state: EngineState, type: CombatEvent['type'], actorId: string, desc: string, targetId?: string, value?: number): void {
@@ -276,33 +285,103 @@ export function executeEnergyVulnerability(
 //
 // When Hallow's Daylight effect doesn't apply (no undead/fiend target), the
 // AI falls back to Energy Vulnerability. The damage type is chosen by scanning
-// ALL party members' actions for the most common damage type — the party's
-// strongest damage profile. The caster would vuln whatever the party can
-// exploit (so doubled damage actually fires).
+// ALL party members' actions for the damage type with the highest EXPECTED
+// DAMAGE PER ROUND — the type that benefits MOST from being doubled. The
+// caster would vuln whatever the party can exploit (so doubled damage actually
+// fires).
 //
-// Heuristic: count each party member's actions' damageType (only actions that
-// DEAL damage — `a.damage` non-null + `a.damageType` non-null). The type with
-// the highest count wins. Ties broken by first-seen order (deterministic).
-// Returns null if no party member has a damage-dealing action (EV can't fire
-// — no damage type to exploit).
+// Session 107 (S106 next-action #5) — v2 WEIGHTED model. v1 counted each
+// damage-dealing action as 1 vote (a 1d6 cantrip counted the same as a 12d6
+// fireball). v2 weights each action by:
+//   weight = expectedDamage × availability × hitChance
+// where:
+//   - expectedDamage = the action's per-hit average (DiceExpression.average,
+//     computed as count×(sides+1)/2+bonus if `average` is missing — some test
+//     factories omit it).
+//   - availability = how often the action is used per round:
+//       • cantrip/weapon (slotLevel 0 or undefined): 1.0 (repeatable every turn)
+//       • slotted spell (slotLevel >= 1): 0.5 (limited slots — conservative; a
+//         caster might cast it 1-2x then fall back to cantrips; over a 5-round
+//         combat ~0.5 avg/round)
+//       • recharge action: multiplied by the recharge probability (Recharge N →
+//         available on N-6 → (7-N)/6; e.g. Recharge 5-6 → 2/6 ≈ 0.33)
+//   - hitChance = probability the damage is dealt:
+//       • attack roll (hitBonus !== null, saveDC === null): 0.65 (typical vs a
+//         reasonable AC; the actual target AC is unknown at pick time, so use
+//         the 5e default ~65% hit rate)
+//       • saving throw (saveDC !== null): 0.75 (save-for-half expected value:
+//         50% fail → full damage, 50% succeed → half → 0.5×1.0 + 0.5×0.5 = 0.75)
+//       • neither (auto-hit / damage_no_save): 1.0
+// The type with the highest total weight wins. Ties broken by first-seen
+// order (deterministic — same as v1, preserved so existing S106 tests that
+// use uniform-damage actions still pass: when all actions have the same dice,
+// v2 weight ∝ count, so the v1 winner is preserved).
+// Returns null if no party member has a damage-dealing action (EV can't fire).
 //
-// v1 simplification: this counts ACTION TYPES, not action AVAILABILITY or
-// damage MAGNITUDE. A cantrip (1 action) counts the same as a multiattack
-// (1 action, but 3 attacks). A 1d6 fire action counts the same as a 12d6 fire
-// action. A more sophisticated model would weight by expected damage per
-// round, but the v1 heuristic (most common type) is a reasonable proxy — the
-// party's "signature" damage type is usually the one they deal most often.
+// v2 vs v1 behavioural difference: v2 picks the type with the highest damage
+// CONTRIBUTION, not the highest action COUNT. Example: a party with three 1d6
+// fire cantrips + one 12d6 cold fireball (slotted) — v1 picks fire (count 3),
+// v2 picks cold (weight 12×3.5×0.5×0.75 = 15.75 vs fire 3×3.5×1.0×0.65 = 6.83).
+// v2 is canon-better: doubling the 12d6 fireball (save-for-half, always deals
+// ~42) benefits more than doubling three 1d6 cantrips (~3.5 each).
 // ============================================================
 
 /**
- * Scans all party members' actions for the most common damage type. Returns
- * the type (the party's strongest damage profile), or null if no party member
- * has a damage-dealing action. Used by the Hallow AI dispatch (S106) to pick
- * the Energy Vulnerability damage type.
+ * Computes the per-round expected-damage weight for a damage-dealing action:
+ * `expectedDamage × availability × hitChance`. See the §S107 comment above for
+ * the full model. Returns 0 for actions with no damage dice.
+ */
+function actionDamageWeight(a: Action): number {
+  const d = a.damage!;
+  // Expected damage per hit: use pre-computed average if present, else compute
+  // (some test factories create DiceExpression without the `average` field).
+  const expectedDmg = typeof d.average === 'number'
+    ? d.average
+    : d.count * (d.sides + 1) / 2 + d.bonus;
+
+  // Availability: how often the action is used per round.
+  let availability = 1.0;  // default: repeatable (cantrip / weapon attack)
+  if (a.slotLevel !== undefined && a.slotLevel >= 1) {
+    // Slotted spell — limited slots. Conservative 0.5 (a caster might cast it
+    // 1-2x then fall back to cantrips; over a 5-round combat ~0.5 avg/round).
+    availability = 0.5;
+  }
+  if (a.recharge) {
+    // Recharge action — available only when the d6 roll meets the threshold.
+    // Recharge N → available on N, N+1, ... 6 → (7 - N) / 6 probability.
+    // (Recharge 5-6 → 2/6 ≈ 0.33; Recharge 6 → 1/6 ≈ 0.17.)
+    availability *= (7 - a.recharge.min) / 6;
+  }
+
+  // Hit chance: probability the damage is dealt.
+  let hitChance = 1.0;  // default: auto-hit (damage_no_save, etc.)
+  if (a.hitBonus !== null && a.saveDC === null) {
+    // Attack roll — flat 0.65 (typical vs reasonable AC; target AC unknown at
+    // pick time, so use the 5e default ~65% hit rate).
+    hitChance = 0.65;
+  } else if (a.saveDC !== null) {
+    // Saving throw — save-for-half expected value ~0.75 (50% fail → full,
+    // 50% succeed → half → 0.5×1.0 + 0.5×0.5 = 0.75).
+    hitChance = 0.75;
+  }
+
+  return expectedDmg * availability * hitChance;
+}
+
+/**
+ * Scans all party members' actions for the damage type with the highest total
+ * expected-damage-per-round weight (S107 v2 model: damage dice × availability
+ * × hit chance). Returns the type that benefits MOST from being doubled, or
+ * null if no party member has a damage-dealing action. Used by the Hallow AI
+ * dispatch (S106) to pick the Energy Vulnerability damage type.
+ *
+ * Ties broken by first-seen order (deterministic). When all party actions have
+ * identical damage dice + availability + hitChance, v2 weight ∝ action count,
+ * so the v1 winner is preserved (existing S106 tests with uniform-damage
+ * actions still pass).
  */
 export function pickHallowDamageType(caster: Combatant, bf: Battlefield): DamageType | null {
-  const counts: Partial<Record<DamageType, number>> = {};
-  let firstSeen: DamageType | null = null;
+  const weights: Partial<Record<DamageType, number>> = {};
   for (const c of bf.combatants.values()) {
     if (c.faction !== caster.faction) continue;  // only party members
     if (c.isDead || c.isUnconscious) continue;
@@ -310,18 +389,21 @@ export function pickHallowDamageType(caster: Combatant, bf: Battlefield): Damage
       // Only count actions that actually deal damage (dice + type).
       if (a.damage && a.damageType) {
         const t = a.damageType;
-        counts[t] = (counts[t] ?? 0) + 1;
-        if (firstSeen === null) firstSeen = t;
+        const w = actionDamageWeight(a);
+        weights[t] = (weights[t] ?? 0) + w;
       }
     }
   }
   let best: DamageType | null = null;
-  let bestCount = 0;
-  for (const t of Object.keys(counts) as DamageType[]) {
-    const n = counts[t] ?? 0;
-    if (n > bestCount || (n === bestCount && best === null && t === firstSeen)) {
+  let bestWeight = -1;  // -1 so a 0-weight type (degenerate) still wins if it's first-seen
+  for (const t of Object.keys(weights) as DamageType[]) {
+    const w = weights[t] ?? 0;
+    // Strict > so the first-seen type wins ties (Object.keys iterates in
+    // insertion order = first-seen order; a later type with equal weight does
+    // NOT override). Matches v1 tie-break.
+    if (w > bestWeight) {
       best = t;
-      bestCount = n;
+      bestWeight = w;
     }
   }
   return best;

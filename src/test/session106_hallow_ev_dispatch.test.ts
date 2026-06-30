@@ -38,7 +38,7 @@ import {
 } from '../spells/hallow';
 import { executePlannedAction, EngineState } from '../engine/combat';
 import { applySpellEffect, undoEffect } from '../engine/spell_effects';
-import { Combatant, Battlefield, Condition, DamageType, Action, PlannedAction } from '../types/core';
+import { Combatant, Battlefield, Condition, DamageType, Action, PlannedAction, AbilityScore } from '../types/core';
 
 // ---- Test harness -------------------------------------------
 
@@ -99,6 +99,44 @@ function makeDamageAction(name: string, damageType: DamageType): Action {
   } as Action;
 }
 
+/**
+ * S107 v2 flexible damage-action factory. Accepts overrides for damage dice
+ * (count/sides/bonus), slotLevel (0=cantrip, 1+=slotted), hitBonus vs saveDC
+ * (attack vs save-based), and recharge. Used by the v2 weighting tests (§5b-d)
+ * to construct actions with differing damage magnitudes / availability / hit
+ * chances so the v2 weighting differences are observable.
+ */
+function makeDamageActionV2(
+  name: string,
+  damageType: DamageType,
+  opts: {
+    count?: number; sides?: number; bonus?: number;
+    slotLevel?: number;
+    hitBonus?: number | null; saveDC?: number | null; saveAbility?: AbilityScore | null;
+    recharge?: { min: number; recharged: boolean };
+  } = {},
+): Action {
+  const count = opts.count ?? 1;
+  const sides = opts.sides ?? 8;
+  const bonus = opts.bonus ?? 3;
+  const hitBonus = opts.hitBonus !== undefined ? opts.hitBonus : 5;
+  const saveDC = opts.saveDC !== undefined ? opts.saveDC : null;
+  const saveAbility = opts.saveAbility !== undefined ? opts.saveAbility : null;
+  const a: Action = {
+    name, isMultiattack: false,
+    attackType: saveDC !== null ? 'save' as const : 'melee',
+    reach: saveDC !== null ? 0 : 5,
+    range: saveDC !== null ? { normal: 120, long: 120 } : null,
+    hitBonus, damage: { count, sides, bonus }, damageType,
+    saveDC, saveAbility,
+    isAoE: false, isControl: false, requiresConcentration: false,
+    costType: 'action', legendaryCost: 0, description: name,
+  } as Action;
+  if (opts.slotLevel !== undefined) a.slotLevel = opts.slotLevel;
+  if (opts.recharge !== undefined) a.recharge = opts.recharge;
+  return a;
+}
+
 function makeCaster(id: string, overrides: Partial<Combatant> = {}): Combatant {
   return makeCombatant(id, {
     faction: 'party',
@@ -149,6 +187,7 @@ console.log('\n--- 1. Metadata: hallowEnergyVulnerabilityV1Wired ---');
 eq('S106 wired flag = true', (halMeta as any).hallowEnergyVulnerabilityV1Wired, true);
 eq('S105 implemented flag still true', (halMeta as any).hallowEnergyVulnerabilityV1Implemented, true);
 eq('Daylight flag still true (unchanged)', (halMeta as any).hallowDaylightOnlyV1Implemented, true);
+eq('S107 v2 weighted flag = true', (halMeta as any).hallowEnergyVulnerabilityV2Weighted, true);
 
 // ============================================================
 // 2. pickHallowDamageType: single party member, single damage type
@@ -212,6 +251,122 @@ console.log('\n--- 5. pickHallowDamageType: no damage actions → null ---');
   // Caster's only action is Hallow (no damageType). No other party members.
   eq('null when no party damage actions',
     pickHallowDamageType(caster, makeBF([caster])), null);
+}
+
+// ============================================================
+// 5b. S107 v2 weighting: higher damage outscores more common
+//     (v1 picked the most COMMON type; v2 picks the type with the highest
+//     expected-damage-per-round weight. Party: 3 fire cantrips (1d6 each,
+//     attack) + 1 cold fireball (12d6, slotted spell, save-based). v1 would
+//     pick fire (count 3); v2 picks cold (weight 12×3.5×0.5×0.75 = 15.75 vs
+//     fire 3×3.5×1.0×0.65 = 6.83). v2 is canon-better — doubling the 12d6
+//     fireball benefits more than tripling 1d6 cantrip hits.)
+// ============================================================
+console.log('\n--- 5b. S107 v2: higher damage outscores more common ---');
+{
+  const caster = makeCaster('wiz', { pos: { x: 5, y: 5, z: 0 } });
+  // Fighter with three 1d6 fire cantrips (attack-based, repeatable).
+  const fighter = makeCombatant('fighter', {
+    faction: 'party', pos: { x: 6, y: 5, z: 0 },
+    actions: [
+      makeDamageActionV2('Fire Bolt 1', 'fire', { count: 1, sides: 6, bonus: 0, slotLevel: 0 }),
+      makeDamageActionV2('Fire Bolt 2', 'fire', { count: 1, sides: 6, bonus: 0, slotLevel: 0 }),
+      makeDamageActionV2('Fire Bolt 3', 'fire', { count: 1, sides: 6, bonus: 0, slotLevel: 0 }),
+    ],
+  });
+  // Wizard with one 12d6 cold fireball (slotted L3, save-based).
+  const wizard = makeCombatant('wizard', {
+    faction: 'party', pos: { x: 7, y: 5, z: 0 },
+    actions: [makeDamageActionV2('Cold Fireball', 'cold',
+      { count: 12, sides: 6, bonus: 0, slotLevel: 3, hitBonus: null, saveDC: 15, saveAbility: 'dex' as AbilityScore })],
+  });
+  // v2: cold weight = 12×3.5×0.5×0.75 = 15.75 > fire weight = 3×3.5×1.0×0.65 = 6.825.
+  eq('v2 picks cold (12d6 fireball) over fire (3× 1d6 cantrip)',
+    pickHallowDamageType(caster, makeBF([caster, fighter, wizard])), 'cold');
+}
+
+// ============================================================
+// 5c. S107 v2 weighting: cantrip availability outscores slotted spell
+//     (equal dice + equal hitChance, but cantrip is repeatable (1.0) while
+//     slotted spell is limited (0.5). Party: 1 fire cantrip (1d8+3) + 1 cold
+//     slotted spell (1d8+3, L3). v1: tie (count 1 each) → first-seen (fire).
+//     v2: fire weight = 7.5×1.0×0.65 = 4.875 > cold weight = 7.5×0.5×0.65 =
+//     2.4375 → fire wins (cantrip availability). Same winner as v1 here, but
+//     for a DIFFERENT reason — and if cold were first-seen, v2 would STILL
+//     pick fire (weight), while v1 would pick cold (first-seen tie-break).)
+// ============================================================
+console.log('\n--- 5c. S107 v2: cantrip availability outscores slotted (equal dice) ---');
+{
+  const caster = makeCaster('wiz', { pos: { x: 5, y: 5, z: 0 } });
+  // Cold slotted spell FIRST (to show v2 doesn't just use first-seen tie-break).
+  const wizard = makeCombatant('wizard', {
+    faction: 'party', pos: { x: 7, y: 5, z: 0 },
+    actions: [makeDamageActionV2('Cold Lance', 'cold',
+      { count: 1, sides: 8, bonus: 3, slotLevel: 3 })],
+  });
+  const fighter = makeCombatant('fighter', {
+    faction: 'party', pos: { x: 6, y: 5, z: 0 },
+    actions: [makeDamageActionV2('Fire Slash', 'fire',
+      { count: 1, sides: 8, bonus: 3, slotLevel: 0 })],
+  });
+  // v1 would pick cold (first-seen, tie count 1=1). v2 picks fire (cantrip
+  // availability 1.0 > slotted 0.5; fire 4.875 > cold 2.4375).
+  eq('v2 picks fire (cantrip, repeatable) over cold (slotted, limited) — NOT first-seen',
+    pickHallowDamageType(caster, makeBF([caster, wizard, fighter])), 'fire');
+}
+
+// ============================================================
+// 5d. S107 v2 weighting: save-based hitChance (0.75) > attack (0.65)
+//     (equal dice + equal availability, but save-based actions have a higher
+//     expected-damage multiplier (save-for-half → 0.75) than attack rolls
+//     (~0.65 hit rate). Party: 1 fire attack (1d8+3, hitBonus) + 1 cold save
+//     spell (1d8+3, saveDC). v1: tie (count 1 each) → first-seen (fire). v2:
+//     fire weight = 7.5×1.0×0.65 = 4.875 < cold weight = 7.5×1.0×0.75 = 5.625
+//     → cold wins (save-for-half higher expected hit).)
+// ============================================================
+console.log('\n--- 5d. S107 v2: save-based hitChance outscores attack (equal dice) ---');
+{
+  const caster = makeCaster('wiz', { pos: { x: 5, y: 5, z: 0 } });
+  // Fire attack FIRST (to show v2 doesn't just use first-seen tie-break).
+  const fighter = makeCombatant('fighter', {
+    faction: 'party', pos: { x: 6, y: 5, z: 0 },
+    actions: [makeDamageActionV2('Fire Slash', 'fire',
+      { count: 1, sides: 8, bonus: 3, hitBonus: 5, saveDC: null })],
+  });
+  const wizard = makeCombatant('wizard', {
+    faction: 'party', pos: { x: 7, y: 5, z: 0 },
+    actions: [makeDamageActionV2('Cold Burst', 'cold',
+      { count: 1, sides: 8, bonus: 3, hitBonus: null, saveDC: 15, saveAbility: 'dex' as AbilityScore })],
+  });
+  // v1 would pick fire (first-seen, tie count 1=1). v2 picks cold (save-based
+  // hitChance 0.75 > attack 0.65; cold 5.625 > fire 4.875).
+  eq('v2 picks cold (save-for-half, 0.75) over fire (attack, 0.65) — NOT first-seen',
+    pickHallowDamageType(caster, makeBF([caster, fighter, wizard])), 'cold');
+}
+
+// ============================================================
+// 5e. S107 v2 regression: v1 tests still pass (uniform damage → v2 ∝ count)
+//     (When all party actions have identical dice + availability + hitChance,
+//      v2 weight ∝ action count, so the v1 winner is preserved. §2-§4 above
+//      use makeDamageAction (1d8+3, attack, no slot) for all actions — v2
+//      reduces to count, so slashing (2) > bludgeoning (1), ties → first-seen.
+//      This §5e is an explicit regression guard: 2 fire + 1 cold, all 1d8+3
+//      attack cantrips → fire (count 2, weight 2×4.875=9.75 > cold 4.875).)
+// ============================================================
+console.log('\n--- 5e. S107 v2 regression: uniform damage → v2 ∝ count (v1 preserved) ---');
+{
+  const caster = makeCaster('wiz', { pos: { x: 5, y: 5, z: 0 } });
+  const fighter = makeCombatant('fighter', {
+    faction: 'party', pos: { x: 6, y: 5, z: 0 },
+    actions: [makeDamageAction('Fire 1', 'fire'), makeDamageAction('Fire 2', 'fire')],
+  });
+  const cleric = makeCombatant('cleric', {
+    faction: 'party', pos: { x: 7, y: 5, z: 0 },
+    actions: [makeDamageAction('Cold 1', 'cold')],
+  });
+  // All 1d8+3 attack cantrips → v2 weight ∝ count → fire (2) > cold (1).
+  eq('v2 uniform-damage: fire (2) > cold (1) — v1 count winner preserved',
+    pickHallowDamageType(caster, makeBF([caster, fighter, cleric])), 'fire');
 }
 
 // ============================================================
