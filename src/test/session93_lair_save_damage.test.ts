@@ -157,10 +157,15 @@ console.log('\n--- 1. save_damage: Adult Red Dragon magma ---');
   tankUp(dragon);
   noLegendary(dragon);   // prevent legendary-action saves from polluting the test
 
-  // Spawn 2 targets within 120 ft (rangeFt).
-  const t1 = spawn('Goblin', { x: 5, y: 0, z: 0 });   // 25 ft away
+  // Spawn 2 targets within 120 ft (rangeFt). Session 105: Red Dragon::0 is
+  // now centerOnPoint=true (point-selection, radiusFt=5 = 1 square). Place t2
+  // ADJACENT to t1 (1 square apart) so a single 5-ft-radius centre catches
+  // BOTH — preserving the "2 save events" assertion. (Previously t2 was at
+  // (10,0,0) = 5 squares from t1, which v1 hit both of; point-selection with a
+  // 1-square radius would catch only 1.)
+  const t1 = spawn('Goblin', { x: 5, y: 0, z: 0 });   // 25 ft from dragon
   asEnemy(t1); tankUp(t1);
-  const t2 = spawn('Goblin', { x: 10, y: 0, z: 0 });  // 50 ft away
+  const t2 = spawn('Goblin', { x: 5, y: 1, z: 0 });   // 25 ft from dragon, 1 sq from t1
   asEnemy(t2); tankUp(t2);
 
   const bf = makeBF([dragon, t1, t2]);
@@ -704,7 +709,13 @@ console.log('\n--- 10. Lair creature never damages itself ---');
   tankUp(dragon);
   noLegendary(dragon);
 
-  const ally = spawn('Goblin', { x: 5, y: 0, z: 0 });
+  // Session 105: Red Dragon::0 is now centerOnPoint=true (point-selection,
+  // radiusFt=5 = 1 square). Place the ally 1 square from the dragon so a
+  // single 5-ft-radius centre catches BOTH dragon + ally — the self-damage
+  // prevention then excludes the dragon, leaving the ally as the damaged
+  // target. (Previously ally was at (5,0,0) = 5 squares; point-selection with
+  // a 1-square radius would catch only the dragon → ally undamaged → 10c fail.)
+  const ally = spawn('Goblin', { x: 1, y: 0, z: 0 });   // 5 ft from dragon
   ally.faction = 'party';   // same faction as dragon
   tankUp(ally);
 

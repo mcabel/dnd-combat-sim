@@ -1471,11 +1471,38 @@ export function extractLairAction(
   // point-selection AoE targeting ("centered on a point the [creature]
   // chooses/can see within N feet of it"). Session 103. This is the opt-in
   // signal for chooseLairActionPoint (vs. the v1 over-approximation that
-  // centers the AoE on the lair creature itself). Verified against the
-  // bestiary: 40 actions use this phrasing (29 save_condition + 4 save_damage
-  // + 7 deferred); the regex does NOT match "within N feet of the [creature]"
-  // (centered-on-self phrasing), so non-point-selection actions stay on v1.
-  const centerOnPoint = /centered on a point/i.test(cleaned);
+  // centers the AoE on the lair creature itself).
+  //
+  // Session 105 — regex broadened. The S103 regex matched ONLY "centered on a
+  // point". The S104 handover (next-action #5) audited the remaining radiusFt
+  // actions and found 4 more with explicit point-selection phrasing that the
+  // S103 regex missed (they use "a point the [creature] chooses/can see" +
+  // "centered on that point", not "centered on a point"):
+  //   • Black Dragon::2  — "spreads from a point the dragon chooses ... filling a 15-foot-radius sphere"
+  //   • Bronze Dragon::1 — "originates at a point the dragon can see ... centered on that point"
+  //   • Copper Dragon::0 — "chooses a point on the ground that it can see ... centered on that point"
+  //   • Red Dragon::0    — "erupts from a point on the ground the dragon can see ... 5-foot-radius geyser"
+  // The new alternation `a point ... (chooses|can see)` catches all 4 (plus 6
+  // radiusFt=undefined actions with the same phrasing — Drow Matron Mother::1,
+  // Geryon::0/::1, Hythonia::1, Yeenoghu::0/::1 — which get the flag but stay
+  // on v1 because selectLairActionPoints requires radiusFt !== undefined to
+  // activate the point-selection branch; the flag is still semantically
+  // correct and future-proofs for when radiusFt extraction is extended to
+  // "within N feet of that point" / "cube N feet on a side" phrasings).
+  //
+  // The regex does NOT match centered-on-self phrasing ("within N feet of the
+  // [creature]" / "around the [creature]" / "centered on him") — those have no
+  // "a point ... chooses/can see" clause, so they stay on v1. The 4 borderline
+  // cases ("a N-foot-radius sphere/area within N feet of [creature]" — Imix::1,
+  // Ogrémoch::0/::1, Olhydra::2) mechanically ARE point-selection but omit the
+  // "chooses/can see" qualifier; they stay on v1 (conservative — a future
+  // session can revisit with more context). Verified against the bestiary:
+  // 22 actions now use centerOnPoint (12 "centered on a point" + 10
+  // "a point ... chooses/can see"); 5 centered-on-self + 4 borderline + 1
+  // ambiguous (Gar Shatterkeel::1) stay false.
+  const centerOnPoint =
+    /centered on a point/i.test(cleaned) ||
+    /a point\b[^.]*?\b(?:chooses|can see)\b/i.test(cleaned);
 
   // ── 10. durationRounds ──
   let durationRounds: number | undefined;

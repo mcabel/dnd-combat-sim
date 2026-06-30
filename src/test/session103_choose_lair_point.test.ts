@@ -137,6 +137,30 @@ console.log('\n--- 1. Parser: centerOnPoint on real bestiary actions ---');
   const red = spawn('Adult Red Dragon');
   const red2 = red.lairActions?.actions.find(a => a.id === 'Red Dragon::2');
   eq('Red Dragon::2 centerOnPoint = true', red2?.centerOnPoint, true);
+
+  // Session 105 — the S103 regex matched ONLY "centered on a point". The S105
+  // broadened regex also matches "a point ... (chooses|can see)". These 4
+  // bestiary actions use that phrasing + a radiusFt, so they now opt into
+  // point-selection (previously stayed on v1 over-approximation):
+  //   Black Dragon::2  — "spreads from a point the dragon chooses ... 15-foot-radius sphere"
+  //   Bronze Dragon::1 — "originates at a point the dragon can see ... 20-foot radius centered on that point"
+  //   Copper Dragon::0 — "chooses a point on the ground that it can see ... 20-foot radius centered on that point"
+  //   Red Dragon::0    — "erupts from a point on the ground the dragon can see ... 5-foot-radius geyser"
+  const black2 = spawn('Adult Black Dragon').lairActions?.actions.find(a => a.id === 'Black Dragon::2');
+  eq('Black Dragon::2 centerOnPoint = true (S105)', black2?.centerOnPoint, true);
+  assert('Black Dragon::2 has radiusFt (S105)', black2?.radiusFt !== undefined);
+
+  const bronze1 = spawn('Adult Bronze Dragon').lairActions?.actions.find(a => a.id === 'Bronze Dragon::1');
+  eq('Bronze Dragon::1 centerOnPoint = true (S105)', bronze1?.centerOnPoint, true);
+  assert('Bronze Dragon::1 has radiusFt (S105)', bronze1?.radiusFt !== undefined);
+
+  const copper0 = spawn('Adult Copper Dragon').lairActions?.actions.find(a => a.id === 'Copper Dragon::0');
+  eq('Copper Dragon::0 centerOnPoint = true (S105)', copper0?.centerOnPoint, true);
+  assert('Copper Dragon::0 has radiusFt (S105)', copper0?.radiusFt !== undefined);
+
+  const red0 = red.lairActions?.actions.find(a => a.id === 'Red Dragon::0');
+  eq('Red Dragon::0 centerOnPoint = true (S105)', red0?.centerOnPoint, true);
+  assert('Red Dragon::0 has radiusFt (S105)', red0?.radiusFt !== undefined);
 }
 
 // ============================================================
@@ -144,10 +168,13 @@ console.log('\n--- 1. Parser: centerOnPoint on real bestiary actions ---');
 // ============================================================
 console.log('\n--- 2. Parser: centerOnPoint false for centered-on-self actions ---');
 {
-  // Red Dragon::0 — magma, "Magma erupts..." (NOT "centered on a point").
+  // Session 105: Red Dragon::0 moved to §1 (it is point-selection, NOT
+  // centered-on-self — "a point on the ground the dragon can see"). Use
+  // Red Dragon::1 ("a 60-foot radius around the dragon") as the
+  // centered-on-self example instead.
   const red = spawn('Adult Red Dragon');
-  const red0 = red.lairActions?.actions.find(a => a.id === 'Red Dragon::0');
-  eq('Red Dragon::0 centerOnPoint = false (magma, centered on self)', red0?.centerOnPoint, false);
+  const red1 = red.lairActions?.actions.find(a => a.id === 'Red Dragon::1');
+  eq('Red Dragon::1 centerOnPoint = false (tremor, centered on self)', red1?.centerOnPoint, false);
 
   // Black Dragon::0 — save_condition "Each creature within 30 feet..." (centered on self).
   const black0 = black0Action();
@@ -321,13 +348,20 @@ console.log('\n--- 9. Integration: Blue Dragon::1 point-selection in combat ---'
 // ============================================================
 console.log('\n--- 10. Regression: non-centerOnPoint action keeps v1 over-approximation ---');
 {
-  // Red Dragon::0 (magma, save_damage) is NOT centerOnPoint. Two spread goblins
-  // both within rangeFt(120) → v1 hits BOTH (radiusFt ignored).
+  // Session 105: Red Dragon::0 is now centerOnPoint=true (moved to point-
+  // selection). Use a SYNTHETIC non-centerOnPoint save_damage action with a
+  // radiusFt (set but ignored by v1) to demonstrate the v1 over-approximation:
+  // two spread goblins both within rangeFt(120) → v1 hits BOTH (radiusFt
+  // ignored because centerOnPoint is false).
   const dragon = spawn('Adult Red Dragon'); asParty(dragon); tankUp(dragon); noLegendary(dragon); noOffense(dragon);
-  const red0 = dragon.lairActions!.actions.find(a => a.id === 'Red Dragon::0')!;
-  eq('Red Dragon::0 centerOnPoint = false (precondition)', red0.centerOnPoint, false);
-  dragon.lairActions!.actions = [red0];
-  dragon._lairActionHistory = [];
+  const v1Action = makeAction('Test::v1', 'save_damage', {
+    saveDC: 15, saveAbility: 'dex',
+    damage: { count: 6, sides: 6, type: 'fire' },
+    rangeFt: 120, radiusFt: 20, centerOnPoint: false,
+    rawText: 'Synthetic v1 save_damage (centerOnPoint=false, radiusFt ignored by v1).',
+  });
+  eq('synthetic v1 action centerOnPoint = false (precondition)', v1Action.centerOnPoint, false);
+  forceAction(dragon, v1Action);
 
   const g1 = spawn('Goblin', pos(1, 0)); asEnemy(g1); tankUp(g1); freeze(g1);
   g1.saveProficiencies = { dex: -100 } as any;   // magma is DEX save — guaranteed fail → damage
@@ -357,10 +391,16 @@ console.log('\n--- 11. Direct parser: synthetic centered-on-point text ---');
   eq('synthetic point text: rangeFt = 120', a.rangeFt, 120);
 
   const selfText = 'Magma erupts from the ground at a point the dragon chooses within 60 feet of it. Each creature on the ground in a 10-foot cube must make a DC 15 Dexterity saving throw.';
-  // Note: "at a point" (not "centered on a point") → centerOnPoint stays false.
-  // This confirms the regex is specific to the "centered on a point" phrasing.
+  // Session 105: the S103 regex matched ONLY "centered on a point". The S105
+  // broadened regex ALSO matches "a point ... (chooses|can see)" — so this
+  // text ("a point the dragon chooses") now → centerOnPoint=true. The action
+  // has no radiusFt ("10-foot cube", not "N-foot-radius"), so the point-
+  // selection BRANCH is skipped (selectLairActionTargets requires radiusFt
+  // !== undefined) → v1 behavior. The flag is still semantically correct
+  // (the text describes point-selection) and future-proofs for when radiusFt
+  // extraction is extended to cube/"within N feet of that point" phrasings.
   const b = extractLairAction(selfText, 'Red Dragon', 0);
-  eq('synthetic "at a point" text: centerOnPoint = false (regex specificity)', b.centerOnPoint, false);
+  eq('synthetic "at a point the dragon chooses" text: centerOnPoint = true (S105 broadened regex)', b.centerOnPoint, true);
 
   const eachWithinText = 'Each creature within 30 feet of the dragon must make a DC 15 Wisdom saving throw.';
   const c = extractLairAction(eachWithinText, 'Black Dragon', 0);
