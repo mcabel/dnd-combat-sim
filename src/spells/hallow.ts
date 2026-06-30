@@ -75,9 +75,19 @@ export const metadata = {
   // Uses the S103 `damage_vulnerability` ActiveEffect pattern (the canonical,
   // regression-guarded pattern — see src/test/session104_vuln_audit.test.ts).
   // Encounter-duration (no concentration, no sourceTurnExpires — mirrors the
-  // existing Daylight effect). NOT wired into the AI dispatch (case 'hallow'
-  // still uses Daylight); AI effect-selection is a future session.
+  // existing Daylight effect).
   hallowEnergyVulnerabilityV1Implemented: true,
+  // Session 106: Energy Vulnerability is now WIRED into the AI dispatch
+  // (case 'hallow' in combat.ts). The effect-selection rule (S106):
+  //   1. If the target is undead/fiend → Daylight (canon-accurate; the
+  //      PHB-intended use — undead/fiends have disadv on attacks in daylight).
+  //   2. Else (no undead/fiend, but there are other enemies) → Energy
+  //      Vulnerability with the party's most common damage type (inferred
+  //      from party members' actions via pickHallowDamageType). The party
+  //      would vuln whatever damage type they can exploit.
+  // This expands Hallow's combat value beyond just undead/fiends — it's now
+  // a general-purpose offensive debuff when no undead/fiend is present.
+  hallowEnergyVulnerabilityV1Wired: true,
 } as const;
 
 function emit(state: EngineState, type: CombatEvent['type'], actorId: string, desc: string, targetId?: string, value?: number): void {
@@ -259,4 +269,60 @@ export function executeEnergyVulnerability(
   emit(state, 'condition_add', caster.id,
     `${target.name} is vulnerable to ${damageType} damage (Hallow Energy Vulnerability)! Incoming ${damageType} damage is doubled (PHB p.197). (NO concentration; encounter-duration.)`,
     target.id);
+}
+
+// ============================================================
+// Session 106 — Hallow effect-selection: pickHallowDamageType
+//
+// When Hallow's Daylight effect doesn't apply (no undead/fiend target), the
+// AI falls back to Energy Vulnerability. The damage type is chosen by scanning
+// ALL party members' actions for the most common damage type — the party's
+// strongest damage profile. The caster would vuln whatever the party can
+// exploit (so doubled damage actually fires).
+//
+// Heuristic: count each party member's actions' damageType (only actions that
+// DEAL damage — `a.damage` non-null + `a.damageType` non-null). The type with
+// the highest count wins. Ties broken by first-seen order (deterministic).
+// Returns null if no party member has a damage-dealing action (EV can't fire
+// — no damage type to exploit).
+//
+// v1 simplification: this counts ACTION TYPES, not action AVAILABILITY or
+// damage MAGNITUDE. A cantrip (1 action) counts the same as a multiattack
+// (1 action, but 3 attacks). A 1d6 fire action counts the same as a 12d6 fire
+// action. A more sophisticated model would weight by expected damage per
+// round, but the v1 heuristic (most common type) is a reasonable proxy — the
+// party's "signature" damage type is usually the one they deal most often.
+// ============================================================
+
+/**
+ * Scans all party members' actions for the most common damage type. Returns
+ * the type (the party's strongest damage profile), or null if no party member
+ * has a damage-dealing action. Used by the Hallow AI dispatch (S106) to pick
+ * the Energy Vulnerability damage type.
+ */
+export function pickHallowDamageType(caster: Combatant, bf: Battlefield): DamageType | null {
+  const counts: Partial<Record<DamageType, number>> = {};
+  let firstSeen: DamageType | null = null;
+  for (const c of bf.combatants.values()) {
+    if (c.faction !== caster.faction) continue;  // only party members
+    if (c.isDead || c.isUnconscious) continue;
+    for (const a of c.actions) {
+      // Only count actions that actually deal damage (dice + type).
+      if (a.damage && a.damageType) {
+        const t = a.damageType;
+        counts[t] = (counts[t] ?? 0) + 1;
+        if (firstSeen === null) firstSeen = t;
+      }
+    }
+  }
+  let best: DamageType | null = null;
+  let bestCount = 0;
+  for (const t of Object.keys(counts) as DamageType[]) {
+    const n = counts[t] ?? 0;
+    if (n > bestCount || (n === bestCount && best === null && t === firstSeen)) {
+      best = t;
+      bestCount = n;
+    }
+  }
+  return best;
 }

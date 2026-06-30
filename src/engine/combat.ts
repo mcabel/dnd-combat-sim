@@ -714,6 +714,9 @@ import {
 import {
   shouldCast as shouldCastHallow,
   execute as executeHallow,
+  shouldCastEnergyVulnerability,
+  executeEnergyVulnerability,
+  pickHallowDamageType,
 } from '../spells/hallow';
 // Wish: out-of-combat stub — shouldCast always returns false
 import { shouldCast as shouldCastWish } from '../spells/wish';
@@ -5738,11 +5741,60 @@ export function executePlannedAction(
     }
 
     case 'hallow': {
-      // Hallow — single-target advantage_vs (Daylight vs undead/fiend).
+      // Hallow — v1 effect-selection (S106):
+      //   1. Daylight (vs undead/fiend) — canon-accurate; the PHB-intended use
+      //      (undead/fiends have disadv on attacks in daylight).
+      //   2. Energy Vulnerability (vs any enemy) — when no undead/fiend is
+      //      present but the party has a damage type to exploit. The damage
+      //      type is inferred from party members' actions (pickHallowDamageType
+      //      returns the party's most common damage type — the one EV would
+      //      double). This expands Hallow's combat value beyond just
+      //      undead/fiends: it's now a general-purpose offensive debuff.
+      //
+      // The AI's pre-selected target (plan.targetId) is preferred when valid;
+      // if it's undead/fiend → Daylight; else → EV (if the party has a damage
+      // type and the target isn't already vulnerable). If the AI didn't pick a
+      // target (or it's unsuitable), fall back to shouldCastHallow (find
+      // undead/fiend), then shouldCastEnergyVulnerability (find highest-HP
+      // enemy not already vulnerable).
       const halTargetId = plan.targetId;
       const halTarget = halTargetId ? bf.combatants.get(halTargetId) ?? null : null;
-      const halLive = halTarget && !halTarget.isDead && !halTarget.isUnconscious ? halTarget : shouldCastHallow(actor, bf);
-      if (halLive) executeHallow(actor, halLive, state);
+      const halLive = halTarget && !halTarget.isDead && !halTarget.isUnconscious ? halTarget : null;
+
+      // Priority 1: if the AI picked a target, use it with the canon-appropriate
+      // effect (Daylight for undead/fiend, EV otherwise).
+      if (halLive) {
+        const ct = (halLive.creatureType ?? '').toLowerCase();
+        if (ct === 'undead' || ct === 'fiend') {
+          executeHallow(actor, halLive, state);
+          break;
+        }
+        // Not undead/fiend — try EV with the party's damage type.
+        const damageType = pickHallowDamageType(actor, bf);
+        if (damageType && !halLive.damageVulnerabilities?.includes(damageType)) {
+          executeEnergyVulnerability(actor, halLive, state, damageType);
+          break;
+        }
+        // EV not applicable (no party damage type, or target already vulnerable)
+        // — fall through to the no-target search below (find undead/fiend).
+      }
+
+      // Priority 2: no AI target (or AI target unsuitable for EV) — find an
+      // undead/fiend for Daylight.
+      const daylightTarget = shouldCastHallow(actor, bf);
+      if (daylightTarget) {
+        executeHallow(actor, daylightTarget, state);
+        break;
+      }
+
+      // Priority 3: no undead/fiend — find any enemy for EV (party's damage type).
+      const evDamageType = pickHallowDamageType(actor, bf);
+      if (evDamageType) {
+        const evTarget = shouldCastEnergyVulnerability(actor, bf, evDamageType);
+        if (evTarget) {
+          executeEnergyVulnerability(actor, evTarget, state, evDamageType);
+        }
+      }
       break;
     }
 
