@@ -474,6 +474,16 @@ console.log('\n--- 12. Damage hook: warding-bond tether damage-split (DC 30 = al
   lairKobold.ac = 0;  // enemy auto-hits
   // Synthetic tether action with saveDC=30 (enemy always fails CON save → redirect fires).
   // DC 30: Goblin CON+0 rolls 1d20+0, max 20 < 30 → always fail.
+  // S107 flake-fix: TWO distinct tether actions (different IDs) so the 2-round
+  // lair-action history skip never blocks the tether from being re-established.
+  // With one action, round 2 skips (the single id is in the 2-entry history) →
+  // the round-1 tether expires at round-2 init-20 → round-2 damage finds no
+  // active tether → no redirect log → 12b fails whenever the Goblin nat-1s in
+  // round 1 (~5%) then hits in round 2 (~95%). With two actions, round 2 picks
+  // the second action (first is in history) → tether re-established (expires at
+  // round 3) → round-2 damage finds an active tether → redirect fires. The only
+  // remaining non-determinism is the Goblin nat-1ing in BOTH rounds (~0.25%),
+  // which skips 12b-12e (skip, not fail). Deterministic enough for CI.
   const tetherAction = makeAction('TestKobold::tether', 'save_only', {
     saveDC: 30,
     saveAbility: 'con',
@@ -482,8 +492,16 @@ console.log('\n--- 12. Damage hook: warding-bond tether damage-split (DC 30 = al
     rangeFt: 120,
     rawText: 'DC 30 CON or warding bond tether.',
   });
+  const tetherActionB = makeAction('TestKobold::tether-b', 'save_only', {
+    saveDC: 30,
+    saveAbility: 'con',
+    lairWardingBondTether: true,
+    maxTargets: 1,
+    rangeFt: 120,
+    rawText: 'DC 30 CON or warding bond tether (alternate).',
+  });
   lairKobold.lairActions = {
-    actions: [tetherAction],
+    actions: [tetherAction, tetherActionB],
     isInLair: true,
   } as any;
   lairKobold._lairActionHistory = [];
@@ -552,6 +570,8 @@ console.log('\n--- 13. Damage hook: tether save success → no redirect ---');
   // Synthetic tether action with saveDC=1 (enemy always succeeds → no redirect).
   // DC 1: Goblin CON+0 rolls 1d20+0, min 1 ≥ 1 → always succeed (nat 1 is NOT
   // auto-fail on saving throws in 5e — only attack rolls and death saves).
+  // S107 flake-fix: TWO distinct tether actions (see §12 comment above) so the
+  // tether is re-established in round 2 (defeating the 2-round history skip).
   const tetherAction = makeAction('TestKobold::tether1', 'save_only', {
     saveDC: 1,
     saveAbility: 'con',
@@ -560,8 +580,16 @@ console.log('\n--- 13. Damage hook: tether save success → no redirect ---');
     rangeFt: 120,
     rawText: 'DC 1 CON or warding bond tether.',
   });
+  const tetherActionB = makeAction('TestKobold::tether1b', 'save_only', {
+    saveDC: 1,
+    saveAbility: 'con',
+    lairWardingBondTether: true,
+    maxTargets: 1,
+    rangeFt: 120,
+    rawText: 'DC 1 CON or warding bond tether (alternate).',
+  });
   lairKobold.lairActions = {
-    actions: [tetherAction],
+    actions: [tetherAction, tetherActionB],
     isInLair: true,
   } as any;
   lairKobold._lairActionHistory = [];
