@@ -584,6 +584,79 @@ console.log('\n--- 16. Session 106 BORDERLINE: Ogrémoch::0 real action point-se
   eq('Ogrémoch::0 clustered: 2 targets hit (both within 10ft)', targets2.length, 2);
 }
 
+// ============================================================
+// 17. Session 106 radiusFt extraction: non-"N-foot-radius" phrasings
+//     (S105 next-action #5b — 4 actions had centerOnPoint=true but
+//     radiusFt=undefined, keeping them on v1 despite the flag. The S106
+//     parser now extracts radiusFt from "within N feet of that point" and
+//     "cube N feet on a side" phrasings, activating point-selection.)
+// ============================================================
+console.log('\n--- 17. Session 106 radiusFt extraction: non-"N-foot-radius" phrasings ---');
+{
+  // Drow Matron Mother::1 — "within 60 feet of that point" → radiusFt=60
+  // (S105 centerOnPoint=true via "a point the drow can see"; S106 adds radiusFt.)
+  const drow1 = spawn('Drow Matron Mother').lairActions?.actions.find(a => a.id === 'Drow Matron Mother::1');
+  eq('Drow Matron Mother::1 centerOnPoint = true (S105)', drow1?.centerOnPoint, true);
+  eq('Drow Matron Mother::1 radiusFt = 60 (S106 "within N feet of that point")', drow1?.radiusFt, 60);
+  eq('Drow Matron Mother::1 rangeFt = 120 (S105)', drow1?.rangeFt, 120);
+
+  // Hythonia::1 — "within 20 feet of that point" → radiusFt=20
+  // (S105 centerOnPoint=true via "a point she can see"; S106 adds radiusFt.)
+  const hythonia1 = spawn('Hythonia').lairActions?.actions.find(a => a.id === 'Hythonia::1');
+  eq('Hythonia::1 centerOnPoint = true (S105)', hythonia1?.centerOnPoint, true);
+  eq('Hythonia::1 radiusFt = 20 (S106 "within N feet of that point")', hythonia1?.radiusFt, 20);
+  eq('Hythonia::1 rangeFt = 150 (S105)', hythonia1?.rangeFt, 150);
+
+  // Storm Giant Quintessent::0 — "within 20 feet of that point" → radiusFt=20
+  // (S103 centerOnPoint=true via "centered on a point"; S106 adds radiusFt.
+  // Note: S105 audit missed this action — same pattern as Drow/Hythonia; included now.)
+  const sgq0 = spawn('Storm Giant Quintessent').lairActions?.actions.find(a => a.id === 'Storm Giant Quintessent::0');
+  eq('Storm Giant Quintessent::0 centerOnPoint = true (S103)', sgq0?.centerOnPoint, true);
+  eq('Storm Giant Quintessent::0 radiusFt = 20 (S106 "within N feet of that point")', sgq0?.radiusFt, 20);
+
+  // Geryon::1 — "cube, 10 feet on each side" → radiusFt=5 (half-side)
+  // (S105 centerOnPoint=true via "a point he can see"; S106 adds radiusFt.)
+  const geryon1 = spawn('Geryon').lairActions?.actions.find(a => a.id === 'Geryon::1');
+  eq('Geryon::1 centerOnPoint = true (S105)', geryon1?.centerOnPoint, true);
+  eq('Geryon::1 radiusFt = 5 (S106 "cube N feet on each side" → floor(10/2))', geryon1?.radiusFt, 5);
+  eq('Geryon::1 rangeFt = 120 (S105)', geryon1?.rangeFt, 120);
+
+  // Yeenoghu::1 — "in the space where the spike emerges" → NO radiusFt (single-target,
+  // no radius number in text). Stays radiusFt=undefined (v1) — S106 left this for a
+  // future session (would need a "single-target point" handler, radiusFt=0).
+  const yeenoghu1 = spawn('Yeenoghu').lairActions?.actions.find(a => a.id === 'Yeenoghu::1');
+  eq('Yeenoghu::1 centerOnPoint = true (S105)', yeenoghu1?.centerOnPoint, true);
+  eq('Yeenoghu::1 radiusFt = undefined (S106 — "in the space" has no number; deferred)', yeenoghu1?.radiusFt, undefined);
+}
+
+// ============================================================
+// 18. Session 106 radiusFt: Geryon::1 cube point-selection behavioural
+//     (Geryon::1 now has centerOnPoint=true + radiusFt=5. A 10ft cube → 5ft
+//     Chebyshev radius. Spread enemies beyond 5ft of any centre within
+//     rangeFt are NOT hit — canon-accurate for a 10ft cube AoE.)
+// ============================================================
+console.log('\n--- 18. Session 106 radiusFt: Geryon::1 cube point-selection ---');
+{
+  const geryon = spawn('Geryon'); geryon.pos = pos(0, 0);
+  const action = geryon.lairActions?.actions.find(a => a.id === 'Geryon::1')!;
+  eq('Geryon::1 radiusFt = 5 (cube half-side)', action.radiusFt, 5);
+  eq('Geryon::1 rangeFt = 120', action.rangeFt, 120);
+
+  // Two enemies: g1 at 5ft (1sq), g2 at 20ft (4sq). radiusFt=5 (1sq). g1-g2=3sq=15ft>5ft.
+  // Point-selection hits 1 (g1); v1 would hit BOTH (all in rangeFt=120).
+  const g1 = spawn('Goblin'); g1.pos = pos(1, 0);   // 5 ft from Geryon
+  const g2 = spawn('Goblin'); g2.pos = pos(4, 0);   // 20 ft from Geryon, 15 ft from g1
+  const { targets, center } = chooseLairActionPoint(geryon, action, [g1, g2]);
+  eq('Geryon::1 spread: 1 target hit (5ft cube radius)', targets.length, 1);
+  eq('Geryon::1 spread: target is g1', targets[0].id, g1.id);
+  eq('Geryon::1 spread: centre = g1 x', center.x, g1.pos.x);
+
+  // Clustered: g1 + g3 adjacent (5ft apart) → both within 5ft cube radius.
+  const g3 = spawn('Goblin'); g3.pos = pos(1, 1);   // 5 ft from g1 (adjacent, same Chebyshev ring)
+  const { targets: targets2 } = chooseLairActionPoint(geryon, action, [g1, g3]);
+  eq('Geryon::1 clustered: 2 targets hit (both within 5ft)', targets2.length, 2);
+}
+
 // ---- Results ------------------------------------------------
 console.log(`\n${'='.repeat(60)}`);
 console.log(`Results: ${passed} passed, ${failed} failed`);

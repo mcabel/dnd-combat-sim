@@ -1464,8 +1464,52 @@ export function extractLairAction(
   const rangeFt = rangeMatch ? parseInt(rangeMatch[1], 10) : undefined;
 
   // ── 9. radiusFt from "N-foot-radius" / "N-foot-radius sphere" ──
+  // Session 106 (S105 next-action #5b): extended with 2 fallback patterns for
+  // actions that have centerOnPoint=true (S103/S105 "a point ... chooses/can
+  // see" / "centered on a point") but use non-"N-foot-radius" AoE phrasings.
+  // Without a radiusFt, these stayed on v1 despite the flag (the point-selection
+  // branch in selectLairActionTargets requires radiusFt !== undefined).
+  //
+  // Fallback 1: "within N feet of that point" → radiusFt = N
+  //   Same Chebyshev approximation as "N-foot-radius sphere" (Euclidean "within
+  //   N feet" → Chebyshev N). Covers:
+  //     • Drow Matron Mother::1 — "within 60 feet of that point" (save_condition)
+  //     • Hythonia::1           — "within 20 feet of that point" (cast_spell)
+  //     • Storm Giant Quintessent::0 — "within 20 feet of that point" (save_condition)
+  //   (S105 audit missed Storm Giant Quintessent::0 — same pattern; included now.)
+  //
+  // Fallback 2: "cube N feet on a side" / "cube, N feet on each side" → radiusFt = floor(N/2)
+  //   A cube N feet on a side has half-side N/2 — the Chebyshev radius from the
+  //   centre to the cube's faces. Covers:
+  //     • Geryon::1 — "cube, 10 feet on each side, centered on that point" → radiusFt = 5
+  //
+  // Note: Yeenoghu::1 ("in the space where the spike emerges") uses neither
+  // phrasing — single-target point effect (no radius number in text). Left on
+  // v1 (radiusFt=undefined); a future session could add a "single-target point"
+  // handler (radiusFt=0). Tracked in the S106 handover next-actions.
+  //
+  // The fallbacks only run when the primary "N-foot-radius" match fails, so
+  // existing radiusFt extraction is unchanged (no regression risk). Verified
+  // via bestiary scan: the 2 new patterns match exactly 4 unique actions
+  // (Drow Matron Mother::1, Geryon::1, Hythonia::1, Storm Giant Quintessent::0)
+  // — 0 false-positives among the other 484 lair actions.
+  let radiusFt: number | undefined;
   const radiusMatch = cleaned.match(/(\d+)[- ]?(?:foot|feet)[- ]?radius/i);
-  const radiusFt = radiusMatch ? parseInt(radiusMatch[1], 10) : undefined;
+  if (radiusMatch) {
+    radiusFt = parseInt(radiusMatch[1], 10);
+  } else {
+    // Fallback 1: "within N feet of that point"
+    const ofThatPointMatch = cleaned.match(/within\s+(\d+)\s*feet\s+of\s+that\s+point/i);
+    if (ofThatPointMatch) {
+      radiusFt = parseInt(ofThatPointMatch[1], 10);
+    } else {
+      // Fallback 2: "cube N feet on a side" / "cube, N feet on each side"
+      const cubeMatch = cleaned.match(/cube,?\s+(\d+)\s+feet\s+on\s+(?:a|each)\s+side/i);
+      if (cubeMatch) {
+        radiusFt = Math.floor(parseInt(cubeMatch[1], 10) / 2);
+      }
+    }
+  }
 
   // ── 9b. centerOnPoint — true when the text explicitly describes
   // point-selection AoE targeting ("centered on a point the [creature]
