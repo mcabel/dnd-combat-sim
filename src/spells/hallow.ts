@@ -55,7 +55,7 @@
 // it (per coverage report).
 // ============================================================
 
-import { Combatant, Battlefield } from '../types/core';
+import { Combatant, Battlefield, DamageType, ActiveEffect } from '../types/core';
 import { CombatEvent, EngineState } from '../engine/combat';
 import { applySpellEffect } from '../engine/spell_effects';
 import { chebyshev3D } from '../engine/movement';
@@ -68,6 +68,16 @@ export const metadata = {
   hallowDaylightOnlyV1Implemented: true,         // v1 always picks "Daylight"
   hallowAreaV1SimplifiedToSingleTarget: true,    // 60-ft AoE → single target
   hallowDurationV1EncounterOnly: true,           // canon 24 hr → v1 encounter
+  // Session 105: the "Energy Vulnerability" effect (PHB p.249) is now
+  // implemented alongside "Daylight". Unlike Daylight (which targets
+  // undead/fiends), Energy Vulnerability targets ANY enemy (you'd vuln
+  // whatever your party can exploit). The caster chooses the damage type.
+  // Uses the S103 `damage_vulnerability` ActiveEffect pattern (the canonical,
+  // regression-guarded pattern — see src/test/session104_vuln_audit.test.ts).
+  // Encounter-duration (no concentration, no sourceTurnExpires — mirrors the
+  // existing Daylight effect). NOT wired into the AI dispatch (case 'hallow'
+  // still uses Daylight); AI effect-selection is a future session.
+  hallowEnergyVulnerabilityV1Implemented: true,
 } as const;
 
 function emit(state: EngineState, type: CombatEvent['type'], actorId: string, desc: string, targetId?: string, value?: number): void {
@@ -145,3 +155,108 @@ export function execute(caster: Combatant, target: Combatant, state: EngineState
 }
 
 export function cleanup(_c: Combatant): void { /* no-op — no concentration; effect persists until combat ends */ }
+
+// ============================================================
+// Session 105 — Hallow "Energy Vulnerability" effect (PHB p.249)
+//
+// PHB p.249: "Energy Vulnerability. All creatures in the area have
+// vulnerability to one damage type of your choice."
+//
+// v1 model: single-target (mirrors the Daylight v1 simplification — the
+// 60-ft AoE is reduced to one targeted enemy). The caster chooses the
+// damage type. Uses the S103 `damage_vulnerability` ActiveEffect pattern
+// (the canonical, regression-guarded pattern — see
+// src/test/session104_vuln_audit.test.ts). Encounter-duration: NO
+// concentration (Hallow has none), NO sourceTurnExpires (persists until
+// combat ends — mirrors the existing Daylight effect).
+//
+// Targeting: ANY enemy within 60 ft (not just undead/fiend — you'd vuln
+// whatever your party can exploit). Picks the highest-HP enemy (the biggest
+// threat — doubled damage chips through HP fastest). Skips enemies already
+// vulnerable to the chosen type (innate or from another active effect) so
+// the slot isn't wasted on a no-op.
+//
+// NOT wired into the AI dispatch (case 'hallow' in combat.ts still uses the
+// Daylight effect). AI effect-selection (Daylight vs Energy Vulnerability)
+// is a future session — these functions are tested directly here.
+// ============================================================
+
+/**
+ * Returns the highest-HP enemy within 60 ft NOT already vulnerable to the
+ * chosen damageType; null otherwise. The caster must have the Hallow action
+ * and a 5th-level slot. NOT concentration-gated (Hallow has no concentration).
+ */
+export function shouldCastEnergyVulnerability(
+  caster: Combatant,
+  bf: Battlefield,
+  damageType: DamageType,
+): Combatant | null {
+  if (!caster.actions.some(a => a.name === 'Hallow')) return null;
+  if (!hasSpellSlot(caster, 5)) return null;
+  // NOT concentration-gated — Hallow has no concentration requirement.
+
+  const candidates: Array<{ c: Combatant; threat: number; dist: number }> = [];
+  for (const c of bf.combatants.values()) {
+    if (c.id === caster.id) continue;
+    if (c.faction === caster.faction) continue;
+    if (c.isDead || c.isUnconscious) continue;
+    const distFt = chebyshev3D(caster.pos, c.pos) * 5;
+    if (distFt > 60) continue;
+    // Skip if already vulnerable to this type (innate or from another effect)
+    // — the slot would be wasted on a no-op push.
+    if (c.damageVulnerabilities?.includes(damageType)) continue;
+    candidates.push({ c, threat: c.maxHP, dist: distFt });
+  }
+  if (candidates.length === 0) return null;
+  candidates.sort((a, b) => a.threat !== b.threat ? b.threat - a.threat : a.dist - b.dist);
+  return candidates[0].c;
+}
+
+/**
+ * Applies Hallow's Energy Vulnerability to the target: a `damage_vulnerability`
+ * ActiveEffect that mirrors the chosen damageType into
+ * target.damageVulnerabilities (so applyDamageWithTempHP doubles incoming
+ * damage of that type, PHB p.197). Encounter-duration (no concentration, no
+ * sourceTurnExpires — persists until combat ends).
+ *
+ * The `addedVulnerability` flag (mirroring the S36 Protection-from-Energy +
+ * S103 lair-debuff-vuln pattern) records whether THIS effect actually pushed
+ * the type — if the target had innate vuln to the same type (or another
+ * active effect already added it), the push is a no-op and undoEffect won't
+ * wrongly splice the innate entry out. (shouldCastEnergyVulnerability skips
+ * already-vulnerable targets, so addedVulnerability is normally true here —
+ * but the guard is kept for safety if execute is called directly.)
+ */
+export function executeEnergyVulnerability(
+  caster: Combatant,
+  target: Combatant,
+  state: EngineState,
+  damageType: DamageType,
+): void {
+  consumeSpellSlot(caster, 5);
+  // NOT a concentration spell — no startConcentration() call.
+
+  emit(state, 'action', caster.id,
+    `${caster.name} casts Hallow (Energy Vulnerability) at ${target.name} — vulnerability to ${damageType} damage! (v1: single-target; canon 24-hr cast + 60-ft AoE NOT modelled. NO concentration; encounter-duration. PHB p.249.)`,
+    target.id);
+
+  if (target.isDead || target.isUnconscious) return;
+
+  const alreadyPresent = target.damageVulnerabilities?.includes(damageType) ?? false;
+  const effect: Omit<ActiveEffect, 'id'> = {
+    casterId: caster.id,
+    spellName: 'Hallow',
+    effectType: 'damage_vulnerability',
+    payload: { damageType, addedVulnerability: !alreadyPresent },
+    sourceIsConcentration: false,         // Hallow has NO concentration
+    appliedTurn: state.battlefield.round,
+    // sourceTurnExpires: undefined — encounter-duration (mirrors the existing
+    // Daylight effect; canon 24-hr duration is its own duration, independent
+    // of caster focus, and v1 bounds it to the encounter).
+    sourceCreatureType: caster.creatureType,
+  };
+  applySpellEffect(target, effect);
+  emit(state, 'condition_add', caster.id,
+    `${target.name} is vulnerable to ${damageType} damage (Hallow Energy Vulnerability)! Incoming ${damageType} damage is doubled (PHB p.197). (NO concentration; encounter-duration.)`,
+    target.id);
+}
