@@ -357,6 +357,13 @@ console.log('\n--- 11. Handler: illusory-attack is mechanical ---');
   const kobold = spawn('Kobold');
   asParty(kobold); tankUp(kobold); noLegendary(kobold);
   kobold.isInLair = true;
+  // S108 flake-fix: clear the Kobold's regular actions so ONLY the lair
+  // action fires. Without this, the Kobold's regular dagger attack can
+  // nat-20 (auto-hit per PHB p.194) vs the AC-30 Goblin, producing a
+  // damage log that breaks §11d's "no damage on miss" assertion (~5%
+  // per run). The lair action fires from lairActions, not actions, so
+  // clearing actions doesn't affect the illusory-attack test.
+  kobold.actions = [];
   forceAction(kobold, makeAction('TestIllusoryAttack::0', 'bespoke', {
     rawText: 'makes one melee weapon attack (7 to hit) against it. On a hit, the attack deals 8 (1d8 + 4) bludgeoning damage.',
     lairIllusoryAttack: {
@@ -396,11 +403,21 @@ console.log('\n--- 11. Handler: illusory-attack is mechanical ---');
     missLog !== undefined);
 
   // 11d. No damage log should fire (attack missed).
+  // S108 flake-fix: the illusory-attack itself can nat-20 (auto-hit per PHB
+  // p.194, ~5% chance) even vs AC 30, producing a CRIT damage log. This is
+  // correct PHB behavior (nat 20 always hits), not a bug — skip the assertion
+  // in that case. Only fail if damage appears WITHOUT a crit (a real bug:
+  // damage on a non-crit miss).
   const dmgLog = rlog.events.find((e: any) =>
     e.type === 'damage' && e.actorId === kobold.id);
-  assert('11d. no damage log on miss',
-    dmgLog === undefined,
-    `unexpected damage: ${dmgLog?.description}`);
+  if (dmgLog && dmgLog.description.includes('CRIT')) {
+    console.log('    (11d skipped — illusory-attack nat-20 auto-hit (CRIT); PHB p.194: nat 20 always hits)');
+    assert('11d. (skipped — nat-20 crit auto-hit)', true);
+  } else {
+    assert('11d. no damage log on miss',
+      dmgLog === undefined,
+      `unexpected damage: ${dmgLog?.description}`);
+  }
 }
 
 // ============================================================
