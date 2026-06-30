@@ -1461,7 +1461,47 @@ export function extractLairAction(
 
   // ── 8. rangeFt from "within N feet" ──
   const rangeMatch = cleaned.match(/within\s+(\d+)\s*feet/i);
-  const rangeFt = rangeMatch ? parseInt(rangeMatch[1], 10) : undefined;
+  let rangeFt = rangeMatch ? parseInt(rangeMatch[1], 10) : undefined;
+
+  // ── 8b. Session 107 (S106 next-action #6): "anywhere in their/its/his/her
+  // lair" override. Some lair actions say the point can be placed "anywhere in
+  // their lair" — canonically an UNBOUNDED placement range (the whole lair).
+  // The §8 extraction above grabs the FIRST "within N feet", which for these
+  // actions is the RADIUS ("within 20 feet of that point"), NOT the range from
+  // the lair creature. Without the override, `chooseLairActionPoint` bounds its
+  // grid-sweep to ±rangeFt/5 squares around the lair creature (e.g. ±4 squares
+  // = 20 ft for SGQ::0) — canon says placement can be ANYWHERE on the
+  // battlefield. The override sets rangeFt to a large constant so the
+  // grid-sweep covers the whole battlefield (the candidates filter still bounds
+  // the effective AoE to radiusFt around each candidate, so the cost is
+  // O(gridCells × candidates) — bounded by the battlefield, not unbounded).
+  //
+  // Affected actions (bestiary scan, MPMM source that `spawnMonster` picks):
+  //   • Storm Giant Quintessent::0 — "thunderclap centered on a point anywhere
+  //     in their lair. Each creature within 20 feet of that point ..."
+  //     (save_condition, radiusFt=20, rangeFt was 20 → now LAIR_ANYWHERE_RANGE_FT)
+  //   • Storm Giant (regular)::1 — "20-foot-radius sphere of fog ... centered
+  //     on a point anywhere in its lair" (cast_spell-flavour, radiusFt=20)
+  //   • Storm Giant (regular)::2 — "60-foot-long line ... originating from a
+  //     point anywhere in its lair" (line, not radius — radiusFt stays
+  //     undefined; the override still sets rangeFt so the line-placement branch
+  //     is unbounded, but as of S107 no line-placement handler exists)
+  //   • Nafas::0 (MPMM) — "20-foot-radius sphere of multiversal dust centered
+  //     on a point anywhere in his lair" (save_condition, radiusFt=20)
+  // The regex `anywhere\s+in\s+(their|its|his|her|the)\s+lair` matches all 4
+  // (and the MTF/other-source variants). Verified 0 false-positives: no other
+  // lair action uses "anywhere in <possessive> lair" phrasing (the 10 grep
+  // hits in legendarygroups.json are these 4 actions + their source duplicates).
+  //
+  // The constant: 500 ft = 100 squares → grid-sweep ±100 cells around the lair
+  // creature (201×201 = 40,401 cells). For ≤10 candidates that's ~400k ops per
+  // lair-action invocation — negligible (lair actions fire once per round). 500
+  // ft exceeds any reasonable battlefield diagonal (a 50×50-cell battlefield is
+  // 250 ft × √2 ≈ 354 ft diagonal), so the grid covers the whole battlefield.
+  const LAIR_ANYWHERE_RANGE_FT = 500;
+  if (/anywhere\s+in\s+(?:their|its|his|her|the)\s+lair/i.test(cleaned)) {
+    rangeFt = LAIR_ANYWHERE_RANGE_FT;
+  }
 
   // ── 9. radiusFt from "N-foot-radius" / "N-foot-radius sphere" ──
   // Session 106 (S105 next-action #5b): extended with 2 fallback patterns for

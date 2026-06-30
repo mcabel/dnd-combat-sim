@@ -657,6 +657,99 @@ console.log('\n--- 18. Session 106 radiusFt: Geryon::1 cube point-selection ---'
   eq('Geryon::1 clustered: 2 targets hit (both within 5ft)', targets2.length, 2);
 }
 
+// ============================================================
+// 19. Session 107 "anywhere in their lair": rangeFt override
+//     (S106 next-action #6. SGQ::0 says "centered on a point
+//     anywhere in their lair. Each creature within 20 feet of
+//     that point...". The §8 rangeFt extraction grabbed "within
+//     20 feet" as rangeFt=20 — but that's the RADIUS (distance
+//     from the chosen point), NOT the range (distance from the
+//     lair creature). Canon says placement can be ANYWHERE in
+//     the lair (unbounded range). S107 adds an override: when
+//     the text matches /anywhere in (their|its|his|her|the)
+//     lair/i, rangeFt is set to 500 (covers any reasonable
+//     battlefield diagonal). radiusFt + centerOnPoint unchanged.)
+// ============================================================
+console.log('\n--- 19. Session 107 "anywhere in their lair": rangeFt override ---');
+{
+  const sgq = spawn('Storm Giant Quintessent');
+  const a0 = sgq.lairActions?.actions.find(a => a.id === 'Storm Giant Quintessent::0')!;
+  const a1 = sgq.lairActions?.actions.find(a => a.id === 'Storm Giant Quintessent::1')!;
+  const a2 = sgq.lairActions?.actions.find(a => a.id === 'Storm Giant Quintessent::2')!;
+
+  // SGQ::0 — the canonical case (S106 handover call-out).
+  eq('SGQ::0 rangeFt = 500 (anywhere-in-lair override; was 20)',
+    a0.rangeFt, 500);
+  eq('SGQ::0 radiusFt = 20 (unchanged — "within 20 feet of that point")',
+    a0.radiusFt, 20);
+  eq('SGQ::0 centerOnPoint = true (unchanged)',
+    a0.centerOnPoint, true);
+  eq('SGQ::0 category = save_condition (unchanged)',
+    a0.category, 'save_condition');
+
+  // SGQ::1 — also "anywhere in its lair" (deferred category).
+  eq('SGQ::1 rangeFt = 500 (anywhere-in-lair override)',
+    a1.rangeFt, 500);
+  eq('SGQ::1 radiusFt = 20 (unchanged — "20-foot-radius sphere")',
+    a1.radiusFt, 20);
+  eq('SGQ::1 centerOnPoint = true (unchanged)',
+    a1.centerOnPoint, true);
+
+  // SGQ::2 — "originating from a point anywhere in its lair" (line, not
+  // radius). The override sets rangeFt=500, but radiusFt stays undefined
+  // (no radius number for a line) and centerOnPoint stays false (not
+  // "centered on a point"). So point-selection does NOT activate for SGQ::2
+  // (requires centerOnPoint && radiusFt !== undefined), but the rangeFt=500
+  // means selectLairActionTargets considers all enemies within 500ft as
+  // candidates (canon: the line can originate anywhere in the lair).
+  eq('SGQ::2 rangeFt = 500 (anywhere-in-lair override)',
+    a2.rangeFt, 500);
+  eq('SGQ::2 radiusFt = undefined (line, no radius)',
+    a2.radiusFt, undefined);
+  eq('SGQ::2 centerOnPoint = false (line, not "centered on a point")',
+    a2.centerOnPoint, false);
+}
+
+// ============================================================
+// 20. Session 107 behavioural: SGQ::0 reaches far enemies
+//     (With rangeFt=500, chooseLairActionPoint's grid-sweep covers
+//     the whole battlefield. An enemy at 100ft (20 squares) from
+//     SGQ — well beyond the OLD rangeFt=20 (4 squares) — is now a
+//     valid AoE centre candidate. With radiusFt=20 (4 squares), a
+//     single far enemy is hit (centre on the enemy). Under the OLD
+//     rangeFt=20, the grid-sweep was bounded to ±4 squares → the
+//     far enemy at 20 squares was NOT a valid centre → 0 targets.)
+// ============================================================
+console.log('\n--- 20. Session 107 behavioural: SGQ::0 reaches far enemies ---');
+{
+  const sgq = spawn('Storm Giant Quintessent'); sgq.pos = pos(0, 0);
+  const action = sgq.lairActions?.actions.find(
+    a => a.id === 'Storm Giant Quintessent::0')!;
+
+  // Enemy at 100ft (20 squares) from SGQ — far beyond old rangeFt=20 (4sq).
+  const farGoblin = spawn('Goblin'); farGoblin.pos = pos(20, 0);  // 100 ft from SGQ
+
+  // With rangeFt=500, the grid-sweep includes the far enemy's cell → centre
+  // on the far enemy → 1 target hit (radiusFt=20 reaches the enemy at centre).
+  const { targets, center } = chooseLairActionPoint(sgq, action, [farGoblin]);
+  eq('SGQ::0 far enemy: 1 target hit (rangeFt=500 reaches 100ft)',
+    targets.length, 1);
+  eq('SGQ::0 far enemy: target is the far goblin',
+    targets[0].id, farGoblin.id);
+  eq('SGQ::0 far enemy: centre = far goblin x (20)',
+    center.x, 20);
+
+  // Sanity: the far enemy is well beyond the OLD rangeFt=20 (4 squares).
+  // If rangeFt were still 20, the grid-sweep would be bounded to ±4 squares
+  // and the far enemy at 20 squares would NOT be a valid centre → 0 targets.
+  // (This is the behavioural change S107 introduces: canon-accurate
+  // unbounded placement for "anywhere in their lair" actions.)
+  const farFt = Math.max(Math.abs(farGoblin.pos.x - sgq.pos.x),
+                         Math.abs(farGoblin.pos.y - sgq.pos.y)) * 5;
+  eq('SGQ::0 far enemy is 100ft from SGQ (beyond old rangeFt=20)',
+    farFt, 100);
+}
+
 // ---- Results ------------------------------------------------
 console.log(`\n${'='.repeat(60)}`);
 console.log(`Results: ${passed} passed, ${failed} failed`);
