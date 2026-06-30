@@ -8068,17 +8068,53 @@ function handleLairDebuffEnemy(
   let debuffed = 0;
   for (const enemy of targets) {
     if (kind === 'vulnerability' && vulnType) {
-      // Push the damage type to the enemy's vulnerabilities. This is a
-      // permanent mutation for the combat (lair action duration is "until
-      // next initiative count 20", but we don't track per-source vulnerability
-      // expiry — v1 simplification: persists for the rest of combat).
-      // Future Phase 5: track as an ActiveEffect with expiry.
-      if (!enemy.damageVulnerabilities) enemy.damageVulnerabilities = [];
-      if (!enemy.damageVulnerabilities.includes(vulnType as DamageType)) {
-        enemy.damageVulnerabilities.push(vulnType as DamageType);
+      // Session 103: track as an ActiveEffect with per-source expiry instead
+      // of a permanent combat-long mutation. The effect mirrors the vuln type
+      // into `enemy.damageVulnerabilities` on apply (so applyDamageWithTempHP
+      // doubles incoming damage of that type, PHB p.197) and the
+      // effect_pipeline's `reevaluateEffects` splices it back out at the start
+      // of a later round once `sourceTurnExpires` has passed (default 1-round
+      // duration = "until next initiative count 20", per the lair-action text).
+      //
+      // The `addedVulnerability` flag (mirroring the Session 36
+      // Protection-from-Energy `addedResistance` fix) records whether THIS
+      // effect actually pushed the type — if the enemy had innate vuln to the
+      // same type (or another active effect already added it), the push is a
+      // no-op and undoEffect won't wrongly splice the innate entry out.
+      const VALID_DAMAGE_TYPES: ReadonlySet<string> = new Set([
+        'acid', 'bludgeoning', 'cold', 'fire', 'force', 'lightning',
+        'necrotic', 'piercing', 'poison', 'psychic', 'radiant', 'slashing',
+        'thunder',
+      ]);
+      if (!VALID_DAMAGE_TYPES.has(vulnType)) {
+        // The parser's `(\w+)` capture could yield a non-damage word (e.g. a
+        // skill or damage type the engine doesn't model). Skip rather than
+        // push garbage into damageVulnerabilities.
+        log(state, 'action', creature.id,
+          `  → debuff_enemy: ${enemy.name} — unrecognised vulnerability type "${vulnType}" — no effect`,
+          enemy.id);
+        continue;
       }
+      const dt = vulnType as DamageType;
+      const alreadyPresent = enemy.damageVulnerabilities?.includes(dt) ?? false;
+      const durationRounds = action.durationRounds ?? 1;
+      const effect: Omit<ActiveEffect, 'id'> = {
+        casterId: creature.id,
+        spellName: `Lair:${action.id}`,
+        effectType: 'damage_vulnerability',
+        payload: { damageType: dt, addedVulnerability: !alreadyPresent },
+        sourceIsConcentration: false,
+        appliedTurn: bf.round,
+        // Expire at the END of the durationRounds-th round after application
+        // (mirrors handleLairVisibility). appliedTurn = round N →
+        // sourceTurnExpires = N + durationRounds - 1, so a 1-round vuln
+        // expires at the start of round N+1.
+        sourceTurnExpires: bf.round + durationRounds - 1,
+      };
+      applySpellEffect(enemy, effect);
       log(state, 'action', creature.id,
-        `  → debuff_enemy: ${enemy.name} gains vulnerability to ${vulnType} damage`,
+        `  → debuff_enemy: ${enemy.name} gains vulnerability to ${vulnType} damage ` +
+        `(${durationRounds}-round duration, auto-expires at round ${bf.round + durationRounds})`,
         enemy.id);
     } else if (kind === 'disadvantage_attack') {
       grantVulnerability(enemy, 'disadvantage', 'attack', `Lair:${action.id}`, 'until_next_turn');

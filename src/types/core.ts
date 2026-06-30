@@ -150,6 +150,15 @@ export type SpellEffectType =
   | 'invisible'             // true invisibility: attacks vs creature have disadv + own attacks have adv (PHB p.194)
   // ── Session 48 — movement_rider typed effect (replaces BB scratch fields) ──
   | 'movement_rider'        // fires when bearer willingly moves 5+ ft; cleared at bearer's next turn start
+  // ── Session 103 — lair-action damage-type vulnerability (debuff_enemy) ──
+  // Used by `handleLairDebuffEnemy` when a lair action grants vulnerability to
+  // a damage type (e.g. Kraken::1 "vulnerability to lightning damage"). The
+  // effect mirrors the vuln type into `target.damageVulnerabilities` on apply
+  // (so applyDamageWithTempHP doubles incoming damage of that type) and splices
+  // it back out on expiry / caster-death (via the `addedVulnerability` payload
+  // flag, mirroring the Session 36 Protection-from-Energy `addedResistance`
+  // pattern — protects innate vuln from being wrongly removed).
+  | 'damage_vulnerability'
   // ── Session 27 — Batch 3 concentration buffs ────────────────────────
   // bane_die: inverse of bless_die (Bane PHB p.219: -1d4 to attacks/saves).
   // weapon_enchant extended with damageDie/damageDieCount/damageDieType
@@ -210,6 +219,23 @@ export interface ActiveEffect {
     //   - undefined → legacy sentinels (pre-Session 36) assume true for
     //     backwards compat (the pre-fix behavior spliced unconditionally).
     addedResistance?: boolean;
+    // ── Session 103 — lair-action damage-vulnerability fix ─────────────
+    // Mirror of `addedResistance` for the `damage_vulnerability` effectType
+    // (debuff_enemy lair actions). When the effect is applied:
+    //   - addedVulnerability === true  → this effect pushed a new entry into
+    //     target.damageVulnerabilities; undoEffect should splice it back out
+    //     on expiry / caster-death.
+    //   - addedVulnerability === false → target already had the vuln type
+    //     (innate, e.g. Skeleton bludgeoning, or from another active effect);
+    //     undoEffect must NOT splice (would wrongly remove the innate entry).
+    //   - undefined → legacy (assume true for backwards compat).
+    // Known limitation (same as addedResistance): if two effects grant the
+    // same vuln type and the "adder" expires before the "non-adder", the
+    // vuln is removed prematurely while the non-adder is still active. This
+    // is rare for lair actions (which share a 1-round duration → simultaneous
+    // expiry → correct) and matches the existing Protection-from-Energy
+    // behavior.
+    addedVulnerability?: boolean;
     // ── Session 17 additions (level-2 batch 3) ─────────────────────────
     // saveDC + saveAbility: if present, the start-of-turn damage tick rolls
     // a save; on success, the damage is halved (PHB p.242 Flaming Sphere:

@@ -187,6 +187,21 @@ export function applySpellEffect(
       _addConditionSource(target, 'invisible', effect.id);
       break;
 
+    case 'damage_vulnerability': {
+      // Session 103: lair-action debuff_enemy vulnerability. Mirror the vuln
+      // type into target.damageVulnerabilities so applyDamageWithTempHP
+      // doubles incoming damage of that type (PHB p.197). Idempotent — if the
+      // type is already present (innate or from another active effect), the
+      // push is a no-op and the handler-set `addedVulnerability` flag stays
+      // false so undoEffect won't wrongly splice the innate entry out.
+      const dt = effect.payload.damageType!;
+      if (!target.damageVulnerabilities) target.damageVulnerabilities = [];
+      if (!target.damageVulnerabilities.includes(dt)) {
+        target.damageVulnerabilities.push(dt);
+      }
+      break;
+    }
+
     case 'taunt':
     case 'curse_attack_disadv':
     case 'ability_disadvantage':
@@ -389,6 +404,20 @@ export function undoEffect(target: Combatant, effect: ActiveEffect): void {
       _removeConditionSource(target, 'invisible', effect.id);
       removeBySource(target, effect.spellName);
       break;
+
+    case 'damage_vulnerability': {
+      // Session 103: splice the vuln type back out of damageVulnerabilities
+      // — but ONLY if THIS effect actually pushed it (`addedVulnerability`).
+      // If the target had innate vuln to the same type (or another active
+      // effect owns the push), addedVulnerability === false → no splice.
+      // Mirrors the Session 36 Protection-from-Energy `addedResistance` fix.
+      const added = (effect.payload as { addedVulnerability?: boolean }).addedVulnerability ?? true;
+      if (added && target.damageVulnerabilities) {
+        const dt = effect.payload.damageType!;
+        target.damageVulnerabilities = target.damageVulnerabilities.filter(t => t !== dt);
+      }
+      break;
+    }
 
     case 'taunt':
     case 'curse_attack_disadv':
