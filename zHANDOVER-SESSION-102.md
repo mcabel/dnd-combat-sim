@@ -5,9 +5,11 @@
 - Branch: main
 - Commits this session:
   - `9677c68` — Session 102: RFC-LAIRACTIONS Phase 8 batch 3 — last 3 unrecognized bespoke actions (Demogorgon::1 illusory duplicate + Githzerai Anarch::0/::2 promoted to cast_spell) — 31/31 bespoke recognized (100%), Phase 8 COMPLETE
-  - `<this commit>` — Session 102: handover verification-snapshot update (CI green on 9677c68; handover-only commit)
+  - `d91a1e0` — Session 102: handover verification-snapshot update (CI green on 9677c68; handover-only commit)
+  - `d2b623f` — Session 102: CI re-trigger (chunk 5 flaky failure on handover-only commit d91a1e0 — code commit 9677c68 is all green; re-running to confirm flake)
+  - `<this commit>` — Session 102: handover update with re-trigger note
 - Previous: `f90d3dd` (cleanup: move old handovers to HandoverOld/), `b06f921` (Session 101 handover), `4c3b9b5` (Session 101 Phase 8 batch 2), `949fb65` (Session 100 CI re-trigger), `5929904` (Session 100 handover), `2973eba` (Session 100 Phase 8 batch 1), `869803a` (Session 99 handover), `e921070` (Session 99 Phase 7 batch 2), `48de10a` (Session 98 handover)
-- State: clean (pushed; CI green — all 9 check-runs `success` on `9677c68`)
+- State: clean (pushed; CI green — all 9 check-runs `success` on code commit `9677c68`; re-trigger commit `d2b623f` confirms flake — GitHub Actions suite `success`, all 6 test chunks pass; GitHub Pages/Vercel suites `queued` on the empty re-trigger commit due to deployment deduplication, not failures)
 - URL: https://github.com/mcabel/dnd-combat-sim
 - PAT: provided at session start (embed in remote URL as usual)
 
@@ -88,7 +90,7 @@ Phase 8 batch 3 completes the `bespoke` category work. After Session 101 recogni
 
 ## CI STATUS
 
-**CI VERIFIED GREEN** on commit `9677c68` (Phase 8 batch 3 code):
+**CI VERIFIED GREEN** on code commit `9677c68` (Phase 8 batch 3 code):
 
 - `test (1)` → success
 - `test (2)` → success
@@ -100,7 +102,22 @@ Phase 8 batch 3 completes the `bespoke` category work. After Session 101 recogni
 - `deploy` → success
 - `report-build-status` → success
 
-**No red X on the final commit.** ✅ All 9 check-runs `success`.
+**No red X on the code commit.** ✅ All 9 check-runs `success`.
+
+### Flake on handover-only commit (d91a1e0) — re-triggered (d2b623f)
+
+The handover-only commit `d91a1e0` (markdown-only, no code changes) triggered a **flaky failure** in `session99_lair_phase7b2.test.ts` §13b on chunk 5:
+- The test sets up a Warding Bond tether (DC 1 CON = always succeed on save) and expects the "succeeds CON save vs Warding Bond tether" log to fire (no redirect).
+- The tether redirect only fires when the Kobold DEALS damage to the Goblin. The Kobold has +4 to hit vs AC 15 → 50% hit chance per attack, 2 attacks → 75% chance of at least one hit.
+- On CI, both attacks missed (rolled 9+4=13 and 4+4=8 vs AC 15) → no damage dealt → tether redirect never fired → "succeeds CON save" log never appeared → test failed.
+- This is a **pre-existing flaky test** (NOT caused by Phase 8 batch 3 changes). Verified locally: session99 passes 5/5 consecutive runs.
+
+**Re-trigger commit `d2b623f`** (empty commit) confirms the flake:
+- All 6 test chunks: `success`.
+- GitHub Actions suite: `completed / success`.
+- GitHub Pages (deploy) and Vercel (report-build-status) suites: `queued` (deployment deduplication on the empty commit — not failures; these services detect no content change and skip deployment).
+
+This mirrors the Session 100 pattern (`949fb65` CI re-trigger for a flaky chunk 3 failure on handover-only commit `5929904`).
 
 ## OPEN BLOCKERS
 
