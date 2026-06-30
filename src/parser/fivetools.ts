@@ -1492,17 +1492,32 @@ export function extractLairAction(
   //
   // The regex does NOT match centered-on-self phrasing ("within N feet of the
   // [creature]" / "around the [creature]" / "centered on him") — those have no
-  // "a point ... chooses/can see" clause, so they stay on v1. The 4 borderline
-  // cases ("a N-foot-radius sphere/area within N feet of [creature]" — Imix::1,
-  // Ogrémoch::0/::1, Olhydra::2) mechanically ARE point-selection but omit the
-  // "chooses/can see" qualifier; they stay on v1 (conservative — a future
-  // session can revisit with more context). Verified against the bestiary:
-  // 22 actions now use centerOnPoint (12 "centered on a point" + 10
-  // "a point ... chooses/can see"); 5 centered-on-self + 4 borderline + 1
-  // ambiguous (Gar Shatterkeel::1) stay false.
+  // "a point ... chooses/can see" clause, so they stay on v1.
+  //
+  // Session 106 — BORDERLINE alternation added (S105 next-action #5a). The 4
+  // BORDERLINE cases (Imix::1, Ogrémoch::0/::1, Olhydra::2) use "N-foot-radius
+  // [shape] within M feet of [creature]" — TWO distances (radius N + range M).
+  // Mechanically this IS point-selection: the N-foot-radius AoE is PLACED at a
+  // point within M feet of the creature (the creature chooses where). The S105
+  // audit left these on v1 (conservative — text omits "chooses/can see"). The
+  // S106 audit confirmed the 4 cases are unambiguous: the radius (N) and range
+  // (M) are both present and distinct (N < M in all 4), and no centered-on-self
+  // action has both ("around the [creature]" / "centered on him" have ONE
+  // distance, no "within M feet of"). The new alternation
+  // `N-foot-radius ... within M feet of` (same sentence, no period between)
+  // matches exactly the 4 BORDERLINE cases and no others (verified via bestiary
+  // scan: 0 false-positives among the 10 remaining radiusFt+!centerOnPoint
+  // actions — 5 centered-on-self + 1 ambiguous (Gar Shatterkeel::1) lack the
+  // "within M feet of" range clause).
+  //
+  // Verified against the bestiary:
+  // 26 actions now use centerOnPoint (12 "centered on a point" + 10
+  // "a point ... chooses/can see" + 4 BORDERLINE "N-foot-radius ... within M
+  // feet of"); 5 centered-on-self + 1 ambiguous (Gar Shatterkeel::1) stay false.
   const centerOnPoint =
     /centered on a point/i.test(cleaned) ||
-    /a point\b[^.]*?\b(?:chooses|can see)\b/i.test(cleaned);
+    /a point\b[^.]*?\b(?:chooses|can see)\b/i.test(cleaned) ||
+    /(?:\d+[- ]?(?:foot|feet)[- ]?radius)[^.]*?\bwithin\s+\d+\s+feet\s+of\b/i.test(cleaned);
 
   // ── 10. durationRounds ──
   let durationRounds: number | undefined;

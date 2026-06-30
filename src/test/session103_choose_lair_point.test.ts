@@ -161,6 +161,35 @@ console.log('\n--- 1. Parser: centerOnPoint on real bestiary actions ---');
   const red0 = red.lairActions?.actions.find(a => a.id === 'Red Dragon::0');
   eq('Red Dragon::0 centerOnPoint = true (S105)', red0?.centerOnPoint, true);
   assert('Red Dragon::0 has radiusFt (S105)', red0?.radiusFt !== undefined);
+
+  // Session 106 — the S105 regex left 4 BORDERLINE cases on v1 (conservative —
+  // text omits "chooses/can see"). The S106 broadened regex also matches
+  // "N-foot-radius [shape] within M feet of [creature]" (TWO distances = point-
+  // placement). These 4 bestiary actions use that phrasing + a radiusFt, so they
+  // now opt into point-selection:
+  //   Imix::1       — "40-foot-radius sphere within 120 feet of Imix" (deferred — flag is semantically correct; not executed)
+  //   Ogrémoch::0   — "10-foot-radius area of rocky or earthy ground within 60 feet of Ogrémoch"
+  //   Ogrémoch::1   — "20-foot-radius area within 60 feet of Ogrémoch"
+  //   Olhydra::2    — "40-foot-radius sphere within 120 feet of Olhydra" (deferred — flag semantically correct)
+  const imix1 = spawn('Imix').lairActions?.actions.find(a => a.id === 'Imix::1');
+  eq('Imix::1 centerOnPoint = true (S106 BORDERLINE)', imix1?.centerOnPoint, true);
+  eq('Imix::1 radiusFt = 40 (S106)', imix1?.radiusFt, 40);
+  eq('Imix::1 rangeFt = 120 (S106)', imix1?.rangeFt, 120);
+
+  const ogremoch0 = spawn('Ogrémoch').lairActions?.actions.find(a => a.id === 'Ogrémoch::0');
+  eq('Ogrémoch::0 centerOnPoint = true (S106 BORDERLINE)', ogremoch0?.centerOnPoint, true);
+  eq('Ogrémoch::0 radiusFt = 10 (S106)', ogremoch0?.radiusFt, 10);
+  eq('Ogrémoch::0 rangeFt = 60 (S106)', ogremoch0?.rangeFt, 60);
+
+  const ogremoch1 = spawn('Ogrémoch').lairActions?.actions.find(a => a.id === 'Ogrémoch::1');
+  eq('Ogrémoch::1 centerOnPoint = true (S106 BORDERLINE)', ogremoch1?.centerOnPoint, true);
+  eq('Ogrémoch::1 radiusFt = 20 (S106)', ogremoch1?.radiusFt, 20);
+  eq('Ogrémoch::1 rangeFt = 60 (S106)', ogremoch1?.rangeFt, 60);
+
+  const olhydra2 = spawn('Olhydra').lairActions?.actions.find(a => a.id === 'Olhydra::2');
+  eq('Olhydra::2 centerOnPoint = true (S106 BORDERLINE)', olhydra2?.centerOnPoint, true);
+  eq('Olhydra::2 radiusFt = 40 (S106)', olhydra2?.radiusFt, 40);
+  eq('Olhydra::2 rangeFt = 120 (S106)', olhydra2?.rangeFt, 120);
 }
 
 // ============================================================
@@ -517,6 +546,42 @@ console.log('\n--- 15. Session 104 grid-sweep: rangeFt bounds centre ---');
   const { targets } = chooseLairActionPoint(dragon, action, [g1]);
   eq('rangebound: 1 target (only g1 in range)', targets.length, 1);
   eq('rangebound: target is g1', targets[0].id, g1.id);
+}
+
+// ============================================================
+// 16. Session 106 BORDERLINE: real Ogrémoch::0 action uses point-selection
+//     (S105 next-action #5a — the 4 BORDERLINE cases now opt into
+//     chooseLairActionPoint. Ogrémoch::0 is save_condition with radiusFt=10,
+//     rangeFt=60 — spread enemies beyond 10ft of any chosen centre are NOT
+//     hit, unlike the v1 over-approximation which would hit all in rangeFt.)
+// ============================================================
+console.log('\n--- 16. Session 106 BORDERLINE: Ogrémoch::0 real action point-selection ---');
+{
+  const ogremoch = spawn('Ogrémoch'); ogremoch.pos = pos(0, 0);
+  // Ogrémoch::0: "10-foot-radius area ... within 60 feet of Ogrémoch"
+  // → centerOnPoint=true (S106), radiusFt=10, rangeFt=60.
+  const action = ogremoch.lairActions?.actions.find(a => a.id === 'Ogrémoch::0')!;
+  eq('Ogrémoch::0 is centerOnPoint (S106)', action.centerOnPoint, true);
+  eq('Ogrémoch::0 radiusFt = 10', action.radiusFt, 10);
+  eq('Ogrémoch::0 rangeFt = 60', action.rangeFt, 60);
+
+  // Two enemies: g1 at 10ft (2sq), g2 at 35ft (7sq). g1-g2 = 5sq = 25ft >
+  // 2*radiusFt (20ft), so NO centre within 2sq of both exists → only 1 target
+  // hit. v1 would hit BOTH (all in rangeFt=60). Point-selection hits 1
+  // (canon-accurate — the 10ft-radius AoE can't reach both spread enemies).
+  const g1 = spawn('Goblin'); g1.pos = pos(2, 0);   // 10 ft from Ogrémoch
+  const g2 = spawn('Goblin'); g2.pos = pos(7, 0);   // 35 ft from Ogrémoch, 25 ft from g1
+  const { targets, center } = chooseLairActionPoint(ogremoch, action, [g1, g2]);
+  eq('Ogrémoch::0 spread: 1 target hit (point-selection)', targets.length, 1);
+  eq('Ogrémoch::0 spread: target is g1 (closer to Ogrémoch)', targets[0].id, g1.id);
+  // Centre on g1 (the only candidate within 10ft of itself; g2 is 25ft away).
+  eq('Ogrémoch::0 spread: centre = g1 x', center.x, g1.pos.x);
+  eq('Ogrémoch::0 spread: centre = g1 y', center.y, g1.pos.y);
+
+  // Clustered case: both g1+g2 within 10ft → both hit.
+  const g3 = spawn('Goblin'); g3.pos = pos(2, 1);   // 5 ft from g1 (adjacent)
+  const { targets: targets2 } = chooseLairActionPoint(ogremoch, action, [g1, g3]);
+  eq('Ogrémoch::0 clustered: 2 targets hit (both within 10ft)', targets2.length, 2);
 }
 
 // ---- Results ------------------------------------------------
