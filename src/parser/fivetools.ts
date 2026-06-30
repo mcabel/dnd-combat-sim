@@ -851,13 +851,40 @@ export function extractLairAction(
     // "casts <spell>" / "casts the <spell> spell" phrasing without an @spell
     // tag — only accept known spells (avoids false positives like "casts a
     // shadow"). This is rare; the @spell tag covers the vast majority.
-    const castsMatch = cleaned.match(/\bcasts?\s+(?:the\s+)?([a-z][a-z\s'-]+?)(?:\s+spell)?(?:\s+on|\s*,|\s*\.|\s+affecting|$)/i);
+    //
+    // Phase 8 batch 3 (Session 102): broadened the trailing-delimiter
+    // alternation to ALSO accept `(` — this catches the Githzerai Anarch
+    // phrasing "casts the creation spell (as a 9th-level spell)" and "casts
+    // the lightning bolt spell (at 5th level)" (MPMM has no @spell tag on
+    // these). The cast-level override (below) then extracts the actual level
+    // from the parenthetical.
+    const castsMatch = cleaned.match(/\bcasts?\s+(?:the\s+)?([a-z][a-z\s'-]+?)(?:\s+spell)?(?:\s+on|\s*,|\s*\.|\s+affecting|\s*\(|$)/i);
     if (castsMatch) {
       const candidate = castsMatch[1].trim().toLowerCase();
       if (LAIR_SPELL_LEVELS[candidate] !== undefined) {
         isSpell = true;
         spellName = candidate;
         castLevel = LAIR_SPELL_LEVELS[candidate];
+      }
+    }
+  }
+  // ── Phase 8 batch 3 (Session 102): cast-level override. ──
+  // Some lair actions cast a spell at a HIGHER level than the spell's base
+  // level (e.g., Githzerai Anarch::0 casts creation at 9th level; ::2 casts
+  // lightning bolt at 5th level). The static LAIR_SPELL_LEVELS table only
+  // knows the base level (creation=5, lightning bolt=3). When the lair-action
+  // text includes "(as a Nth-level spell)" or "(at Nth level)", override
+  // castLevel with the text-specified value.
+  //
+  // Verified: the regex matches ONLY the 4 Githzerai Anarch lair actions
+  // (2 in MPMM, 2 in MTF) — no other lair action in the bestiary uses this
+  // parenthetical phrasing. Safe to apply globally (gated on isSpell=true).
+  if (isSpell && spellName) {
+    const lvlMatch = cleaned.match(/\(\s*(?:as\s+a\s+|at\s+)(\d+)(?:st|nd|rd|th)?[-\s]*level(?:\s+spell)?\s*\)/i);
+    if (lvlMatch) {
+      const txtLevel = parseInt(lvlMatch[1], 10);
+      if (txtLevel >= 1 && txtLevel <= 9) {  // sanity guard (spell levels 1-9)
+        castLevel = txtLevel;
       }
     }
   }
@@ -1261,6 +1288,8 @@ export function extractLairAction(
   let lairIllusoryAttack: { attackBonus: number; damage: { count: number; sides: number; bonus: number; type: string } } | undefined;
   let lairRechargeAbility: boolean | undefined;
   let lairBespokeActionInvocation: boolean | undefined;
+  // Phase 8 batch 3 (Session 102): Demogorgon::1 illusory duplicate.
+  let lairIllusoryDuplicate: boolean | undefined;
 
   // Plane-shift (Sphinx::3): "shifts itself and up to N other creatures ... to
   // another plane of existence". Out-of-combat effect — log-only v1.
@@ -1340,6 +1369,30 @@ export function extractLairAction(
   if (/uses?\s+either\s+(?:its|his|her)\s+\w+/i.test(cleaned)
       && !/uses\s+one\s+of\s+(?:their|his|her)\s+available/i.test(cleaned)) {
     lairBespokeActionInvocation = true;
+  }
+
+  // ── 6g. Phase 8 batch 3 (Session 102): Demogorgon::1 illusory duplicate. ──
+  // The text: "creates an illusory duplicate of himself... The first time a
+  // creature or an object interacts physically with Demogorgon (for example,
+  // by hitting him with an attack), there is a {@chance 50} chance that the
+  // illusory duplicate is affected, not Demogorgon, in which case the
+  // illusion disappears."
+  //
+  // Parser extracts `lairIllusoryDuplicate = true` from the conjunction of:
+  //   - "illusory duplicate" (the effect name)
+  //   - "interacts physically" (the trigger phrase)
+  //   - "{@chance 50}" or "50% chance" (the redirect probability — we don't
+  //     parse the exact % because v1 hardcodes 50%; Phase 9+ may parameterize)
+  //
+  // The MECHANICAL handler sets `Combatant.lairIllusoryDuplicate` (scratch
+  // field). The reactive redirect is in `applyLairIllusoryDuplicateRedirect`
+  // (called at 3 attack-damage hook sites in resolveAttack).
+  //
+  // Verified: the regex matches ONLY Demogorgon::1 (MPMM + MTF) — no other
+  // lair action uses "illusory duplicate" + "interacts physically" together.
+  if (/\billusory\s+duplicate\b/i.test(cleaned)
+      && /\binteracts?\s+physically\b/i.test(cleaned)) {
+    lairIllusoryDuplicate = true;
   }
 
   // ── 7. summons from {@creature X} + "up to N" / "N <creatures> rise as" ──
@@ -1577,6 +1630,8 @@ export function extractLairAction(
     lairIllusoryAttack,
     lairRechargeAbility,
     lairBespokeActionInvocation,
+    // Phase 8 batch 3 (Session 102): Demogorgon::1 illusory duplicate.
+    lairIllusoryDuplicate,
     category,
   };
 }

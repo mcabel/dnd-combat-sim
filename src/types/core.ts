@@ -1092,6 +1092,47 @@ export interface LairAction {
    */
   lairBespokeActionInvocation?: boolean;
 
+  // ── Phase 8 batch 3 (Session 102): last 3 bespoke-category recognition flags. ──
+  // Completes bespoke coverage: 31/31 (100%). One flag covers 1 action
+  // (Demogorgon::1 illusory duplicate — MECHANICAL: reactive damage redirect).
+  // The other 2 unrecognized bespoke actions (Githzerai Anarch::0/::2) are
+  // promoted to `cast_spell` via the broadened casts-regex (parser §2), so
+  // they don't need a bespoke flag here.
+  /**
+   * Illusory-duplicate flag (Demogorgon::1). When true, the lair creature
+   * creates an illusory duplicate of itself in its space, lasting until the
+   * next initiative count 20. The first time a creature physically interacts
+   * with the lair creature (e.g., hits it with an attack), there is a 50%
+   * chance the illusory duplicate is affected instead — in which case the
+   * duplicate disappears and the lair creature takes no damage.
+   *
+   * The handler is MECHANICAL — it sets `Combatant.lairIllusoryDuplicate`
+   * (a scratch field with `expiresAtRound`). The reactive redirect is handled
+   * by `applyLairIllusoryDuplicateRedirect`, called at the 3 attack-damage
+   * hook sites in `resolveAttack` (save-based damage, auto-hit damage,
+   * weapon-hit damage — NOT fall damage, since fall damage isn't an "attack
+   * interaction"). On the first qualifying damage instance:
+   *   - Roll 1d100. If ≤ 50: redirect — heal back the damage (no damage to
+   *     the lair creature), log "illusory duplicate absorbs the hit and
+   *     disappears", clear the field.
+   *   - If > 50: log "illusory duplicate fails to redirect — lair creature
+   *     takes the hit", clear the field (the redirect is consumed either way).
+   *
+   * v1 simplifications:
+   *   - The duplicate lasts 1 round (cleared at the next lair-action
+   *     checkpoint by `resolveLairActions`).
+   *   - The redirect fires on the first damage instance from an attack
+   *     (dealt > 0). A hit that deals 0 damage (immunity) does NOT consume
+   *     the redirect — acceptable v1 simplification.
+   *   - "Object interacts physically" (e.g., a trap triggering) is NOT
+   *     modeled — only attack damage triggers the redirect.
+   *   - The duplicate's movement (Demogorgon can move it on his turn) is
+   *     NOT modeled — the duplicate is assumed to be in Demogorgon's space.
+   *   - Sight-dependency immunity (truesight/blindsight sees through the
+   *     illusion) is NOT modeled — same simplification as Mirror Image.
+   */
+  lairIllusoryDuplicate?: boolean;
+
   /** Dispatcher routing tag (Phase 2+). `cast_spell` when isSpell; else by tag presence. */
   category: LairActionCategory;
 }
@@ -1915,6 +1956,24 @@ export interface Combatant {
     targetId: string;        // the creature that must make the CON save
     saveDC: number;          // 18 (Lich::1) / 18 (Illithilich::1)
     sourceActionId: string;  // e.g. 'Lich::1' — for log searchability
+    expiresAtRound: number;  // state.battlefield.round + 1 (next init-20)
+  } | null;
+
+  // ── Phase 8 batch 3 (Session 102): Demogorgon::1 Illusory Duplicate. ──
+  // Set by `handleLairBespoke` when `LairAction.lairIllusoryDuplicate === true`.
+  // Cleared by `resolveLairActions` at the start of each lair-action checkpoint
+  // (the duplicate lasts "until initiative count 20 on the next round"). Also
+  // cleared lazily in `applyLairIllusoryDuplicateRedirect` when the redirect
+  // fires (hit or miss on the 50% coin-flip) or the expiry round has passed.
+  // null = no illusory duplicate active.
+  //
+  // The reactive redirect is modeled as a "healback" — when the lair creature
+  // takes attack damage and the duplicate is active, roll 1d100; on ≤ 50 the
+  // duplicate absorbs the hit (heal back the damage, duplicate disappears),
+  // on > 50 the lair creature takes the hit normally (duplicate's redirect is
+  // consumed either way — "the first time" trigger is used up).
+  lairIllusoryDuplicate?: {
+    sourceActionId: string;  // e.g. 'Demogorgon::1' — for log searchability
     expiresAtRound: number;  // state.battlefield.round + 1 (next init-20)
   } | null;
 

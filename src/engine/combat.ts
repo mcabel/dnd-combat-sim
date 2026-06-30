@@ -1557,6 +1557,8 @@ export function resolveAttack(
       applyWardingBondRedirect(target, dealt, state);
       // Phase 7 batch 2 (Session 99): Lich/Illithilich Warding Bond tether.
       applyLairWardingBondTetherRedirect(target, dealt, state);
+      // Phase 8 batch 3 (Session 102): Demogorgon::1 illusory duplicate redirect.
+      applyLairIllusoryDuplicateRedirect(target, dealt, state);
       checkDeath(target, state);
     }
     // Apply post-save-FAIL cantrip riders (e.g. Vicious Mockery disadv on next
@@ -1608,6 +1610,8 @@ export function resolveAttack(
       applyWardingBondRedirect(target, dealt, state);
       // Phase 7 batch 2 (Session 99): Lich/Illithilich Warding Bond tether.
       applyLairWardingBondTetherRedirect(target, dealt, state);
+      // Phase 8 batch 3 (Session 102): Demogorgon::1 illusory duplicate redirect.
+      applyLairIllusoryDuplicateRedirect(target, dealt, state);
       checkDeath(target, state, attacker);
     }
     return;
@@ -2495,6 +2499,8 @@ export function resolveAttack(
     applyWardingBondRedirect(target, dealt, state);
     // Phase 7 batch 2 (Session 99): Lich/Illithilich Warding Bond tether.
     applyLairWardingBondTetherRedirect(target, dealt, state);
+    // Phase 8 batch 3 (Session 102): Demogorgon::1 illusory duplicate redirect.
+    applyLairIllusoryDuplicateRedirect(target, dealt, state);
     checkDeath(target, state);
   }
 
@@ -6508,6 +6514,14 @@ function resolveLairActions(state: EngineState): void {
     if (c.lairWardingBondTether && state.battlefield.round >= c.lairWardingBondTether.expiresAtRound) {
       c.lairWardingBondTether = null;
     }
+    // ── Phase 8 batch 3 (Session 102): expire Demogorgon::1 illusory duplicate. ──
+    // Same 1-round expiry as the Warding Bond tether. The duplicate lasts
+    // "until initiative count 20 of the next round" — clear at the next
+    // checkpoint. The lazy expiry in `applyLairIllusoryDuplicateRedirect` is a
+    // backstop for edge cases (e.g., combat ends before the next checkpoint).
+    if (c.lairIllusoryDuplicate && state.battlefield.round >= c.lairIllusoryDuplicate.expiresAtRound) {
+      c.lairIllusoryDuplicate = null;
+    }
   }
 
   // Collect in-lair creatures with at least one lair action, alive & conscious.
@@ -6960,6 +6974,15 @@ function scoreLairAction(
         // save_only disadvOnAttacks pattern — both deny the enemy effective
         // attacks for 1 round).
         score += W.buffVulnerability;
+      } else if (action.lairIllusoryDuplicate) {
+        // Phase 8 batch 3 (Session 102): Illusory-duplicate (Demogorgon::1) —
+        // defensive buff: 50% chance to negate the FIRST attack's damage
+        // against the lair creature for 1 round. One-shot (consumed after the
+        // first attack). Weaker than self-invisibility (which gives disadv on
+        // ALL attacks for a round) but stronger than log-only. Score as
+        // visibilitySelf (8) — a moderate defensive estimate (expected
+        // savings ≈ 0.5 × one attack's damage ≈ 7-8 HP).
+        score += W.visibilitySelf;
       } else if (action.lairDispelMagic) {
         // Dispel-magic (Topaz Dragon::1, Zargon::1, Darkweaver::0) — value
         // depends on how many enemy effects are active (unknown at score
@@ -8404,6 +8427,72 @@ function applyLairWardingBondTetherRedirect(
 }
 
 /**
+ * Phase 8 batch 3 (Session 102): Reactive damage-redirect hook for Demogorgon::1
+ * Illusory Duplicate. Called at the 3 attack-damage hook sites in resolveAttack
+ * (save-based damage, auto-hit damage, weapon-hit damage — NOT fall damage at
+ * site 2838, since fall damage isn't an "attack interaction").
+ *
+ * When the damagee has an active illusory duplicate:
+ *   - The first attack that deals damage triggers a 50% coin-flip (1d100 ≤ 50).
+ *   - On SUCCESS (≤50): the illusory duplicate absorbs the hit — heal back the
+ *     full damage amount (capped at maxHP), log "illusory duplicate absorbs
+ *     the hit and disappears", clear the field. The damagee takes NO damage.
+ *   - On FAILURE (>50): the damagee takes the hit normally (damage already
+ *     applied), log "illusory duplicate fails to redirect — damagee takes the
+ *     hit", clear the field.
+ *   - Either way, the duplicate's redirect is consumed (the "first time"
+ *     trigger is used up per the text: "The FIRST time a creature or an object
+ *     interacts physically with Demogorgon").
+ *
+ * The healback mirrors `applyLairWardingBondTetherRedirect`'s approach: since
+ * `dealt` was already applied to the damagee via `applyDamageWithTempHP`, we
+ * heal back the full amount (capped at maxHP) on a successful redirect. This
+ * correctly models "the illusory duplicate is affected, not Demogorgon".
+ *
+ * v1 simplifications:
+ *   - The redirect chance is hardcoded at 50% (matches Demogorgon::1's
+ *     {@chance 50}). Phase 9+ may parameterize if other creatures use a
+ *     different chance.
+ *   - The redirect fires on the first damage instance from an attack (dealt >
+ *     0). A hit that deals 0 damage (immunity) does NOT consume the redirect.
+ *   - "Object interacts physically" (e.g., a trap) is NOT modeled — only
+ *     attack damage triggers the redirect.
+ */
+function applyLairIllusoryDuplicateRedirect(
+  damagee: Combatant,
+  dealt: number,
+  state: EngineState,
+): void {
+  if (!damagee.lairIllusoryDuplicate || dealt <= 0) return;
+  const dup = damagee.lairIllusoryDuplicate;
+  // Lazy expiry: clear if the expiry round has passed (the next init-20 checkpoint).
+  if (state.battlefield.round >= dup.expiresAtRound) {
+    damagee.lairIllusoryDuplicate = null;
+    return;
+  }
+  // Roll 1d100 for the 50% coin-flip.
+  const roll = rollDie(100);
+  const redirected = roll <= 50;
+  if (redirected) {
+    // Heal back the full damage amount (capped at maxHP). This models "the
+    // illusory duplicate is affected, not Demogorgon" — the damagee takes no
+    // net damage from this hit.
+    const hpBeforeHeal = damagee.currentHP;
+    damagee.currentHP = Math.min(damagee.maxHP, damagee.currentHP + dealt);
+    const healed = damagee.currentHP - hpBeforeHeal;
+    log(state, 'action', damagee.id,
+      `${damagee.name}'s illusory duplicate absorbs the hit (1d100=${roll} ≤ 50) — ${damagee.name} takes NO damage${healed > 0 ? ` (healed ${healed} back)` : ''}! The illusory duplicate disappears.`,
+      damagee.id, healed);
+  } else {
+    log(state, 'action', damagee.id,
+      `${damagee.name}'s illusory duplicate fails to redirect (1d100=${roll} > 50) — ${damagee.name} takes the full ${dealt} damage. The illusory duplicate is consumed.`,
+      damagee.id, dealt);
+  }
+  // Either way, the duplicate's redirect is consumed (the "first time" trigger).
+  damagee.lairIllusoryDuplicate = null;
+}
+
+/**
  * Resolve a `save_only` lair action. Each target rolls `saveAbility` vs
  * `saveDC`; on failure, the bespoke effect (push/fall/banish/etc.) is logged
  * as "not yet implemented" with the action.id. On success, no effect.
@@ -8950,11 +9039,32 @@ function handleLairBespoke(
     return;
   }
 
+  // ── Phase 8 batch 3 (Session 102): Demogorgon::1 illusory duplicate. ──
+  // 15. Illusory-duplicate (Demogorgon::1) — MECHANICAL: sets a scratch field
+  //     on the lair creature. The reactive redirect is handled by
+  //     `applyLairIllusoryDuplicateRedirect` at the 3 attack-damage hook sites.
+  //     The duplicate lasts until the next init-20 checkpoint (1 round). The
+  //     first attack that deals damage to the lair creature triggers a 50%
+  //     coin-flip: on ≤50, the duplicate absorbs the hit (healback) and
+  //     disappears; on >50, the lair creature takes the hit normally. Either
+  //     way, the duplicate's redirect is consumed (the "first time" trigger).
+  if (action.lairIllusoryDuplicate) {
+    creature.lairIllusoryDuplicate = {
+      sourceActionId: action.id,
+      expiresAtRound: state.battlefield.round + 1,
+    };
+    log(state, 'action', creature.id,
+      `  → bespoke: illusory-duplicate — ${creature.name} creates an illusory duplicate of itself (lasts until next init-20; first attack has 50% chance to hit the duplicate instead)`,
+      undefined);
+    return;
+  }
+
   // ── Default: log "not yet implemented" with action.id ──
-  // After Phase 8 batch 2 (Session 101), the bespoke fallback only fires for
-  // 3 remaining unrecognized actions: Demogorgon::1 (illusory duplicate — needs
-  // attack-resolution hook), Githzerai Anarch::0/::2 (promote to cast_spell).
-  // Phase 9+ per-action.id handlers.
+  // After Phase 8 batch 3 (Session 102), the bespoke fallback should NEVER
+  // fire — all 31 bespoke actions are now recognized (28 from batches 1+2 +
+  // inline-regex, 1 from batch 3's illusoryDuplicate flag, 2 promoted to
+  // cast_spell via the broadened casts-regex). If this log fires, it's a
+  // regression or a new bespoke action added to the bestiary.
   log(state, 'action', creature.id,
     `  → bespoke: ${action.id} not yet implemented (Phase 9: per-action.id handler) — no mechanical effect`,
     undefined);
