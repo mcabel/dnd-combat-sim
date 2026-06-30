@@ -1503,6 +1503,18 @@ export function extractLairAction(
     rangeFt = LAIR_ANYWHERE_RANGE_FT;
   }
 
+  // ── 9pre. centerOnPoint (computed before §9 so the §9 fallback 3 can gate
+  // on it). True when the text explicitly describes point-selection AoE
+  // targeting ("centered on a point the [creature] chooses/can see within N
+  // feet of it"). Session 103. This is the opt-in signal for
+  // chooseLairActionPoint (vs. the v1 over-approximation that centers the AoE
+  // on the lair creature itself). See the full §9b comment below for the
+  // regex evolution (S103 → S105 → S106 BORDERLINE → S107 count update).
+  const centerOnPoint =
+    /centered on a point/i.test(cleaned) ||
+    /a point\b[^.]*?\b(?:chooses|can see)\b/i.test(cleaned) ||
+    /(?:\d+[- ]?(?:foot|feet)[- ]?radius)[^.]*?\bwithin\s+\d+\s+feet\s+of\b/i.test(cleaned);
+
   // ── 9. radiusFt from "N-foot-radius" / "N-foot-radius sphere" ──
   // Session 106 (S105 next-action #5b): extended with 2 fallback patterns for
   // actions that have centerOnPoint=true (S103/S105 "a point ... chooses/can
@@ -1523,16 +1535,24 @@ export function extractLairAction(
   //   centre to the cube's faces. Covers:
   //     • Geryon::1 — "cube, 10 feet on each side, centered on that point" → radiusFt = 5
   //
-  // Note: Yeenoghu::1 ("in the space where the spike emerges") uses neither
-  // phrasing — single-target point effect (no radius number in text). Left on
-  // v1 (radiusFt=undefined); a future session could add a "single-target point"
-  // handler (radiusFt=0). Tracked in the S106 handover next-actions.
+  // Fallback 3 (Session 107, S106 next-action #4): "in (the|that) space" →
+  //   radiusFt = 0. Single-target point effect — the AoE is ONE space (the
+  //   chosen point), so Chebyshev radius = 0 (only the target AT the chosen
+  //   point is hit). Gated on centerOnPoint=true to avoid false-positives: 12
+  //   non-point-selection actions also use "in the/that space" (Alyxian::2,
+  //   Gold Dragon::1, etc.) but they have centerOnPoint=false, so fallback 3
+  //   does NOT apply. Covers:
+  //     • Yeenoghu::1 — "Any creature in the space where the spike emerges"
+  //       (save_damage, rangeFt=100). Was radiusFt=undefined → v1 hit ALL
+  //       enemies within rangeFt=100 (over-approximation). Now radiusFt=0 →
+  //       point-selection hits 1 target at the chosen point (canon-accurate:
+  //       the spike emerges in ONE space). [S106 next-action #4 RESOLVED]
   //
   // The fallbacks only run when the primary "N-foot-radius" match fails, so
   // existing radiusFt extraction is unchanged (no regression risk). Verified
-  // via bestiary scan: the 2 new patterns match exactly 4 unique actions
-  // (Drow Matron Mother::1, Geryon::1, Hythonia::1, Storm Giant Quintessent::0)
-  // — 0 false-positives among the other 484 lair actions.
+  // via bestiary scan: the 3 fallback patterns match exactly 5 unique actions
+  // (Drow Matron Mother::1, Geryon::1, Hythonia::1, Storm Giant Quintessent::0,
+  // Yeenoghu::1) — 0 false-positives among the other 484 lair actions.
   let radiusFt: number | undefined;
   const radiusMatch = cleaned.match(/(\d+)[- ]?(?:foot|feet)[- ]?radius/i);
   if (radiusMatch) {
@@ -1547,6 +1567,11 @@ export function extractLairAction(
       const cubeMatch = cleaned.match(/cube,?\s+(\d+)\s+feet\s+on\s+(?:a|each)\s+side/i);
       if (cubeMatch) {
         radiusFt = Math.floor(parseInt(cubeMatch[1], 10) / 2);
+      } else if (centerOnPoint && /in (?:the|that) space/i.test(cleaned)) {
+        // Fallback 3 (S107): single-target point effect — radius 0 (only the
+        // target at the chosen point is hit). Gated on centerOnPoint to avoid
+        // false-positives from non-point-selection "in the/that space" actions.
+        radiusFt = 0;
       }
     }
   }
@@ -1598,10 +1623,9 @@ export function extractLairAction(
   // 26 actions now use centerOnPoint (12 "centered on a point" + 10
   // "a point ... chooses/can see" + 4 BORDERLINE "N-foot-radius ... within M
   // feet of"); 5 centered-on-self + 1 ambiguous (Gar Shatterkeel::1) stay false.
-  const centerOnPoint =
-    /centered on a point/i.test(cleaned) ||
-    /a point\b[^.]*?\b(?:chooses|can see)\b/i.test(cleaned) ||
-    /(?:\d+[- ]?(?:foot|feet)[- ]?radius)[^.]*?\bwithin\s+\d+\s+feet\s+of\b/i.test(cleaned);
+  // (centerOnPoint is computed above in §9pre, before the radiusFt block, so
+  // the §9 fallback 3 can gate on it. The regex + evolution history are
+  // documented here; the declaration is in §9pre.)
 
   // ── 10. durationRounds ──
   let durationRounds: number | undefined;

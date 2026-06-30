@@ -621,12 +621,14 @@ console.log('\n--- 17. Session 106 radiusFt extraction: non-"N-foot-radius" phra
   eq('Geryon::1 radiusFt = 5 (S106 "cube N feet on each side" → floor(10/2))', geryon1?.radiusFt, 5);
   eq('Geryon::1 rangeFt = 120 (S105)', geryon1?.rangeFt, 120);
 
-  // Yeenoghu::1 — "in the space where the spike emerges" → NO radiusFt (single-target,
-  // no radius number in text). Stays radiusFt=undefined (v1) — S106 left this for a
-  // future session (would need a "single-target point" handler, radiusFt=0).
+  // Yeenoghu::1 — "in the space where the spike emerges" → single-target point effect.
+  // S106 left radiusFt=undefined (no radius number; deferred). S107 fallback 3
+  // (next-action #4) now sets radiusFt=0 for centerOnPoint + "in (the|that) space"
+  // actions — see §21 for the full behavioural test. This §17 assertion tracks
+  // the parser field (updated S106→S107: undefined → 0).
   const yeenoghu1 = spawn('Yeenoghu').lairActions?.actions.find(a => a.id === 'Yeenoghu::1');
   eq('Yeenoghu::1 centerOnPoint = true (S105)', yeenoghu1?.centerOnPoint, true);
-  eq('Yeenoghu::1 radiusFt = undefined (S106 — "in the space" has no number; deferred)', yeenoghu1?.radiusFt, undefined);
+  eq('Yeenoghu::1 radiusFt = 0 (S107 fallback 3 — single-target point, was undefined in S106)', yeenoghu1?.radiusFt, 0);
 }
 
 // ============================================================
@@ -748,6 +750,75 @@ console.log('\n--- 20. Session 107 behavioural: SGQ::0 reaches far enemies ---')
                          Math.abs(farGoblin.pos.y - sgq.pos.y)) * 5;
   eq('SGQ::0 far enemy is 100ft from SGQ (beyond old rangeFt=20)',
     farFt, 100);
+}
+
+// ============================================================
+// 21. Session 107 Yeenoghu::1 single-target point (radiusFt=0)
+//     (S106 next-action #4. Yeenoghu::1: "Any creature in the space
+//     where the spike emerges" — single-target point effect, no
+//     radius number in text. S106 left it on v1 (radiusFt=undefined)
+//     because the number-based fallbacks can't extract a radius.
+//     S107 fallback 3: if centerOnPoint=true AND text matches
+//     /in (the|that) space/i, set radiusFt=0. With radiusFt=0,
+//     chooseLairActionPoint hits only the target AT the chosen
+//     point (Chebyshev=0) — canon-accurate for "any creature in
+//     the space where the spike emerges". Gated on centerOnPoint
+//     to avoid false-positives: 12 non-point-selection actions
+//     also use "in the/that space" (Alyxian::2, Gold Dragon::1,
+//     etc.) but have centerOnPoint=false, so fallback 3 skips them.)
+// ============================================================
+console.log('\n--- 21. Session 107 Yeenoghu::1 single-target point (radiusFt=0) ---');
+{
+  const yeen = spawn('Yeenoghu');
+  const action = yeen.lairActions?.actions.find(a => a.id === 'Yeenoghu::1')!;
+
+  // Parser: fallback 3 extracted radiusFt=0.
+  eq('Yeenoghu::1 centerOnPoint = true (a point he can see)',
+    action.centerOnPoint, true);
+  eq('Yeenoghu::1 radiusFt = 0 (single-target point, fallback 3)',
+    action.radiusFt, 0);
+  eq('Yeenoghu::1 rangeFt = 100 (within 100 feet of him, unchanged)',
+    action.rangeFt, 100);
+  eq('Yeenoghu::1 category = save_damage (unchanged)',
+    action.category, 'save_damage');
+
+  // Behavioural: radiusFt=0 → point-selection hits ONLY 1 target (the one at
+  // the chosen point), even when 3 enemies are within rangeFt=100. Under v1
+  // (radiusFt=undefined), ALL enemies within rangeFt=100 were hit (the v1
+  // save_damage handler over-approximates). Now, point-selection activates
+  // (centerOnPoint && radiusFt !== undefined) → chooseLairActionPoint picks
+  // the best single cell → 1 target (radiusFt=0 reaches only that cell).
+  yeen.pos = pos(0, 0);
+  const g1 = spawn('Goblin'); g1.pos = pos(2, 0);   // 10 ft from Yeenoghu
+  const g2 = spawn('Goblin'); g2.pos = pos(5, 0);   // 25 ft from Yeenoghu
+  const g3 = spawn('Goblin'); g3.pos = pos(10, 0);  // 50 ft from Yeenoghu
+  // All 3 within rangeFt=100. With radiusFt=0, each is hit only if the centre
+  // is on its cell. The point-selection picks 1 cell → 1 target.
+  const { targets, center } = chooseLairActionPoint(yeen, action, [g1, g2, g3]);
+  eq('Yeenoghu::1 spread: 1 target hit (radiusFt=0 single-target)',
+    targets.length, 1);
+  // The chosen target is one of the 3 (tie-break: closest to lair creature,
+  // so g1 at 10ft). The centre is the g1 cell.
+  eq('Yeenoghu::1 spread: target is g1 (closest, tie-break)',
+    targets[0].id, g1.id);
+  eq('Yeenoghu::1 spread: centre = g1 x (2)',
+    center.x, 2);
+
+  // Stacked: 2 enemies on the SAME cell → both hit (both "in the space").
+  const g4 = spawn('Goblin'); g4.pos = pos(3, 0);   // 15 ft from Yeenoghu
+  const g5 = spawn('Goblin'); g5.pos = pos(3, 0);   // same cell as g4 (stacked)
+  const { targets: targets2 } = chooseLairActionPoint(yeen, action, [g4, g5]);
+  eq('Yeenoghu::1 stacked: 2 targets hit (same cell, both in the space)',
+    targets2.length, 2);
+
+  // False-positive guard: Gold Dragon::1 uses "in the space" but has
+  // centerOnPoint=false → fallback 3 does NOT apply → radiusFt stays undefined.
+  const gd = spawn('Adult Gold Dragon');
+  const gd1 = gd.lairActions?.actions.find(a => a.id === 'Gold Dragon::1')!;
+  eq('Gold Dragon::1 centerOnPoint = false (not point-selection)',
+    gd1.centerOnPoint, false);
+  eq('Gold Dragon::1 radiusFt = undefined (fallback 3 skipped, not centerOnPoint)',
+    gd1.radiusFt, undefined);
 }
 
 // ---- Results ------------------------------------------------
