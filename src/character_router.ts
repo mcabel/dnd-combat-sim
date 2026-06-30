@@ -490,7 +490,7 @@ router.post('/simulate/custom', (req: Request, res: Response) => {
   try {
     const body = req.body as {
       partyCharacterIds?: string[];
-      enemies?: { name: string; count?: number; aiProfile?: string }[];
+      enemies?: { name: string; count?: number; aiProfile?: string; isInLair?: boolean }[];
       trials?: number;
     };
 
@@ -529,6 +529,18 @@ router.post('/simulate/custom', (req: Request, res: Response) => {
         const m = spawnMonster(bestiary, cfg.name, { x: ex++ * 2, y: 6, z: 0 }, (cfg.aiProfile as any) ?? 'attackNearest');
         if (!m) {
           return res.status(400).json({ error: `Unknown monster: "${cfg.name}"` });
+        }
+        // SHEET-43: per-enemy isInLair override. The parser default sets
+        // isInLair=true for lair creatures and undefined otherwise. The UI
+        // toggle lets the user suppress lair actions for a lair creature
+        // encountered outside its lair (e.g. a dragon ambushed in a field).
+        // When isInLair is omitted, the parser default stands (no override).
+        // When false, lair actions are suppressed even for lair creatures.
+        // When true, lair actions fire (same as parser default — explicit).
+        // For non-lair creatures, isInLair=true is harmless: the engine's
+        // resolveLairActions also filters on `lairActions.actions.length > 0`.
+        if (cfg.isInLair !== undefined) {
+          m.isInLair = cfg.isInLair;
         }
         enemies.push(m);
       }

@@ -143,6 +143,8 @@ button.full { width: 100%; padding: 11px; font-size: 13px; }
 .mon-row input[type=text]   { flex: 2; }
 .mon-row input[type=number] { flex: 0 0 60px; }
 .mon-row select             { flex: 1; }
+.mon-lair-toggle { display: flex; align-items: center; gap: 2px; font-size: 11px; color: var(--muted); cursor: pointer; white-space: nowrap; user-select: none; }
+.mon-lair-toggle input[type=checkbox] { width: 14px; height: 14px; cursor: pointer; margin: 0; }
 
 /* Member row */
 .mem-row { display: flex; gap: 8px; align-items: center; padding: 8px 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; }
@@ -1022,7 +1024,7 @@ const S = {
   pendingSecondStyle: false,  // Champion 10+ without second Fighting Style
   parties: [],
   selectedParty: null,
-  partyEnemies: [{ name:'Goblin', count:1, ai:'attackNearest' }],
+  partyEnemies: [{ name:'Goblin', count:1, ai:'attackNearest', isInLair:true }],
   trials: 100,
   monsters: [],
   lastSimEnemies: [],   // enemies from most recent simulate call, for XP award
@@ -3823,7 +3825,11 @@ function populateMonsterList(list) {
 function addEnemyRow() {
   const list = document.getElementById('ps-enemy-list');
   const idx = S.partyEnemies.length;
-  S.partyEnemies.push({ name:'', count:1, ai:'attackNearest' });
+  // SHEET-43: isInLair defaults to true (matches parser default for lair
+  // creatures; harmless for non-lair creatures — engine also filters on
+  // lairActions.actions.length > 0). Unchecking suppresses lair actions
+  // (e.g. a dragon ambushed in a field outside its lair).
+  S.partyEnemies.push({ name:'', count:1, ai:'attackNearest', isInLair:true });
   const row = document.createElement('div');
   row.className = 'mon-row';
   row.id = `enemy-row-${idx}`;
@@ -3835,6 +3841,7 @@ function addEnemyRow() {
       <option value="smart">Tactical</option>
       <option value="attackWeakest">Weakest</option>
     </select>
+    <label class="mon-lair-toggle" title="In Lair: toggle off to suppress lair actions (e.g. a dragon encountered outside its lair). Only affects creatures with lair actions."><input type="checkbox" checked onchange="S.partyEnemies[${idx}].isInLair=this.checked"/>Lair</label>
     <button class="danger sm" onclick="removeEnemyRow(${idx},this)">✕</button>`;
   list.appendChild(row);
 }
@@ -3882,7 +3889,7 @@ async function runSim() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         partyCharacterIds: S.selectedParty.characterIds,
-        enemies: enemies.map(e => ({ name: e.name.trim(), count: e.count, aiProfile: e.ai })),
+        enemies: enemies.map(e => ({ name: e.name.trim(), count: e.count, aiProfile: e.ai, isInLair: e.isInLair })),
         trials: S.trials,
       }),
     });
