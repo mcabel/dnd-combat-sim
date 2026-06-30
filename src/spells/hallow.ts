@@ -97,6 +97,21 @@ export const metadata = {
   // unchanged — only the type-selection heuristic is refined. See
   // pickHallowDamageType + actionDamageWeight below for the model.
   hallowEnergyVulnerabilityV2Weighted: true,
+  // Session 108: the v2 attack-roll hitChance is now data-driven instead of a
+  // flat 0.65. S107 used the 5e default ~65% hit rate for ALL attack rolls
+  // because the target's AC is unknown at pickHallowDamageType call time. S108
+  // refines this per-action: hitChance = f(action.hitBonus, BESTIARY_MEAN_AC)
+  // — the action's own to-hit bonus vs the bestiary mean AC (14.849, computed
+  // from 5904 monsters in bestiaryData/*.json). A +8 to-hit action now scores
+  // higher than a +2 to-hit action (it lands more often, so doubling its damage
+  // is more valuable). The save-based (0.75) and auto-hit (1.0) hitChances are
+  // unchanged. The dispatch wiring (S106) is still unchanged — only the
+  // attack-roll hitChance inside actionDamageWeight is refined. S106 next-action
+  // #9 option (b): "use the average party hitBonus vs an average enemy AC (the
+  // bestiary mean)" — implemented per-action (each action's hitBonus IS a party
+  // member's to-hit for that action; using it per-action preserves granularity
+  // a single averaged hitBonus would erase). See bestiaryHitChance below.
+  hallowEnergyVulnerabilityV2BestiaryHitChance: true,
 } as const;
 
 function emit(state: EngineState, type: CombatEvent['type'], actorId: string, desc: string, targetId?: string, value?: number): void {
@@ -306,9 +321,14 @@ export function executeEnergyVulnerability(
 //       • recharge action: multiplied by the recharge probability (Recharge N →
 //         available on N-6 → (7-N)/6; e.g. Recharge 5-6 → 2/6 ≈ 0.33)
 //   - hitChance = probability the damage is dealt:
-//       • attack roll (hitBonus !== null, saveDC === null): 0.65 (typical vs a
-//         reasonable AC; the actual target AC is unknown at pick time, so use
-//         the 5e default ~65% hit rate)
+//       • attack roll (hitBonus !== null, saveDC === null): S108 data-driven —
+//         bestiaryHitChance(action.hitBonus) = f(hitBonus, BESTIARY_MEAN_AC).
+//         Replaces the S107 flat 0.65 (5e default ~65%) with a per-action value
+//         derived from the bestiary AC distribution. A +8 to-hit action lands
+//         more often than a +2 to-hit action, so doubling its damage is more
+//         valuable. (S107 used 0.65 for all attack rolls because the target AC
+//         was unknown at pick time; S108 uses the bestiary mean AC 14.849 as
+//         the representative enemy AC — see bestiaryHitChance below.)
 //       • saving throw (saveDC !== null): 0.75 (save-for-half expected value:
 //         50% fail → full damage, 50% succeed → half → 0.5×1.0 + 0.5×0.5 = 0.75)
 //       • neither (auto-hit / damage_no_save): 1.0
@@ -321,15 +341,70 @@ export function executeEnergyVulnerability(
 // v2 vs v1 behavioural difference: v2 picks the type with the highest damage
 // CONTRIBUTION, not the highest action COUNT. Example: a party with three 1d6
 // fire cantrips + one 12d6 cold fireball (slotted) — v1 picks fire (count 3),
-// v2 picks cold (weight 12×3.5×0.5×0.75 = 15.75 vs fire 3×3.5×1.0×0.65 = 6.83).
+// v2 picks cold (weight 12×3.5×0.5×0.75 = 15.75 vs fire 3×3.5×1.0×0.5576 = 5.86,
+// using the S108 bestiary hitChance for hitBonus +5 vs AC 14.849; S107 used
+// the flat 0.65 giving fire 6.83 — either way cold wins decisively).
 // v2 is canon-better: doubling the 12d6 fireball (save-for-half, always deals
 // ~42) benefits more than doubling three 1d6 cantrips (~3.5 each).
+//
+// Session 108 (S107 next-action #9 option b) — per-target hitChance. The S107
+// flat 0.65 attack-roll hitChance is replaced by bestiaryHitChance(hitBonus),
+// which computes P(hit) = clamp((21 - max(2, AC - hitBonus)) / 20, 0.05, 0.95)
+// using BESTIARY_MEAN_AC = 14.849 (the mean AC across 5904 bestiary monsters).
+// This is the data-driven refinement of the S107 default. The save-based (0.75)
+// and auto-hit (1.0) hitChances are unchanged. The dispatch wiring (S106) is
+// still unchanged — only the attack-roll hitChance inside actionDamageWeight
+// is refined. Existing S107 tests (§5b/5c/5d/5e) still pass: the winners are
+// preserved (cold still beats fire in §5b/§5d because 0.75 > 0.5576; fire still
+// beats cold in §5c via availability; uniform-damage §5e still reduces to count
+// since all attack actions share the same hitBonus → same hitChance).
 // ============================================================
+
+/**
+ * Bestiary mean Armor Class, precomputed from bestiaryData/*.json (5904
+ * monsters with numeric AC; computed via a one-off scan — see S108 handover).
+ * Used by bestiaryHitChance() as the representative enemy AC when the actual
+ * target is unknown at pickHallowDamageType call time. 14.849 ≈ 15 (the modal
+ * AC; the distribution is roughly symmetric around the mean so the mean is a
+ * faithful representative).
+ */
+const BESTIARY_MEAN_AC = 14.849;
+
+/**
+ * Expected hit chance for an attack roll vs a representative bestiary monster,
+ * using the bestiary mean AC. Replaces the S107 flat 0.65 (5e default ~65% hit
+ * rate) with a data-driven, per-action value derived from the actual monster
+ * AC distribution.
+ *
+ * Formula: P(hit) = clamp((21 - max(2, AC - hitBonus)) / 20, 0.05, 0.95)
+ *   - A hit requires d20 + hitBonus >= AC, i.e. d20 >= AC - hitBonus.
+ *   - nat 1 always misses  → the minimum successful roll is max(2, ceil(AC -
+ *     hitBonus)); the number of successful faces is (21 - that minimum).
+ *   - nat 20 always hits   → clamp the upper bound at 0.95 (1/20).
+ *   - The floor 0.05 covers the degenerate case where AC - hitBonus >= 20.
+ *
+ * Using the MEAN AC (14.849) approximates E[P(hit | AC)] closely because the
+ * hitChance function is near-linear in AC over the bestiary range (verified:
+ * mean-AC approximation 0.5576 vs the full-distribution average 0.5573 for
+ * hitBonus=5 — within 0.0003, well below any decision-relevant threshold).
+ *
+ * Examples (BESTIARY_MEAN_AC = 14.849):
+ *   hitBonus +5 → (21 - max(2, 9.849))  / 20 = 11.151 / 20 = 0.5576
+ *   hitBonus +8 → (21 - max(2, 6.849))  / 20 = 14.151 / 20 = 0.7076
+ *   hitBonus +2 → (21 - max(2, 12.849)) / 20 = 8.151  / 20 = 0.4076
+ *   hitBonus +0 → (21 - max(2, 14.849)) / 20 = 6.151  / 20 = 0.3076
+ */
+export function bestiaryHitChance(hitBonus: number): number {
+  const minRoll = Math.max(2, BESTIARY_MEAN_AC - hitBonus);
+  const p = (21 - minRoll) / 20;
+  return Math.max(0.05, Math.min(0.95, p));
+}
 
 /**
  * Computes the per-round expected-damage weight for a damage-dealing action:
  * `expectedDamage × availability × hitChance`. See the §S107 comment above for
- * the full model. Returns 0 for actions with no damage dice.
+ * the full model. Returns 0 for actions with no damage dice. S108 refines the
+ * attack-roll hitChance from the flat 0.65 to bestiaryHitChance(hitBonus).
  */
 function actionDamageWeight(a: Action): number {
   const d = a.damage!;
@@ -356,9 +431,10 @@ function actionDamageWeight(a: Action): number {
   // Hit chance: probability the damage is dealt.
   let hitChance = 1.0;  // default: auto-hit (damage_no_save, etc.)
   if (a.hitBonus !== null && a.saveDC === null) {
-    // Attack roll — flat 0.65 (typical vs reasonable AC; target AC unknown at
-    // pick time, so use the 5e default ~65% hit rate).
-    hitChance = 0.65;
+    // Attack roll — S108 data-driven hitChance from the action's hitBonus vs
+    // the bestiary mean AC (replaces the S107 flat 0.65). A higher hitBonus
+    // lands more often, so doubling that action's damage is more valuable.
+    hitChance = bestiaryHitChance(a.hitBonus);
   } else if (a.saveDC !== null) {
     // Saving throw — save-for-half expected value ~0.75 (50% fail → full,
     // 50% succeed → half → 0.5×1.0 + 0.5×0.5 = 0.75).

@@ -34,6 +34,7 @@ import {
   shouldCastEnergyVulnerability,
   executeEnergyVulnerability,
   pickHallowDamageType,
+  bestiaryHitChance,
   metadata as halMeta,
 } from '../spells/hallow';
 import { executePlannedAction, EngineState } from '../engine/combat';
@@ -50,6 +51,10 @@ function assert(label: string, cond: boolean, detail = ''): void {
 }
 function eq<T>(label: string, a: T, b: T): void {
   assert(label, a === b, `got ${JSON.stringify(a)}, want ${JSON.stringify(b)}`);
+}
+/** Floating-point approximate equality (tolerance 1e-4) — for hitChance weights. */
+function approx(label: string, a: number, b: number): void {
+  assert(label, Math.abs(a - b) < 1e-4, `got ${a}, want ${b} (diff ${a - b})`);
 }
 
 // ---- Factories (mirror session105_hallow_energy_vuln.test.ts) -----
@@ -188,6 +193,7 @@ eq('S106 wired flag = true', (halMeta as any).hallowEnergyVulnerabilityV1Wired, 
 eq('S105 implemented flag still true', (halMeta as any).hallowEnergyVulnerabilityV1Implemented, true);
 eq('Daylight flag still true (unchanged)', (halMeta as any).hallowDaylightOnlyV1Implemented, true);
 eq('S107 v2 weighted flag = true', (halMeta as any).hallowEnergyVulnerabilityV2Weighted, true);
+eq('S108 v2 bestiary hitChance flag = true', (halMeta as any).hallowEnergyVulnerabilityV2BestiaryHitChance, true);
 
 // ============================================================
 // 2. pickHallowDamageType: single party member, single damage type
@@ -257,15 +263,18 @@ console.log('\n--- 5. pickHallowDamageType: no damage actions → null ---');
 // 5b. S107 v2 weighting: higher damage outscores more common
 //     (v1 picked the most COMMON type; v2 picks the type with the highest
 //     expected-damage-per-round weight. Party: 3 fire cantrips (1d6 each,
-//     attack) + 1 cold fireball (12d6, slotted spell, save-based). v1 would
-//     pick fire (count 3); v2 picks cold (weight 12×3.5×0.5×0.75 = 15.75 vs
-//     fire 3×3.5×1.0×0.65 = 6.83). v2 is canon-better — doubling the 12d6
-//     fireball benefits more than tripling 1d6 cantrip hits.)
+//     attack, hitBonus +5) + 1 cold fireball (12d6, slotted spell, save-based).
+//     v1 would pick fire (count 3); v2 picks cold. Weights (S108 bestiary
+//     hitChance for hitBonus +5 vs AC 14.849 = 0.5576):
+//       cold = 12×3.5×0.5×0.75 = 15.75
+//       fire = 3×3.5×1.0×0.5576 = 5.855
+//     cold wins decisively. v2 is canon-better — doubling the 12d6 fireball
+//     benefits more than tripling 1d6 cantrip hits.)
 // ============================================================
 console.log('\n--- 5b. S107 v2: higher damage outscores more common ---');
 {
   const caster = makeCaster('wiz', { pos: { x: 5, y: 5, z: 0 } });
-  // Fighter with three 1d6 fire cantrips (attack-based, repeatable).
+  // Fighter with three 1d6 fire cantrips (attack-based, repeatable, hitBonus +5).
   const fighter = makeCombatant('fighter', {
     faction: 'party', pos: { x: 6, y: 5, z: 0 },
     actions: [
@@ -280,7 +289,7 @@ console.log('\n--- 5b. S107 v2: higher damage outscores more common ---');
     actions: [makeDamageActionV2('Cold Fireball', 'cold',
       { count: 12, sides: 6, bonus: 0, slotLevel: 3, hitBonus: null, saveDC: 15, saveAbility: 'dex' as AbilityScore })],
   });
-  // v2: cold weight = 12×3.5×0.5×0.75 = 15.75 > fire weight = 3×3.5×1.0×0.65 = 6.825.
+  // v2 (S108): cold weight 15.75 > fire weight 5.855 (bestiary hitChance 0.5576).
   eq('v2 picks cold (12d6 fireball) over fire (3× 1d6 cantrip)',
     pickHallowDamageType(caster, makeBF([caster, fighter, wizard])), 'cold');
 }
@@ -288,12 +297,15 @@ console.log('\n--- 5b. S107 v2: higher damage outscores more common ---');
 // ============================================================
 // 5c. S107 v2 weighting: cantrip availability outscores slotted spell
 //     (equal dice + equal hitChance, but cantrip is repeatable (1.0) while
-//     slotted spell is limited (0.5). Party: 1 fire cantrip (1d8+3) + 1 cold
-//     slotted spell (1d8+3, L3). v1: tie (count 1 each) → first-seen (fire).
-//     v2: fire weight = 7.5×1.0×0.65 = 4.875 > cold weight = 7.5×0.5×0.65 =
-//     2.4375 → fire wins (cantrip availability). Same winner as v1 here, but
-//     for a DIFFERENT reason — and if cold were first-seen, v2 would STILL
-//     pick fire (weight), while v1 would pick cold (first-seen tie-break).)
+//     slotted spell is limited (0.5). Party: 1 fire cantrip (1d8+3, hitBonus +5)
+//     + 1 cold slotted spell (1d8+3, L3, hitBonus +5). v1: tie (count 1 each)
+//     → first-seen (cold, placed first). v2 (S108 bestiary hitChance 0.5576 for
+//     hitBonus +5):
+//       fire  = 7.5×1.0×0.5576 = 4.182
+//       cold  = 7.5×0.5×0.5576 = 2.091
+//     → fire wins (cantrip availability). Same winner as v1 here, but for a
+//     DIFFERENT reason — and since cold is first-seen, v2 picks fire (weight)
+//     while v1 would pick cold (first-seen tie-break).)
 // ============================================================
 console.log('\n--- 5c. S107 v2: cantrip availability outscores slotted (equal dice) ---');
 {
@@ -310,19 +322,24 @@ console.log('\n--- 5c. S107 v2: cantrip availability outscores slotted (equal di
       { count: 1, sides: 8, bonus: 3, slotLevel: 0 })],
   });
   // v1 would pick cold (first-seen, tie count 1=1). v2 picks fire (cantrip
-  // availability 1.0 > slotted 0.5; fire 4.875 > cold 2.4375).
+  // availability 1.0 > slotted 0.5; fire 4.182 > cold 2.091).
   eq('v2 picks fire (cantrip, repeatable) over cold (slotted, limited) — NOT first-seen',
     pickHallowDamageType(caster, makeBF([caster, wizard, fighter])), 'fire');
 }
 
 // ============================================================
-// 5d. S107 v2 weighting: save-based hitChance (0.75) > attack (0.65)
+// 5d. S107 v2 weighting: save-based hitChance (0.75) > attack (bestiary)
 //     (equal dice + equal availability, but save-based actions have a higher
 //     expected-damage multiplier (save-for-half → 0.75) than attack rolls
-//     (~0.65 hit rate). Party: 1 fire attack (1d8+3, hitBonus) + 1 cold save
-//     spell (1d8+3, saveDC). v1: tie (count 1 each) → first-seen (fire). v2:
-//     fire weight = 7.5×1.0×0.65 = 4.875 < cold weight = 7.5×1.0×0.75 = 5.625
-//     → cold wins (save-for-half higher expected hit).)
+//     (S108 bestiary hitChance for hitBonus +5 = 0.5576). Party: 1 fire attack
+//     (1d8+3, hitBonus +5) + 1 cold save spell (1d8+3, saveDC 15). v1: tie
+//     (count 1 each) → first-seen (fire). v2 (S108):
+//       fire  = 7.5×1.0×0.5576 = 4.182
+//       cold  = 7.5×1.0×0.75   = 5.625
+//     → cold wins (save-for-half higher expected hit). The margin is WIDER under
+//     S108 than S107 (0.75 vs 0.5576 > 0.75 vs 0.65) — the data-driven attack
+//     hitChance is lower than the 5e default because the bestiary mean AC
+//     (14.85) is tough for a +5 to-hit (~56% hit, not 65%).)
 // ============================================================
 console.log('\n--- 5d. S107 v2: save-based hitChance outscores attack (equal dice) ---');
 {
@@ -339,8 +356,8 @@ console.log('\n--- 5d. S107 v2: save-based hitChance outscores attack (equal dic
       { count: 1, sides: 8, bonus: 3, hitBonus: null, saveDC: 15, saveAbility: 'dex' as AbilityScore })],
   });
   // v1 would pick fire (first-seen, tie count 1=1). v2 picks cold (save-based
-  // hitChance 0.75 > attack 0.65; cold 5.625 > fire 4.875).
-  eq('v2 picks cold (save-for-half, 0.75) over fire (attack, 0.65) — NOT first-seen',
+  // hitChance 0.75 > attack bestiary 0.5576; cold 5.625 > fire 4.182).
+  eq('v2 picks cold (save-for-half, 0.75) over fire (attack, bestiary 0.5576) — NOT first-seen',
     pickHallowDamageType(caster, makeBF([caster, fighter, wizard])), 'cold');
 }
 
@@ -351,7 +368,8 @@ console.log('\n--- 5d. S107 v2: save-based hitChance outscores attack (equal dic
 //      use makeDamageAction (1d8+3, attack, no slot) for all actions — v2
 //      reduces to count, so slashing (2) > bludgeoning (1), ties → first-seen.
 //      This §5e is an explicit regression guard: 2 fire + 1 cold, all 1d8+3
-//      attack cantrips → fire (count 2, weight 2×4.875=9.75 > cold 4.875).)
+//      attack cantrips (hitBonus +5) → fire (count 2, weight 2×4.182=8.364 >
+//      cold 4.182, using S108 bestiary hitChance 0.5576).)
 // ============================================================
 console.log('\n--- 5e. S107 v2 regression: uniform damage → v2 ∝ count (v1 preserved) ---');
 {
@@ -364,9 +382,86 @@ console.log('\n--- 5e. S107 v2 regression: uniform damage → v2 ∝ count (v1 p
     faction: 'party', pos: { x: 7, y: 5, z: 0 },
     actions: [makeDamageAction('Cold 1', 'cold')],
   });
-  // All 1d8+3 attack cantrips → v2 weight ∝ count → fire (2) > cold (1).
+  // All 1d8+3 attack cantrips (hitBonus +5) → v2 weight ∝ count → fire (2) > cold (1).
   eq('v2 uniform-damage: fire (2) > cold (1) — v1 count winner preserved',
     pickHallowDamageType(caster, makeBF([caster, fighter, cleric])), 'fire');
+}
+
+// ============================================================
+// 5f. S108 per-target hitChance: higher hitBonus attack outscores lower
+//     (S108 replaces the flat 0.65 attack hitChance with bestiaryHitChance(
+//     hitBonus). Two actions with IDENTICAL dice + availability but DIFFERENT
+//     hitBonuses now get different weights: the higher-hitBonus action lands
+//     more often, so doubling its damage is more valuable. Party: 1 cold attack
+//     (1d8+3, hitBonus +2, low) FIRST + 1 fire attack (1d8+3, hitBonus +8, high).
+//     S107 (flat 0.65): tie (same dice, same availability, same flat hitChance)
+//     → first-seen cold. S108 (bestiary hitChance):
+//       cold = 7.5×1.0×0.4076 = 3.057  (hitBonus +2 → 0.4076)
+//       fire = 7.5×1.0×0.7076 = 5.307  (hitBonus +8 → 0.7076)
+//     → fire wins (higher hitBonus → higher hitChance → higher weight). NOT
+//     first-seen — this is the S108 behavioural difference from S107: under S107
+//     cold would win (first-seen tie); under S108 fire wins (per-target weight).)
+// ============================================================
+console.log('\n--- 5f. S108 per-target hitChance: higher hitBonus outscores lower ---');
+{
+  const caster = makeCaster('wiz', { pos: { x: 5, y: 5, z: 0 } });
+  // Cold attack FIRST (low hitBonus +2) — would win under S107 (first-seen tie).
+  const rogue = makeCombatant('rogue', {
+    faction: 'party', pos: { x: 7, y: 5, z: 0 },
+    actions: [makeDamageActionV2('Cold Dagger', 'cold',
+      { count: 1, sides: 8, bonus: 3, hitBonus: 2, saveDC: null, slotLevel: 0 })],
+  });
+  // Fire attack SECOND (high hitBonus +8).
+  const fighter = makeCombatant('fighter', {
+    faction: 'party', pos: { x: 6, y: 5, z: 0 },
+    actions: [makeDamageActionV2('Fire Greatsword', 'fire',
+      { count: 1, sides: 8, bonus: 3, hitBonus: 8, saveDC: null, slotLevel: 0 })],
+  });
+  // S107 flat 0.65: tie (cold 4.875 = fire 4.875) → first-seen cold. S108:
+  // fire 5.307 > cold 3.057 → fire wins (per-target hitChance).
+  eq('S108 picks fire (hitBonus +8, hc 0.7076) over cold (hitBonus +2, hc 0.4076) — NOT first-seen',
+    pickHallowDamageType(caster, makeBF([caster, rogue, fighter])), 'fire');
+}
+
+// ============================================================
+// 5g. S108 bestiaryHitChance: direct value verification
+//     (bestiaryHitChance(hitBonus) = clamp((21 - max(2, 14.849 - hitBonus))/20,
+//     0.05, 0.95). Verifies the data-driven hitChance values that replaced the
+//     S107 flat 0.65. The bestiary mean AC 14.849 is tough for low hitBonuses
+//     and easy for high hitBonuses — capturing the per-action granularity S107
+//     lacked.)
+// ============================================================
+console.log('\n--- 5g. S108 bestiaryHitChance direct value verification ---');
+{
+  // hitBonus +5 vs AC 14.849 → (21 - 9.849)/20 = 0.55755.
+  approx('bestiaryHitChance(+5) ≈ 0.5576 (was flat 0.65 in S107)',
+    bestiaryHitChance(5), 0.5576);
+  // hitBonus +8 vs AC 14.849 → (21 - 6.849)/20 = 0.70755.
+  approx('bestiaryHitChance(+8) ≈ 0.7076 (high hitBonus → high hitChance)',
+    bestiaryHitChance(8), 0.7076);
+  // hitBonus +2 vs AC 14.849 → (21 - 12.849)/20 = 0.40755 (float: 0.4075499...).
+  approx('bestiaryHitChance(+2) ≈ 0.4076 (low hitBonus → low hitChance)',
+    bestiaryHitChance(2), 0.4076);
+  // hitBonus +0 vs AC 14.849 → (21 - 14.849)/20 = 0.30755.
+  approx('bestiaryHitChance(+0) ≈ 0.3076 (no bonus → ~31% vs mean-AC enemy)',
+    bestiaryHitChance(0), 0.3076);
+  // Degenerate high hitBonus → clamped to 0.95 (nat 20 always hits floor is
+  // 1/20 = 0.05; the upper clamp is 0.95 because nat 1 always misses even when
+  // hitBonus >= AC). hitBonus +30 vs AC 14.849 → (21 - max(2, -15.151))/20 =
+  // (21-2)/20 = 0.95.
+  eq('bestiaryHitChance(+30) clamped to 0.95 (nat 1 always misses)',
+    bestiaryHitChance(30), 0.95);
+  // Degenerate low hitBonus → clamped to 0.05 (nat 20 always hits). hitBonus
+  // -10 vs AC 14.849 → (21 - max(2, 24.849))/20 = (21-24.849)/20 = negative →
+  // clamped to 0.05.
+  eq('bestiaryHitChance(-10) clamped to 0.05 (nat 20 always hits)',
+    bestiaryHitChance(-10), 0.05);
+  // Monotonicity: higher hitBonus → higher (or equal) hitChance.
+  assert('bestiaryHitChance is monotonic non-decreasing in hitBonus',
+    bestiaryHitChance(0) <= bestiaryHitChance(2) &&
+    bestiaryHitChance(2) <= bestiaryHitChance(5) &&
+    bestiaryHitChance(5) <= bestiaryHitChance(8) &&
+    bestiaryHitChance(8) <= bestiaryHitChance(30));
 }
 
 // ============================================================
