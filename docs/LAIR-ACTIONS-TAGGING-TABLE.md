@@ -21,7 +21,7 @@ Review this table before Phase 2 dispatch begins. Flag any `isSpell` mis-tag or
 | Metric | Value |
 |---|---|
 | Total actions | 324 |
-| `isSpell: true` (cast a named spell) | 40 |
+| `isSpell: true` (cast a named spell) | 42 |
 | `isMagical: true` (all) | 324 |
 | Out-of-scope (`lair_oos_*`) | 6 |
 | Deferred (`lair_def_*` / heuristic) | 16 |
@@ -31,12 +31,12 @@ Review this table before Phase 2 dispatch begins. Flag any `isSpell` mis-tag or
 
 | Category | Count |
 |---|---|
-| `bespoke` | 65 |
+| `bespoke` | 63 |
 | `save_condition` | 55 |
 | `save_damage` | 55 |
-| `cast_spell` | 40 |
-| `save_only` | 37 |
-| `summon` | 22 |
+| `cast_spell` | 42 |
+| `save_only` | 36 |
+| `summon` | 23 |
 | `deferred` | 16 |
 | `buff_ally` | 7 |
 | `debuff_enemy` | 7 |
@@ -230,7 +230,7 @@ Grouped by `sourceCreature` (alphabetical). Columns: `id`, `isMagical`, `isSpell
 
 | id | isMagical | isSpell | spellName | castLevel | category | saveDC | saveAbility | damage | conditions | outOfScopeId | deferred | deferredId |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| `Captain N'ghathrod::0` | ✓ |  | — | — | `save_only` | 15 | — | — | — | — | — | — |
+| `Captain N'ghathrod::0` | ✓ |  | — | — | `summon` | 15 | — | — | — | — | — | — |
 | `Captain N'ghathrod::1` | ✓ |  | — | — | `save_damage` | 15 | wis | 3d6 psychic | — | — | — | — |
 
 ### Copper Dragon
@@ -389,11 +389,11 @@ Grouped by `sourceCreature` (alphabetical). Columns: `id`, `isMagical`, `isSpell
 
 | id | isMagical | isSpell | spellName | castLevel | category | saveDC | saveAbility | damage | conditions | outOfScopeId | deferred | deferredId |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| `Githzerai Anarch::0` | ✓ |  | — | — | `bespoke` | — | — | — | — | — | — | — |
+| `Githzerai Anarch::0` | ✓ | ✓ | creation | 9 | `cast_spell` | — | — | — | — | — | — | — |
 | `Githzerai Anarch::1` | ✓ |  | — | — | `save_only` | 5 | — | — | — | — | — | — |
-| `Githzerai Anarch::2` | ✓ |  | — | — | `bespoke` | — | — | — | — | — | — | — |
-| `Githzerai Anarch::0` | ✓ | ✓ | lightning bolt | 3 | `cast_spell` | — | — | — | — | — | — | — |
-| `Githzerai Anarch::1` | ✓ | ✓ | creation | 5 | `cast_spell` | — | — | — | — | — | — | — |
+| `Githzerai Anarch::2` | ✓ | ✓ | lightning bolt | 5 | `cast_spell` | — | — | — | — | — | — | — |
+| `Githzerai Anarch::0` | ✓ | ✓ | lightning bolt | 5 | `cast_spell` | — | — | — | — | — | — | — |
+| `Githzerai Anarch::1` | ✓ | ✓ | creation | 9 | `cast_spell` | — | — | — | — | — | — | — |
 | `Githzerai Anarch::2` | ✓ |  | — | — | `save_only` | 5 | — | — | — | — | — | — |
 
 ### Gold Dragon
@@ -472,7 +472,7 @@ Grouped by `sourceCreature` (alphabetical). Columns: `id`, `isMagical`, `isSpell
 | id | isMagical | isSpell | spellName | castLevel | category | saveDC | saveAbility | damage | conditions | outOfScopeId | deferred | deferredId |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | `Imix::0` | ✓ |  | — | — | `save_condition` | 20 | str | — | prone | — | — | — |
-| `Imix::1` | ✓ |  | — | — | `deferred` | — | — | 3d6 fire | — | — | magical-darkness | lair_def_auto_Imix_1 |
+| `Imix::1` | ✓ |  | — | — | `deferred` | — | — | 3d6 fire | — | — | magical-darkness | lair_def_012 |
 | `Imix::2` | ✓ |  | — | — | `save_damage` | 15 | con | 1d8 fire | exhaustion | — | — | — |
 
 ### Juiblex
@@ -615,7 +615,7 @@ Grouped by `sourceCreature` (alphabetical). Columns: `id`, `isMagical`, `isSpell
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | `Olhydra::0` | ✓ |  | — | — | `save_condition` | 20 | str | — | prone | — | — | — |
 | `Olhydra::1` | ✓ |  | — | — | `deferred` | — | — | — | — | — | visibility | lair_def_003 |
-| `Olhydra::2` | ✓ |  | — | — | `deferred` | — | — | 3d6 cold | — | — | magical-darkness | lair_def_auto_Olhydra_2 |
+| `Olhydra::2` | ✓ |  | — | — | `deferred` | — | — | 3d6 cold | — | — | magical-darkness | lair_def_013 |
 
 ### Orcus
 
@@ -675,7 +675,7 @@ Grouped by `sourceCreature` (alphabetical). Columns: `id`, `isMagical`, `isSpell
 
 | id | isMagical | isSpell | spellName | castLevel | category | saveDC | saveAbility | damage | conditions | outOfScopeId | deferred | deferredId |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| `Sea Fury::0` | ✓ |  | — | — | `deferred` | — | — | — | — | — | magical-darkness | lair_def_auto_Sea_Fury_0 |
+| `Sea Fury::0` | ✓ |  | — | — | `deferred` | — | — | — | — | — | magical-darkness | lair_def_011 |
 | `Sea Fury::1` | ✓ |  | — | — | `save_condition` | 16 | str | — | prone | — | — | — |
 | `Sea Fury::2` | ✓ |  | — | — | `summon` | — | — | — | — | — | — | — |
 
@@ -780,7 +780,7 @@ Grouped by `sourceCreature` (alphabetical). Columns: `id`, `isMagical`, `isSpell
 
 | id | isMagical | isSpell | spellName | castLevel | category | saveDC | saveAbility | damage | conditions | outOfScopeId | deferred | deferredId |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| `White Dragon::0` | ✓ |  | — | — | `deferred` | 10 | con | 3d6 cold | — | — | magical-darkness | lair_def_auto_White_Dragon_0 |
+| `White Dragon::0` | ✓ |  | — | — | `deferred` | 10 | con | 3d6 cold | — | — | magical-darkness | lair_def_010 |
 | `White Dragon::1` | ✓ |  | — | — | `damage_no_save` | — | — | 3d6 piercing | — | — | — | — |
 | `White Dragon::2` | ✓ |  | — | — | `debuff_enemy` | — | — | — | — | — | — | — |
 | `White Dragon::3` | ✓ |  | — | — | `summon` | 15 | con | — | blinded | — | — | — |

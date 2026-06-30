@@ -784,6 +784,25 @@ const LAIR_REGISTRY: LairRegistryEntry[] = [
   { sourceCreature: 'Sphinx', match: /flow of time within the lair is altered/i, kind: 'deferred', id: 'lair_def_008', deferredTag: 'meta-time' },
   // [VERIFY-2] Juiblex green slime → recommended deferred: 'dmg-hazard' (next sequential id)
   { sourceCreature: 'Juiblex', match: /green slime/i, kind: 'deferred', id: 'lair_def_009', deferredTag: 'dmg-hazard' },
+  // ── Session 103: promote 4 heuristic-caught `magical-darkness` deferred
+  //    actions to stable IDs. The handover (S102) cited "7" auto entries, but
+  //    that count was stale from Session 91 — Demogorgon/Morkoth darkness
+  //    actions were since promoted to `cast_spell` (they carry `@spell
+  //    darkness` tags → `isSpell` takes precedence over the heuristic). The
+  //    actual remaining auto entries are 4 unique sourceCreature base names
+  //    (White Dragon covers both adult + ancient; Olhydra has a SECOND
+  //    deferred action besides lair_def_003), covering 10 bestiary entries
+  //    with source variants (|mm, |pota, |egw). Each `match` phrase was
+  //    verified to match ONLY the intended action and none of the creature's
+  //    other lair actions. Note: 3 of 4 (White Dragon, Imix, Olhydra::2)
+  //    also deal damage — they remain `deferred` here (the damage portion
+  //    can be wired in a future phase as a save_damage/damage_no_save rider
+  //    once the vision/light subsystem lands); this commit is ID-promotion
+  //    only, per the S102 task list. ──
+  { sourceCreature: 'White Dragon', match: /freezing fog fills/i, kind: 'deferred', id: 'lair_def_010', deferredTag: 'magical-darkness' },
+  { sourceCreature: 'Sea Fury', match: /foggy or murky/i, kind: 'deferred', id: 'lair_def_011', deferredTag: 'magical-darkness' },
+  { sourceCreature: 'Imix', match: /black smoke and burning embers/i, kind: 'deferred', id: 'lair_def_012', deferredTag: 'magical-darkness' },
+  { sourceCreature: 'Olhydra', match: /freezing fog fills/i, kind: 'deferred', id: 'lair_def_013', deferredTag: 'magical-darkness' },
 ];
 
 /**

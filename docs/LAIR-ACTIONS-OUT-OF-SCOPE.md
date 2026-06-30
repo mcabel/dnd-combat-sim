@@ -31,7 +31,7 @@ These have no combat-mechanical effect and no plausible mechanical implementatio
 
 ---
 
-## Deferred (mechanical, awaiting subsystem) — 8 entries
+## Deferred (mechanical, awaiting subsystem) — 12 entries (8 Phase 0 + `lair_def_009` Juiblex from Session 91 + 4 promoted from `lair_def_auto_*` in Session 103)
 
 These ARE mechanical (or could become mechanical). The engine logs them with the deferral tag and skips execution until the named subsystem is built.
 
@@ -45,6 +45,10 @@ These ARE mechanical (or could become mechanical). The engine logs them with the
 | `lair_def_006` | Sphinx | "every creature in the lair must reroll initiative. The sphinx can choose not to reroll." | `meta-initiative` (needs initiative-order mutation) |
 | `lair_def_007` | Baphomet | "Reverse Gravity... gravity is reversed within that room... creatures fall in the direction of the new pull of gravity..." | `gravity` (needs gravity-flip subsystem) |
 | `lair_def_008` | Sphinx | "The flow of time within the lair is altered such that everything within moves up to 10 years forward or backward..." | `meta-time` (needs time-manipulation subsystem) — **reclassified from `lair_oos_006` per user direction** |
+| `lair_def_010` | White Dragon (adult + ancient) | "Freezing fog fills a 20-foot-radius sphere centered on a point the dragon can see within 120 feet of it... heavily obscured... 3d6 cold damage (DC 10 CON)..." | `magical-darkness` (needs vision/light subsystem; damage rider pending future phase) — **promoted from `lair_def_auto_*` in Session 103** |
+| `lair_def_011` | Sea Fury | "Caverns, tunnels, and pools of water within 120 feet of the sea fury become foggy or murky... heavily obscured." | `magical-darkness` (needs vision/light subsystem) — **promoted from `lair_def_auto_*` in Session 103** |
+| `lair_def_012` | Imix | "A thick cloud of black smoke and burning embers fills a 40-foot-radius sphere within 120 feet of Imix... heavily obscured... 3d6 fire damage..." | `magical-darkness` (needs vision/light subsystem; damage rider pending future phase) — **promoted from `lair_def_auto_*` in Session 103** |
+| `lair_def_013` | Olhydra | "A freezing fog fills a 40-foot-radius sphere within 120 feet of Olhydra... heavily obscured... 3d6 cold damage..." | `magical-darkness` (needs vision/light subsystem; damage rider pending future phase) — **promoted from `lair_def_auto_*` in Session 103** |
 
 ---
 
@@ -125,11 +129,69 @@ The full per-action tagging table (324 rows) is in
 
 ### Review items for the next pass
 
-- The 7 `lair_def_auto_*` heuristic-caught deferred actions should be reviewed
-  and, if confirmed, promoted to stable `lair_def_NNN` IDs in this registry.
+- ~~The 7 `lair_def_auto_*` heuristic-caught deferred actions should be reviewed
+  and, if confirmed, promoted to stable `lair_def_NNN` IDs in this registry.~~
+  **RESOLVED in Session 103.** The "7" count was stale (from Session 91) —
+  Demogorgon/Morkoth darkness actions had since been promoted to `cast_spell`
+  (they carry `@spell darkness` tags → `isSpell` takes precedence over the
+  heuristic), leaving only **4 unique sourceCreature base names** still caught
+  by the `magical-darkness` heuristic: White Dragon (adult + ancient), Sea
+  Fury, Imix, and Olhydra::2. All 4 were promoted to stable IDs
+  `lair_def_010`–`lair_def_013` in `LAIR_REGISTRY` this session. A full
+  bestiary scan confirms **0 `lair_def_auto_*` IDs remain** (the heuristic
+  safety-net no longer fires for any bestiary action).
 - The 40 `isSpell: true` actions should be spot-audited before Phase 2 dispatch
   wires the GoI/Counterspell interaction (the remedy-reference exclusion handles
   the known Sphinx cases, but other edge cases may exist).
 - The ~15 intro-text artifacts (e.g., "At your discretion, a legendary…") should
   be filtered out in Phase 2's flattening refinement so they don't pollute the
   action pool.
+
+---
+
+## Phase 1 Update (Session 103) — `lair_def_auto_*` promotion to stable IDs
+
+The Session 102 handover listed "Promote the 7 `lair_def_auto_*` heuristic-caught
+deferred actions to stable `lair_def_NNN` IDs" as a LOW-risk review item. On
+re-verification against the current bestiary (7307 creatures, full
+`mergeBestiaries` + `spawnMonster` scan), the actual remaining auto entries
+were **4 unique sourceCreature base names** (the handover's "7" was stale from
+Session 91 — Demogorgon::0/::1 and Morkoth::0/::1 darkness actions had since
+been promoted to `cast_spell` because they carry `@spell darkness` tags, and
+`isSpell` takes precedence over the heuristic safety-net).
+
+### Promoted this session
+
+| Stable ID | sourceCreature | `match` phrase | Covers (bestiary entries) |
+|---|---|---|---|
+| `lair_def_010` | `White Dragon` | `/freezing fog fills/i` | adult white dragon (+ `\|mm`), ancient white dragon (+ `\|mm`) — 4 entries |
+| `lair_def_011` | `Sea Fury` | `/foggy or murky/i` | sea fury (+ `\|egw`) — 2 entries |
+| `lair_def_012` | `Imix` | `/black smoke and burning embers/i` | imix (+ `\|pota`) — 2 entries |
+| `lair_def_013` | `Olhydra` | `/freezing fog fills/i` | olhydra (+ `\|pota`) ::2 — 2 entries (Olhydra::1 stays `lair_def_003`) |
+
+Total: **10 bestiary entries** promoted (4 unique sourceCreature base names ×
+source variants). Each `match` phrase was verified to match ONLY the intended
+deferred action and none of the creature's other lair actions (e.g., White
+Dragon's `damage_no_save` ice-shards and `debuff_enemy` ice-wall actions do not
+contain "freezing fog fills").
+
+### Design note — damage riders remain deferred
+
+3 of the 4 promoted actions (White Dragon, Imix, Olhydra::2) also deal damage
+(3d6 cold / 3d6 fire / 3d6 cold respectively, with DC 10 CON for White Dragon).
+They remain in the `deferred` category for now: the damage portion could be
+wired in a future phase as a `save_damage`/`damage_no_save` rider once the
+vision/light subsystem lands (so the darkness and damage share a single
+mechanical resolution). This commit is **ID-promotion only** — no runtime
+behavior change (the actions were already logged-and-skipped as `deferred`;
+they now log a stable ID instead of an `auto_*` ID).
+
+### Post-promotion verification
+
+- Full bestiary scan: **0 `lair_def_auto_*` IDs remain** (the heuristic
+  safety-net no longer fires for any bestiary action).
+- `lair_def_*` stable count: **13 unique IDs** (001–004, 006–013; 005 reserved
+  as a duplicate alias of 004, unused in `LAIR_REGISTRY`).
+- Regression: all 6 CI test chunks pass locally (429/429 files, 23696
+  assertions, 0 failed) — see `src/test/session103_deferred_promotion.test.ts`
+  for the dedicated promotion-verification test.
