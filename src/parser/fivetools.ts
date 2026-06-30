@@ -1467,6 +1467,16 @@ export function extractLairAction(
   const radiusMatch = cleaned.match(/(\d+)[- ]?(?:foot|feet)[- ]?radius/i);
   const radiusFt = radiusMatch ? parseInt(radiusMatch[1], 10) : undefined;
 
+  // ── 9b. centerOnPoint — true when the text explicitly describes
+  // point-selection AoE targeting ("centered on a point the [creature]
+  // chooses/can see within N feet of it"). Session 103. This is the opt-in
+  // signal for chooseLairActionPoint (vs. the v1 over-approximation that
+  // centers the AoE on the lair creature itself). Verified against the
+  // bestiary: 40 actions use this phrasing (29 save_condition + 4 save_damage
+  // + 7 deferred); the regex does NOT match "within N feet of the [creature]"
+  // (centered-on-self phrasing), so non-point-selection actions stay on v1.
+  const centerOnPoint = /centered on a point/i.test(cleaned);
+
   // ── 10. durationRounds ──
   let durationRounds: number | undefined;
   if (/until\s+initiative\s+count\s+20\s+on\s+the\s+round\s+after\s+next/i.test(cleaned)) {
@@ -1614,6 +1624,7 @@ export function extractLairAction(
     summons,
     rangeFt,
     radiusFt,
+    centerOnPoint,
     durationRounds,
     targetsEnemies,
     targetFilter,

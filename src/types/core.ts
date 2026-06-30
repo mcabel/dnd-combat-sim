@@ -823,6 +823,26 @@ export interface LairAction {
   rangeFt?: number;
   /** Radius in feet inferred from "N-foot-radius" / "N-foot-radius sphere". */
   radiusFt?: number;
+  /**
+   * Session 103 — true when the lair-action text explicitly describes
+   * point-selection AoE targeting: "centered on a point the [creature]
+   * chooses/can see within N feet of it" (vs. "each creature within N feet
+   * of the [creature]", which is centered on the lair creature itself).
+   *
+   * When `centerOnPoint === true` AND `radiusFt` is set, the engine's
+   * `selectLairActionTargets` calls `chooseLairActionPoint` to pick the AoE
+   * center within `rangeFt` of the lair creature that maximizes targets hit
+   * within `radiusFt` of that center (true point-selection per the rules).
+   * When false/undefined, the v1 over-approximation is used (all enemies
+   * within `rangeFt` of the lair creature are hit — `radiusFt` ignored).
+   *
+   * Opt-in via this flag (rather than applying point-selection to every
+   * action with `radiusFt`) limits the behavioral change to actions that
+   * EXPLICITLY describe point-selection in their text, minimising test
+   * impact. Actions without the "centered on a point" phrasing keep the v1
+   * behavior.
+   */
+  centerOnPoint?: boolean;
   /** Duration in rounds: 1 = "until initiative count 20 on the next round"; 10 = "1 minute"; Infinity = "until dismissed". */
   durationRounds?: number;
   /** true = affects the lair creature's enemies; false = allies/self. Inferred from "each creature other than the [creature]" vs "the [creature] casts Haste on themself". */

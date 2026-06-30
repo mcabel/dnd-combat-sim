@@ -7563,27 +7563,108 @@ function handleLairSpellSlotRegen(
 // ---- Phase 3a helpers ---------------------------------------
 
 /**
+ * Session 103 — choose the AoE center point for a `centerOnPoint` lair action.
+ *
+ * Given the lair creature, the action (with `radiusFt` set), and the
+ * already-faction+range-filtered candidate targets, pick the candidate
+ * position that maximises the number of targets caught within `radiusFt`
+ * (Chebyshev feet, matching the battlefield's square-grid model).
+ *
+ * This is the "true point-selection AoE targeting" helper called out as the
+ * ⭐ next-action in the Session 102 handover. It replaces the v1
+ * over-approximation (which centred the AoE on the lair creature itself and
+ * hit every enemy in `rangeFt`) for actions whose text explicitly says
+ * "centered on a point the [creature] chooses/can see within N feet of it"
+ * (the `centerOnPoint` parser flag).
+ *
+ * Algorithm (mirrors `findBestAoECluster` in src/ai/actions.ts):
+ *   - Candidate centres = each candidate target's position. (All candidates
+ *     are already within `rangeFt` of the lair creature, so every candidate
+ *     centre is a legal "point within N feet of it" per the rules.)
+ *   - For each candidate centre, count how many candidates fall within
+ *     `radiusFt` (Chebyshev) of it.
+ *   - Return the centre with the highest count. Ties are broken by:
+ *       1. closest to the lair creature (minimises wasted range, deterministic)
+ *       2. lowest (x, y, z) lexicographically (final deterministic tie-break)
+ *
+ * v1 limitation (matches findBestAoECluster): candidate centres are real
+ * creature positions only — a midpoint between two spread enemies that would
+ * catch both is NOT considered. For tightly-clustered enemies this is optimal;
+ * for two enemies exactly `radiusFt` apart, only one is caught (a midpoint
+ * would catch both). A grid-sweep enhancement is deferred to a future session.
+ *
+ * Returns `{ center, targets }`. If `candidates` is empty, returns the lair
+ * creature's own position with an empty target list (the handler logs
+ * "no valid targets" and skips).
+ */
+export function chooseLairActionPoint(
+  lairCreature: Combatant,
+  action: LairAction,
+  candidates: Combatant[],
+): { center: Vec3; targets: Combatant[] } {
+  const radiusFt = action.radiusFt!;
+  let best: { center: Vec3; targets: Combatant[] } | null = null;
+
+  for (const pivot of candidates) {
+    const hit = candidates.filter(t =>
+      chebyshev3D(pivot.pos, t.pos) * 5 <= radiusFt,
+    );
+    if (best === null) {
+      best = { center: { ...pivot.pos }, targets: hit };
+      continue;
+    }
+    const more = hit.length > best.targets.length;
+    const same = hit.length === best.targets.length;
+    if (more) {
+      best = { center: { ...pivot.pos }, targets: hit };
+    } else if (same) {
+      // Tie-break 1: closer to the lair creature (Chebyshev feet).
+      const dPivot = chebyshev3D(lairCreature.pos, pivot.pos) * 5;
+      const dBest = chebyshev3D(lairCreature.pos, best.center) * 5;
+      if (dPivot < dBest) {
+        best = { center: { ...pivot.pos }, targets: hit };
+      } else if (dPivot === dBest) {
+        // Tie-break 2: lowest (x, y, z) lexicographically.
+        const p = pivot.pos, b = best.center;
+        if (p.x < b.x || (p.x === b.x && p.y < b.y) ||
+            (p.x === b.x && p.y === b.y && p.z < b.z)) {
+          best = { center: { ...pivot.pos }, targets: hit };
+        }
+      }
+    }
+  }
+
+  if (best === null) {
+    // No candidates — return the lair creature's position with empty targets.
+    return { center: { ...lairCreature.pos }, targets: [] };
+  }
+  return best;
+}
+
+/**
  * Select the targets for a lair action based on its `targetsEnemies`,
  * `rangeFt`, and `targetFilter` fields.
  *
  * Returns a list of living, non-dead combatants (does NOT exclude the lair
  * creature itself — handlers do that themselves to keep this helper generic).
  *
- * Targeting model (v1 simplification — Phase 4 will add true point-selection AI):
+ * Targeting model:
  *   - If `targetsEnemies`: lair creature's enemies (`livingEnemiesOf`).
  *     Else: lair creature's allies including itself (`livingAlliesOf` + self).
  *   - If `rangeFt` set: only those within `rangeFt` of the lair creature
  *     (Chebyshev distance in feet — 1 square = 5 ft, so distance = chebyshev3D * 5).
- *     This models "the dragon chooses a point within 120 ft of it" as "the
- *     dragon's lair action affects all enemies within 120 ft of the dragon" —
- *     a v1 simplification that over-approximates the AoE (a real dragon would
- *     center the effect on the densest cluster, not on itself).
- *   - `radiusFt` is NOT used for targeting. It represents the AoE size at the
- *     CHOSEN point (e.g., the magma geyser is a 5-ft-radius cylinder), which
- *     would require point-selection AI to place correctly. Phase 4 will add a
- *     `chooseLairActionPoint(action, candidates, bf)` helper that picks the
- *     point maximizing targets hit, at which point `radiusFt` becomes the
- *     targeting constraint. For now, we hit everyone in `rangeFt`.
+ *   - If `centerOnPoint` (Session 103) AND `radiusFt` set: the AoE is centred
+ *     on a POINT the lair creature chooses within `rangeFt` (per the rules:
+ *     "centered on a point the dragon can see within 120 feet of it"), NOT on
+ *     the lair creature itself. `chooseLairActionPoint` picks the point that
+ *     maximises targets hit within `radiusFt`, and only those targets are
+ *     returned. This is the true point-selection model (replaces the v1
+ *     over-approximation for actions that explicitly describe point-selection).
+ *   - Otherwise (`centerOnPoint` false/undefined, or `radiusFt` unset): the v1
+ *     over-approximation — all candidates within `rangeFt` of the lair creature
+ *     are hit (`radiusFt` ignored). A real dragon would centre the effect on
+ *     the densest cluster, not on itself; `centerOnPoint` opts into the correct
+ *     model. See `chooseLairActionPoint` for the algorithm + limitations.
  *   - If `targetFilter` set: only those whose `creatureType` (lowercased)
  *     contains any of the pipe-separated filter substrings.
  *   - If `rangeFt` is undefined: all living enemies/allies (the action affects
@@ -7601,7 +7682,6 @@ function selectLairActionTargets(
     : [...livingAlliesOf(creature, bf), creature];  // ally-affecting actions include self
 
   // Range filter (Chebyshev feet from the lair creature).
-  // (radiusFt is intentionally NOT applied here — see doc comment above.)
   if (action.rangeFt !== undefined) {
     candidates = candidates.filter(t =>
       chebyshev3D(creature.pos, t.pos) * 5 <= action.rangeFt!
@@ -7615,6 +7695,16 @@ function selectLairActionTargets(
       const ct = (t.creatureType ?? '').toLowerCase();
       return filters.some(f => ct.includes(f));
     });
+  }
+
+  // Session 103 — point-selection AoE targeting. When the action explicitly
+  // describes "centered on a point" targeting AND has a radius, pick the AoE
+  // centre within rangeFt that maximises targets within radiusFt, and return
+  // only those targets. Otherwise fall through to the v1 over-approximation
+  // (return all candidates in rangeFt — radiusFt ignored).
+  if (action.centerOnPoint && action.radiusFt !== undefined && candidates.length > 0) {
+    const { targets } = chooseLairActionPoint(creature, action, candidates);
+    return targets;
   }
 
   return candidates;
