@@ -660,7 +660,7 @@ import {
 } from '../spells/darkness';
 import {
   shouldCast as shouldCastGiantInsect,
-  execute as executeGiantInsect,
+  executeLair as executeLairGiantInsect,
 } from '../spells/giant_insect';
 import {
   shouldCastLair as shouldCastLairSimulacrum,
@@ -8017,12 +8017,14 @@ function callExecuteByPlanType(
       executeDarkness(caster, caster, state);
       break;
     }
-    // ── S115: giant insect — 'cast' signature (NO target param) ──
+    // ── S115/S116: giant insect — 'cast' signature, lair-specific executeLair ──
     case 'giantInsect': {
-      // Giant Insect execute takes only (caster, state) — no target.
-      // The target param is ignored (shouldCast returned boolean, converted
-      // to `creature` by the dispatcher's shouldCast switch below).
-      executeGiantInsect(caster, state);
+      // Giant Insect lair action (Arasta "spiders only") uses a LAIR-SPECIFIC
+      // executeLair (S116: summons 3 giant spiders). The regular execute (player
+      // spell — forward-compat flag only) is NOT used here. The target param is
+      // ignored (shouldCast returned boolean, converted to `creature` by the
+      // dispatcher's shouldCast switch below).
+      executeLairGiantInsect(caster, state);
       break;
     }
     // ── S115: simulacrum — 'single' signature, lair-specific executeLair ──
@@ -8407,18 +8409,26 @@ function handleLairCastSpell(
     }
   }
 
+  // ── S116: check LAIR_BESPOKE_SPELL_META FIRST ──────────────────────
+  // Bespoke lair-dispatch modules may provide a better lair-specific execute
+  // than the generic registry's stub. The key case: Giant Insect is in BOTH
+  // the generic registry (forward-compat flag stub) AND LAIR_BESPOKE_SPELL_META
+  // (S116: executeLair summons 3 giant spiders). Checking bespoke first ensures
+  // the lair action uses the real summoning, not the flag stub.
+  //
+  // This only affects spells in LAIR_BESPOKE_SPELL_META (15 bespoke spells).
+  // The other 262 generic-registry spells are NOT in the bespoke meta table, so
+  // dispatchBespokeLairSpell returns false and they fall through to the generic
+  // path below. Regular (non-lair) monster spell casts use the `genericSpell`
+  // case (line ~6284), NOT this function, so they're unaffected by this flip.
+  const bespokeDispatched = dispatchBespokeLairSpell(creature, action, state);
+  if (bespokeDispatched) return;
+
   const desc = lookupGenericSpell(action.spellName);
   if (!desc) {
-    // Not in the GENERIC_SPELLS registry. Try the lair-bespoke dispatcher
-    // (S113): routes to dedicated spell modules (Fireball, Banishment, Fog
-    // Cloud pilot). See docs/RFC-LAIR-ACTION-BESPOKE-DISPATCH.md.
-    const dispatched = dispatchBespokeLairSpell(creature, action, state);
-    if (dispatched) return;
-
-    // Spell has no module at all (no generic registry entry, no bespoke
-    // lair-dispatch entry). Log + skip. (S113: updated log message —
-    // removed the stale "Phase 5 will wire dedicated spell modules" wording
-    // per Q2 directive.)
+    // Not in the bespoke meta table, not in the GENERIC_SPELLS registry.
+    // Log + skip. (S113: updated log message — removed the stale "Phase 5
+    // will wire dedicated spell modules" wording per Q2 directive.)
     log(state, 'action', creature.id,
       `  → cast_spell: "${action.spellName}" (L${castLevel}) ` +
       `not in GENERIC_SPELLS registry and no bespoke lair-dispatch module — ` +

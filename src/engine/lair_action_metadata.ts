@@ -99,7 +99,10 @@ import { Combatant, Action, LairAction } from '../types/core';
  * signature type 'cast' (Arasta: suppress, no fixed duration) + simulacrum
  * forward-compat (Fraz-Urb'luu: suppress, 1-round lair duration; log + flag
  * only — real duplicate-combatant subsystem deferred) → 15 of 15.
- * All 15 bespoke-only spells now dispatch (RFC goal achieved). Note: lesser
+ * S116 enhancements: darkness Demogorgon "casts four times" → 4 obstacles at
+ * distinct points (executeLairDarkness via lairMultiCast override) + giant
+ * insect Arasta "spiders only" → 3 giant spider summons (executeLair). All 15
+ * bespoke-only spells now dispatch (RFC goal achieved). Note: lesser
  * restoration is a parser mis-tag (see RFC §2.3); antimagic field is Q2 skip.
  */
 export const lairActionMetadata = {
@@ -111,6 +114,10 @@ export const lairActionMetadata = {
   // signature type 'cast' (giant insect) + simulacrum forward-compat.
   // 15 of 15 bespoke-only spells now dispatch (RFC goal achieved).
   lairActionBespokeDispatchV2FullCoverage: true,
+  // Session 116: darkness Demogorgon 4× multi-cast (executeLairDarkness) +
+  // giant insect Arasta 3× spider summon (executeLair) + dispatch-order flip
+  // (bespoke meta checked before generic registry in handleLairCastSpell).
+  lairActionBespokeDispatchV3MultiCastAndSummons: true,
 };
 
 // ---- Types --------------------------------------------------
@@ -319,24 +326,35 @@ export const LAIR_BESPOKE_SPELL_META: Map<string, LairBespokeSpellMeta> = new Ma
       },
     },
   }],
-  // ── S115: giant insect — 4th signature type 'cast' ────────────
+  // ── S115/S116: giant insect — 4th signature type 'cast' ─────────
   // Arasta (MOT::1): "Arasta casts the giant insect spell (spiders only).
   // It lasts until she uses this lair action again or until she dies."
   // → Category A duration-replacement → concentrationMode = 'suppress'.
   //   No fixed lair duration (lasts until lair action used again or death —
-  //   similar to spike growth). The "spiders only" variant is a v1
-  //   simplification: the spell's execute() just sets a forward-compat flag
-  //   (_genericSpellActiveSpells); the actual summoning is NOT modelled.
-  //   signature = 'cast' (4th type): execute(caster, state) with NO target
+  //   similar to spike growth).
+  // signature = 'cast' (4th type): execute(caster, state) with NO target
   //   param, shouldCast returns boolean (not Combatant | null).
+  // S116: executeLair now SUMMONS 3 giant spider combatants (MM p.328 stats)
+  //   on Arasta's faction (was forward-compat flag only in S115). They despawn
+  //   on Arasta's death (removeEffectsFromCaster → despawn by summonerId). The
+  //   "lasts until lair action used again" cleanup is deferred (same out-of-
+  //   scope note as spike growth). The spider Bite models 1d8+3 piercing only
+  //   (poison save + Web recharge deferred — Action type can't represent
+  //   conditional secondary damage cleanly).
+  // S116 dispatch-order note: Giant Insect is in BOTH the generic registry
+  //   (forward-compat flag stub) AND this bespoke meta table. handleLairCastSpell
+  //   now checks LAIR_BESPOKE_SPELL_META FIRST (S116), so lair actions use the
+  //   real summoning executeLair, not the generic flag stub. Regular monster
+  //   casts use the genericSpell case (not handleLairCastSpell), so they're
+  //   unaffected and still hit the generic flag stub.
   ['giant insect', {
     canonicalName: 'Giant Insect',
     planType: 'giantInsect',
     signature: 'cast',             // 4th signature type: execute(caster, state), shouldCast → boolean
     concentrationMode: 'suppress', // Category A duration-replacement: "lasts until she uses this lair action again or until she dies"
-    // lairDurationRounds undefined: no fixed round count. The forward-compat
-    // flag persists until caster death (removeEffectsFromCaster) or a future
-    // "uses this lair action again" cleanup mechanism (out of scope for S115).
+    // lairDurationRounds undefined: no fixed round count. The summoned spiders
+    // persist until caster death (removeEffectsFromCaster despawns by summonerId)
+    // or a future "uses this lair action again" cleanup mechanism (out of scope).
   }],
   // ── S115: simulacrum — forward-compat (Fraz-Urb'luu::2) ────────
   // Fraz-Urb'luu (MPMM::2): "Fraz-Urb'luu chooses one Humanoid within the
@@ -364,9 +382,16 @@ export const LAIR_BESPOKE_SPELL_META: Map<string, LairBespokeSpellMeta> = new Ma
     concentrationMode: 'suppress', // Category B hazard: "as if created with the simulacrum spell"
     lairDurationRounds: 1,         // "destroyed on the next initiative count 20"
   }],
-  // ── Future expansion (S116+) ────────────────────────────────────
+  // ── Future expansion (S117+) ────────────────────────────────────
   // antimagic field (Demilich) — Q2: skip (no module). Future: implement antimagic_field.ts first.
   // lesser restoration (Fazrian) — PARSER MIS-TAG, do NOT add (see RFC §2.3)
   // simulacrum full implementation: spawn a real half-HP duplicate combatant
   //   (currently forward-compat log + flag only — see simulacrum.ts executeLair).
+  // giant insect v2: model the spider Bite poison save (DC 11 Con vs 2d8) +
+  //   the Web (recharge 5) restraint attack + the "lasts until lair action used
+  //   again" despawn (currently S116 summons 3 spiders with piercing-only Bite,
+  //   despawn on caster death only).
+  // darkness v2: Morkoth "choice of darkness/dispel magic/misty step" (parser
+  //   tags spellName='darkness' first option; v1 always dispatches darkness).
+  //   Demogorgon "casts four times" is RESOLVED in S116 (4 obstacles).
 ]);

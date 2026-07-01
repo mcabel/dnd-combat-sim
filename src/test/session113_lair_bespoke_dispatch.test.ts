@@ -205,6 +205,8 @@ eq('1aa. simulacrum lairDurationRounds = 1 (destroyed on next initiative count 2
   LAIR_BESPOKE_SPELL_META.get('simulacrum')!.lairDurationRounds, 1);
 assert('1ab. lairActionBespokeDispatchV2FullCoverage === true (S115: 15/15 RFC goal achieved)',
   (lairActionMetadata as any).lairActionBespokeDispatchV2FullCoverage === true);
+assert('1ac. lairActionBespokeDispatchV3MultiCastAndSummons === true (S116: darkness 4× + giant insect summon)',
+  (lairActionMetadata as any).lairActionBespokeDispatchV3MultiCastAndSummons === true);
 
 // ============================================================
 // 2. Fireball dispatch (Zariel MPMM Zariel::0, Category A normal, AoE)
@@ -739,7 +741,7 @@ console.log('\n--- 9. Morkoth darkness (S115: normal default, no override) ---')
 }
 
 // ============================================================
-// 10. S115: Arasta giant insect dispatch (4th signature type 'cast', suppress)
+// 10. S115+S116: Arasta giant insect dispatch (4th signature type 'cast', suppress)
 //     Raw text: "Arasta casts the giant insect spell (spiders only). It lasts
 //     until she uses this lair action again or until she dies."
 //     → concentrationMode = 'suppress' (Category A duration-replacement),
@@ -748,10 +750,12 @@ console.log('\n--- 9. Morkoth darkness (S115: normal default, no override) ---')
 //     signature = 'cast' (4th type): execute(caster, state) with NO target
 //     param, shouldCast returns boolean. The dispatcher converts the boolean
 //     to `creature | null` so the existing skip-if-null logic works.
-//     v1 simplification: the spell's execute() just sets a forward-compat
-//     flag (_genericSpellActiveSpells); the actual summoning is NOT modelled.
+//     S116: executeLair now SUMMONS 3 giant spider combatants (MM p.328 stats)
+//     on Arasta's faction. They despawn on Arasta's death (removeEffectsFromCaster
+//     → despawn by summonerId). The "lasts until lair action used again" cleanup
+//     is deferred (same out-of-scope note as spike growth).
 // ============================================================
-console.log('\n--- 10. Arasta giant insect (S115: 4th signature type cast, suppress) ---');
+console.log('\n--- 10. Arasta giant insect (S115 cast + S116 3× spider summon) ---');
 {
   const arasta = spawn('Arasta', { x: 0, y: 0, z: 0 }, 'MOT');
   asParty(arasta);
@@ -781,12 +785,12 @@ console.log('\n--- 10. Arasta giant insect (S115: 4th signature type cast, suppr
     castLog !== undefined,
     `events: ${rlog.events.filter((e:any)=>e.actorId===arasta.id && e.type==='action').map((e:any)=>e.description.substring(0,80)).join(' | ')}`);
 
-  // 10b. Arasta's _genericSpellActiveSpells has 'Giant Insect' (forward-compat flag set)
+  // 10b. Arasta's _genericSpellActiveSpells has 'Giant Insect' (flag set)
   assert('10b. Arasta._genericSpellActiveSpells has "Giant Insect" (flag set)',
     arasta._genericSpellActiveSpells?.has('Giant Insect') === true,
     `_genericSpellActiveSpells: ${JSON.stringify([...(arasta._genericSpellActiveSpells ?? [])])}`);
 
-  // 10c. Arasta did NOT start concentration (suppress mode + execute doesn't call startConcentration)
+  // 10c. Arasta did NOT start concentration (suppress mode + executeLair doesn't call startConcentration)
   assert('10c. Arasta did NOT start concentration (suppress mode)',
     arasta.concentration === null || arasta.concentration?.active === false,
     `concentration: ${JSON.stringify(arasta.concentration)}`);
@@ -803,12 +807,54 @@ console.log('\n--- 10. Arasta giant insect (S115: 4th signature type cast, suppr
   assert('10e. old skip log does NOT fire',
     skipLog === undefined);
 
-  // 10f. No new ActiveEffects were created (giant insect v1 only sets a flag, no effects)
+  // 10f. No new ActiveEffects were created (giant insect lair summons combatants,
+  //      not effects — despawn is via summonerId on caster death, not via effect)
   // The dispatcher's post-processing loop runs but finds 0 new effects.
   const giantInsectEffects = arasta.activeEffects.filter(e => e.spellName === 'Giant Insect');
-  assert('10f. no "Giant Insect" ActiveEffect created (v1 forward-compat flag only)',
+  assert('10f. no "Giant Insect" ActiveEffect created (summons combatants, not effects)',
     giantInsectEffects.length === 0,
     `effects: ${JSON.stringify(giantInsectEffects.map(e => ({spellName: e.spellName, effectType: e.effectType})))}`);
+
+  // ── S116: giant spider summon assertions ──
+  // 10g. THREE giant spider summons created (isSummon + summonSpellName='Giant Insect')
+  const spiders = [...bf.combatants.values()].filter(
+    (c: Combatant) => c.isSummon === true && c.summonSpellName === 'Giant Insect'
+  );
+  assert('10g. THREE giant spider summons created (S116 spider summoning)',
+    spiders.length === 3,
+    `got ${spiders.length} giant insect summons; names: ${spiders.map(s => s.name).join(', ')}`);
+
+  // 10h. All spiders are on Arasta's faction (party)
+  assert('10h. all spiders on Arasta faction (party)',
+    spiders.every(s => s.faction === arasta.faction),
+    `factions: ${JSON.stringify(spiders.map(s => s.faction))}`);
+
+  // 10i. All spiders have summonerId = Arasta.id (despawn on Arasta death)
+  assert('10i. all spiders have summonerId = Arasta (despawn on her death)',
+    spiders.every(s => s.summonerId === arasta.id),
+    `summonerIds: ${JSON.stringify(spiders.map(s => s.summonerId))}`);
+
+  // 10j. Each spider has Giant Spider stats (MM p.328): 26 HP, AC 14, Bite +5 1d8+3
+  assert('10j. spiders have Giant Spider stats (26 HP, AC 14, Bite)',
+    spiders.every(s => s.maxHP === 26 && s.currentHP === 26 && s.ac === 14 &&
+      s.actions.some(a => a.name === 'Bite' && a.hitBonus === 5)),
+    `stats: ${JSON.stringify(spiders.map(s => ({hp: s.maxHP, ac: s.ac, bite: s.actions.find(a=>a.name==='Bite')?.hitBonus})))}`);
+
+  // 10k. The summon log mentions "3 giant spiders" (or "3 giant spiders appear")
+  const summonLog = rlog.events.find((e: any) =>
+    e.type === 'action' && e.actorId === arasta.id &&
+    e.description.includes('giant spiders'));
+  assert('10k. summon log mentions "giant spiders" (S116 summon)',
+    summonLog !== undefined,
+    `arasta action logs: ${rlog.events.filter((e:any)=>e.actorId===arasta.id && e.type==='action').map((e:any)=>e.description.substring(0,90)).join(' || ')}`);
+
+  // 10l. Spiders were inserted into the initiative order (pendingInitiativeInserts
+  //      processed). After combat, the 3 spider IDs should be in initiativeOrder.
+  //      (maxRounds:1 → all combatants get at least 1 turn unless they die first.)
+  const inInit = spiders.filter(s => (bf.initiativeOrder as string[]).includes(s.id));
+  assert('10l. spiders inserted into initiative order',
+    inInit.length === 3,
+    `initiativeOrder: ${JSON.stringify(bf.initiativeOrder)}`);
 }
 
 // ============================================================
