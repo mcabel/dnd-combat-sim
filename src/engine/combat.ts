@@ -8002,6 +8002,12 @@ function callExecuteByPlanType(
       if (t) executeWallOfForce(caster, t, state);
       break;
     }
+    // ── S115: darkness — self signature (execute ignores target) ──
+    case 'darkness': {
+      // Darkness execute ignores the target param (self-cast obstacle)
+      executeDarkness(caster, caster, state);
+      break;
+    }
     default:
       throw new Error(`Unknown lair-bespoke plan type: ${planType}`);
   }
@@ -8050,6 +8056,19 @@ function dispatchBespokeLairSpell(
   const meta = LAIR_BESPOKE_SPELL_META.get(action.spellName.toLowerCase());
   if (!meta) return false;
 
+  // ── S115: per-creature concentration override ──
+  // Some spells appear in multiple creatures' lair actions with DIFFERENT
+  // concentration semantics (e.g., darkness: Demogorgon suppress vs Morkoth
+  // normal). The `creatureOverride` table (keyed by `action.sourceCreature`
+  // — the legendary group name) lets the same spell dispatch with different
+  // `concentrationMode` / `lairDurationRounds` per creature. The override's
+  // fields take precedence over the entry defaults.
+  const override = meta.creatureOverride?.[action.sourceCreature];
+  const concentrationMode: 'normal' | 'suppress' =
+    override?.concentrationMode ?? meta.concentrationMode;
+  const lairDurationRounds: number | undefined =
+    override?.lairDurationRounds ?? meta.lairDurationRounds;
+
   const bf = state.battlefield;
 
   // ── 1. Attach synthetic state (mirror attachMonsterBespokeSyntheticState) ──
@@ -8074,7 +8093,7 @@ function dispatchBespokeLairSpell(
       saveDC: creature.monsterSpellcasting?.saveDC ?? action.saveDC ?? 15,
       saveAbility: null,
       isAoE: false, isControl: false,
-      requiresConcentration: meta.concentrationMode === 'normal',
+      requiresConcentration: concentrationMode === 'normal',
       slotLevel: action.castLevel ?? meta.planType.length,  // approximate
       costType: 'action', legendaryCost: 0,
     } as Action);
@@ -8103,8 +8122,10 @@ function dispatchBespokeLairSpell(
   // ── 2. Set suppressConcentration for 'suppress' mode ──
   // startConcentration (utils.ts) checks this flag and becomes a no-op.
   // Cleared in the finally block below.
+  // Uses the per-creature `concentrationMode` (post-override, S115+) so that
+  // e.g. Demogorgon's darkness suppresses while Morkoth's doesn't.
   const hadSuppressFlag = creature.suppressConcentration === true;
-  if (meta.concentrationMode === 'suppress') {
+  if (concentrationMode === 'suppress') {
     creature.suppressConcentration = true;
   }
 
@@ -8155,6 +8176,10 @@ function dispatchBespokeLairSpell(
         break;
       case 'wallOfForce':
         target = shouldCastWallOfForce(creature, bf);
+        break;
+      // ── S115: darkness — self signature (shouldCast returns caster) ──
+      case 'darkness':
+        target = shouldCastDarkness(creature, bf);
         break;
       default:
         throw new Error(`Unknown lair-bespoke plan type: ${meta.planType}`);
@@ -8208,13 +8233,16 @@ function dispatchBespokeLairSpell(
     // If lairDurationRounds is undefined (e.g. Spike Growth "lasts until dragon
     // uses lair again or dies"), the effect persists until caster death (via
     // removeEffectsFromCaster) — no auto-expiry.
-    if (meta.concentrationMode === 'suppress') {
+    // Uses the per-creature `concentrationMode` / `lairDurationRounds`
+    // (post-override, S115+) so e.g. Demogorgon's darkness gets the 1-round
+    // lair-duration expiry while Morkoth's darkness is normal concentration.
+    if (concentrationMode === 'suppress') {
       for (let i = effectsBefore; i < creature.activeEffects.length; i++) {
         const eff = creature.activeEffects[i];
         if (eff.spellName === meta.canonicalName) {
           eff.sourceIsConcentration = false;
-          if (meta.lairDurationRounds) {
-            eff.sourceTurnExpires = bf.round + meta.lairDurationRounds - 1;
+          if (lairDurationRounds) {
+            eff.sourceTurnExpires = bf.round + lairDurationRounds - 1;
           }
         }
       }

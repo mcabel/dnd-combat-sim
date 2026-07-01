@@ -15,6 +15,8 @@
 //   5. Skip path — Lightning Bolt (not in pilot batch, updated log wording)
 //   6. Antimagic field skip (Q2: no module, updated log wording)
 //   7. Regression — Aboleth phantasmal force still uses generic-registry path
+//   8. S115: Demogorgon darkness dispatch (Category A explicit exception, suppress conc)
+//   9. S115: Morkoth darkness dispatch (Category A normal, concentration applies)
 //
 // Run: npx ts-node --transpile-only src/test/session113_lair_bespoke_dispatch.test.ts
 // ============================================================
@@ -107,14 +109,36 @@ function noLegendary(c: Combatant): void {
 function asParty(c: Combatant): void { c.faction = 'party'; }
 function asEnemy(c: Combatant): void { c.faction = 'enemy'; }
 
+/**
+ * Pin a creature's speed to 0 so it can't move on its turn.
+ *
+ * Used to prevent movement-based flakes in lair-action tests. Two failure
+ * modes are prevented:
+ *   (a) The goblin (Nimble Escape → Dash as bonus action) moves >60 ft away
+ *       from the caster before the lair action fires, causing shouldCast to
+ *       return null (no valid target in range).
+ *   (b) The caster Dashes toward the goblin (becoming adjacent), then the
+ *       goblin attacks with an IMPROVISED WEAPON (hardcoded AI fallback at
+ *       src/ai/actions.ts:316 — fires even when goblin.actions = [] because
+ *       improvised/unarmed is a universal PHB p.148 fallback). The goblin's
+ *       attack deals damage, the caster fails the concentration save, and
+ *       concentration breaks before the assertion checks it.
+ *
+ * Pinning BOTH the caster and the goblin prevents movement entirely — no
+ * adjacency, no improvised attack, no concentration break. (S15 root-cause
+ * of the S114 §7b flake: the S114 fix cleared goblin.actions but missed the
+ * improvised-weapon fallback + the caster's Dash-closer movement.)
+ */
+function pin(c: Combatant): void { c.speed = 0; c.flySpeed = null; c.swimSpeed = null; c.burrowSpeed = null; }
+
 // ============================================================
 // 1. Metadata flag
 // ============================================================
 console.log('\n--- 1. Metadata flag ---');
 assert('1a. lairActionBespokeDispatchV1Implemented === true',
   lairActionMetadata.lairActionBespokeDispatchV1Implemented === true);
-assert('1b. LAIR_BESPOKE_SPELL_META has 12 entries (S113 pilot 3 + S114 batch 1 4 + batch 2 3 + batch 3 2)',
-  LAIR_BESPOKE_SPELL_META.size === 12,
+assert('1b. LAIR_BESPOKE_SPELL_META has 13 entries (S113 pilot 3 + S114 batch 1 4 + batch 2 3 + batch 3 2 + S115 darkness 1)',
+  LAIR_BESPOKE_SPELL_META.size === 13,
   `got ${LAIR_BESPOKE_SPELL_META.size}`);
 assert('1c. fireball in meta',
   LAIR_BESPOKE_SPELL_META.has('fireball'));
@@ -136,6 +160,22 @@ eq('1k. fog cloud concentrationMode = suppress',
   LAIR_BESPOKE_SPELL_META.get('fog cloud')!.concentrationMode, 'suppress');
 eq('1l. fog cloud lairDurationRounds = 1',
   LAIR_BESPOKE_SPELL_META.get('fog cloud')!.lairDurationRounds, 1);
+
+// ── S115: darkness metadata + per-creature override ──
+assert('1m. darkness in meta (S115)',
+  LAIR_BESPOKE_SPELL_META.has('darkness'));
+eq('1n. darkness signature = self (shouldCast returns caster)',
+  LAIR_BESPOKE_SPELL_META.get('darkness')!.signature, 'self');
+eq('1o. darkness default concentrationMode = normal (Morkoth default)',
+  LAIR_BESPOKE_SPELL_META.get('darkness')!.concentrationMode, 'normal');
+assert('1p. darkness has creatureOverride with Demogorgon entry',
+  LAIR_BESPOKE_SPELL_META.get('darkness')!.creatureOverride?.['Demogorgon'] !== undefined);
+eq('1q. Demogorgon override concentrationMode = suppress',
+  LAIR_BESPOKE_SPELL_META.get('darkness')!.creatureOverride?.['Demogorgon']?.concentrationMode, 'suppress');
+eq('1r. Demogorgon override lairDurationRounds = 1',
+  LAIR_BESPOKE_SPELL_META.get('darkness')!.creatureOverride?.['Demogorgon']?.lairDurationRounds, 1);
+assert('1s. Morkoth has NO override (uses default normal)',
+  LAIR_BESPOKE_SPELL_META.get('darkness')!.creatureOverride?.['Morkoth'] === undefined);
 
 // ============================================================
 // 2. Fireball dispatch (Zariel MPMM Zariel::0, Category A normal, AoE)
@@ -427,12 +467,18 @@ console.log('\n--- 7. Aboleth phantasmal force (S114 batch 1: now dispatched) --
   // Force from starting concentration). The lair action fires at initiative
   // count 20, AFTER the Aboleth's regular turn.
   aboleth.actions = [];
+  // Pin Aboleth so it can't Dash toward the goblin (which would make them
+  // adjacent → goblin improvised-weapon attack → concentration break flake).
+  pin(aboleth);
 
   const goblin = spawn('Goblin', { x: 3, y: 0, z: 0 });
   asEnemy(goblin); tankUp(goblin);
   // Clear goblin actions so it can't attack the Aboleth and potentially break
   // concentration on a natural-1 save (which would flake the §7b assertion).
   goblin.actions = [];
+  // Pin goblin speed so it can't Nimble-Escape-Dash out of Phantasmal Force's
+  // 60-ft range before the lair action fires (movement-based flake prevention).
+  pin(goblin);
 
   const bf = makeBF([aboleth, goblin]);
   const rlog = runCombat(bf, [aboleth.id, goblin.id], {
@@ -457,6 +503,175 @@ console.log('\n--- 7. Aboleth phantasmal force (S114 batch 1: now dispatched) --
     e.type === 'action' && e.actorId === aboleth.id &&
     e.description.includes('no bespoke lair-dispatch module'));
   assert('7c. old skip log does NOT fire (phantasmal force now dispatched)',
+    skipLog === undefined);
+}
+
+// ============================================================
+// 8. S115: Demogorgon darkness dispatch (Category A explicit exception, suppress)
+//    Raw text: "Demogorgon casts the darkness spell four times, targeting
+//    different areas with the spell. Demogorgon doesn't need to concentrate
+//    on the spells, which end on initiative count 20 of the next round."
+//    → concentrationMode = 'suppress', lairDurationRounds = 1 (per-creature
+//      override for sourceCreature='Demogorgon').
+//    v1 simplification: casts once (self-centered obstacle), not four times.
+// ============================================================
+console.log('\n--- 8. Demogorgon darkness (S115: suppress per-creature override) ---');
+{
+  const demo = spawn('Demogorgon', { x: 0, y: 0, z: 0 }, 'MPMM');
+  asParty(demo);
+  forceLairAction(demo, 'Demogorgon::0');  // darkness L2
+  tankUp(demo);
+  noLegendary(demo);
+  // shouldCastDarkness strategy (a): low HP + near enemy → cast. Set HP to 30%
+  // so the defensive-retreat trigger fires. (Strategies (b)/(c) require allies,
+  // which would complicate the test setup; (a) is the simplest reliable trigger.)
+  demo.currentHP = Math.floor(demo.maxHP * 0.3);
+  // Clear regular-turn actions so Demogorgon doesn't cast anything on his turn
+  // (which could start concentration and block the lair-action darkness from
+  // firing — shouldCastDarkness checks caster.concentration?.active).
+  demo.actions = [];
+  // Pin Demogorgon so it can't Dash toward the goblin (which would make them
+  // adjacent → goblin improvised-weapon attack → could deal damage; while
+  // Demogorgon's darkness is suppress-mode (no concentration to break), pinning
+  // keeps the test deterministic and consistent with §7/§9).
+  pin(demo);
+
+  const goblin = spawn('Goblin', { x: 3, y: 0, z: 0 });  // 15 ft away, within 45 ft trigger
+  asEnemy(goblin); tankUp(goblin);
+  // Clear goblin actions so it can't attack Demogorgon (no concentration-break risk).
+  goblin.actions = [];
+  // Pin goblin speed so it can't Nimble-Escape-Dash out of Darkness's 45-ft
+  // trigger range before the lair action fires (movement-based flake prevention).
+  pin(goblin);
+
+  const bf = makeBF([demo, goblin]);
+  const rlog = runCombat(bf, [demo.id, goblin.id], {
+    maxRounds: 1, verbose: false
+  } as any);
+
+  // 8a. "casts Darkness" log fires (bespoke dispatch succeeded)
+  const castLog = rlog.events.find((e: any) =>
+    e.type === 'action' && e.actorId === demo.id &&
+    e.description.includes('casts Darkness'));
+  assert('8a. "casts Darkness" log fires (S115 Demogorgon dispatch)',
+    castLog !== undefined,
+    `events: ${rlog.events.filter((e:any)=>e.actorId===demo.id && e.type==='action').map((e:any)=>e.description.substring(0,80)).join(' | ')}`);
+
+  // 8b. Darkness obstacle created (blocksVision, isMagicalDarkness)
+  const obstacle = (bf as any).obstacles?.find((o: any) =>
+    o.blocksVision === true && o.isMagicalDarkness === true);
+  assert('8b. darkness obstacle created (blocksVision + isMagicalDarkness)',
+    obstacle !== undefined,
+    `obstacles: ${JSON.stringify((bf as any).obstacles?.map((o:any)=>({id:o.id,blocksVision:o.blocksVision,isMagicalDarkness:o.isMagicalDarkness})))}`);
+
+  // 8c. Demogorgon did NOT start concentration (Category A explicit exception → suppress)
+  assert('8c. Demogorgon did NOT start concentration (suppress mode)',
+    demo.concentration === null || demo.concentration?.active === false,
+    `concentration: ${JSON.stringify(demo.concentration)}`);
+
+  // 8d. The Darkness effect has sourceIsConcentration = false (post-processed)
+  const darkEffect = demo.activeEffects.find(e => e.spellName === 'Darkness');
+  assert('8d. Darkness effect has sourceIsConcentration = false',
+    darkEffect?.sourceIsConcentration === false,
+    `effect: ${JSON.stringify(darkEffect ? {spellName: darkEffect.spellName, sourceIsConcentration: darkEffect.sourceIsConcentration} : null)}`);
+
+  // 8e. The Darkness effect has sourceTurnExpires = 1 (1-round lair duration override)
+  assert('8e. Darkness effect has sourceTurnExpires = 1 (1-round lair duration)',
+    darkEffect?.sourceTurnExpires === 1,
+    `sourceTurnExpires: ${darkEffect?.sourceTurnExpires}`);
+
+  // 8f. suppressConcentration flag was cleaned up after execute
+  assert('8f. suppressConcentration flag cleared after execute',
+    demo.suppressConcentration !== true,
+    `suppressConcentration: ${demo.suppressConcentration}`);
+
+  // 8g. The OLD skip log does NOT fire
+  const skipLog = rlog.events.find((e: any) =>
+    e.type === 'action' && e.actorId === demo.id &&
+    e.description.includes('no bespoke lair-dispatch module'));
+  assert('8g. old skip log does NOT fire',
+    skipLog === undefined);
+}
+
+// ============================================================
+// 9. S115: Morkoth darkness dispatch (Category A normal, concentration applies)
+//    Raw text: "The morkoth casts darkness, dispel magic, or misty step,
+//    using Intelligence as its spellcasting ability and without expending
+//    a spell slot."
+//    → concentrationMode = 'normal' (default; Morkoth has NO creatureOverride).
+//    v1 simplification: parser tags spellName='darkness' (first of 3 options);
+//    always dispatches darkness.
+// ============================================================
+console.log('\n--- 9. Morkoth darkness (S115: normal default, no override) ---');
+{
+  const mork = spawn('Morkoth', { x: 0, y: 0, z: 0 }, 'MPMM');
+  asParty(mork);
+  forceLairAction(mork, 'Morkoth::0');  // darkness L2 (parser-tagged first option)
+  tankUp(mork);
+  noLegendary(mork);
+  // shouldCastDarkness strategy (a): low HP + near enemy. Morkoth has 165 HP;
+  // set to 30% so the defensive-retreat trigger fires.
+  mork.currentHP = Math.floor(mork.maxHP * 0.3);
+  // Clear regular-turn actions so Morkoth doesn't cast anything on its turn.
+  mork.actions = [];
+  // Pin Morkoth so it can't Dash toward the goblin (which would make them
+  // adjacent → goblin improvised-weapon attack → concentration break flake on
+  // §9c which asserts Morkoth's concentration is active).
+  pin(mork);
+
+  const goblin = spawn('Goblin', { x: 3, y: 0, z: 0 });
+  asEnemy(goblin); tankUp(goblin);
+  goblin.actions = [];
+  // Pin goblin speed so it can't Nimble-Escape-Dash out of Darkness's 45-ft
+  // trigger range before the lair action fires (movement-based flake prevention).
+  pin(goblin);
+
+  const bf = makeBF([mork, goblin]);
+  const rlog = runCombat(bf, [mork.id, goblin.id], {
+    maxRounds: 1, verbose: false
+  } as any);
+
+  // 9a. "casts Darkness" log fires (bespoke dispatch succeeded)
+  const castLog = rlog.events.find((e: any) =>
+    e.type === 'action' && e.actorId === mork.id &&
+    e.description.includes('casts Darkness'));
+  assert('9a. "casts Darkness" log fires (S115 Morkoth dispatch)',
+    castLog !== undefined,
+    `events: ${rlog.events.filter((e:any)=>e.actorId===mork.id && e.type==='action').map((e:any)=>e.description.substring(0,80)).join(' | ')}`);
+
+  // 9b. Darkness obstacle created
+  const obstacle = (bf as any).obstacles?.find((o: any) =>
+    o.blocksVision === true && o.isMagicalDarkness === true);
+  assert('9b. darkness obstacle created (blocksVision + isMagicalDarkness)',
+    obstacle !== undefined,
+    `obstacles: ${JSON.stringify((bf as any).obstacles?.map((o:any)=>({id:o.id,blocksVision:o.blocksVision})))}`);
+
+  // 9c. Morkoth DID start concentration (Category A normal — Morkoth concentrates)
+  assert('9c. Morkoth started concentration on Darkness (normal mode, no override)',
+    mork.concentration?.active === true && mork.concentration?.spellName === 'Darkness',
+    `concentration: ${JSON.stringify(mork.concentration)}`);
+
+  // 9d. The Darkness effect has sourceIsConcentration = true (normal concentration)
+  const darkEffect = mork.activeEffects.find(e => e.spellName === 'Darkness');
+  assert('9d. Darkness effect has sourceIsConcentration = true (normal conc)',
+    darkEffect?.sourceIsConcentration === true,
+    `effect: ${JSON.stringify(darkEffect ? {spellName: darkEffect.spellName, sourceIsConcentration: darkEffect.sourceIsConcentration} : null)}`);
+
+  // 9e. The Darkness effect has NO sourceTurnExpires (normal concentration — no lair-duration override)
+  assert('9e. Darkness effect has NO sourceTurnExpires (normal conc, no lair duration)',
+    darkEffect?.sourceTurnExpires === undefined,
+    `sourceTurnExpires: ${darkEffect?.sourceTurnExpires}`);
+
+  // 9f. suppressConcentration flag was NOT set (normal mode)
+  assert('9f. suppressConcentration flag NOT set (normal mode)',
+    mork.suppressConcentration !== true,
+    `suppressConcentration: ${mork.suppressConcentration}`);
+
+  // 9g. The OLD skip log does NOT fire
+  const skipLog = rlog.events.find((e: any) =>
+    e.type === 'action' && e.actorId === mork.id &&
+    e.description.includes('no bespoke lair-dispatch module'));
+  assert('9g. old skip log does NOT fire',
     skipLog === undefined);
 }
 

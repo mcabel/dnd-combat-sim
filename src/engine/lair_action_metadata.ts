@@ -57,9 +57,16 @@
 //      removed per user clarification) → 'suppress' + lairDurationRounds
 //    - Category B hazard-like ("as though it had cast", "identical to
 //      the spell", "fills the space") → 'suppress' + lairDurationRounds
-// 4. Add an entry to LAIR_BESPOKE_SPELL_META keyed by lowercase spell name
-// 5. Add a case to `callExecuteByPlanType` in combat.ts for the new planType
-// 6. Add tests to src/test/session113_lair_bespoke_dispatch.test.ts
+// 4. If the SAME spell appears in multiple creatures' lair actions with
+//    DIFFERENT concentration semantics (e.g., darkness: Demogorgon suppress
+//    vs Morkoth normal), add a `creatureOverride` keyed by the legendary
+//    group name (the lair action's `sourceCreature` field). The override's
+//    `concentrationMode` / `lairDurationRounds` take precedence over the
+//    entry defaults for that creature only. (S115+ feature.)
+// 5. Add an entry to LAIR_BESPOKE_SPELL_META keyed by lowercase spell name
+// 6. Add a case to `callExecuteByPlanType` in combat.ts for the new planType
+// 7. Add a case to `dispatchBespokeLairSpell`'s shouldCast switch in combat.ts
+// 8. Add tests to src/test/session113_lair_bespoke_dispatch.test.ts
 //    (or a new sessionNNN test file for a later batch)
 //
 // CROSS-REFERENCES
@@ -83,16 +90,22 @@ import { Combatant, Action, LairAction } from '../types/core';
  * `LAIR_BESPOKE_SPELL_META` (this file), then logs the updated skip message.
  *
  * Pilot coverage (S113): Fireball, Banishment, Fog Cloud (3 of 15 spells).
- * Full coverage (S114+): the remaining 12 spells (cloud of daggers, command,
- * darkness, lightning bolt, moonbeam, phantasmal force, power word kill,
- * simulacrum, sleet storm, spike growth, wall of force, lesser restoration
- * — note: lesser restoration is a parser mis-tag, see RFC §2.3).
+ * Expansion coverage (S114): cloud of daggers, command, lightning bolt,
+ * moonbeam, phantasmal force, power word kill, sleet storm, spike growth,
+ * wall of force (9 more → 12 of 15).
+ * Expansion coverage (S115): darkness with per-creature concentration
+ * override (Demogorgon: suppress; Morkoth: normal) → 13 of 15.
+ * Remaining 2: giant insect (non-standard signature), simulacrum (stub
+ * module). Note: lesser restoration is a parser mis-tag (see RFC §2.3).
  */
 export const lairActionMetadata = {
   // Session 113: lair-action cast_spell now dispatches to bespoke spell
   // modules (not just GENERIC_SPELLS). Pilot: Fireball, Banishment, Fog Cloud.
   // See docs/RFC-LAIR-ACTION-BESPOKE-DISPATCH.md for the full design.
   lairActionBespokeDispatchV1Implemented: true,
+  // Session 115: per-creature concentration override added (darkness:
+  // Demogorgon suppress vs Morkoth normal). 13 of 15 bespoke-only spells
+  // now dispatch.
   // Future: lairActionBespokeDispatchV2FullCoverage (when all 15 spells routed)
 };
 
@@ -139,6 +152,25 @@ export interface LairBespokeSpellMeta {
    * on the created effect(s) so they auto-expire via reevaluateEffects.
    */
   lairDurationRounds?: number;
+  /**
+   * Per-creature overrides (S115+). Keyed by the lair action's `sourceCreature`
+   * (the legendary group name, e.g., 'Demogorgon'). When the lair-action
+   * dispatcher looks up the meta, it checks for a creature-specific override
+   * first; if present, the override's fields take precedence over the defaults.
+   *
+   * Use case: spells like 'darkness' where Demogorgon's lair action is a
+   * Category A explicit exception ("doesn't need to concentrate") while
+   * Morkoth's is Category A normal (concentration applies). Both lair actions
+   * cast 'darkness' but with different concentration handling.
+   *
+   * Only `concentrationMode` and `lairDurationRounds` can be overridden — the
+   * spell's `canonicalName`/`planType`/`signature` are module-intrinsic and
+   * don't vary by creature.
+   */
+  creatureOverride?: Record<string, {
+    concentrationMode?: ConcentrationMode;
+    lairDurationRounds?: number;
+  }>;
 }
 
 // ---- Per-spell metadata table (pilot + S114 expansion) -------
@@ -237,16 +269,42 @@ export const LAIR_BESPOKE_SPELL_META: Map<string, LairBespokeSpellMeta> = new Ma
     signature: 'single',
     concentrationMode: 'normal',  // Category A normal: Elder Brain casts, concentration applies
   }],
-  // ── Future expansion (S115+) ────────────────────────────────────
-  // command (Graz'zt) — not concentration, single-target (multi-target per lair text but v1 single)
-  // darkness (Demogorgon) — Category A explicit exception, self, suppress, 1 round
-  // darkness (Morkoth) — Category A normal, self, concentration
+  // ── S115: darkness — per-creature concentration override ───────
+  // Darkness is a special case: the same spell appears in two lair actions
+  // with DIFFERENT concentration semantics.
+  //   - Morkoth (MPMM::0): "casts darkness... without expending a spell slot"
+  //     → Category A normal (concentration applies; Morkoth concentrates).
+  //   - Demogorgon (MPMM::0 / MTF::1): "casts the darkness spell four times...
+  //     Demogorgon doesn't need to concentrate on the spells, which end on
+  //     initiative count 20 of the next round."
+  //     → Category A explicit exception (suppress concentration) + 1-round
+  //       lair duration override.
+  // The default mode is 'normal' (Morkoth). The `creatureOverride` flips
+  // Demogorgon's entry to 'suppress' with a 1-round lair duration.
+  //
+  // v1 simplifications (noted for future sessions):
+  //   - Demogorgon's lair text says "casts four times, targeting different
+  //     areas". v1 casts once (self-centered obstacle). A future session
+  //     could implement 4 separate obstacles at chosen points.
+  //   - Morkoth's lair text offers a CHOICE of darkness / dispel magic /
+  //     misty step. The parser tags spellName='darkness' (first option).
+  //     v1 always dispatches darkness; a future session could implement
+  //     the choice (pick the most tactical of the 3).
+  ['darkness', {
+    canonicalName: 'Darkness',
+    planType: 'darkness',
+    signature: 'self',             // shouldCast returns the caster; execute ignores target
+    concentrationMode: 'normal',   // Default: Morkoth casts normally (concentration applies)
+    creatureOverride: {
+      'Demogorgon': {
+        concentrationMode: 'suppress',  // "doesn't need to concentrate"
+        lairDurationRounds: 1,          // "end on initiative count 20 of the next round"
+      },
+    },
+  }],
+  // ── Future expansion (S116+) ────────────────────────────────────
   // giant insect (Arasta) — Category A duration-replacement, special (summon), suppress
-  // lightning bolt (Githzerai Anarch) — not concentration, AoE line (v1: treat as aoe)
   // simulacrum (Fraz-Urb'luu) — Category B hazard, special (summon), suppress, 1 round
-  // sleet storm (Yan-C-Bin) — Category B hazard, AoE, suppress, 1 round
-  // spike growth (Copper Dragon) — Category B hazard, AoE, suppress, until dragon uses lair again/dies
-  // wall of force (Elder Brain) — Category A normal, special (wall), concentration
-  // lesser restoration (Fazrian) — PARSER MIS-TAG, do NOT add (see RFC §2.3)
   // antimagic field (Demilich) — Q2: skip (no module). Future: implement antimagic_field.ts first.
+  // lesser restoration (Fazrian) — PARSER MIS-TAG, do NOT add (see RFC §2.3)
 ]);
