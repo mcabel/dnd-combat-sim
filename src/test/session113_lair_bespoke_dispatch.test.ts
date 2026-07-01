@@ -422,9 +422,17 @@ console.log('\n--- 7. Aboleth phantasmal force (S114 batch 1: now dispatched) --
   forceLairAction(aboleth, 'Aboleth::0');  // phantasmal force L2
   tankUp(aboleth);
   noLegendary(aboleth);
+  // Clear regular-turn actions so the Aboleth doesn't cast a concentration
+  // spell on its regular turn (which would block the lair-action Phantasmal
+  // Force from starting concentration). The lair action fires at initiative
+  // count 20, AFTER the Aboleth's regular turn.
+  aboleth.actions = [];
 
   const goblin = spawn('Goblin', { x: 3, y: 0, z: 0 });
   asEnemy(goblin); tankUp(goblin);
+  // Clear goblin actions so it can't attack the Aboleth and potentially break
+  // concentration on a natural-1 save (which would flake the §7b assertion).
+  goblin.actions = [];
 
   const bf = makeBF([aboleth, goblin]);
   const rlog = runCombat(bf, [aboleth.id, goblin.id], {
