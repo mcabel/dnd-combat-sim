@@ -173,10 +173,19 @@ export interface LairBespokeSpellMeta {
    * Only `concentrationMode` and `lairDurationRounds` can be overridden — the
    * spell's `canonicalName`/`planType`/`signature` are module-intrinsic and
    * don't vary by creature.
+   *
+   * S116+: `lairMultiCast` (optional) — for lair actions that cast the same
+   * spell multiple times (e.g., Demogorgon "casts the darkness spell four
+   * times, targeting different areas"). When > 1, the dispatcher calls the
+   * spell's lair-specific multi-cast execute (e.g., `executeLairDarkness`)
+   * instead of the single-cast `callExecuteByPlanType` path. Currently only
+   * meaningful for obstacle-creating spells (darkness); other spell types
+   * would need a dedicated multi-cast execute to use this field.
    */
   creatureOverride?: Record<string, {
     concentrationMode?: ConcentrationMode;
     lairDurationRounds?: number;
+    lairMultiCast?: number;
   }>;
 }
 
@@ -289,14 +298,14 @@ export const LAIR_BESPOKE_SPELL_META: Map<string, LairBespokeSpellMeta> = new Ma
   // The default mode is 'normal' (Morkoth). The `creatureOverride` flips
   // Demogorgon's entry to 'suppress' with a 1-round lair duration.
   //
-  // v1 simplifications (noted for future sessions):
-  //   - Demogorgon's lair text says "casts four times, targeting different
-  //     areas". v1 casts once (self-centered obstacle). A future session
-  //     could implement 4 separate obstacles at chosen points.
-  //   - Morkoth's lair text offers a CHOICE of darkness / dispel magic /
-  //     misty step. The parser tags spellName='darkness' (first option).
-  //     v1 always dispatches darkness; a future session could implement
-  //     the choice (pick the most tactical of the 3).
+  // S116: Demogorgon's "casts four times, targeting different areas" is now
+  //   modelled via `lairMultiCast: 4` → the dispatcher calls
+  //   `executeLairDarkness(caster, state, 4)` which creates 4 darkness
+  //   obstacles at distinct offset points (N/E/S/W at 30 ft). The v1
+  //   simplification note about "casts once" is now resolved. The Morkoth
+  //   "choice of darkness/dispel magic/misty step" simplification remains
+  //   (parser tags spellName='darkness' as the first option; a future session
+  //   could implement the tactical choice — may need a parser change).
   ['darkness', {
     canonicalName: 'Darkness',
     planType: 'darkness',
@@ -306,6 +315,7 @@ export const LAIR_BESPOKE_SPELL_META: Map<string, LairBespokeSpellMeta> = new Ma
       'Demogorgon': {
         concentrationMode: 'suppress',  // "doesn't need to concentrate"
         lairDurationRounds: 1,          // "end on initiative count 20 of the next round"
+        lairMultiCast: 4,               // S116: "casts the darkness spell four times"
       },
     },
   }],

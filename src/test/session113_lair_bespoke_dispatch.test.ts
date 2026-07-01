@@ -178,6 +178,11 @@ eq('1r. Demogorgon override lairDurationRounds = 1',
   LAIR_BESPOKE_SPELL_META.get('darkness')!.creatureOverride?.['Demogorgon']?.lairDurationRounds, 1);
 assert('1s. Morkoth has NO override (uses default normal)',
   LAIR_BESPOKE_SPELL_META.get('darkness')!.creatureOverride?.['Morkoth'] === undefined);
+// ── S116: darkness lairMultiCast (Demogorgon "casts four times") ──
+eq('1s2. Demogorgon override lairMultiCast = 4 (S116 multi-cast)',
+  LAIR_BESPOKE_SPELL_META.get('darkness')!.creatureOverride?.['Demogorgon']?.lairMultiCast, 4);
+assert('1s3. Morkoth has NO lairMultiCast (single cast, normal mode)',
+  LAIR_BESPOKE_SPELL_META.get('darkness')!.creatureOverride?.['Morkoth']?.lairMultiCast === undefined);
 
 // ── S115: giant insect metadata + 4th signature type 'cast' ──
 assert('1t. giant insect in meta (S115)',
@@ -531,15 +536,17 @@ console.log('\n--- 7. Aboleth phantasmal force (S114 batch 1: now dispatched) --
 }
 
 // ============================================================
-// 8. S115: Demogorgon darkness dispatch (Category A explicit exception, suppress)
+// 8. S115+S116: Demogorgon darkness dispatch (Category A explicit exception, suppress)
 //    Raw text: "Demogorgon casts the darkness spell four times, targeting
 //    different areas with the spell. Demogorgon doesn't need to concentrate
 //    on the spells, which end on initiative count 20 of the next round."
 //    → concentrationMode = 'suppress', lairDurationRounds = 1 (per-creature
 //      override for sourceCreature='Demogorgon').
-//    v1 simplification: casts once (self-centered obstacle), not four times.
+//    S116: lairMultiCast = 4 → executeLairDarkness creates 4 obstacles at
+//      distinct offset points (N/E/S/W at 30 ft). The "casts four times"
+//      simplification is now resolved.
 // ============================================================
-console.log('\n--- 8. Demogorgon darkness (S115: suppress per-creature override) ---');
+console.log('\n--- 8. Demogorgon darkness (S115 suppress + S116 4× multi-cast) ---');
 {
   const demo = spawn('Demogorgon', { x: 0, y: 0, z: 0 }, 'MPMM');
   asParty(demo);
@@ -581,28 +588,40 @@ console.log('\n--- 8. Demogorgon darkness (S115: suppress per-creature override)
     castLog !== undefined,
     `events: ${rlog.events.filter((e:any)=>e.actorId===demo.id && e.type==='action').map((e:any)=>e.description.substring(0,80)).join(' | ')}`);
 
-  // 8b. Darkness obstacle created (blocksVision, isMagicalDarkness)
-  const obstacle = (bf as any).obstacles?.find((o: any) =>
+  // 8b. S116: FOUR darkness obstacles created (blocksVision + isMagicalDarkness)
+  //     (was 1 in S115; S116 multi-cast creates 4 at distinct offset points)
+  const darkObstacles = ((bf as any).obstacles ?? []).filter((o: any) =>
     o.blocksVision === true && o.isMagicalDarkness === true);
-  assert('8b. darkness obstacle created (blocksVision + isMagicalDarkness)',
-    obstacle !== undefined,
-    `obstacles: ${JSON.stringify((bf as any).obstacles?.map((o:any)=>({id:o.id,blocksVision:o.blocksVision,isMagicalDarkness:o.isMagicalDarkness})))}`);
+  assert('8b. FOUR darkness obstacles created (S116 4× multi-cast)',
+    darkObstacles.length === 4,
+    `got ${darkObstacles.length} darkness obstacles; obstacles: ${JSON.stringify((bf as any).obstacles?.map((o:any)=>({id:o.id,blocksVision:o.blocksVision,isMagicalDarkness:o.isMagicalDarkness,x:o.x,y:o.y})))}`);
+
+  // 8b2. The 4 obstacles are at DISTINCT positions (different top-left corners)
+  //      → confirms "targeting different areas" (not 4 overlapping on caster)
+  const distinctCorners = new Set(darkObstacles.map((o: any) => `${o.x},${o.y}`));
+  assert('8b2. 4 obstacles at distinct positions (different areas)',
+    distinctCorners.size === 4,
+    `got ${distinctCorners.size} distinct corners; corners: ${[...distinctCorners].join(' | ')}`);
 
   // 8c. Demogorgon did NOT start concentration (Category A explicit exception → suppress)
   assert('8c. Demogorgon did NOT start concentration (suppress mode)',
     demo.concentration === null || demo.concentration?.active === false,
     `concentration: ${JSON.stringify(demo.concentration)}`);
 
-  // 8d. The Darkness effect has sourceIsConcentration = false (post-processed)
-  const darkEffect = demo.activeEffects.find(e => e.spellName === 'Darkness');
-  assert('8d. Darkness effect has sourceIsConcentration = false',
-    darkEffect?.sourceIsConcentration === false,
-    `effect: ${JSON.stringify(darkEffect ? {spellName: darkEffect.spellName, sourceIsConcentration: darkEffect.sourceIsConcentration} : null)}`);
+  // 8d. S116: ALL FOUR Darkness effects have sourceIsConcentration = false
+  //     (post-processed by the dispatcher's suppress-mode loop)
+  const darkEffects = demo.activeEffects.filter(e => e.spellName === 'Darkness');
+  assert('8d. FOUR Darkness effects created (one per obstacle)',
+    darkEffects.length === 4,
+    `got ${darkEffects.length} Darkness effects`);
+  assert('8d2. ALL Darkness effects have sourceIsConcentration = false',
+    darkEffects.every(e => e.sourceIsConcentration === false),
+    `sourceIsConcentration values: ${JSON.stringify(darkEffects.map(e => e.sourceIsConcentration))}`);
 
-  // 8e. The Darkness effect has sourceTurnExpires = 1 (1-round lair duration override)
-  assert('8e. Darkness effect has sourceTurnExpires = 1 (1-round lair duration)',
-    darkEffect?.sourceTurnExpires === 1,
-    `sourceTurnExpires: ${darkEffect?.sourceTurnExpires}`);
+  // 8e. S116: ALL FOUR Darkness effects have sourceTurnExpires = 1 (1-round lair duration)
+  assert('8e. ALL Darkness effects have sourceTurnExpires = 1 (1-round lair duration)',
+    darkEffects.every(e => e.sourceTurnExpires === 1),
+    `sourceTurnExpires values: ${JSON.stringify(darkEffects.map(e => e.sourceTurnExpires))}`);
 
   // 8f. suppressConcentration flag was cleaned up after execute
   assert('8f. suppressConcentration flag cleared after execute',
@@ -615,6 +634,26 @@ console.log('\n--- 8. Demogorgon darkness (S115: suppress per-creature override)
     e.description.includes('no bespoke lair-dispatch module'));
   assert('8g. old skip log does NOT fire',
     skipLog === undefined);
+
+  // 8h. S116: the multi-cast log (from executeLairDarkness) mentions the count
+  //     ("casts Darkness 4 times"). This is SEPARATE from the dispatcher's
+  //     intent log ("→ casts Darkness (L2) via lair action (bespoke dispatch)").
+  const multiCastLog = rlog.events.find((e: any) =>
+    e.type === 'action' && e.actorId === demo.id &&
+    e.description.includes('casts Darkness 4 time'));
+  assert('8h. multi-cast log mentions "casts Darkness 4 times" (S116 4× multi-cast)',
+    multiCastLog !== undefined,
+    `demo action logs: ${rlog.events.filter((e:any)=>e.actorId===demo.id && e.type==='action').map((e:any)=>e.description.substring(0,90)).join(' || ')}`);
+
+  // 8i. S116: each of the 4 obstacles has a matching effect (obstacleId cross-ref)
+  const obstacleIds = new Set(darkObstacles.map((o: any) => o.id));
+  const effectObstacleIds = new Set(darkEffects.map(e => (e.payload as any)?.obstacleId).filter(Boolean));
+  assert('8i. 4 distinct obstacleIds across effects (one effect per obstacle)',
+    effectObstacleIds.size === 4,
+    `got ${effectObstacleIds.size} distinct effect obstacleIds: ${[...effectObstacleIds].join(' | ')}`);
+  assert('8i2. every effect obstacleId matches a created obstacle',
+    [...effectObstacleIds].every(id => obstacleIds.has(id as string)),
+    `unmatched: ${[...effectObstacleIds].filter(id => !obstacleIds.has(id as string)).join(' | ')}`);
 }
 
 // ============================================================

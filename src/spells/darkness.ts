@@ -58,6 +58,9 @@ export const metadata = {
   darknessBlocksDarkvision: true,              // backward-compat flag
   darknessBlocksDarkvisionV1Implemented: false, // Phase 2 vision feature
   darknessRemotePlacementV1Implemented: false,
+  // S116: Demogorgon lair-action "casts four times, targeting different areas"
+  // is now modelled as 4 separate obstacles at distinct offset points.
+  darknessLairMultiCastV1Implemented: true,
 } as const;
 
 function emit(state: EngineState, type: CombatEvent['type'], actorId: string, desc: string, targetId?: string, value?: number): void {
@@ -73,12 +76,22 @@ const RADIUS_FT = 15;
  * blocksVision=true, blocksMovement=false, isMagicalDarkness=true.
  */
 function buildObstacle(caster: Combatant): Obstacle {
-  const id = `darkness-${caster.id}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  return buildObstacleAt(caster.pos.x, caster.pos.y, caster.pos.z, caster.id, 'self');
+}
+
+/**
+ * Build a darkness Obstacle (7×7 grid) centered on an arbitrary point.
+ * Used by the lair-action multi-cast (S116) to place obstacles at distinct
+ * offset points around the caster. `suffix` disambiguates obstacle IDs when
+ * multiple obstacles are created in the same tick.
+ */
+function buildObstacleAt(cx: number, cy: number, cz: number, casterId: string, suffix: string | number): Obstacle {
+  const id = `darkness-${casterId}-${Date.now()}-${suffix}-${Math.random().toString(36).slice(2, 6)}`;
   return {
     id,
-    x: caster.pos.x - RADIUS_SQUARES,
-    y: caster.pos.y - RADIUS_SQUARES,
-    z: caster.pos.z,
+    x: cx - RADIUS_SQUARES,
+    y: cy - RADIUS_SQUARES,
+    z: cz,
     width: RADIUS_SQUARES * 2 + 1,   // 7
     depth: RADIUS_SQUARES * 2 + 1,   // 7
     height: 1,
@@ -203,3 +216,105 @@ export function execute(caster: Combatant, _self: Combatant, state: EngineState)
 }
 
 export function cleanup(_c: Combatant): void { /* no-op — removeEffectsFromCaster handles conc cleanup */ }
+
+// ============================================================
+// S116: Lair-action multi-cast (Demogorgon "casts four times")
+// ============================================================
+//
+// Demogorgon's lair text (MPMM::0 / MTF::1): "Demogorgon casts the darkness
+// spell four times, targeting different areas with the spell. Demogorgon
+// doesn't need to concentrate on the spells, which end on initiative count 20
+// of the next round."
+//
+// This is SEPARATE from the regular `execute` (player spell — 1 self-centered
+// obstacle, concentration, consumes a slot). The lair dispatcher calls this
+// `executeLairDarkness` when the creatureOverride declares `lairMultiCast > 1`
+// (currently only Demogorgon). Morkoth's lair-action darkness (Category A
+// normal, 1 cast, concentration applies) uses the regular `execute` path.
+//
+// v1 implementation:
+//   - Creates `count` darkness obstacles at `count` distinct FIXED offset
+//     points around the caster (N/E/S/W at 30 ft, then diagonals at ~28 ft).
+//     Canon allows Demogorgon to choose any points within the 60-ft range;
+//     fixed offsets are a v1 simplification (a future session could place
+//     them tactically on enemy clusters). The caster is NOT inside any
+//     obstacle (offsets are 30 ft out; obstacles are 15-ft radius).
+//   - Does NOT consume a spell slot (lair action — at-will magical effect).
+//   - Does NOT call startConcentration (suppress mode — the dispatcher sets
+//     suppressConcentration=true and post-processes the created effects to
+//     set sourceIsConcentration=false + sourceTurnExpires = round + 1 - 1).
+//   - Creates one ActiveEffect per obstacle (each battlefield_obstacle with a
+//     distinct obstacleId). removeEffectsFromCaster removes all of them on
+//     caster death / lair-duration expiry (each effect's obstacleId is
+//     looked up + removed via removeBattlefieldObstacle).
+// ============================================================
+
+/**
+ * Fixed offset positions (in grid squares; 1 square = 5 ft) for the lair-action
+ * multi-cast. Ordered so the first 4 cover the cardinal directions (N/E/S/W at
+ * 30 ft), and the next 4 cover the diagonals (~28 ft). All within Darkness's
+ * 60-ft range.
+ */
+const LAIR_OFFSETS: ReadonlyArray<{ dx: number; dy: number }> = [
+  { dx: 6, dy: 0 },     // East 30 ft
+  { dx: -6, dy: 0 },    // West 30 ft
+  { dx: 0, dy: 6 },     // North 30 ft
+  { dx: 0, dy: -6 },    // South 30 ft
+  { dx: 4, dy: 4 },     // NE ~28 ft
+  { dx: -4, dy: 4 },    // NW ~28 ft
+  { dx: 4, dy: -4 },    // SE ~28 ft
+  { dx: -4, dy: -4 },   // SW ~28 ft
+];
+
+/**
+ * Lair-action execute for Darkness — Demogorgon multi-cast (S116).
+ *
+ * Creates `count` darkness obstacles at `count` distinct offset points around
+ * the caster. Does NOT consume a slot or start concentration (suppress mode).
+ * The dispatcher's suppress-mode post-processing flips sourceIsConcentration
+ * to false and sets sourceTurnExpires on all created effects.
+ *
+ * @param caster  the lair creature (Demogorgon)
+ * @param state   engine state
+ * @param count   number of darkness obstacles to create (default 4 per canon)
+ */
+export function executeLairDarkness(caster: Combatant, state: EngineState, count: number = 4): void {
+  const bf = state.battlefield;
+  if (!bf.obstacles) bf.obstacles = [];
+
+  let placed = 0;
+  for (let i = 0; i < count && i < LAIR_OFFSETS.length; i++) {
+    const off = LAIR_OFFSETS[i];
+    const cx = caster.pos.x + off.dx;
+    const cy = caster.pos.y + off.dy;
+    const cz = caster.pos.z;
+    const obstacle = buildObstacleAt(cx, cy, cz, caster.id, `lair${i}`);
+    bf.obstacles.push(obstacle);
+
+    // One ActiveEffect per obstacle (each tracks its own obstacleId so
+    // removeEffectsFromCaster can remove them independently).
+    const effect: Omit<ActiveEffect, 'id'> = {
+      casterId: caster.id,
+      spellName: 'Darkness',
+      effectType: 'battlefield_obstacle',
+      payload: {
+        obstacleId: obstacle.id,
+        obstacleCenterX: cx,
+        obstacleCenterY: cy,
+        obstacleCenterZ: cz,
+        obstacleRadiusFt: RADIUS_FT,
+        blocksDarkvision: true,  // Darkness is MAGICAL darkness — blocks darkvision
+      },
+      sourceIsConcentration: true,  // flipped to false by dispatcher post-processing
+      appliedTurn: bf.round,
+    };
+    applySpellEffect(caster, effect);
+    placed++;
+  }
+
+  emit(state, 'action', caster.id,
+    `${caster.name} casts Darkness ${placed} time${placed === 1 ? '' : 's'} via lair action! ` +
+    `${placed} 15-ft sphere${placed === 1 ? '' : 's'} of magical darkness appear at different areas ` +
+    `(blocks vision + darkvision, enables Hide). ${caster.name} doesn't need to concentrate — ` +
+    `they end on initiative count 20 of the next round.`);
+}

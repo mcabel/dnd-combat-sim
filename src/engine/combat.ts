@@ -656,6 +656,7 @@ import {
 import {
   shouldCast as shouldCastDarkness,
   execute as executeDarkness,
+  executeLairDarkness,
 } from '../spells/darkness';
 import {
   shouldCast as shouldCastGiantInsect,
@@ -8254,8 +8255,22 @@ function dispatchBespokeLairSpell(
   // ── 5. Call execute with the right signature ──
   // Record the effect count before execute so we can find newly-created effects.
   const effectsBefore = creature.activeEffects.length;
+  // S116: lair multi-cast (e.g., Demogorgon "casts the darkness spell four
+  // times, targeting different areas"). When the creatureOverride declares
+  // `lairMultiCast > 1`, call the spell's lair-specific multi-cast execute
+  // (e.g., `executeLairDarkness`) instead of the single-cast path. The
+  // multi-cast execute creates N obstacles/effects; the suppress-mode
+  // post-processing below flips all of them to sourceIsConcentration=false
+  // + sourceTurnExpires (per-creature lairDurationRounds). Currently only
+  // darkness supports this (Demogorgon); other spells would need a dedicated
+  // multi-cast execute to use the `lairMultiCast` field.
+  const lairMultiCast = override?.lairMultiCast;
   try {
-    callExecuteByPlanType(meta.planType, creature, target, state);
+    if (meta.planType === 'darkness' && typeof lairMultiCast === 'number' && lairMultiCast > 1) {
+      executeLairDarkness(creature, state, lairMultiCast);
+    } else {
+      callExecuteByPlanType(meta.planType, creature, target, state);
+    }
   } catch (e) {
     log(state, 'action', creature.id,
       `  → cast_spell: "${meta.canonicalName}" threw an error — ${e instanceof Error ? e.message : String(e)}`,
