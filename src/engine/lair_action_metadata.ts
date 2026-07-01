@@ -96,20 +96,21 @@ import { Combatant, Action, LairAction } from '../types/core';
  * wall of force (9 more → 12 of 15).
  * Expansion coverage (S115): darkness with per-creature concentration
  * override (Demogorgon: suppress; Morkoth: normal) + giant insect with 4th
- * signature type 'cast' (Arasta: suppress, no fixed duration) → 14 of 15.
- * Remaining 1: simulacrum (stub module — needs real implementation first).
- * Note: lesser restoration is a parser mis-tag (see RFC §2.3).
+ * signature type 'cast' (Arasta: suppress, no fixed duration) + simulacrum
+ * forward-compat (Fraz-Urb'luu: suppress, 1-round lair duration; log + flag
+ * only — real duplicate-combatant subsystem deferred) → 15 of 15.
+ * All 15 bespoke-only spells now dispatch (RFC goal achieved). Note: lesser
+ * restoration is a parser mis-tag (see RFC §2.3); antimagic field is Q2 skip.
  */
 export const lairActionMetadata = {
   // Session 113: lair-action cast_spell now dispatches to bespoke spell
   // modules (not just GENERIC_SPELLS). Pilot: Fireball, Banishment, Fog Cloud.
   // See docs/RFC-LAIR-ACTION-BESPOKE-DISPATCH.md for the full design.
   lairActionBespokeDispatchV1Implemented: true,
-  // Session 115: per-creature concentration override added (darkness:
-  // Demogorgon suppress vs Morkoth normal) + 4th signature type 'cast'
-  // (giant insect: Arasta suppress, no fixed duration). 14 of 15
-  // bespoke-only spells now dispatch.
-  // Future: lairActionBespokeDispatchV2FullCoverage (when all 15 spells routed)
+  // Session 115: per-creature concentration override (darkness) + 4th
+  // signature type 'cast' (giant insect) + simulacrum forward-compat.
+  // 15 of 15 bespoke-only spells now dispatch (RFC goal achieved).
+  lairActionBespokeDispatchV2FullCoverage: true,
 };
 
 // ---- Types --------------------------------------------------
@@ -327,8 +328,35 @@ export const LAIR_BESPOKE_SPELL_META: Map<string, LairBespokeSpellMeta> = new Ma
     // flag persists until caster death (removeEffectsFromCaster) or a future
     // "uses this lair action again" cleanup mechanism (out of scope for S115).
   }],
+  // ── S115: simulacrum — forward-compat (Fraz-Urb'luu::2) ────────
+  // Fraz-Urb'luu (MPMM::2): "Fraz-Urb'luu chooses one Humanoid within the
+  // lair and instantly creates a simulacrum of that creature (as if created
+  // with the simulacrum spell). This simulacrum obeys Fraz-Urb'luu's commands
+  // and is destroyed on the next initiative count 20."
+  // → Category B hazard-like ("as if created with the simulacrum spell") →
+  //   concentrationMode = 'suppress', lairDurationRounds = 1 (destroyed on
+  //   next initiative count 20).
+  // signature = 'single' (targets one humanoid; shouldCastLair returns the
+  //   target Combatant). The dispatcher calls shouldCastLairSimulacrum +
+  //   executeLairSimulacrum (NOT the regular shouldCast/execute stubs which
+  //   stay null/no-op for the player spell system — simulacrum has a 12-hour
+  //   cast time and is out-of-combat for players).
+  // v1 forward-compat: executeLair logs the simulacrum creation + sets a
+  //   flag on _genericSpellActiveSpells. The actual duplicate combatant
+  //   (half-HP clone with the target's stats, joining the caster's faction,
+  //   removed at next initiative count 20) is NOT spawned — that requires a
+  //   creature-duplication subsystem. A future session should implement the
+  //   real duplicate creation + the 1-round lair-duration cleanup.
+  ['simulacrum', {
+    canonicalName: 'Simulacrum',
+    planType: 'simulacrum',
+    signature: 'single',           // shouldCastLair returns the humanoid target; executeLair takes (caster, target, state)
+    concentrationMode: 'suppress', // Category B hazard: "as if created with the simulacrum spell"
+    lairDurationRounds: 1,         // "destroyed on the next initiative count 20"
+  }],
   // ── Future expansion (S116+) ────────────────────────────────────
-  // simulacrum (Fraz-Urb'luu) — Category B hazard, special (summon), suppress, 1 round
   // antimagic field (Demilich) — Q2: skip (no module). Future: implement antimagic_field.ts first.
   // lesser restoration (Fazrian) — PARSER MIS-TAG, do NOT add (see RFC §2.3)
+  // simulacrum full implementation: spawn a real half-HP duplicate combatant
+  //   (currently forward-compat log + flag only — see simulacrum.ts executeLair).
 ]);

@@ -662,6 +662,10 @@ import {
   execute as executeGiantInsect,
 } from '../spells/giant_insect';
 import {
+  shouldCastLair as shouldCastLairSimulacrum,
+  executeLair as executeLairSimulacrum,
+} from '../spells/simulacrum';
+import {
   shouldCast as shouldCastWallOfFire,
   execute as executeWallOfFire,
 } from '../spells/wall_of_fire';
@@ -8020,6 +8024,15 @@ function callExecuteByPlanType(
       executeGiantInsect(caster, state);
       break;
     }
+    // ── S115: simulacrum — 'single' signature, lair-specific executeLair ──
+    case 'simulacrum': {
+      // Simulacrum uses a LAIR-SPECIFIC executeLair (not the regular execute
+      // stub which is a no-op for the player spell system). The target is the
+      // humanoid picked by shouldCastLairSimulacrum.
+      const t = Array.isArray(target) ? target[0] : target;
+      if (t) executeLairSimulacrum(caster, t, state);
+      break;
+    }
     default:
       throw new Error(`Unknown lair-bespoke plan type: ${planType}`);
   }
@@ -8199,6 +8212,13 @@ function dispatchBespokeLairSpell(
       // target anyone); callExecuteByPlanType's 'giantInsect' case ignores it.
       case 'giantInsect':
         target = shouldCastGiantInsect(creature, bf) ? creature : null;
+        break;
+      // ── S115: simulacrum — lair-specific shouldCastLair (picks humanoid) ──
+      // Simulacrum uses a LAIR-SPECIFIC shouldCastLair (not the regular
+      // shouldCast stub which always returns null for the player spell system).
+      // shouldCastLairSimulacrum picks the highest-HP enemy humanoid.
+      case 'simulacrum':
+        target = shouldCastLairSimulacrum(creature, bf);
         break;
       default:
         throw new Error(`Unknown lair-bespoke plan type: ${meta.planType}`);

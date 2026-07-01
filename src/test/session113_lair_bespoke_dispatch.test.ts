@@ -18,6 +18,7 @@
 //   8. S115: Demogorgon darkness dispatch (Category A explicit exception, suppress conc)
 //   9. S115: Morkoth darkness dispatch (Category A normal, concentration applies)
 //   10. S115: Arasta giant insect dispatch (4th signature type 'cast', suppress, no fixed duration)
+//   11. S115: Fraz-Urb'luu simulacrum dispatch (forward-compat: log + flag, suppress, 1-round lair duration)
 //
 // Run: npx ts-node --transpile-only src/test/session113_lair_bespoke_dispatch.test.ts
 // ============================================================
@@ -138,8 +139,8 @@ function pin(c: Combatant): void { c.speed = 0; c.flySpeed = null; c.swimSpeed =
 console.log('\n--- 1. Metadata flag ---');
 assert('1a. lairActionBespokeDispatchV1Implemented === true',
   lairActionMetadata.lairActionBespokeDispatchV1Implemented === true);
-assert('1b. LAIR_BESPOKE_SPELL_META has 14 entries (S113 pilot 3 + S114 batch 1 4 + batch 2 3 + batch 3 2 + S115 darkness 1 + giant insect 1)',
-  LAIR_BESPOKE_SPELL_META.size === 14,
+assert('1b. LAIR_BESPOKE_SPELL_META has 15 entries (S113 pilot 3 + S114 batches 9 + S115 darkness 1 + giant insect 1 + simulacrum 1 = 15/15 full coverage)',
+  LAIR_BESPOKE_SPELL_META.size === 15,
   `got ${LAIR_BESPOKE_SPELL_META.size}`);
 assert('1c. fireball in meta',
   LAIR_BESPOKE_SPELL_META.has('fireball'));
@@ -187,6 +188,18 @@ eq('1v. giant insect concentrationMode = suppress (Category A duration-replaceme
   LAIR_BESPOKE_SPELL_META.get('giant insect')!.concentrationMode, 'suppress');
 assert('1w. giant insect has NO lairDurationRounds (lasts until lair action used again or death)',
   LAIR_BESPOKE_SPELL_META.get('giant insect')!.lairDurationRounds === undefined);
+
+// ── S115: simulacrum metadata + forward-compat (Fraz-Urb'luu::2) ──
+assert('1x. simulacrum in meta (S15 — 15/15 full coverage)',
+  LAIR_BESPOKE_SPELL_META.has('simulacrum'));
+eq('1y. simulacrum signature = single (shouldCastLair returns humanoid target)',
+  LAIR_BESPOKE_SPELL_META.get('simulacrum')!.signature, 'single');
+eq('1z. simulacrum concentrationMode = suppress (Category B hazard)',
+  LAIR_BESPOKE_SPELL_META.get('simulacrum')!.concentrationMode, 'suppress');
+eq('1aa. simulacrum lairDurationRounds = 1 (destroyed on next initiative count 20)',
+  LAIR_BESPOKE_SPELL_META.get('simulacrum')!.lairDurationRounds, 1);
+assert('1ab. lairActionBespokeDispatchV2FullCoverage === true (S115: 15/15 RFC goal achieved)',
+  (lairActionMetadata as any).lairActionBespokeDispatchV2FullCoverage === true);
 
 // ============================================================
 // 2. Fireball dispatch (Zariel MPMM Zariel::0, Category A normal, AoE)
@@ -757,6 +770,93 @@ console.log('\n--- 10. Arasta giant insect (S115: 4th signature type cast, suppr
   assert('10f. no "Giant Insect" ActiveEffect created (v1 forward-compat flag only)',
     giantInsectEffects.length === 0,
     `effects: ${JSON.stringify(giantInsectEffects.map(e => ({spellName: e.spellName, effectType: e.effectType})))}`);
+}
+
+// ============================================================
+// 11. S115: Fraz-Urb'luu simulacrum dispatch (forward-compat: log + flag)
+//     Raw text: "Fraz-Urb'luu chooses one Humanoid within the lair and
+//     instantly creates a simulacrum of that creature (as if created with
+//     the simulacrum spell). This simulacrum obeys Fraz-Urb'luu's commands
+//     and is destroyed on the next initiative count 20."
+//     → concentrationMode = 'suppress' (Category B hazard), lairDurationRounds = 1.
+//     signature = 'single' (targets one humanoid). The dispatcher calls
+//     shouldCastLairSimulacrum (picks highest-HP enemy humanoid) +
+//     executeLairSimulacrum (logs + sets forward-compat flag).
+//     v1 forward-compat: the actual duplicate combatant (half-HP clone)
+//     is NOT spawned — that requires a creature-duplication subsystem.
+// ============================================================
+console.log('\n--- 11. Fraz-Urb\'luu simulacrum (S115: forward-compat, suppress) ---');
+{
+  const fraz = spawn("Fraz-Urb'luu", { x: 0, y: 0, z: 0 }, 'MPMM');
+  asParty(fraz);
+  forceLairAction(fraz, "Fraz-Urb'luu::2");  // simulacrum L7
+  tankUp(fraz);
+  noLegendary(fraz);
+  fraz.actions = [];
+  pin(fraz);
+
+  // Goblin is a humanoid (creatureType='humanoid') — valid simulacrum target.
+  const goblin = spawn('Goblin', { x: 3, y: 0, z: 0 });
+  asEnemy(goblin); tankUp(goblin);
+  goblin.actions = [];
+  pin(goblin);
+
+  const bf = makeBF([fraz, goblin]);
+  const rlog = runCombat(bf, [fraz.id, goblin.id], {
+    maxRounds: 1, verbose: false
+  } as any);
+
+  // 11a. "creates a simulacrum of" log fires (bespoke dispatch succeeded)
+  // Search for the executeLair-specific log (not the lair-action preamble which
+  // also contains "creates a simulacrum of" in its rawText). The executeLair log
+  // contains "forward-compat flag set" which only appears in executeLair's emit.
+  const castLog = rlog.events.find((e: any) =>
+    e.type === 'action' && e.actorId === fraz.id &&
+    e.description.includes('creates a simulacrum of') &&
+    e.description.includes('forward-compat flag set'));
+  assert('11a. "creates a simulacrum of" log fires (S115 Fraz-Urb\'luu dispatch)',
+    castLog !== undefined,
+    `events: ${rlog.events.filter((e:any)=>e.actorId===fraz.id && e.type==='action').map((e:any)=>e.description.substring(0,80)).join(' | ')}`);
+
+  // 11b. The executeLair log mentions the goblin as the simulacrum target
+  if (castLog) {
+    assert('11b. simulacrum log mentions the goblin (humanoid target)',
+      castLog.description.includes('Goblin'),
+      `log: ${castLog.description.substring(0, 150)}`);
+  }
+
+  // 11c. Fraz-Urb'luu's _genericSpellActiveSpells has 'Simulacrum' (forward-compat flag set)
+  assert('11c. Fraz-Urb\'luu._genericSpellActiveSpells has "Simulacrum" (flag set)',
+    fraz._genericSpellActiveSpells?.has('Simulacrum') === true,
+    `_genericSpellActiveSpells: ${JSON.stringify([...(fraz._genericSpellActiveSpells ?? [])])}`);
+
+  // 11d. Fraz-Urb'luu did NOT start concentration (suppress mode)
+  assert('11d. Fraz-Urb\'luu did NOT start concentration (suppress mode)',
+    fraz.concentration === null || fraz.concentration?.active === false,
+    `concentration: ${JSON.stringify(fraz.concentration)}`);
+
+  // 11e. suppressConcentration flag was cleaned up after execute
+  assert('11e. suppressConcentration flag cleared after execute',
+    fraz.suppressConcentration !== true,
+    `suppressConcentration: ${fraz.suppressConcentration}`);
+
+  // 11f. The OLD skip log does NOT fire
+  const skipLog = rlog.events.find((e: any) =>
+    e.type === 'action' && e.actorId === fraz.id &&
+    e.description.includes('no bespoke lair-dispatch module'));
+  assert('11f. old skip log does NOT fire',
+    skipLog === undefined);
+
+  // 11g. No new combatant was added to the battlefield (v1 forward-compat — no duplicate spawned)
+  // The goblin is the only enemy; no simulacrum clone appears in bf.combatants.
+  const allCombatants = [...bf.combatants.values()];
+  const simulacrumClones = allCombatants.filter(c =>
+    c.id !== fraz.id && c.id !== goblin.id &&
+    c.faction === fraz.faction  // a clone would join Fraz-Urb'luu's faction
+  );
+  assert('11g. no simulacrum clone combatant spawned (v1 forward-compat: log + flag only)',
+    simulacrumClones.length === 0,
+    `unexpected clones: ${JSON.stringify(simulacrumClones.map(c => ({id: c.id, name: c.name, faction: c.faction})))}`);
 }
 
 // ============================================================
