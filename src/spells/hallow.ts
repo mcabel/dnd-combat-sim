@@ -143,6 +143,29 @@ export const metadata = {
   // first (type), shouldCastEnergyVulnerability runs second (target). See
   // likelyHallowTargetAC below.
   hallowEnergyVulnerabilityV2LikelyTargetAC: true,
+  // Session 111: the S110 likelyHallowTargetAC predicts the likely target as
+  // the highest-HP enemy within 60 ft, mirroring shouldCastEnergyVulnerability
+  // MINUS the type-dependent vuln-skip (which can't be applied at pick time
+  // since the damage type isn't chosen yet). The two diverge ONLY when the
+  // highest-HP enemy is ALREADY VULNERABLE to the would-be-chosen type —
+  // shouldCastEnergyVulnerability then skips it and picks the second-highest-HP
+  // enemy, but S110's likelyHallowTargetAC still returns the top-HP enemy's AC
+  // (predicting the WRONG target for that type). S111 closes that divergence:
+  // pickHallowDamageType now computes the likely-target AC PER DAMAGE TYPE —
+  // for each candidate type, it applies that type's vuln-skip and predicts
+  // the actual target for THAT type, then scores the type against its own
+  // predicted target's AC. This is the S110 next-action #13 (LOW-MEDIUM risk
+  // — helper-only, dispatch UNCHANGED, but the per-type-target iteration is
+  // more complex and could shift bestiary combats where a top-HP enemy is
+  // pre-vulnerable to the party's dominant type). Falls back to
+  // likelyHallowTargetAC (S110 behavior) when no enemy is within 60 ft OR all
+  // in-range enemies are already vulnerable to that type (the rare edge case
+  // where shouldCastEnergyVulnerability would return null for that type — the
+  // pick is moot for that type, so the fallback is safe). The dispatch wiring
+  // (S106 case 'hallow' in combat.ts) is STILL unchanged — pickHallowDamageType
+  // runs first (type), shouldCastEnergyVulnerability runs second (target). See
+  // likelyHallowTargetACForType below.
+  hallowEnergyVulnerabilityV2PerTypeLikelyTargetAC: true,
 } as const;
 
 function emit(state: EngineState, type: CombatEvent['type'], actorId: string, desc: string, targetId?: string, value?: number): void {
@@ -563,6 +586,126 @@ export function likelyHallowTargetAC(caster: Combatant, bf: Battlefield): number
 }
 
 /**
+ * Predicts the AC of the enemy that `shouldCastEnergyVulnerability` will
+ * actually select as the Hallow target FOR A SPECIFIC DAMAGE TYPE — the
+ * HIGHEST-HP living enemy within Hallow's 60-ft range that is NOT ALREADY
+ * VULNERABLE to that type. S111 refinement of the S110 likelyHallowTargetAC:
+ * S110 predicted the likely target as the highest-HP enemy within 60 ft
+ * REGARDLESS of damage type (since the type wasn't chosen yet at pick time),
+ * applying the vuln-skip ONLY at the `shouldCastEnergyVulnerability` call site.
+ * This created a divergence: when the highest-HP enemy was ALREADY VULNERABLE
+ * to a candidate type, S110 still returned the top-HP enemy's AC, but
+ * `shouldCastEnergyVulnerability` would skip it and pick the SECOND-highest-HP
+ * enemy for that type — so S110's hitChance was computed against the WRONG
+ * target for that type.
+ *
+ * S111 closes that divergence: pickHallowDamageType now calls this helper PER
+ * CANDIDATE TYPE, applying that type's vuln-skip up-front to predict the
+ * ACTUAL target for THAT type. The hitChance is then computed against the
+ * correct target's AC, so the weight reflects the damage gain from doubling
+ * that type against the enemy that will actually be vuln'd.
+ *
+ * Selection mirrors `shouldCastEnergyVulnerability` EXACTLY (the only
+ * difference is the return type — AC: number here vs Combatant: Combatant
+ * there):
+ *   - enemies only (faction differs from caster's)
+ *   - not dead / unconscious
+ *   - within 60 ft (chebyshev3D(caster.pos, c.pos) × 5 ≤ 60 — the same range
+ *     gate `shouldCastEnergyVulnerability` uses; enemies beyond 60 ft can
+ *     NEVER be the Hallow target so their AC must not influence the pick)
+ *   - NOT already vulnerable to `damageType` (innate or from another active
+ *     effect — the same vuln-skip `shouldCastEnergyVulnerability` applies)
+ *   - highest maxHP wins (the biggest threat); ties broken by NEAREST distance
+ *     (same tie-break as `shouldCastEnergyVulnerability`); full ties keep
+ *     first-seen (Map insertion order — matches the stable-sort behaviour of
+ *     `shouldCastEnergyVulnerability`'s candidates.sort)
+ *
+ * Falls back to `likelyHallowTargetAC(caster, bf)` (S110 behavior — the
+ * highest-HP enemy within 60 ft AC, ignoring the vuln-skip) when NO enemy
+ * within 60 ft is a valid candidate (i.e. none in range, OR all in-range
+ * enemies are already vulnerable to `damageType`). This is the rare edge case
+ * where `shouldCastEnergyVulnerability` would return null for that type —
+ * Hallow EV doesn't fire for that type, so the pick is moot and the fallback
+ * value is harmless. `likelyHallowTargetAC` itself falls back to
+ * `encounterAvgAC` (S109 encounter average → BESTIARY_MEAN_AC) when no living
+ * enemy is within 60 ft at all, preserving the full S110/S109/S108 fallback
+ * chain.
+ *
+ * Why this preserves all S110 unit tests:
+ *   - §5b-§5g (no enemies on the battlefield) → no candidate → fallback to
+ *     likelyHallowTargetAC → encounterAvgAC → bestiary mean → identical S110
+ *     hitChance values → identical winners.
+ *   - §5h/§5i (a SINGLE enemy within 60 ft, NOT pre-vulnerable) → likely
+ *     target for any type = that enemy → its AC = S110 likelyHallowTargetAC
+ *     (only one enemy) → identical hitChance → identical winners.
+ *   - §5j/§5k (encounterAvgAC + likelyHallowTargetAC direct): unchanged (no
+ *     modification to those helpers).
+ *   - §5l (squishy-boss flip — boss NOT pre-vulnerable to fire/cold):
+ *     likelyHallowTargetACForType('cold') = boss AC 10 (not pre-vuln),
+ *     likelyHallowTargetACForType('fire') = boss AC 10 (not pre-vuln) → same
+ *     as S110 → fire wins (identical flip).
+ *   - §6-§16 (enemies at AC 14, single party damage type, NOT pre-vulnerable):
+ *     likelyHallowTargetACForType(that type) = enemy AC 14 = S110 → identical
+ *     (and the single damage type makes the pick AC-independent anyway).
+ *
+ * The ONLY behavioural change vs S110 is when the highest-HP enemy within
+ * 60 ft is ALREADY VULNERABLE to a candidate type — see §5n for the flip demo
+ * (a top-HP boss pre-vulnerable to fire + a low-HP low-AC mook makes the fire
+ * attack's predicted target the MOOK, whose low AC raises fire's hitChance
+ * enough to flip the pick from cold to fire — canon-better, since the fire
+ * attack's actual target IS the mook after `shouldCastEnergyVulnerability`
+ * skips the pre-vulnerable boss).
+ *
+ * Used by pickHallowDamageType (S111). The dispatch wiring (S106 case 'hallow'
+ * in combat.ts) is STILL unchanged — only the AC fed into the attack-roll
+ * hitChance inside actionDamageWeight is refined (from S110's single
+ * likely-target AC to S111's per-type likely-target AC).
+ */
+export function likelyHallowTargetACForType(
+  caster: Combatant,
+  bf: Battlefield,
+  damageType: DamageType,
+): number {
+  let best: { ac: number; maxHP: number; distFt: number } | null = null;
+  for (const c of bf.combatants.values()) {
+    if (c.id === caster.id) continue;             // not the caster
+    if (c.faction === caster.faction) continue;    // only enemies (opposing faction)
+    if (c.isDead || c.isUnconscious) continue;     // only living enemies
+    // Same finite-AC guard as encounterAvgAC / likelyHallowTargetAC.
+    if (typeof c.ac !== 'number' || !isFinite(c.ac)) continue;
+    const distFt = chebyshev3D(caster.pos, c.pos) * 5;
+    if (distFt > 60) continue;                     // beyond Hallow's 60-ft range
+    // S111 vuln-skip: mirror shouldCastEnergyVulnerability's type-dependent
+    // skip — if this enemy is already vulnerable to `damageType` (innate or
+    // from another active effect), `shouldCastEnergyVulnerability` would skip
+    // it (the slot would be wasted on a no-op push), so it must NOT influence
+    // the predicted AC for THIS type. (This is the only difference vs S110's
+    // likelyHallowTargetAC, which ignores the vuln-skip since the type isn't
+    // known at pick time.)
+    if (c.damageVulnerabilities?.includes(damageType)) continue;
+    // Mirror shouldCastEnergyVulnerability: highest maxHP wins; ties broken by
+    // nearest distance; full ties keep first-seen (strict > / strict < so an
+    // equal-HP equal-distance later enemy does NOT override the first-seen).
+    if (best === null
+      || c.maxHP > best.maxHP
+      || (c.maxHP === best.maxHP && distFt < best.distFt)) {
+      best = { ac: c.ac, maxHP: c.maxHP, distFt };
+    }
+  }
+  // No valid candidate for THIS type within 60 ft → fall back to S110's
+  // likelyHallowTargetAC (highest-HP enemy within 60 ft IGNORING the vuln-skip
+  // — the prediction `shouldCastEnergyVulnerability` would have made before
+  // applying the type-dependent skip). This is the rare edge case where every
+  // in-range enemy is already vulnerable to `damageType` (so
+  // `shouldCastEnergyVulnerability` would return null for this type — the
+  // Hallow EV doesn't fire for this type, the pick is moot, and the fallback
+  // value is harmless). `likelyHallowTargetAC` itself falls back to
+  // `encounterAvgAC` (→ BESTIARY_MEAN_AC) when no enemy is within 60 ft at
+  // all, preserving the full S110/S109 fallback chain.
+  return best !== null ? best.ac : likelyHallowTargetAC(caster, bf);
+}
+
+/**
  * Computes the per-round expected-damage weight for a damage-dealing action:
  * `expectedDamage × availability × hitChance`. See the §S107 comment above for
  * the full model. Returns 0 for actions with no damage dice. S108 refines the
@@ -576,9 +719,22 @@ export function likelyHallowTargetAC(caster: Combatant, bf: Battlefield): number
  * 60 ft, mirroring shouldCastEnergyVulnerability's selection). The likely-
  * target AC is more faithful than the encounter average because the Hallow
  * target is NOT drawn uniformly from the enemy pool — it's the single
- * highest-HP enemy within range.
+ * highest-HP enemy within range. S111 refines the AC AGAIN: instead of a
+ * single likely-target AC for ALL types, the AC is now PER-TYPE
+ * (likelyHallowTargetACForType — for each candidate type, the highest-HP
+ * enemy within 60 ft that is NOT ALREADY VULNERABLE to that type, mirroring
+ * shouldCastEnergyVulnerability's selection EXACTLY). The per-type likely-
+ * target AC is more faithful than the S110 single likely-target AC because
+ * `shouldCastEnergyVulnerability` applies a type-dependent vuln-skip — when
+ * the top-HP enemy is pre-vulnerable to a candidate type, the ACTUAL target
+ * for that type is the SECOND-highest-HP enemy, and S111 correctly predicts
+ * that (S110 would have used the top-HP enemy's AC, predicting the wrong
+ * target). The `targetAC` parameter is the per-type-target AC computed by
+ * pickHallowDamageType via likelyHallowTargetACForType (memoized per damage
+ * type to avoid re-scanning the battlefield for every action of the same
+ * type).
  */
-function actionDamageWeight(a: Action, encounterAC: number): number {
+function actionDamageWeight(a: Action, targetAC: number): number {
   const d = a.damage!;
   // Expected damage per hit: use pre-computed average if present, else compute
   // (some test factories create DiceExpression without the `average` field).
@@ -606,11 +762,18 @@ function actionDamageWeight(a: Action, encounterAC: number): number {
     // Attack roll — S108 data-driven hitChance from the action's hitBonus vs
     // a representative enemy AC (replaces the S107 flat 0.65). S109 refines
     // the AC from the global bestiary mean to the ENCOUNTER-SPECIFIC average
-    // AC of living enemies (encounterAC, passed in by pickHallowDamageType via
-    // encounterAvgAC). A higher hitBonus lands more often, so doubling that
-    // action's damage is more valuable — and vs a low-AC enemy pool an attack
-    // roll lands more often still (so attack damage is worth more to double).
-    hitChance = bestiaryHitChance(a.hitBonus, encounterAC);
+    // AC of living enemies. S110 refines it further to the LIKELY TARGET's AC
+    // (the highest-HP enemy within 60 ft, mirroring
+    // shouldCastEnergyVulnerability's selection). S111 refines it once more to
+    // the PER-TYPE LIKELY TARGET's AC (targetAC, passed in by
+    // pickHallowDamageType via likelyHallowTargetACForType — for each
+    // candidate type, the highest-HP enemy within 60 ft that is NOT already
+    // vulnerable to that type, mirroring shouldCastEnergyVulnerability's
+    // selection EXACTLY). A higher hitBonus lands more often, so doubling
+    // that action's damage is more valuable — and vs a low-AC likely target
+    // an attack roll lands more often still (so attack damage is worth more
+    // to double).
+    hitChance = bestiaryHitChance(a.hitBonus, targetAC);
   } else if (a.saveDC !== null) {
     // Saving throw — save-for-half expected value ~0.75 (50% fail → full,
     // 50% succeed → half → 0.5×1.0 + 0.5×0.5 = 0.75).
@@ -648,18 +811,54 @@ function actionDamageWeight(a: Action, encounterAC: number): number {
  * shouldCastEnergyVulnerability runs second (target). See
  * likelyHallowTargetAC above.
  *
+ * S111 refinement: the AC passed to actionDamageWeight is now PER-TYPE
+ * (likelyHallowTargetACForType — for each candidate type, the highest-HP
+ * living enemy within 60 ft that is NOT ALREADY VULNERABLE to that type,
+ * mirroring shouldCastEnergyVulnerability's selection EXACTLY). The S110
+ * likely-target AC was type-AGNOSTIC (the same AC for all types), which
+ * diverged from `shouldCastEnergyVulnerability` when the top-HP enemy was
+ * pre-vulnerable to a candidate type — `shouldCastEnergyVulnerability` would
+ * skip it and pick the second-highest-HP enemy, but S110's AC still reflected
+ * the top-HP enemy. S111 closes that divergence: each candidate type gets its
+ * OWN predicted target's AC, so the hitChance reflects the enemy that will
+ * ACTUALLY be vuln'd for that type. Falls back to likelyHallowTargetAC (S110
+ * behavior, ignoring the vuln-skip) when no valid candidate exists for a type
+ * (none in range OR all in-range enemies pre-vulnerable to that type — the
+ * rare edge case where shouldCastEnergyVulnerability would return null for
+ * that type, so the pick is moot and the fallback is harmless). Memoized per
+ * damage type to avoid re-scanning the battlefield for every action of the
+ * same type. The dispatch wiring (S106 case 'hallow' in combat.ts) is STILL
+ * unchanged — pickHallowDamageType runs first (type), then
+ * shouldCastEnergyVulnerability runs second (target). See
+ * likelyHallowTargetACForType above.
+ *
  * Ties broken by first-seen order (deterministic). When all party actions have
  * identical damage dice + availability + hitChance, v2 weight ∝ action count,
  * so the v1 winner is preserved (existing S106 tests with uniform-damage
  * actions still pass).
  */
 export function pickHallowDamageType(caster: Combatant, bf: Battlefield): DamageType | null {
-  // S110: likely-target AC (highest-HP living enemy within 60 ft, mirroring
-  // shouldCastEnergyVulnerability's selection). Falls back to encounterAvgAC
-  // (S109 encounter average → BESTIARY_MEAN_AC) when no enemy is within range.
-  // Computed once — the AC is the same for all actions; only the per-action
-  // hitBonus varies.
-  const encounterAC = likelyHallowTargetAC(caster, bf);
+  // S111: per-type likely-target AC. For each candidate damage type, predict
+  // the enemy that `shouldCastEnergyVulnerability` will ACTUALLY select AS THE
+  // TARGET FOR THAT TYPE (highest-HP enemy within 60 ft that is NOT already
+  // vulnerable to that type — mirroring `shouldCastEnergyVulnerability`'s
+  // selection EXACTLY, including the type-dependent vuln-skip that S110's
+  // type-agnostic `likelyHallowTargetAC` could not apply at pick time). The
+  // per-type AC is memoized to avoid re-scanning the battlefield for every
+  // action of the same type — `acCache` survives across the entire party scan.
+  // Falls back to likelyHallowTargetAC (S110 behavior) when no valid candidate
+  // exists for a type (none in range OR all in-range enemies pre-vulnerable to
+  // that type). The dispatch wiring (S106 case 'hallow' in combat.ts) is
+  // STILL unchanged — pickHallowDamageType runs first (type), then
+  // shouldCastEnergyVulnerability runs second (target).
+  const acCache = new Map<DamageType, number>();
+  const targetACFor = (t: DamageType): number => {
+    const cached = acCache.get(t);
+    if (cached !== undefined) return cached;
+    const ac = likelyHallowTargetACForType(caster, bf, t);
+    acCache.set(t, ac);
+    return ac;
+  };
   const weights: Partial<Record<DamageType, number>> = {};
   for (const c of bf.combatants.values()) {
     if (c.faction !== caster.faction) continue;  // only party members
@@ -668,7 +867,7 @@ export function pickHallowDamageType(caster: Combatant, bf: Battlefield): Damage
       // Only count actions that actually deal damage (dice + type).
       if (a.damage && a.damageType) {
         const t = a.damageType;
-        const w = actionDamageWeight(a, encounterAC);
+        const w = actionDamageWeight(a, targetACFor(t));
         weights[t] = (weights[t] ?? 0) + w;
       }
     }

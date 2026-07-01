@@ -37,6 +37,7 @@ import {
   bestiaryHitChance,
   encounterAvgAC,
   likelyHallowTargetAC,
+  likelyHallowTargetACForType,
   metadata as halMeta,
 } from '../spells/hallow';
 import { executePlannedAction, EngineState } from '../engine/combat';
@@ -198,6 +199,7 @@ eq('S107 v2 weighted flag = true', (halMeta as any).hallowEnergyVulnerabilityV2W
 eq('S108 v2 bestiary hitChance flag = true', (halMeta as any).hallowEnergyVulnerabilityV2BestiaryHitChance, true);
 eq('S109 v2 encounter AC flag = true', (halMeta as any).hallowEnergyVulnerabilityV2EncounterAC, true);
 eq('S110 v2 likely-target AC flag = true', (halMeta as any).hallowEnergyVulnerabilityV2LikelyTargetAC, true);
+eq('S111 v2 per-type likely-target AC flag = true', (halMeta as any).hallowEnergyVulnerabilityV2PerTypeLikelyTargetAC, true);
 
 // ============================================================
 // 2. pickHallowDamageType: single party member, single damage type
@@ -746,6 +748,192 @@ console.log('\n--- 5l. S110 likely-target AC: squishy boss flips save→attack -
     encounterAvgAC(caster, makeBF([caster, wizard, fighter, sBoss, tMook])), 15);
   eq('cross-check: likelyHallowTargetAC for same setup = 10 (boss AC, highest-HP within 60ft)',
     likelyHallowTargetAC(caster, makeBF([caster, wizard, fighter, sBoss, tMook])), 10);
+}
+
+// ============================================================
+// 5m. S111 likelyHallowTargetACForType: direct value verification
+//     (Verifies the S111 helper that replaces likelyHallowTargetAC inside
+//     pickHallowDamageType. likelyHallowTargetACForType predicts the AC of the
+//     enemy that shouldCastEnergyVulnerability will ACTUALLY select AS THE
+//     TARGET FOR A SPECIFIC DAMAGE TYPE — the HIGHEST-HP living enemy within
+//     Hallow's 60-ft range that is NOT ALREADY VULNERABLE to that type
+//     (mirrors shouldCastEnergyVulnerability's selection EXACTLY, including
+//     the type-dependent vuln-skip that S110's type-agnostic
+//     likelyHallowTargetAC could not apply at pick time). Falls back to
+//     likelyHallowTargetAC (S110 behavior) when no valid candidate exists for
+//     that type — i.e. none in range OR all in-range enemies pre-vulnerable to
+//     that type. This is the LOW-MEDIUM-risk way to close the S110
+//     next-action #13 divergence: pickHallowDamageType now predicts the
+//     per-type target itself and uses its AC, so the hitChance reflects the
+//     enemy that will actually be vuln'd for THAT type — not the type-agnostic
+//     top-HP enemy that may be skipped by shouldCastEnergyVulnerability.)
+// ============================================================
+console.log('\n--- 5m. S111 likelyHallowTargetACForType direct value verification ---');
+{
+  const caster = makeCaster('wiz', { pos: { x: 5, y: 5, z: 0 } });
+
+  // (1) Single enemy (NOT pre-vulnerable) → that enemy's AC (mirrors S110
+  // likelyHallowTargetAC for any type — the S110 behavior is preserved when
+  // the top-HP enemy is not pre-vulnerable).
+  const goblin = makeCombatant('goblin', { pos: { x: 6, y: 5, z: 0 }, ac: 10, maxHP: 30 });
+  eq('likelyHallowTargetACForType(fire): single non-vuln enemy AC 10 → 10 (S110 preserved)',
+    likelyHallowTargetACForType(caster, makeBF([caster, goblin]), 'fire'), 10);
+  eq('likelyHallowTargetACForType(cold): same single enemy → 10 (type-independent when not pre-vuln)',
+    likelyHallowTargetACForType(caster, makeBF([caster, goblin]), 'cold'), 10);
+
+  // (2) Top-HP enemy IS pre-vulnerable to `damageType` → skip → second-highest-
+  // HP enemy's AC (the S111 refinement vs S110). vulnBoss AC 18 HP 200
+  // (pre-vulnerable to fire) + tankMook AC 5 HP 50 (NOT pre-vulnerable).
+  // S110 likelyHallowTargetAC would return 18 (vulnBoss AC — type-agnostic
+  // top-HP). S111 likelyHallowTargetACForType('fire') skips vulnBoss (pre-
+  // vuln to fire) → returns tankMook AC 5.
+  const vulnBoss = makeCombatant('vulnBoss', {
+    pos: { x: 6, y: 5, z: 0 }, ac: 18, maxHP: 200,
+    damageVulnerabilities: ['fire'],
+  });
+  const tankMook = makeCombatant('tankMook', { pos: { x: 7, y: 5, z: 0 }, ac: 5, maxHP: 50 });
+  eq('likelyHallowTargetACForType(fire): top-HP pre-vuln to fire → skip → mook AC 5 (S111 refinement, NOT 18)',
+    likelyHallowTargetACForType(caster, makeBF([caster, vulnBoss, tankMook]), 'fire'), 5);
+  // For cold (vulnBoss NOT pre-vulnerable to cold) → vulnBoss is the valid
+  // top-HP candidate → AC 18 (S110 behavior preserved for cold).
+  eq('likelyHallowTargetACForType(cold): top-HP NOT pre-vuln to cold → vulnBoss AC 18 (S110 preserved)',
+    likelyHallowTargetACForType(caster, makeBF([caster, vulnBoss, tankMook]), 'cold'), 18);
+
+  // (3) Cross-check: S110 likelyHallowTargetAC (type-agnostic) returns vulnBoss
+  // AC 18 for the SAME setup — confirming likelyHallowTargetACForType(fire)
+  // diverges (returns 5, the mook) while likelyHallowTargetACForType(cold)
+  // matches (returns 18, the boss).
+  eq('cross-check: likelyHallowTargetAC (S110, type-agnostic) = 18 (vulnBoss AC — diverges from fire, matches cold)',
+    likelyHallowTargetAC(caster, makeBF([caster, vulnBoss, tankMook])), 18);
+
+  // (4) ALL in-range enemies pre-vulnerable to `damageType` → no valid
+  // candidate → fallback to likelyHallowTargetAC (S110 behavior — type-
+  // agnostic top-HP AC, ignoring the vuln-skip). This is the rare edge case
+  // where shouldCastEnergyVulnerability would return null for that type —
+  // Hallow EV doesn't fire for that type, the pick is moot, and the fallback
+  // is harmless. Both enemies pre-vulnerable to fire → fallback returns
+  // vulnBoss AC 18 (the top-HP enemy, ignoring the vuln-skip — same as S110).
+  const vulnBoss2 = makeCombatant('vulnBoss2', {
+    pos: { x: 6, y: 5, z: 0 }, ac: 18, maxHP: 200,
+    damageVulnerabilities: ['fire'],
+  });
+  const vulnMook = makeCombatant('vulnMook', {
+    pos: { x: 7, y: 5, z: 0 }, ac: 5, maxHP: 50,
+    damageVulnerabilities: ['fire'],
+  });
+  eq('likelyHallowTargetACForType(fire): ALL in-range pre-vuln → fallback likelyHallowTargetAC = 18 (vulnBoss AC, top-HP, S110 behavior)',
+    likelyHallowTargetACForType(caster, makeBF([caster, vulnBoss2, vulnMook]), 'fire'), 18);
+
+  // (5) No enemies at all (only caster + party ally) → fallback to
+  // likelyHallowTargetAC → encounterAvgAC → BESTIARY_MEAN_AC (14.849).
+  // Preserves the S110/S109/S108 fallback chain.
+  const ally = makeCombatant('ally', { faction: 'party', pos: { x: 6, y: 5, z: 0 }, ac: 99 });
+  approx('likelyHallowTargetACForType(fire): no enemies → fallback chain → BESTIARY_MEAN_AC (14.849)',
+    likelyHallowTargetACForType(caster, makeBF([caster, ally]), 'fire'), 14.849);
+
+  // (6) No enemy within 60 ft → fallback to likelyHallowTargetAC →
+  // encounterAvgAC (which has no range gate, so the out-of-range enemy IS
+  // included) → that enemy's AC. Same as S110 §5k "beyond 60ft" case.
+  const farOnly = makeCombatant('farOnly', { pos: { x: 18, y: 5, z: 0 }, ac: 20, maxHP: 100 });
+  eq('likelyHallowTargetACForType(fire): only enemy beyond 60ft → fallback likelyHallowTargetAC → encounterAvgAC = 20',
+    likelyHallowTargetACForType(caster, makeBF([caster, farOnly]), 'fire'), 20);
+
+  // (7) Cross-check: likelyHallowTargetACForType = likelyHallowTargetAC when
+  // no enemy is pre-vulnerable (no divergence — S111 reduces to S110 in the
+  // common case). Setup: two non-vulnerable enemies (boss AC 18 HP 200 +
+  // mook AC 10 HP 30). likelyHallowTargetACForType(any type) should equal
+  // likelyHallowTargetAC (both return the top-HP enemy's AC 18).
+  const cleanBoss = makeCombatant('cleanBoss', { pos: { x: 6, y: 5, z: 0 }, ac: 18, maxHP: 200 });
+  const cleanMook = makeCombatant('cleanMook', { pos: { x: 7, y: 5, z: 0 }, ac: 10, maxHP: 30 });
+  const cleanBF = makeBF([caster, cleanBoss, cleanMook]);
+  eq('cross-check: no pre-vuln → likelyHallowTargetACForType(fire) = likelyHallowTargetAC = 18 (no divergence)',
+    likelyHallowTargetACForType(caster, cleanBF, 'fire'), likelyHallowTargetAC(caster, cleanBF));
+  eq('cross-check: no pre-vuln → likelyHallowTargetACForType(cold) = likelyHallowTargetAC = 18 (no divergence)',
+    likelyHallowTargetACForType(caster, cleanBF, 'cold'), likelyHallowTargetAC(caster, cleanBF));
+
+  // (8) Dead pre-vulnerable enemy excluded → the living enemy (even if lower
+  // HP) is the candidate. (Mirrors §5k "dead enemy skipped" but with a pre-
+  // vuln twist: the dead enemy would have been skipped by the vuln-skip too
+  // if it were the target type, but it's already excluded by the dead guard.)
+  const liveMook = makeCombatant('liveMook', { pos: { x: 6, y: 5, z: 0 }, ac: 8, maxHP: 30 });
+  const deadVulnBoss = makeCombatant('deadVulnBoss', {
+    pos: { x: 7, y: 5, z: 0 }, ac: 20, maxHP: 999, isDead: true,
+    damageVulnerabilities: ['fire'],
+  });
+  eq('likelyHallowTargetACForType(fire): dead pre-vuln boss (HP 999) skipped → living mook AC 8',
+    likelyHallowTargetACForType(caster, makeBF([caster, liveMook, deadVulnBoss]), 'fire'), 8);
+}
+
+// ============================================================
+// 5n. S111 per-type-target vuln-skip: top-HP boss pre-vuln to fire flips cold→fire
+//     (The S111 behavioural difference from S110. Party: 1 cold save spell
+//     (1d8+3, saveDC 15) FIRST + 1 fire attack (1d8+3, hitBonus +5) SECOND,
+//     both cantrips (availability 1.0). Enemies: vulnBoss AC 18 HP 200 (pre-
+//     vulnerable to fire, highest-HP within 60ft) + tankMook AC 5 HP 50 (NOT
+//     pre-vulnerable to fire — the second-highest-HP).
+//     S110 (type-agnostic likelyHallowTargetAC = vulnBoss AC 18 for BOTH types):
+//       fire hc = (21-max(2,18-5))/20 = (21-13)/20 = 8/20 = 0.40
+//       fire  = 7.5×1.0×0.40 = 3.00
+//       cold  = 7.5×1.0×0.75 = 5.625  → cold wins (also first-seen).
+//     S111 (per-type likelyHallowTargetACForType):
+//       fire: vulnBoss pre-vuln to fire → skip → tankMook AC 5 →
+//         fire hc = (21-max(2,5-5))/20 = (21-2)/20 = 19/20 → clamp 0.95
+//         fire  = 7.5×1.0×0.95 = 7.125
+//       cold: vulnBoss NOT pre-vuln to cold → vulnBoss AC 18 →
+//         cold hc (save) = 0.75 (save-based hitChance is AC-independent)
+//         cold  = 7.5×1.0×0.75 = 5.625
+//       fire 7.125 > cold 5.625  → fire wins (NOT first-seen — the fire
+//     attack's ACTUAL target after vuln-skip is the low-AC mook, whose AC
+//     makes the attack land 95% of the time, so doubling fire damage is more
+//     valuable than doubling the cold save spell). Canon-better: S110 used
+//     the WRONG AC for fire (vulnBoss AC 18, when the actual fire target is
+//     tankMook AC 5), underestimating fire's hitChance (0.40 vs 0.95) and
+//     thus fire's weight (3.00 vs 7.125), leading to a wrong pick (cold).
+//     S111 correctly predicts the per-type target and picks fire — the type
+//     with the higher expected damage gain from being doubled.)
+// ============================================================
+console.log('\n--- 5n. S111 per-type-target vuln-skip: top-HP boss pre-vuln to fire flips cold→fire ---');
+{
+  const caster = makeCaster('wiz', { pos: { x: 5, y: 5, z: 0 } });
+  // Cold save spell FIRST (S110 picks cold via weight + first-seen).
+  const wizard = makeCombatant('wizard', {
+    faction: 'party', pos: { x: 7, y: 5, z: 0 },
+    actions: [makeDamageActionV2('Cold Burst', 'cold',
+      { count: 1, sides: 8, bonus: 3, hitBonus: null, saveDC: 15, saveAbility: 'dex' as AbilityScore, slotLevel: 0 })],
+  });
+  // Fire attack SECOND (hitBonus +5).
+  const fighter = makeCombatant('fighter', {
+    faction: 'party', pos: { x: 6, y: 5, z: 0 },
+    actions: [makeDamageActionV2('Fire Slash', 'fire',
+      { count: 1, sides: 8, bonus: 3, hitBonus: 5, saveDC: null, slotLevel: 0 })],
+  });
+  // vulnBoss AC 18 HP 200 (highest-HP within 60ft — the type-agnostic likely
+  // target). Pre-vulnerable to fire (innate damageVulnerabilities: ['fire']).
+  const vulnBoss = makeCombatant('vulnBoss', {
+    pos: { x: 8, y: 5, z: 0 }, ac: 18, maxHP: 200,
+    damageVulnerabilities: ['fire'],
+  });
+  // tankMook AC 5 HP 50 (second-highest-HP within 60ft — the per-type likely
+  // target for FIRE, since vulnBoss is pre-vulnerable to fire and skipped).
+  const tankMook = makeCombatant('tankMook', { pos: { x: 9, y: 5, z: 0 }, ac: 5, maxHP: 50 });
+  // S110 (type-agnostic AC 18 for both): cold 5.625 > fire 3.0 → cold wins.
+  // S111 (per-type AC: fire → 5, cold → 18): fire 7.125 > cold 5.625 → fire wins (FLIP).
+  eq('S111 picks fire (per-type target AC for fire = mook AC 5 → fire hc 0.95 > cold 0.75) — NOT first-seen cold',
+    pickHallowDamageType(caster, makeBF([caster, wizard, fighter, vulnBoss, tankMook])), 'fire');
+  // Cross-check: S110 likelyHallowTargetAC (type-agnostic) = vulnBoss AC 18
+  // for the same setup — would pick cold (the S110 winner). Confirms the S111
+  // flip is driven by the per-type vuln-skip divergence.
+  eq('cross-check: likelyHallowTargetAC (S110, type-agnostic) = 18 (vulnBoss AC — S110 would pick cold)',
+    likelyHallowTargetAC(caster, makeBF([caster, wizard, fighter, vulnBoss, tankMook])), 18);
+  // Cross-check: likelyHallowTargetACForType('fire') = mook AC 5 (vulnBoss
+  // pre-vuln to fire → skip → tankMook — the actual fire target).
+  eq('cross-check: likelyHallowTargetACForType(fire) = 5 (vulnBoss pre-vuln to fire → skip → tankMook AC 5)',
+    likelyHallowTargetACForType(caster, makeBF([caster, wizard, fighter, vulnBoss, tankMook]), 'fire'), 5);
+  // Cross-check: likelyHallowTargetACForType('cold') = vulnBoss AC 18 (vulnBoss
+  // NOT pre-vuln to cold → vulnBoss is the valid top-HP candidate — the actual
+  // cold target).
+  eq('cross-check: likelyHallowTargetACForType(cold) = 18 (vulnBoss NOT pre-vuln to cold → vulnBoss AC 18)',
+    likelyHallowTargetACForType(caster, makeBF([caster, wizard, fighter, vulnBoss, tankMook]), 'cold'), 18);
 }
 
 // ============================================================
