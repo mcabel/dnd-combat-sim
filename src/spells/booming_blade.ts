@@ -124,7 +124,7 @@ function emit(
 // ---- applyCantripEffect --------------------------------------
 
 /**
- * Apply Booming Blade's post-hit rider after the melee spell
+ * Apply Booming Blade's post-hit rider after the melee weapon
  * attack hits. Called from resolveAttack's attack-roll branch
  * (via cantrip_effects dispatcher) AFTER damage is dealt, ONLY
  * on a hit.
