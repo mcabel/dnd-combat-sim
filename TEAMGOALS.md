@@ -913,4 +913,15 @@ For an RFC:
   ```
 - **Rationale:** <2-3 sentences>
 - **Status:** PROPOSED | APPROVED | REJECTED | SUPERSEDED
-```
+
+---
+
+## RFC-LAIR-ACTION-BESPOKE-DISPATCH (Session 113 proposal)
+
+- **Proposed by:** Cantrip-z (with user-authorized SHEET+CORE access for this workstream)
+- **Target files:** `src/engine/combat.ts`, `src/test/session94_lair_phase3b.test.ts`, `src/test/session102_lair_phase8b3.test.ts`, new `src/test/session113_lair_bespoke_dispatch.test.ts`
+- **Full RFC:** `docs/RFC-LAIR-ACTION-BESPOKE-DISPATCH.md`
+- **Summary:** Adds a bespoke-dispatch fallback to `handleLairCastSpell` so lair-action `cast_spell` actions route to dedicated spell modules (Fireball, Banishment, Fog Cloud) instead of silently no-op'ing when the spell isn't in `GENERIC_SPELLS`. Pilot batch of 3 spells covers all 3 `execute()` signature shapes (AoE-array, single-target, self-cast) and both concentration categories (creature-casts vs hazard-like). Closes the S104-S112 next-action #1 ("unified cast dispatch") at MEDIUM risk (re-assessed from HIGH).
+- **User authorizations received:** B1 (z owns SHEET+CORE), B2 (MEDIUM risk OK, revert if red), B3 (pilot batch), B4 (rewrite flipping tests), B5 (post RFC first — done), Q1 (concentration rules), Q2 (antimagic field skip), Q3 (pilot-only RFC scope), Q4 (metadata flag `lairActionBespokeDispatchV1Implemented: true`), Q5 (assert new behavior in rewritten tests).
+- **Risk:** MEDIUM (autonomous-OK with care)
+- **Status:** PROPOSED — awaiting user ack on Q-ack-1 through Q-ack-5 (§7 of the RFC)
