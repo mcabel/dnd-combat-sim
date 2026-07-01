@@ -1193,6 +1193,15 @@ export function improvisedMeleeAction(creature: Combatant): Action {
  * (the AI should not cast two concentration spells — caller is responsible).
  */
 export function startConcentration(caster: Combatant, spellName: string): void {
+  // ── Session 113 — Lair-action bespoke dispatch: concentration suppression ──
+  // When `suppressConcentration` is true (set by dispatchBespokeLairSpell
+  // for Category B hazard-like / duration-replacement / explicit-exception
+  // lair-action spells), startConcentration() becomes a no-op. The lair
+  // action's effect is still created (by the spell's execute()), but it's
+  // NOT tied to the caster's concentration — the dispatcher post-processes
+  // the effect to set sourceIsConcentration = false + sourceTurnExpires.
+  // See docs/RFC-LAIR-ACTION-BESPOKE-DISPATCH.md §4.5 for the design.
+  if (caster.suppressConcentration) return;
   caster.concentration = { active: true, spellName, dcIfHit: 10 };
 }
 

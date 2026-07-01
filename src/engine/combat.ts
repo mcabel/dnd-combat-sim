@@ -806,6 +806,14 @@ import {
 } from './perception';
 // ── Session 64 RFC-COMBINING-EFFECTS Phase 1: priority activation ──
 import { reevaluateEffects } from './effect_pipeline';
+// ── Session 113: Lair-action bespoke dispatch ──
+// Metadata table + feature flag for routing lair-action cast_spell to
+// bespoke spell modules (Fireball, Banishment, Fog Cloud pilot).
+// See docs/RFC-LAIR-ACTION-BESPOKE-DISPATCH.md for the full design.
+import {
+  LAIR_BESPOKE_SPELL_META,
+  LairBespokeSpellMeta,
+} from './lair_action_metadata';
 import {
   shouldCast as shouldCastCharmPerson,
   execute as executeCharmPerson,
@@ -7902,6 +7910,246 @@ function rollLairDamage(dmg: { count: number; sides: number; type: string }): nu
 //     all but a few common patterns.
 // ============================================================
 
+// ── Session 113: Lair-action bespoke dispatch ──────────────────
+// dispatchBespokeLairSpell + callExecuteByPlanType: route lair-action
+// cast_spell to bespoke spell modules when the spell isn't in the
+// GENERIC_SPELLS registry. See docs/RFC-LAIR-ACTION-BESPOKE-DISPATCH.md.
+// ────────────────────────────────────────────────────────────────
+
+/**
+ * Call a bespoke spell module's execute() with the right signature shape.
+ *
+ * The 3 signature shapes (per LAIR_BESPOKE_SPELL_META):
+ *   - 'aoe':    execute(caster, targets: Combatant[], state)
+ *   - 'single': execute(caster, target: Combatant, state)
+ *   - 'self':   execute(caster, _self: Combatant, state)  (target ignored)
+ *
+ * The `target` parameter is the result of the bespoke `shouldCast()`
+ * (either a Combatant or Combatant[] depending on the spell). For 'single'
+ * spells, shouldCast returns a single Combatant; for 'aoe', an array; for
+ * 'self', the caster itself (the target param is ignored by execute).
+ *
+ * Throws if the planType is not in the pilot's dispatch table (S113 pilot:
+ * fireball, banishment, fogCloud only — S114+ will add the remaining 12).
+ */
+function callExecuteByPlanType(
+  planType: string,
+  caster: Combatant,
+  target: Combatant | Combatant[],
+  state: EngineState,
+): void {
+  switch (planType) {
+    case 'fireball': {
+      const targets = Array.isArray(target) ? target : [target];
+      executeFireball(caster, targets, state);
+      break;
+    }
+    case 'banishment': {
+      const t = Array.isArray(target) ? target[0] : target;
+      if (t) executeBanishment(caster, t, state);
+      break;
+    }
+    case 'fogCloud': {
+      // Fog Cloud execute ignores the target param (self-cast)
+      executeFogCloud(caster, caster, state);
+      break;
+    }
+    default:
+      throw new Error(`Unknown lair-bespoke plan type: ${planType}`);
+  }
+}
+
+/**
+ * Dispatch a bespoke spell module for a lair-action `cast_spell`.
+ *
+ * Called by `handleLairCastSpell` when `lookupGenericSpell` returns null
+ * but `LAIR_BESPOKE_SPELL_META` has an entry for the spell. Returns true
+ * if dispatched (the spell executed or was canonically skipped), false if
+ * the spell isn't in the lair-bespoke meta table (caller logs the skip).
+ *
+ * Implementation (per RFC §4):
+ *   1. Look up the spell in LAIR_BESPOKE_SPELL_META (lowercase key).
+ *   2. Attach synthetic state (action + resources) so the bespoke
+ *      `shouldCast` checks pass — mirrors `attachMonsterBespokeSyntheticState`.
+ *   3. Call the bespoke `shouldCast`:
+ *      - Returns a target → use it for `execute` (canon-accurate target
+ *        selection per user Q-ack-3 directive).
+ *      - Returns null → skip the lair action (canon-accurate "no valid
+ *        target"). The lair creature wouldn't waste the spell.
+ *   4. For 'suppress' concentration mode (Category B hazard / duration-
+ *      replacement / explicit exception per Q1): set
+ *      `caster.suppressConcentration = true` before execute (so
+ *      startConcentration becomes a no-op), then post-process the created
+ *      effect(s) to set sourceIsConcentration = false + sourceTurnExpires
+ *      = bf.round + lairDurationRounds - 1.
+ *   5. Call `callExecuteByPlanType` with the right signature shape.
+ *   6. Cleanup: remove synthetic state + clear suppressConcentration in
+ *      a finally block (idempotent).
+ *
+ * Returns true if the spell was found in the meta table (regardless of
+ * whether shouldCast returned a target — a null-target skip is still a
+ * "dispatched" outcome from the caller's perspective). Returns false if
+ * the spell isn't in the meta table (caller logs the skip).
+ */
+function dispatchBespokeLairSpell(
+  creature: Combatant,
+  action: LairAction,
+  state: EngineState,
+): boolean {
+  // Guard: action.spellName is checked truthy by the caller (handleLairCastSpell)
+  // before dispatching. Defensive guard for TypeScript + runtime safety.
+  if (!action.spellName) return false;
+  const meta = LAIR_BESPOKE_SPELL_META.get(action.spellName.toLowerCase());
+  if (!meta) return false;
+
+  const bf = state.battlefield;
+
+  // ── 1. Attach synthetic state (mirror attachMonsterBespokeSyntheticState) ──
+  // The bespoke shouldCast functions check:
+  //   - caster.actions.some(a => a.name === 'Fireball')  → lair creature has no such action
+  //   - hasSpellSlot(caster, 3)                          → lair creature has no resources.spellSlots
+  //   - (conc spells) caster.concentration?.active       → lair creature may or may not have conc
+  // We attach a synthetic action (for the name + saveDC lookup) and synthetic
+  // resources (so hasSpellSlot returns true). Concentration is left as-is
+  // (if the lair creature is already concentrating, shouldCast correctly
+  // returns null for concentration spells).
+  const hadAction = creature.actions.some(a => a.name === meta.canonicalName);
+  if (!hadAction) {
+    creature.actions.push({
+      name: meta.canonicalName,
+      isMultiattack: false,
+      attackType: 'spell',
+      reach: 0, range: null,
+      hitBonus: 0,
+      damage: { count: 0, sides: 0, bonus: 0, average: 0 },
+      damageType: 'force',
+      saveDC: creature.monsterSpellcasting?.saveDC ?? action.saveDC ?? 15,
+      saveAbility: null,
+      isAoE: false, isControl: false,
+      requiresConcentration: meta.concentrationMode === 'normal',
+      slotLevel: action.castLevel ?? meta.planType.length,  // approximate
+      costType: 'action', legendaryCost: 0,
+    } as Action);
+  }
+  // Synthetic resources: provide all slots L1-9 as available (so hasSpellSlot
+  // returns true for any level). The actual slot consumption is a no-op for
+  // lair creatures (lair actions are at-will magical effects). Mirror the
+  // monster-bespoke pattern.
+  const hadResources = creature.resources !== null;
+  if (!hadResources) {
+    creature.resources = {
+      spellSlots: {
+        1: { max: 4, remaining: 4 },
+        2: { max: 3, remaining: 3 },
+        3: { max: 3, remaining: 3 },
+        4: { max: 3, remaining: 3 },
+        5: { max: 2, remaining: 2 },
+        6: { max: 1, remaining: 1 },
+        7: { max: 1, remaining: 1 },
+        8: { max: 1, remaining: 1 },
+        9: { max: 1, remaining: 1 },
+      },
+    } as any;
+  }
+
+  // ── 2. Set suppressConcentration for 'suppress' mode ──
+  // startConcentration (utils.ts) checks this flag and becomes a no-op.
+  // Cleared in the finally block below.
+  const hadSuppressFlag = creature.suppressConcentration === true;
+  if (meta.concentrationMode === 'suppress') {
+    creature.suppressConcentration = true;
+  }
+
+  // ── 3. Call shouldCast to get the target(s) ──
+  // Per user Q-ack-3: call shouldCast (canon-accurate target selection).
+  // If shouldCast returns null, skip the lair action (canon-accurate "no
+  // valid target"). Note: shouldCast's LoS checks may conservatively skip
+  // some valid casts (lair creatures sense via hearing/etc. per Q1, but
+  // implementing full senses is out of scope for the pilot).
+  let target: Combatant | Combatant[] | null = null;
+  try {
+    switch (meta.planType) {
+      case 'fireball':
+        target = shouldCastFireball(creature, bf);
+        break;
+      case 'banishment':
+        target = shouldCastBanishment(creature, bf);
+        break;
+      case 'fogCloud':
+        target = shouldCastFogCloud(creature, bf);
+        break;
+      default:
+        throw new Error(`Unknown lair-bespoke plan type: ${meta.planType}`);
+    }
+  } finally {
+    // No-op: cleanup happens in the outer finally below
+  }
+
+  if (!target) {
+    // shouldCast returned null — canon-accurate "no valid target". Log + skip.
+    log(state, 'action', creature.id,
+      `  → cast_spell: "${meta.canonicalName}" (L${action.castLevel ?? '?'}) ` +
+      `skipped — shouldCast found no valid target (canon-accurate; the lair creature wouldn't waste the spell)`,
+      undefined);
+    // Cleanup synthetic state
+    if (!hadAction) {
+      creature.actions = creature.actions.filter(a => a.name !== meta.canonicalName);
+    }
+    if (!hadResources) {
+      creature.resources = null;
+    }
+    if (!hadSuppressFlag) {
+      creature.suppressConcentration = undefined;
+    }
+    return true;  // dispatched (canon-accurate skip)
+  }
+
+  // ── 4. Log the spell-cast intent ──
+  log(state, 'action', creature.id,
+    `  → casts ${meta.canonicalName} (L${action.castLevel ?? '?'}) via lair action (bespoke dispatch)`,
+    undefined);
+
+  // ── 5. Call execute with the right signature ──
+  // Record the effect count before execute so we can find newly-created effects.
+  const effectsBefore = creature.activeEffects.length;
+  try {
+    callExecuteByPlanType(meta.planType, creature, target, state);
+  } catch (e) {
+    log(state, 'action', creature.id,
+      `  → cast_spell: "${meta.canonicalName}" threw an error — ${e instanceof Error ? e.message : String(e)}`,
+      undefined);
+  } finally {
+    // ── 6. Post-process: concentration-suppress mode ──
+    // For 'suppress' mode spells (Fog Cloud hazard), the execute() created
+    // effects with sourceIsConcentration = true (the module's default).
+    // Since we suppressed concentration start, those effects would never
+    // be cleaned up via concentration break. Fix: flip sourceIsConcentration
+    // to false + set sourceTurnExpires for the lair-duration override.
+    if (meta.concentrationMode === 'suppress' && meta.lairDurationRounds) {
+      for (let i = effectsBefore; i < creature.activeEffects.length; i++) {
+        const eff = creature.activeEffects[i];
+        if (eff.spellName === meta.canonicalName) {
+          eff.sourceIsConcentration = false;
+          eff.sourceTurnExpires = bf.round + meta.lairDurationRounds - 1;
+        }
+      }
+    }
+
+    // ── 7. Cleanup synthetic state (idempotent) ──
+    if (!hadAction) {
+      creature.actions = creature.actions.filter(a => a.name !== meta.canonicalName);
+    }
+    if (!hadResources) {
+      creature.resources = null;
+    }
+    if (!hadSuppressFlag) {
+      creature.suppressConcentration = undefined;
+    }
+  }
+
+  return true;
+}
+
 /**
  * Resolve a `cast_spell` lair action. The lair creature casts the named spell
  * at the parsed `castLevel`. Reuses the GENERIC_SPELLS registry (262 spells).
@@ -7994,12 +8242,20 @@ function handleLairCastSpell(
 
   const desc = lookupGenericSpell(action.spellName);
   if (!desc) {
-    // Spell has a dedicated module (Fireball, Banishment, etc.) or isn't
-    // implemented at all. v1: log + skip. Phase 5 will dispatch dedicated
-    // modules via a unified cast helper.
+    // Not in the GENERIC_SPELLS registry. Try the lair-bespoke dispatcher
+    // (S113): routes to dedicated spell modules (Fireball, Banishment, Fog
+    // Cloud pilot). See docs/RFC-LAIR-ACTION-BESPOKE-DISPATCH.md.
+    const dispatched = dispatchBespokeLairSpell(creature, action, state);
+    if (dispatched) return;
+
+    // Spell has no module at all (no generic registry entry, no bespoke
+    // lair-dispatch entry). Log + skip. (S113: updated log message —
+    // removed the stale "Phase 5 will wire dedicated spell modules" wording
+    // per Q2 directive.)
     log(state, 'action', creature.id,
       `  → cast_spell: "${action.spellName}" (L${castLevel}) ` +
-      `not in GENERIC_SPELLS registry — logged, not executed (Phase 5 will wire dedicated spell modules)`,
+      `not in GENERIC_SPELLS registry and no bespoke lair-dispatch module — ` +
+      `logged, not executed`,
       undefined);
     return;
   }

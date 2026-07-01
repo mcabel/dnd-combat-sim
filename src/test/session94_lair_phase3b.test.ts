@@ -173,15 +173,17 @@ console.log('\n--- 1. cast_spell: Aboleth phantasmal force (in registry) ---');
 }
 
 // ============================================================
-// 2. cast_spell — Zariel::0 (fireball, NOT in generic registry)
-//    Verify: header + "not in GENERIC_SPELLS registry" log fires (no effect).
-//    Fireball has a dedicated module but isn't in the generic dispatch.
+// 2. cast_spell — Aboleth::0 with spellName overridden to "Fireball"
+//    S113 (RFC: docs/RFC-LAIR-ACTION-BESPOKE-DISPATCH.md): Fireball now
+//    dispatches via the lair-bespoke path (it has a dedicated module but
+//    isn't in GENERIC_SPELLS). The lair action ACTUALLY EXECUTES Fireball
+//    instead of logging "not in GENERIC_SPELLS registry".
 // ============================================================
-console.log('\n--- 2. cast_spell: Zariel fireball (NOT in generic registry) ---');
+console.log('\n--- 2. cast_spell: Aboleth "Fireball" (bespoke dispatch, S113) ---');
 {
   // Zariel is not in mm-2014 — use a synthetic action on Aboleth instead.
   // We replace Aboleth::0's spellName with "Fireball" (which has a dedicated
-  // module but is NOT in GENERIC_SPELLS).
+  // module, NOT in GENERIC_SPELLS, but IS in LAIR_BESPOKE_SPELL_META post-S113).
   const aboleth = spawn('Aboleth', { x: 0, y: 0, z: 0 });
   asParty(aboleth);
   forceLairAction(aboleth, 'Aboleth::0');
@@ -193,25 +195,41 @@ console.log('\n--- 2. cast_spell: Zariel fireball (NOT in generic registry) ---'
 
   const t1 = spawn('Goblin', { x: 5, y: 0, z: 0 });
   asEnemy(t1); tankUp(t1);
+  const goblinHPBefore = t1.currentHP;
 
   const bf = makeBF([aboleth, t1]);
   const rlog = runCombat(bf, [aboleth.id, t1.id], {
     maxRounds: 1, verbose: false
   } as any);
 
-  // The "not in GENERIC_SPELLS registry" log fires.
+  // 2a. "casts Fireball" log fires (bespoke dispatch succeeded).
+  const castLog = rlog.events.find((e: any) =>
+    e.type === 'action' && e.actorId === aboleth.id &&
+    e.description.includes('casts Fireball'));
+  assert('2a. "casts Fireball" log fires (bespoke dispatch)',
+    castLog !== undefined,
+    `no cast log; got: ${rlog.events.filter((e:any)=>e.actorId===aboleth.id).map((e:any)=>e.description.substring(0,80)).join(' | ')}`);
+
+  // 2b. Goblin took fire damage (8d6 DC save for half — HP must have dropped).
+  assert('2b. goblin took fire damage from Fireball',
+    t1.currentHP < goblinHPBefore,
+    `HP before=${goblinHPBefore}, after=${t1.currentHP}`);
+
+  // 2c. The OLD "not in GENERIC_SPELLS registry" log does NOT fire.
   const skipLog = rlog.events.find((e: any) =>
     e.type === 'action' && e.actorId === aboleth.id &&
     e.description.includes('not in GENERIC_SPELLS registry'));
-  assert('2a. "not in GENERIC_SPELLS registry" log fires',
-    skipLog !== undefined,
-    `no skip log; got: ${rlog.events.filter((e:any)=>e.actorId===aboleth.id).map((e:any)=>e.description.substring(0,80)).join(' | ')}`);
-  if (skipLog) {
-    assert('2b. log mentions "Fireball"',
-      skipLog.description.includes('Fireball'));
-    assert('2c. log mentions "Phase 5"',
-      skipLog.description.includes('Phase 5'));
-  }
+  assert('2c. old "not in GENERIC_SPELLS registry" log does NOT fire',
+    skipLog === undefined,
+    `skip log fired: ${skipLog?.description}`);
+
+  // 2d. The OLD "Phase 5" wording does NOT appear in any log.
+  const phase5Log = rlog.events.find((e: any) =>
+    e.type === 'action' && e.actorId === aboleth.id &&
+    e.description.includes('Phase 5'));
+  assert('2d. old "Phase 5" wording is gone from all logs',
+    phase5Log === undefined,
+    `Phase 5 log fired: ${phase5Log?.description}`);
 }
 
 // ============================================================

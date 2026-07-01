@@ -1761,6 +1761,17 @@ export interface Combatant {
     // field, so it's undefined (treated as "no linked target").
     targetId?: string | null;
   } | null;
+  // ── Session 113 — Lair-action bespoke dispatch: concentration suppression ──
+  // When true, startConcentration() becomes a no-op for this combatant.
+  // Set by dispatchBespokeLairSpell (src/engine/combat.ts) for Category B
+  // (hazard-like) and Category A-duration-replacement / explicit-exception
+  // lair-action spells — per the user Q1 directive: hazard-like lair
+  // actions ("as though it had cast", "identical to the spell", "fills the
+  // space") and duration-replacement ("lasts until X") do NOT use the
+  // caster's concentration. The flag is set transiently (true before
+  // execute(), cleared in the finally block after execute() returns).
+  // See docs/RFC-LAIR-ACTION-BESPOKE-DISPATCH.md §4.5 for the design.
+  suppressConcentration?: boolean;
 
   // Death saving throws (PHB p.197) — PCs only
   // Monsters die outright at 0 HP; PCs fall unconscious and roll saves.

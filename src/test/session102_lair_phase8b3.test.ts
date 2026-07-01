@@ -423,8 +423,11 @@ console.log('\n--- 10. Handler: cast_spell Creation executes ---');
 
 // ============================================================
 // 11. Handler: cast_spell — Lightning Bolt logs "not in registry"
+//    S113 update: Lightning Bolt is NOT in the S113 pilot batch (only
+//    Fireball, Banishment, Fog Cloud are). It still skips, but with the
+//    S113-updated log message (no longer mentions "Phase 5").
 // ============================================================
-console.log('\n--- 11. Handler: cast_spell Lightning Bolt (not in registry) ---');
+console.log('\n--- 11. Handler: cast_spell Lightning Bolt (pilot: not yet routed) ---');
 {
   const ga = spawn('Githzerai Anarch', 'MPMM');
   asParty(ga); tankUp(ga); noLegendary(ga);
@@ -439,7 +442,9 @@ console.log('\n--- 11. Handler: cast_spell Lightning Bolt (not in registry) ---'
   const bf = makeBF([ga, goblin]);
   const rlog = runCombat(bf, [ga.id, goblin.id], { maxRounds: 1, verbose: false } as any);
 
-  // Lightning Bolt is NOT in the GENERIC_SPELLS registry → log "not in registry".
+  // Lightning Bolt is NOT in GENERIC_SPELLS and NOT in the S113 pilot's
+  // LAIR_BESPOKE_SPELL_META → log "not in GENERIC_SPELLS registry and no
+  // bespoke lair-dispatch module" (S113 updated wording).
   const notInRegLog = rlog.events.find((e: any) =>
     e.type === 'action' && e.actorId === ga.id &&
     e.description.includes('not in GENERIC_SPELLS registry'));
@@ -451,6 +456,14 @@ console.log('\n--- 11. Handler: cast_spell Lightning Bolt (not in registry) ---'
       notInRegLog.description.includes('L5'));
     assert('11c. log mentions "lightning bolt"',
       notInRegLog.description.toLowerCase().includes('lightning bolt'));
+    // 11d. S113: the new log mentions "no bespoke lair-dispatch module"
+    assert('11d. S113 log mentions "no bespoke lair-dispatch module"',
+      notInRegLog.description.includes('no bespoke lair-dispatch module'),
+      `got: ${notInRegLog.description}`);
+    // 11e. S113: the OLD "Phase 5" wording is GONE
+    assert('11e. S113: old "Phase 5" wording is gone',
+      !notInRegLog.description.includes('Phase 5'),
+      `got: ${notInRegLog.description}`);
   }
 }
 
