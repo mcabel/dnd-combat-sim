@@ -7991,6 +7991,17 @@ function callExecuteByPlanType(
       if (t) executeSpikeGrowth(caster, t, state);
       break;
     }
+    // ── S114 batch 3: 2 more spells ──
+    case 'lightningBolt': {
+      const targets = Array.isArray(target) ? target : [target];
+      executeLightningBolt(caster, targets, state);
+      break;
+    }
+    case 'wallOfForce': {
+      const t = Array.isArray(target) ? target[0] : target;
+      if (t) executeWallOfForce(caster, t, state);
+      break;
+    }
     default:
       throw new Error(`Unknown lair-bespoke plan type: ${planType}`);
   }
@@ -8137,6 +8148,13 @@ function dispatchBespokeLairSpell(
         break;
       case 'spikeGrowth':
         target = shouldCastSpikeGrowth(creature, bf);
+        break;
+      // ── S114 batch 3: 2 more spells ──
+      case 'lightningBolt':
+        target = shouldCastLightningBolt(creature, bf);
+        break;
+      case 'wallOfForce':
+        target = shouldCastWallOfForce(creature, bf);
         break;
       default:
         throw new Error(`Unknown lair-bespoke plan type: ${meta.planType}`);

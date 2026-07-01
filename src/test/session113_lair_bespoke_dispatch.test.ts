@@ -113,8 +113,8 @@ function asEnemy(c: Combatant): void { c.faction = 'enemy'; }
 console.log('\n--- 1. Metadata flag ---');
 assert('1a. lairActionBespokeDispatchV1Implemented === true',
   lairActionMetadata.lairActionBespokeDispatchV1Implemented === true);
-assert('1b. LAIR_BESPOKE_SPELL_META has 10 entries (S113 pilot 3 + S114 batch 1 4 + batch 2 3)',
-  LAIR_BESPOKE_SPELL_META.size === 10,
+assert('1b. LAIR_BESPOKE_SPELL_META has 12 entries (S113 pilot 3 + S114 batch 1 4 + batch 2 3 + batch 3 2)',
+  LAIR_BESPOKE_SPELL_META.size === 12,
   `got ${LAIR_BESPOKE_SPELL_META.size}`);
 assert('1c. fireball in meta',
   LAIR_BESPOKE_SPELL_META.has('fireball'));
@@ -309,9 +309,11 @@ console.log('\n--- 4. Fog Cloud dispatch (Bronze Dragon::0, hazard) ---');
 }
 
 // ============================================================
-// 5. Skip path — Lightning Bolt (not in pilot batch)
+// 5. Lightning Bolt dispatch (S114 batch 3: now dispatched)
+//    S113: Lightning Bolt was NOT in the pilot → skipped with "no bespoke".
+//    S114 batch 3: Lightning Bolt IS now in LAIR_BESPOKE_SPELL_META → dispatches.
 // ============================================================
-console.log('\n--- 5. Skip path: Lightning Bolt (not in pilot batch) ---');
+console.log('\n--- 5. Lightning Bolt dispatch (S114 batch 3) ---');
 {
   const ga = spawn('Githzerai Anarch', { x: 0, y: 0, z: 0 }, 'MPMM');
   asParty(ga); tankUp(ga); noLegendary(ga);
@@ -320,29 +322,47 @@ console.log('\n--- 5. Skip path: Lightning Bolt (not in pilot batch) ---');
     a => a.spellName === 'lightning bolt')!;
   forceAction(ga, lbAction);
 
-  const goblin = spawn('Goblin');
+  // Place goblin in a valid Lightning Bolt line position (straight line from caster)
+  const goblin = spawn('Goblin', { x: 5, y: 0, z: 0 });
   asEnemy(goblin); tankUp(goblin, 100_000);
+  const goblinHPBefore = goblin.currentHP;
 
   const bf = makeBF([ga, goblin]);
   const rlog = runCombat(bf, [ga.id, goblin.id], { maxRounds: 1, verbose: false } as any);
 
-  // 5a. Skip log fires with S113-updated wording
+  // 5a. "casts Lightning Bolt" log fires (bespoke dispatch succeeded)
+  const castLog = rlog.events.find((e: any) =>
+    e.type === 'action' && e.actorId === ga.id &&
+    e.description.includes('casts Lightning Bolt'));
+  assert('5a. "casts Lightning Bolt" log fires (S114 batch 3 dispatch)',
+    castLog !== undefined,
+    `events: ${rlog.events.filter((e:any)=>e.actorId===ga.id && e.type==='action').map((e:any)=>e.description.substring(0,80)).join(' | ')}`);
+
+  // 5b. Lightning Bolt damage log fires (8d6 lightning, DEX save)
+  const dmgLog = rlog.events.find((e: any) =>
+    e.actorId === ga.id &&
+    e.description.toLowerCase().includes('lightning damage'));
+  assert('5b. lightning damage log fires',
+    dmgLog !== undefined,
+    `no damage log; events: ${rlog.events.filter((e:any)=>e.actorId===ga.id).map((e:any)=>e.description.substring(0,80)).join(' | ')}`);
+
+  // 5c. Goblin took lightning damage (HP dropped)
+  assert('5c. goblin took lightning damage',
+    goblin.currentHP < goblinHPBefore,
+    `HP before=${goblinHPBefore}, after=${goblin.currentHP}`);
+
+  // 5d. The OLD "no bespoke lair-dispatch module" skip log does NOT fire
   const skipLog = rlog.events.find((e: any) =>
     e.type === 'action' && e.actorId === ga.id &&
     e.description.includes('no bespoke lair-dispatch module'));
-  assert('5a. S113 skip log fires ("no bespoke lair-dispatch module")',
-    skipLog !== undefined,
-    `events: ${rlog.events.filter((e:any)=>e.actorId===ga.id && e.type==='action').map((e:any)=>e.description.substring(0,80)).join(' | ')}`);
+  assert('5d. old "no bespoke" skip log does NOT fire',
+    skipLog === undefined,
+    `skip log fired: ${skipLog?.description}`);
 
-  // 5b. Log mentions "lightning bolt"
-  if (skipLog) {
-    assert('5b. log mentions "lightning bolt"',
-      skipLog.description.toLowerCase().includes('lightning bolt'));
-    // 5c. OLD "Phase 5" wording is GONE
-    assert('5c. old "Phase 5" wording is gone',
-      !skipLog.description.includes('Phase 5'),
-      `got: ${skipLog.description}`);
-  }
+  // 5e. Githzerai Anarch did NOT start concentration (Lightning Bolt is not conc)
+  assert('5e. GA has no concentration active (Lightning Bolt is not conc)',
+    ga.concentration === null || ga.concentration?.active === false,
+    `concentration: ${JSON.stringify(ga.concentration)}`);
 }
 
 // Helper for §5 (force a specific action object, not just by ID)

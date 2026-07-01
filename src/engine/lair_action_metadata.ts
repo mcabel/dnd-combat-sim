@@ -224,7 +224,20 @@ export const LAIR_BESPOKE_SPELL_META: Map<string, LairBespokeSpellMeta> = new Ma
     // the dragon dies" — no fixed round count. Effect persists until caster death (removeEffectsFromCaster).
     // The "uses this lair action again" cleanup would need a separate mechanism (out of scope for S114).
   }],
-  // ── Future expansion (S114 batch 3+) ────────────────────────────
+  // ── S114 batch 3: 2 more spells (giant insect + simulacrum deferred — non-standard signatures) ──
+  ['lightning bolt', {
+    canonicalName: 'Lightning Bolt',
+    planType: 'lightningBolt',
+    signature: 'aoe',
+    concentrationMode: 'normal',  // Not concentration (instantaneous); Category A normal
+  }],
+  ['wall of force', {
+    canonicalName: 'Wall of Force',
+    planType: 'wallOfForce',
+    signature: 'single',
+    concentrationMode: 'normal',  // Category A normal: Elder Brain casts, concentration applies
+  }],
+  // ── Future expansion (S115+) ────────────────────────────────────
   // command (Graz'zt) — not concentration, single-target (multi-target per lair text but v1 single)
   // darkness (Demogorgon) — Category A explicit exception, self, suppress, 1 round
   // darkness (Morkoth) — Category A normal, self, concentration
