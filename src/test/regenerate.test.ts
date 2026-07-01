@@ -257,8 +257,11 @@ console.log('\n=== 4. execute — healing ===\n');
 
 {
   // 4b. Capped at maxHP
+  // S114 fix: set currentHP=95 so ANY heal roll (min 7) → 102 → capped at 100.
+  // Previously currentHP=90, which meant heal rolls 7..9 → HP 97..99 (NOT capped),
+  // causing an RNG flake ~3% of CI runs.
   const caster = makeCleric();
-  const ally   = makeCombatant('fighter1', { pos: { x: 1, y: 0, z: 0 }, currentHP: 90, maxHP: 100 });
+  const ally   = makeCombatant('fighter1', { pos: { x: 1, y: 0, z: 0 }, currentHP: 95, maxHP: 100 });
   const bf     = makeBF([caster, ally]);
   const state  = makeState(bf);
 

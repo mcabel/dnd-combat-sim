@@ -858,7 +858,7 @@ export function extractLairAction(
     const tagEnd = tagStart + sm[0].length;
     const beforeCtx = rawText.substring(Math.max(0, tagStart - 30), tagStart);
     const afterCtx = rawText.substring(tagEnd, Math.min(rawText.length, tagEnd + 80));
-    const isRemedyRef = /ends?\s+this\s+effect|cast\s+on\s+(?:the\s+)?target\s+ends|can\s+(?:be\s+)?(?:ended|removed|reversed|undone)|dispelled\s+by|only\s+(?:a\s+)?(?:this\s+)?spell|if\s+(?:a\s+)?(?:this\s+)?spell|\bspell\s+can\b|\bspell\s+cast\s+on/i.test(beforeCtx + ' ' + afterCtx);
+    const isRemedyRef = /ends?\s+this\s+effect|cast\s+on\s+(?:the\s+)?target\s+ends|can\s+(?:be\s+)?(?:ended|removed|reversed|undone)|dispelled\s+by|only\s+(?:a\s+)?(?:this\s+)?spell|if\s+(?:a\s+)?(?:this\s+)?spell|\bspell\s+can\b|\bspell\s+cast\s+on|\breceives?\s+(?:a\s+)?(?:this\s+)?spell/i.test(beforeCtx + ' ' + afterCtx);
     if (!isRemedyRef) {
       isSpell = true;
       spellName = name;
