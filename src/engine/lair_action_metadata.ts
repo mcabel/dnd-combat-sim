@@ -48,6 +48,7 @@
 //    - execute(caster, targets: Combatant[], state) → 'aoe'
 //    - execute(caster, target: Combatant, state)   → 'single'
 //    - execute(caster, _self: Combatant, state)    → 'self'
+//    - execute(caster, state)  [no target; shouldCast returns boolean] → 'cast'
 // 3. Determine the concentrationMode per the Q1 lair-action rules:
 //    - Read the lair action's raw text in bestiaryData/legendarygroups.json
 //    - Category A normal ("casts the spell", spell is concentration,
@@ -94,9 +95,10 @@ import { Combatant, Action, LairAction } from '../types/core';
  * moonbeam, phantasmal force, power word kill, sleet storm, spike growth,
  * wall of force (9 more → 12 of 15).
  * Expansion coverage (S115): darkness with per-creature concentration
- * override (Demogorgon: suppress; Morkoth: normal) → 13 of 15.
- * Remaining 2: giant insect (non-standard signature), simulacrum (stub
- * module). Note: lesser restoration is a parser mis-tag (see RFC §2.3).
+ * override (Demogorgon: suppress; Morkoth: normal) + giant insect with 4th
+ * signature type 'cast' (Arasta: suppress, no fixed duration) → 14 of 15.
+ * Remaining 1: simulacrum (stub module — needs real implementation first).
+ * Note: lesser restoration is a parser mis-tag (see RFC §2.3).
  */
 export const lairActionMetadata = {
   // Session 113: lair-action cast_spell now dispatches to bespoke spell
@@ -104,8 +106,9 @@ export const lairActionMetadata = {
   // See docs/RFC-LAIR-ACTION-BESPOKE-DISPATCH.md for the full design.
   lairActionBespokeDispatchV1Implemented: true,
   // Session 115: per-creature concentration override added (darkness:
-  // Demogorgon suppress vs Morkoth normal). 13 of 15 bespoke-only spells
-  // now dispatch.
+  // Demogorgon suppress vs Morkoth normal) + 4th signature type 'cast'
+  // (giant insect: Arasta suppress, no fixed duration). 14 of 15
+  // bespoke-only spells now dispatch.
   // Future: lairActionBespokeDispatchV2FullCoverage (when all 15 spells routed)
 };
 
@@ -116,8 +119,11 @@ export const lairActionMetadata = {
  * - 'aoe':    execute(caster, targets: Combatant[], state)
  * - 'single': execute(caster, target: Combatant, state)
  * - 'self':   execute(caster, _self: Combatant, state)  (target ignored)
+ * - 'cast':   execute(caster, state)  (NO target param; shouldCast returns
+ *             boolean instead of Combatant | null — S115+ for spells like
+ *             Giant Insect that don't target anyone)
  */
-export type BespokeSignature = 'aoe' | 'single' | 'self';
+export type BespokeSignature = 'aoe' | 'single' | 'self' | 'cast';
 
 /**
  * Q1 lair-action concentration categorization.
@@ -302,8 +308,26 @@ export const LAIR_BESPOKE_SPELL_META: Map<string, LairBespokeSpellMeta> = new Ma
       },
     },
   }],
+  // ── S115: giant insect — 4th signature type 'cast' ────────────
+  // Arasta (MOT::1): "Arasta casts the giant insect spell (spiders only).
+  // It lasts until she uses this lair action again or until she dies."
+  // → Category A duration-replacement → concentrationMode = 'suppress'.
+  //   No fixed lair duration (lasts until lair action used again or death —
+  //   similar to spike growth). The "spiders only" variant is a v1
+  //   simplification: the spell's execute() just sets a forward-compat flag
+  //   (_genericSpellActiveSpells); the actual summoning is NOT modelled.
+  //   signature = 'cast' (4th type): execute(caster, state) with NO target
+  //   param, shouldCast returns boolean (not Combatant | null).
+  ['giant insect', {
+    canonicalName: 'Giant Insect',
+    planType: 'giantInsect',
+    signature: 'cast',             // 4th signature type: execute(caster, state), shouldCast → boolean
+    concentrationMode: 'suppress', // Category A duration-replacement: "lasts until she uses this lair action again or until she dies"
+    // lairDurationRounds undefined: no fixed round count. The forward-compat
+    // flag persists until caster death (removeEffectsFromCaster) or a future
+    // "uses this lair action again" cleanup mechanism (out of scope for S115).
+  }],
   // ── Future expansion (S116+) ────────────────────────────────────
-  // giant insect (Arasta) — Category A duration-replacement, special (summon), suppress
   // simulacrum (Fraz-Urb'luu) — Category B hazard, special (summon), suppress, 1 round
   // antimagic field (Demilich) — Q2: skip (no module). Future: implement antimagic_field.ts first.
   // lesser restoration (Fazrian) — PARSER MIS-TAG, do NOT add (see RFC §2.3)

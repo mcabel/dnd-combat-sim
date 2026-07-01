@@ -658,6 +658,10 @@ import {
   execute as executeDarkness,
 } from '../spells/darkness';
 import {
+  shouldCast as shouldCastGiantInsect,
+  execute as executeGiantInsect,
+} from '../spells/giant_insect';
+import {
   shouldCast as shouldCastWallOfFire,
   execute as executeWallOfFire,
 } from '../spells/wall_of_fire';
@@ -8008,6 +8012,14 @@ function callExecuteByPlanType(
       executeDarkness(caster, caster, state);
       break;
     }
+    // ── S115: giant insect — 'cast' signature (NO target param) ──
+    case 'giantInsect': {
+      // Giant Insect execute takes only (caster, state) — no target.
+      // The target param is ignored (shouldCast returned boolean, converted
+      // to `creature` by the dispatcher's shouldCast switch below).
+      executeGiantInsect(caster, state);
+      break;
+    }
     default:
       throw new Error(`Unknown lair-bespoke plan type: ${planType}`);
   }
@@ -8180,6 +8192,13 @@ function dispatchBespokeLairSpell(
       // ── S115: darkness — self signature (shouldCast returns caster) ──
       case 'darkness':
         target = shouldCastDarkness(creature, bf);
+        break;
+      // ── S115: giant insect — 'cast' signature (shouldCast returns boolean) ──
+      // Convert boolean → Combatant|null so the existing `if (!target) skip`
+      // logic works. The target is the caster itself (giant insect doesn't
+      // target anyone); callExecuteByPlanType's 'giantInsect' case ignores it.
+      case 'giantInsect':
+        target = shouldCastGiantInsect(creature, bf) ? creature : null;
         break;
       default:
         throw new Error(`Unknown lair-bespoke plan type: ${meta.planType}`);

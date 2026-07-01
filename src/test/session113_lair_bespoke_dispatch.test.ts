@@ -17,6 +17,7 @@
 //   7. Regression — Aboleth phantasmal force still uses generic-registry path
 //   8. S115: Demogorgon darkness dispatch (Category A explicit exception, suppress conc)
 //   9. S115: Morkoth darkness dispatch (Category A normal, concentration applies)
+//   10. S115: Arasta giant insect dispatch (4th signature type 'cast', suppress, no fixed duration)
 //
 // Run: npx ts-node --transpile-only src/test/session113_lair_bespoke_dispatch.test.ts
 // ============================================================
@@ -46,7 +47,7 @@ function eq<T>(label: string, a: T, e: T): void {
 
 // ---- Load bestiary ------------------------------------------
 
-const NEEDED_SOURCES = ['mm-2014', 'mtf', 'mpmm', 'aitfr-dn', 'pota', 'wdmm', 'cos', 'coa'];
+const NEEDED_SOURCES = ['mm-2014', 'mtf', 'mpmm', 'aitfr-dn', 'pota', 'wdmm', 'cos', 'coa', 'mot'];
 const dir = path.join(__dirname, '../../bestiaryData');
 const allFiles = fs.readdirSync(dir).filter(f => f.endsWith('.json'));
 const files = allFiles.filter(f =>
@@ -137,8 +138,8 @@ function pin(c: Combatant): void { c.speed = 0; c.flySpeed = null; c.swimSpeed =
 console.log('\n--- 1. Metadata flag ---');
 assert('1a. lairActionBespokeDispatchV1Implemented === true',
   lairActionMetadata.lairActionBespokeDispatchV1Implemented === true);
-assert('1b. LAIR_BESPOKE_SPELL_META has 13 entries (S113 pilot 3 + S114 batch 1 4 + batch 2 3 + batch 3 2 + S115 darkness 1)',
-  LAIR_BESPOKE_SPELL_META.size === 13,
+assert('1b. LAIR_BESPOKE_SPELL_META has 14 entries (S113 pilot 3 + S114 batch 1 4 + batch 2 3 + batch 3 2 + S115 darkness 1 + giant insect 1)',
+  LAIR_BESPOKE_SPELL_META.size === 14,
   `got ${LAIR_BESPOKE_SPELL_META.size}`);
 assert('1c. fireball in meta',
   LAIR_BESPOKE_SPELL_META.has('fireball'));
@@ -176,6 +177,16 @@ eq('1r. Demogorgon override lairDurationRounds = 1',
   LAIR_BESPOKE_SPELL_META.get('darkness')!.creatureOverride?.['Demogorgon']?.lairDurationRounds, 1);
 assert('1s. Morkoth has NO override (uses default normal)',
   LAIR_BESPOKE_SPELL_META.get('darkness')!.creatureOverride?.['Morkoth'] === undefined);
+
+// ── S115: giant insect metadata + 4th signature type 'cast' ──
+assert('1t. giant insect in meta (S115)',
+  LAIR_BESPOKE_SPELL_META.has('giant insect'));
+eq('1u. giant insect signature = cast (4th type: execute(caster, state), shouldCast → boolean)',
+  LAIR_BESPOKE_SPELL_META.get('giant insect')!.signature, 'cast');
+eq('1v. giant insect concentrationMode = suppress (Category A duration-replacement)',
+  LAIR_BESPOKE_SPELL_META.get('giant insect')!.concentrationMode, 'suppress');
+assert('1w. giant insect has NO lairDurationRounds (lasts until lair action used again or death)',
+  LAIR_BESPOKE_SPELL_META.get('giant insect')!.lairDurationRounds === undefined);
 
 // ============================================================
 // 2. Fireball dispatch (Zariel MPMM Zariel::0, Category A normal, AoE)
@@ -673,6 +684,79 @@ console.log('\n--- 9. Morkoth darkness (S115: normal default, no override) ---')
     e.description.includes('no bespoke lair-dispatch module'));
   assert('9g. old skip log does NOT fire',
     skipLog === undefined);
+}
+
+// ============================================================
+// 10. S115: Arasta giant insect dispatch (4th signature type 'cast', suppress)
+//     Raw text: "Arasta casts the giant insect spell (spiders only). It lasts
+//     until she uses this lair action again or until she dies."
+//     → concentrationMode = 'suppress' (Category A duration-replacement),
+//       lairDurationRounds = undefined (no fixed duration — lasts until
+//       lair action used again or death, like spike growth).
+//     signature = 'cast' (4th type): execute(caster, state) with NO target
+//     param, shouldCast returns boolean. The dispatcher converts the boolean
+//     to `creature | null` so the existing skip-if-null logic works.
+//     v1 simplification: the spell's execute() just sets a forward-compat
+//     flag (_genericSpellActiveSpells); the actual summoning is NOT modelled.
+// ============================================================
+console.log('\n--- 10. Arasta giant insect (S115: 4th signature type cast, suppress) ---');
+{
+  const arasta = spawn('Arasta', { x: 0, y: 0, z: 0 }, 'MOT');
+  asParty(arasta);
+  forceLairAction(arasta, 'Arasta::1');  // giant insect L4 (spiders only)
+  tankUp(arasta);
+  noLegendary(arasta);
+  // Clear regular-turn actions so Arasta doesn't cast anything on her turn.
+  arasta.actions = [];
+  // Pin Arasta so she can't Dash toward the goblin (movement-based flake prevention).
+  pin(arasta);
+
+  const goblin = spawn('Goblin', { x: 3, y: 0, z: 0 });
+  asEnemy(goblin); tankUp(goblin);
+  goblin.actions = [];
+  pin(goblin);
+
+  const bf = makeBF([arasta, goblin]);
+  const rlog = runCombat(bf, [arasta.id, goblin.id], {
+    maxRounds: 1, verbose: false
+  } as any);
+
+  // 10a. "casts Giant Insect" log fires (bespoke dispatch succeeded)
+  const castLog = rlog.events.find((e: any) =>
+    e.type === 'action' && e.actorId === arasta.id &&
+    e.description.includes('casts Giant Insect'));
+  assert('10a. "casts Giant Insect" log fires (S115 Arasta dispatch)',
+    castLog !== undefined,
+    `events: ${rlog.events.filter((e:any)=>e.actorId===arasta.id && e.type==='action').map((e:any)=>e.description.substring(0,80)).join(' | ')}`);
+
+  // 10b. Arasta's _genericSpellActiveSpells has 'Giant Insect' (forward-compat flag set)
+  assert('10b. Arasta._genericSpellActiveSpells has "Giant Insect" (flag set)',
+    arasta._genericSpellActiveSpells?.has('Giant Insect') === true,
+    `_genericSpellActiveSpells: ${JSON.stringify([...(arasta._genericSpellActiveSpells ?? [])])}`);
+
+  // 10c. Arasta did NOT start concentration (suppress mode + execute doesn't call startConcentration)
+  assert('10c. Arasta did NOT start concentration (suppress mode)',
+    arasta.concentration === null || arasta.concentration?.active === false,
+    `concentration: ${JSON.stringify(arasta.concentration)}`);
+
+  // 10d. suppressConcentration flag was cleaned up after execute
+  assert('10d. suppressConcentration flag cleared after execute',
+    arasta.suppressConcentration !== true,
+    `suppressConcentration: ${arasta.suppressConcentration}`);
+
+  // 10e. The OLD skip log does NOT fire
+  const skipLog = rlog.events.find((e: any) =>
+    e.type === 'action' && e.actorId === arasta.id &&
+    e.description.includes('no bespoke lair-dispatch module'));
+  assert('10e. old skip log does NOT fire',
+    skipLog === undefined);
+
+  // 10f. No new ActiveEffects were created (giant insect v1 only sets a flag, no effects)
+  // The dispatcher's post-processing loop runs but finds 0 new effects.
+  const giantInsectEffects = arasta.activeEffects.filter(e => e.spellName === 'Giant Insect');
+  assert('10f. no "Giant Insect" ActiveEffect created (v1 forward-compat flag only)',
+    giantInsectEffects.length === 0,
+    `effects: ${JSON.stringify(giantInsectEffects.map(e => ({spellName: e.spellName, effectType: e.effectType})))}`);
 }
 
 // ============================================================
