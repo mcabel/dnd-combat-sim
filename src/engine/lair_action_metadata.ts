@@ -141,7 +141,7 @@ export interface LairBespokeSpellMeta {
   lairDurationRounds?: number;
 }
 
-// ---- Per-spell metadata table (pilot: 3 spells) -------------
+// ---- Per-spell metadata table (pilot + S114 expansion) -------
 
 /**
  * Per-spell metadata for the lair-action bespoke dispatcher.
@@ -149,9 +149,11 @@ export interface LairBespokeSpellMeta {
  * Keyed by LOWERCASE spell name (the bestiary stores spell names in
  * lowercase; the dispatcher normalizes via toLowerCase() before lookup).
  *
- * S113 pilot: 3 spells covering all 3 signature shapes + both concentration
- * categories. S114+ will add the remaining 12 spells (see RFC §6 for the
- * full list).
+ * S113 pilot: 3 spells (fireball, banishment, fog cloud) — all 3 signature
+ * shapes + both concentration categories.
+ * S114 batch 1: 4 single-target Category A spells (cloud of daggers, moonbeam,
+ * phantasmal force, power word kill).
+ * S114 batch 2+: remaining 8 spells (see RFC §6 for the full list).
  */
 export const LAIR_BESPOKE_SPELL_META: Map<string, LairBespokeSpellMeta> = new Map([
   // ── Pilot batch (S113) ──────────────────────────────────────────
@@ -174,16 +176,37 @@ export const LAIR_BESPOKE_SPELL_META: Map<string, LairBespokeSpellMeta> = new Ma
     concentrationMode: 'suppress',  // Category B hazard: Bronze Dragon lair creates fog
     lairDurationRounds: 1,          // "until initiative count 20 on the next round" = 1 round
   }],
-  // ── Future expansion (S114+) ────────────────────────────────────
-  // cloud of daggers (Kyrilla) — Category A normal, single-target, concentration
+  // ── S114 batch 1: 4 single-target Category A spells ────────────
+  ['cloud of daggers', {
+    canonicalName: 'Cloud of Daggers',
+    planType: 'cloudOfDaggers',
+    signature: 'single',
+    concentrationMode: 'normal',  // Category A normal: Kyrilla casts, concentration confirmed by lair text
+  }],
+  ['moonbeam', {
+    canonicalName: 'Moonbeam',
+    planType: 'moonbeam',
+    signature: 'single',
+    concentrationMode: 'normal',  // Category A normal: Kyrilla casts, concentration confirmed by lair text
+  }],
+  ['phantasmal force', {
+    canonicalName: 'Phantasmal Force',
+    planType: 'phantasmalForce',
+    signature: 'single',
+    concentrationMode: 'normal',  // Category A normal: Aboleth casts, concentration confirmed by lair text
+  }],
+  ['power word kill', {
+    canonicalName: 'Power Word Kill',
+    planType: 'powerWordKill',
+    signature: 'single',
+    concentrationMode: 'normal',  // Not concentration (instantaneous); 'normal' is fine
+  }],
+  // ── Future expansion (S114 batch 2+) ────────────────────────────
   // command (Graz'zt) — not concentration, single-target (multi-target per lair text but v1 single)
   // darkness (Demogorgon) — Category A explicit exception, self, suppress, 1 round
   // darkness (Morkoth) — Category A normal, self, concentration
   // giant insect (Arasta) — Category A duration-replacement, special (summon), suppress
   // lightning bolt (Githzerai Anarch) — not concentration, AoE line (v1: treat as aoe)
-  // moonbeam (Kyrilla) — Category A normal, single-target, concentration
-  // phantasmal force (Aboleth) — Category A normal, single-target, concentration
-  // power word kill (Orcus) — not concentration, single-target
   // simulacrum (Fraz-Urb'luu) — Category B hazard, special (summon), suppress, 1 round
   // sleet storm (Yan-C-Bin) — Category B hazard, AoE, suppress, 1 round
   // spike growth (Copper Dragon) — Category B hazard, AoE, suppress, until dragon uses lair again/dies

@@ -7954,6 +7954,27 @@ function callExecuteByPlanType(
       executeFogCloud(caster, caster, state);
       break;
     }
+    // ── S114 batch 1: 4 single-target spells ──
+    case 'cloudOfDaggers': {
+      const t = Array.isArray(target) ? target[0] : target;
+      if (t) executeCloudOfDaggers(caster, t, state);
+      break;
+    }
+    case 'moonbeam': {
+      const t = Array.isArray(target) ? target[0] : target;
+      if (t) executeMoonbeam(caster, t, state);
+      break;
+    }
+    case 'phantasmalForce': {
+      const t = Array.isArray(target) ? target[0] : target;
+      if (t) executePhantasmalForce(caster, t, state);
+      break;
+    }
+    case 'powerWordKill': {
+      const t = Array.isArray(target) ? target[0] : target;
+      if (t) executePowerWordKill(caster, t, state);
+      break;
+    }
     default:
       throw new Error(`Unknown lair-bespoke plan type: ${planType}`);
   }
@@ -8077,6 +8098,19 @@ function dispatchBespokeLairSpell(
         break;
       case 'fogCloud':
         target = shouldCastFogCloud(creature, bf);
+        break;
+      // ── S114 batch 1: 4 single-target spells ──
+      case 'cloudOfDaggers':
+        target = shouldCastCloudOfDaggers(creature, bf);
+        break;
+      case 'moonbeam':
+        target = shouldCastMoonbeam(creature, bf);
+        break;
+      case 'phantasmalForce':
+        target = shouldCastPhantasmalForce(creature, bf);
+        break;
+      case 'powerWordKill':
+        target = shouldCastPowerWordKill(creature, bf);
         break;
       default:
         throw new Error(`Unknown lair-bespoke plan type: ${meta.planType}`);

@@ -113,8 +113,8 @@ function asEnemy(c: Combatant): void { c.faction = 'enemy'; }
 console.log('\n--- 1. Metadata flag ---');
 assert('1a. lairActionBespokeDispatchV1Implemented === true',
   lairActionMetadata.lairActionBespokeDispatchV1Implemented === true);
-assert('1b. LAIR_BESPOKE_SPELL_META has 3 entries (pilot: fireball, banishment, fog cloud)',
-  LAIR_BESPOKE_SPELL_META.size === 3,
+assert('1b. LAIR_BESPOKE_SPELL_META has 7 entries (S113 pilot 3 + S114 batch 1 4)',
+  LAIR_BESPOKE_SPELL_META.size === 7,
   `got ${LAIR_BESPOKE_SPELL_META.size}`);
 assert('1c. fireball in meta',
   LAIR_BESPOKE_SPELL_META.has('fireball'));
@@ -391,13 +391,11 @@ console.log('\n--- 6. Antimagic field skip (Q2: no module) ---');
 }
 
 // ============================================================
-// 7. Regression — Aboleth phantasmal force (bespoke-only, NOT in pilot)
-//    phantasmal force has a bespoke module but is NOT in the S113 pilot's
-//    LAIR_BESPOKE_SPELL_META. It should skip with the S113-updated log.
-//    (When S114 adds phantasmal force to the meta, this test will flip to
-//    assert execution.)
+// 7. Regression — Aboleth phantasmal force (S114 batch 1: now DISPATCHED)
+//    S113: phantasmal force was NOT in the pilot → skipped.
+//    S114 batch 1: phantasmal force IS now in LAIR_BESPOKE_SPELL_META → executes.
 // ============================================================
-console.log('\n--- 7. Regression: Aboleth phantasmal force (bespoke-only, not in pilot) ---');
+console.log('\n--- 7. Aboleth phantasmal force (S114 batch 1: now dispatched) ---');
 {
   const aboleth = spawn('Aboleth', { x: 0, y: 0, z: 0 });
   asParty(aboleth);
@@ -413,23 +411,25 @@ console.log('\n--- 7. Regression: Aboleth phantasmal force (bespoke-only, not in
     maxRounds: 1, verbose: false
   } as any);
 
-  // 7a. Skip log fires (phantasmal force is NOT in the S113 pilot meta)
+  // 7a. "casts Phantasmal Force" log fires (bespoke dispatch succeeded)
+  const castLog = rlog.events.find((e: any) =>
+    e.type === 'action' && e.actorId === aboleth.id &&
+    e.description.includes('casts Phantasmal Force'));
+  assert('7a. "casts Phantasmal Force" log fires (S114 batch 1 dispatch)',
+    castLog !== undefined,
+    `events: ${rlog.events.filter((e:any)=>e.actorId===aboleth.id && e.type==='action').map((e:any)=>e.description.substring(0,80)).join(' | ')}`);
+
+  // 7b. Aboleth started concentration (Phantasmal Force is concentration, Category A normal)
+  assert('7b. Aboleth started concentration on Phantasmal Force',
+    aboleth.concentration?.active === true && aboleth.concentration?.spellName === 'Phantasmal Force',
+    `concentration: ${JSON.stringify(aboleth.concentration)}`);
+
+  // 7c. The OLD skip log does NOT fire
   const skipLog = rlog.events.find((e: any) =>
     e.type === 'action' && e.actorId === aboleth.id &&
     e.description.includes('no bespoke lair-dispatch module'));
-  assert('7a. S113 skip log fires for phantasmal force (not in pilot)',
-    skipLog !== undefined,
-    `events: ${rlog.events.filter((e:any)=>e.actorId===aboleth.id && e.type==='action').map((e:any)=>e.description.substring(0,80)).join(' | ')}`);
-
-  // 7b. Log mentions "phantasmal force"
-  if (skipLog) {
-    assert('7b. log mentions "phantasmal force"',
-      skipLog.description.toLowerCase().includes('phantasmal force'));
-    // 7c. OLD "Phase 5" wording is GONE
-    assert('7c. old "Phase 5" wording is gone',
-      !skipLog.description.includes('Phase 5'),
-      `got: ${skipLog.description}`);
-  }
+  assert('7c. old skip log does NOT fire (phantasmal force now dispatched)',
+    skipLog === undefined);
 }
 
 // ============================================================
