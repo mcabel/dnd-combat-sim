@@ -127,6 +127,22 @@ export const metadata = {
   // hitChance inside actionDamageWeight is refined. S108 next-action #10: LOW
   // risk (helper-only, dispatch unchanged). See encounterAvgAC below.
   hallowEnergyVulnerabilityV2EncounterAC: true,
+  // Session 110: the S109 encounterAvgAC uses the AVERAGE AC of ALL living
+  // enemies — but the Hallow target is NOT drawn uniformly from this pool.
+  // shouldCastEnergyVulnerability picks the HIGHEST-HP enemy within 60 ft (the
+  // biggest threat). So the most accurate AC for the hitChance calculation is
+  // the LIKELY TARGET's AC, not the encounter average. S109 next-action #11
+  // proposed reordering the combat.ts dispatch to pick the target FIRST (MEDIUM
+  // risk — touches the S106 dispatch rule). S110 achieves the same target-
+  // specific accuracy at LOW risk (helper-only, dispatch UNCHANGED):
+  // pickHallowDamageType now predicts the likely target itself (highest-HP
+  // living enemy within 60 ft, mirroring shouldCastEnergyVulnerability's
+  // selection minus the type-dependent vuln-skip) and uses THAT enemy's AC,
+  // falling back to encounterAvgAC (S109 behavior) when no enemy is within
+  // 60 ft. The dispatch order is still unchanged — pickHallowDamageType runs
+  // first (type), shouldCastEnergyVulnerability runs second (target). See
+  // likelyHallowTargetAC below.
+  hallowEnergyVulnerabilityV2LikelyTargetAC: true,
 } as const;
 
 function emit(state: EngineState, type: CombatEvent['type'], actorId: string, desc: string, targetId?: string, value?: number): void {
@@ -466,6 +482,87 @@ export function encounterAvgAC(caster: Combatant, bf: Battlefield): number {
 }
 
 /**
+ * Predicts the AC of the enemy that `shouldCastEnergyVulnerability` will
+ * actually select as the Hallow target — the HIGHEST-HP living enemy within
+ * Hallow's 60-ft range (the biggest threat, the one doubled damage chips
+ * through fastest). S110 refinement of the S109 encounterAvgAC: the S109
+ * helper uses the AVERAGE AC of ALL living enemies, but the Hallow target is
+ * NOT drawn uniformly from that pool — `shouldCastEnergyVulnerability` picks
+ * the single highest-HP enemy within 60 ft. So the most accurate AC for the
+ * hitChance calculation is the LIKELY TARGET's AC, not the encounter average.
+ *
+ * S109 next-action #11 proposed reordering the combat.ts dispatch to pick the
+ * target FIRST (MEDIUM risk — touches the S106 dispatch rule). S110 achieves
+ * the same target-specific accuracy at LOW risk (helper-only, dispatch
+ * UNCHANGED): `pickHallowDamageType` computes the likely target itself (using
+ * the SAME selection heuristic as `shouldCastEnergyVulnerability` — highest
+ * maxHP, tie-broken by nearest distance — minus the type-dependent vuln-skip,
+ * which can't be applied at pick time since the damage type isn't chosen yet).
+ *
+ * Selection mirrors `shouldCastEnergyVulnerability`:
+ *   - enemies only (faction differs from caster's)
+ *   - not dead / unconscious
+ *   - within 60 ft (chebyshev3D(caster.pos, c.pos) × 5 ≤ 60 — the same range
+ *     gate `shouldCastEnergyVulnerability` uses; enemies beyond 60 ft can
+ *     NEVER be the Hallow target so their AC must not influence the pick)
+ *   - highest maxHP wins (the biggest threat); ties broken by NEAREST distance
+ *     (same tie-break as `shouldCastEnergyVulnerability`); full ties keep
+ *     first-seen (Map insertion order — matches the stable-sort behaviour of
+ *     `shouldCastEnergyVulnerability`'s candidates.sort)
+ *
+ * Falls back to `encounterAvgAC(caster, bf)` (the S109 encounter average,
+ * which itself falls back to BESTIARY_MEAN_AC when no living enemies are
+ * present) when no enemy is within 60 ft. This preserves all S109 unit tests:
+ *   - §5b-§5g (no enemies on the battlefield) → no likely target → fallback to
+ *     encounterAvgAC → bestiary mean → identical S109 hitChance values.
+ *   - §5h/§5i (a SINGLE enemy within 60 ft) → likely target = that enemy →
+ *     its AC equals the S109 encounter average (only one enemy) → identical.
+ *   - §6-§16 (enemies at AC 14, single party damage type) → likely target AC
+ *     14 = encounter avg 14 → identical (and the single damage type makes the
+ *     pick AC-independent anyway).
+ *   - §5j (encounterAvgAC direct) → unchanged (encounterAvgAC not modified).
+ *
+ * The ONLY behavioural change vs S109 is in multi-enemy encounters where the
+ * highest-HP enemy's AC differs from the encounter average — see §5l for the
+ * flip demo (a high-HP low-AC "squishy boss" makes attack rolls land more
+ * often vs the likely target than the encounter average suggests, so doubling
+ * attack damage becomes the better pick).
+ *
+ * Used by pickHallowDamageType (S110). The dispatch wiring (S106 case 'hallow'
+ * in combat.ts) is STILL unchanged — only the AC fed into the attack-roll
+ * hitChance inside actionDamageWeight is refined (from encounter average to
+ * likely-target-specific).
+ */
+export function likelyHallowTargetAC(caster: Combatant, bf: Battlefield): number {
+  let best: { ac: number; maxHP: number; distFt: number } | null = null;
+  for (const c of bf.combatants.values()) {
+    if (c.id === caster.id) continue;             // not the caster
+    if (c.faction === caster.faction) continue;    // only enemies (opposing faction)
+    if (c.isDead || c.isUnconscious) continue;     // only living enemies
+    // Same finite-AC guard as encounterAvgAC (NaN/Infinity would poison the
+    // pick — skip such combatants so a malformed entry can't skew the result).
+    if (typeof c.ac !== 'number' || !isFinite(c.ac)) continue;
+    const distFt = chebyshev3D(caster.pos, c.pos) * 5;
+    if (distFt > 60) continue;                     // beyond Hallow's 60-ft range
+    // Mirror shouldCastEnergyVulnerability: highest maxHP wins; ties broken by
+    // nearest distance; full ties keep first-seen (strict > / strict < so an
+    // equal-HP equal-distance later enemy does NOT override the first-seen).
+    if (best === null
+      || c.maxHP > best.maxHP
+      || (c.maxHP === best.maxHP && distFt < best.distFt)) {
+      best = { ac: c.ac, maxHP: c.maxHP, distFt };
+    }
+  }
+  // No enemy within 60 ft → fall back to the S109 encounter average (which
+  // itself falls back to BESTIARY_MEAN_AC when no living enemies exist at all).
+  // The fallback value is only used when Hallow can't target anyone nearby —
+  // in that case shouldCastEnergyVulnerability returns null and EV doesn't
+  // fire, so the damage-type pick is moot. Keeping the S109 fallback ensures
+  // the helper never returns undefined and preserves the S109 unit tests.
+  return best !== null ? best.ac : encounterAvgAC(caster, bf);
+}
+
+/**
  * Computes the per-round expected-damage weight for a damage-dealing action:
  * `expectedDamage × availability × hitChance`. See the §S107 comment above for
  * the full model. Returns 0 for actions with no damage dice. S108 refines the
@@ -473,7 +570,13 @@ export function encounterAvgAC(caster: Combatant, bf: Battlefield): number {
  * refines it further: the AC passed to bestiaryHitChance is now the
  * encounter-specific average AC of living enemies (encounterAC, computed once
  * by pickHallowDamageType via encounterAvgAC) instead of the global bestiary
- * mean — so the hitChance reflects the actual enemies on the field.
+ * mean — so the hitChance reflects the actual enemies on the field. S110
+ * refines the AC once more: instead of the encounter AVERAGE AC, the LIKELY
+ * TARGET's AC is used (likelyHallowTargetAC — the highest-HP enemy within
+ * 60 ft, mirroring shouldCastEnergyVulnerability's selection). The likely-
+ * target AC is more faithful than the encounter average because the Hallow
+ * target is NOT drawn uniformly from the enemy pool — it's the single
+ * highest-HP enemy within range.
  */
 function actionDamageWeight(a: Action, encounterAC: number): number {
   const d = a.damage!;
@@ -531,16 +634,32 @@ function actionDamageWeight(a: Action, encounterAC: number): number {
  * does). Falls back to the bestiary mean when no living enemies are present
  * (preserves all S108 unit tests, which have no enemies on the battlefield).
  *
+ * S110 refinement: the AC passed to actionDamageWeight is now the LIKELY
+ * TARGET's AC (likelyHallowTargetAC — the highest-HP living enemy within
+ * Hallow's 60-ft range, mirroring shouldCastEnergyVulnerability's selection)
+ * instead of the encounter AVERAGE AC. The Hallow target is NOT drawn
+ * uniformly from the enemy pool — `shouldCastEnergyVulnerability` picks the
+ * single highest-HP enemy within 60 ft — so the likely-target AC is a more
+ * faithful representative than the encounter average. Falls back to
+ * encounterAvgAC (S109 behavior) when no enemy is within 60 ft. Computed ONCE
+ * here (the AC is the same for all actions; only the per-action hitBonus
+ * varies). The dispatch wiring (S106 case 'hallow' in combat.ts) is STILL
+ * unchanged — pickHallowDamageType runs first (type), then
+ * shouldCastEnergyVulnerability runs second (target). See
+ * likelyHallowTargetAC above.
+ *
  * Ties broken by first-seen order (deterministic). When all party actions have
  * identical damage dice + availability + hitChance, v2 weight ∝ action count,
  * so the v1 winner is preserved (existing S106 tests with uniform-damage
  * actions still pass).
  */
 export function pickHallowDamageType(caster: Combatant, bf: Battlefield): DamageType | null {
-  // S109: encounter-specific average AC of living enemies (bestiary mean
-  // fallback when none). Computed once — the AC is the same for all actions;
-  // only the per-action hitBonus varies.
-  const encounterAC = encounterAvgAC(caster, bf);
+  // S110: likely-target AC (highest-HP living enemy within 60 ft, mirroring
+  // shouldCastEnergyVulnerability's selection). Falls back to encounterAvgAC
+  // (S109 encounter average → BESTIARY_MEAN_AC) when no enemy is within range.
+  // Computed once — the AC is the same for all actions; only the per-action
+  // hitBonus varies.
+  const encounterAC = likelyHallowTargetAC(caster, bf);
   const weights: Partial<Record<DamageType, number>> = {};
   for (const c of bf.combatants.values()) {
     if (c.faction !== caster.faction) continue;  // only party members

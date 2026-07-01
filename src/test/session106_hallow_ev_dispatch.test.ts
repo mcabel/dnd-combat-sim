@@ -36,6 +36,7 @@ import {
   pickHallowDamageType,
   bestiaryHitChance,
   encounterAvgAC,
+  likelyHallowTargetAC,
   metadata as halMeta,
 } from '../spells/hallow';
 import { executePlannedAction, EngineState } from '../engine/combat';
@@ -196,6 +197,7 @@ eq('Daylight flag still true (unchanged)', (halMeta as any).hallowDaylightOnlyV1
 eq('S107 v2 weighted flag = true', (halMeta as any).hallowEnergyVulnerabilityV2Weighted, true);
 eq('S108 v2 bestiary hitChance flag = true', (halMeta as any).hallowEnergyVulnerabilityV2BestiaryHitChance, true);
 eq('S109 v2 encounter AC flag = true', (halMeta as any).hallowEnergyVulnerabilityV2EncounterAC, true);
+eq('S110 v2 likely-target AC flag = true', (halMeta as any).hallowEnergyVulnerabilityV2LikelyTargetAC, true);
 
 // ============================================================
 // 2. pickHallowDamageType: single party member, single damage type
@@ -597,6 +599,153 @@ console.log('\n--- 5j. S109 encounterAvgAC direct value verification ---');
   const m3 = makeCombatant('m3', { pos: { x: 8, y: 5, z: 0 }, ac: 18 });
   approx('encounterAvgAC: three enemies AC 10+12+18 → MEAN 13.3333',
     encounterAvgAC(caster, makeBF([caster, m1, m2, m3])), 40 / 3);
+}
+
+// ============================================================
+// 5k. S110 likelyHallowTargetAC: direct value verification
+//     (Verifies the S110 helper that replaces encounterAvgAC inside
+//     pickHallowDamageType. likelyHallowTargetAC predicts the AC of the enemy
+//     that shouldCastEnergyVulnerability will actually select as the Hallow
+//     target — the HIGHEST-HP living enemy within Hallow's 60-ft range (the
+//     same selection heuristic, minus the type-dependent vuln-skip). Falls
+//     back to encounterAvgAC (S109 behavior → BESTIARY_MEAN_AC) when no enemy
+//     is within 60 ft. This is the LOW-risk way to achieve the S109
+//     next-action #11 target-specific accuracy WITHOUT reordering the
+//     combat.ts dispatch: pickHallowDamageType predicts the likely target
+//     itself and uses its AC, so the hitChance reflects the enemy that will
+//     actually be vuln'd, not the encounter average.)
+// ============================================================
+console.log('\n--- 5k. S110 likelyHallowTargetAC direct value verification ---');
+{
+  const caster = makeCaster('wiz', { pos: { x: 5, y: 5, z: 0 } });
+  // Single enemy within 60 ft → that enemy's AC (mirrors §5h/§5i: single enemy
+  // → likely target = that enemy → AC = encounter avg).
+  const goblin = makeCombatant('goblin', { pos: { x: 6, y: 5, z: 0 }, ac: 10, maxHP: 30 });
+  eq('likelyHallowTargetAC: single enemy AC 10 (within 60ft) → 10',
+    likelyHallowTargetAC(caster, makeBF([caster, goblin])), 10);
+
+  // Highest-HP wins: two enemies, the higher-HP one's AC is returned (NOT the
+  // mean). This is the S110 refinement vs S109: S109 encounterAvgAC would
+  // return (10+18)/2 = 14; S110 returns 18 (the high-HP enemy's AC).
+  const trash = makeCombatant('trash', { pos: { x: 6, y: 5, z: 0 }, ac: 10, maxHP: 30 });
+  const boss = makeCombatant('boss', { pos: { x: 7, y: 5, z: 0 }, ac: 18, maxHP: 200 });
+  eq('likelyHallowTargetAC: higher-HP enemy (boss AC 18, HP 200 > trash AC 10, HP 30) → 18 (NOT mean 14)',
+    likelyHallowTargetAC(caster, makeBF([caster, trash, boss])), 18);
+
+  // HP tie → NEAREST enemy wins (mirrors shouldCastEnergyVulnerability's
+  // distance tie-break). Both HP 100; nearer enemy (5ft) AC 12 wins over
+  // farther enemy (10ft) AC 20.
+  const near = makeCombatant('near', { pos: { x: 6, y: 5, z: 0 }, ac: 12, maxHP: 100 });
+  const far = makeCombatant('far', { pos: { x: 7, y: 5, z: 0 }, ac: 20, maxHP: 100 });
+  eq('likelyHallowTargetAC: HP tie → nearest enemy AC 12 (5ft < 10ft) — NOT far AC 20',
+    likelyHallowTargetAC(caster, makeBF([caster, near, far])), 12);
+
+  // Enemy beyond 60 ft excluded → fallback to encounterAvgAC. The far enemy
+  // (13 squares = 65ft > 60ft) can NEVER be the Hallow target, so its AC
+  // (20) must not influence the pick. With no enemy within range, the helper
+  // falls back to encounterAvgAC — which here includes the out-of-range
+  // enemy (encounterAvgAC has no range gate) → 20. (This demonstrates the
+  // fallback path; in a real combat with a near enemy, the near enemy's AC
+  // would be used instead.)
+  const farOnly = makeCombatant('farOnly', { pos: { x: 18, y: 5, z: 0 }, ac: 20, maxHP: 100 });
+  eq('likelyHallowTargetAC: only enemy beyond 60ft → fallback encounterAvgAC = 20',
+    likelyHallowTargetAC(caster, makeBF([caster, farOnly])), 20);
+
+  // No enemies at all (only caster + party ally) → fallback to encounterAvgAC
+  // → BESTIARY_MEAN_AC (14.849). Preserves the S109 no-enemy fallback.
+  const ally = makeCombatant('ally', { faction: 'party', pos: { x: 6, y: 5, z: 0 }, ac: 99 });
+  approx('likelyHallowTargetAC: no enemies → fallback encounterAvgAC → BESTIARY_MEAN_AC (14.849)',
+    likelyHallowTargetAC(caster, makeBF([caster, ally])), 14.849);
+
+  // Dead enemy excluded → only the living enemy is a candidate.
+  const live = makeCombatant('live', { pos: { x: 6, y: 5, z: 0 }, ac: 10, maxHP: 50 });
+  const dead = makeCombatant('dead', { pos: { x: 7, y: 5, z: 0 }, ac: 20, maxHP: 999, isDead: true });
+  eq('likelyHallowTargetAC: dead enemy (HP 999) skipped → living AC 10',
+    likelyHallowTargetAC(caster, makeBF([caster, live, dead])), 10);
+
+  // Unconscious enemy excluded → only the living enemy is a candidate.
+  const live2 = makeCombatant('live2', { pos: { x: 6, y: 5, z: 0 }, ac: 12, maxHP: 50 });
+  const unconscious = makeCombatant('unc', { pos: { x: 7, y: 5, z: 0 }, ac: 18, maxHP: 999, isUnconscious: true });
+  eq('likelyHallowTargetAC: unconscious enemy (HP 999) skipped → living AC 12',
+    likelyHallowTargetAC(caster, makeBF([caster, live2, unconscious])), 12);
+
+  // Party member excluded (not an enemy) → only the enemy is a candidate.
+  const enemy = makeCombatant('enemy', { pos: { x: 6, y: 5, z: 0 }, ac: 10, maxHP: 50 });
+  const partyAlly = makeCombatant('pAlly', { faction: 'party', pos: { x: 7, y: 5, z: 0 }, ac: 99, maxHP: 999 });
+  eq('likelyHallowTargetAC: party member (HP 999) skipped → enemy AC 10',
+    likelyHallowTargetAC(caster, makeBF([caster, enemy, partyAlly])), 10);
+
+  // Multi-enemy: likely target AC ≠ encounter avg (the S110 refinement).
+  // Enemies: squishy boss AC 10 (HP 200) + tanky mook AC 20 (HP 50).
+  //   encounterAvgAC = (10+20)/2 = 15  (S109)
+  //   likelyHallowTargetAC = 10         (S110 — boss is highest-HP within 60ft)
+  eq('likelyHallowTargetAC: multi-enemy — likely target AC 10 ≠ encounter avg 15 (the S110 refinement)',
+    likelyHallowTargetAC(caster, makeBF([caster,
+      makeCombatant('sBoss', { pos: { x: 6, y: 5, z: 0 }, ac: 10, maxHP: 200 }),
+      makeCombatant('tMook', { pos: { x: 7, y: 5, z: 0 }, ac: 20, maxHP: 50 }),
+    ])), 10);
+  // Cross-check: encounterAvgAC still returns the MEAN (15) for the same setup
+  // — confirming likelyHallowTargetAC and encounterAvgAC now diverge (S110).
+  eq('encounterAvgAC (cross-check): same setup → MEAN 15 (likelyHallowTargetAC returns 10 — diverged)',
+    encounterAvgAC(caster, makeBF([caster,
+      makeCombatant('sBoss2', { pos: { x: 6, y: 5, z: 0 }, ac: 10, maxHP: 200 }),
+      makeCombatant('tMook2', { pos: { x: 7, y: 5, z: 0 }, ac: 20, maxHP: 50 }),
+    ])), 15);
+}
+
+// ============================================================
+// 5l. S110 likely-target AC: high-HP low-AC "squishy boss" flips save→attack
+//     (The S110 behavioural difference from S109. Party: 1 cold save spell
+//     (1d8+3, saveDC 15) FIRST + 1 fire attack (1d8+3, hitBonus +5) SECOND,
+//     both cantrips (availability 1.0). Enemies: squishy boss AC 10 (HP 200)
+//     + tanky mook AC 20 (HP 50).
+//     S109 (encounter avg AC 15): fire hc = (21-max(2,10))/20 = 11/20 = 0.55
+//       fire  = 7.5×1.0×0.55 = 4.125
+//       cold  = 7.5×1.0×0.75 = 5.625  → cold wins (also first-seen).
+//     S110 (likely target = boss AC 10, the highest-HP enemy within 60ft):
+//       fire hc = (21-max(2,5))/20 = 16/20 = 0.80
+//       fire  = 7.5×1.0×0.80 = 6.0
+//       cold  = 7.5×1.0×0.75 = 5.625  → fire wins (NOT first-seen — the
+//     squishy boss is the likely Hallow target, and its low AC makes attack
+//     rolls land 80% of the time, so doubling attack damage is more valuable
+//     than doubling the save-for-half spell). This is the S110 behavioural
+//     difference from S109: the likely-target AC flips the pick from cold
+//     (save) to fire (attack) when the biggest-threat enemy happens to be
+//     low-AC. Canon-better: the caster expects to vuln the boss (highest HP),
+//     so picks the type that lands best against the BOSS, not the encounter
+//     average.)
+// ============================================================
+console.log('\n--- 5l. S110 likely-target AC: squishy boss flips save→attack ---');
+{
+  const caster = makeCaster('wiz', { pos: { x: 5, y: 5, z: 0 } });
+  // Cold save spell FIRST (S109 picks cold via weight + first-seen).
+  const wizard = makeCombatant('wizard', {
+    faction: 'party', pos: { x: 7, y: 5, z: 0 },
+    actions: [makeDamageActionV2('Cold Burst', 'cold',
+      { count: 1, sides: 8, bonus: 3, hitBonus: null, saveDC: 15, saveAbility: 'dex' as AbilityScore, slotLevel: 0 })],
+  });
+  // Fire attack SECOND (hitBonus +5).
+  const fighter = makeCombatant('fighter', {
+    faction: 'party', pos: { x: 6, y: 5, z: 0 },
+    actions: [makeDamageActionV2('Fire Slash', 'fire',
+      { count: 1, sides: 8, bonus: 3, hitBonus: 5, saveDC: null, slotLevel: 0 })],
+  });
+  // Squishy boss AC 10 (HP 200 — highest-HP within 60ft → the likely Hallow
+  // target) + tanky mook AC 20 (HP 50). Encounter avg = 15; likely target =
+  // boss AC 10.
+  const sBoss = makeCombatant('sBoss', { pos: { x: 8, y: 5, z: 0 }, ac: 10, maxHP: 200 });
+  const tMook = makeCombatant('tMook', { pos: { x: 9, y: 5, z: 0 }, ac: 20, maxHP: 50 });
+  // S109 (encounter avg 15): cold 5.625 > fire 4.125 → cold wins.
+  // S110 (likely target AC 10): fire 6.0 > cold 5.625 → fire wins (FLIP).
+  eq('S110 picks fire (squishy boss AC 10 is likely target → attack hc 0.80 > save 0.75) — NOT first-seen cold',
+    pickHallowDamageType(caster, makeBF([caster, wizard, fighter, sBoss, tMook])), 'fire');
+  // Cross-check: S109 encounterAvgAC for the same setup = 15 (the mean), which
+  // would pick cold (the S109 winner). This confirms the S110 flip is driven
+  // by the likely-target AC (10) diverging from the encounter average (15).
+  eq('cross-check: encounterAvgAC for same setup = 15 (S109 would pick cold; S110 picks fire)',
+    encounterAvgAC(caster, makeBF([caster, wizard, fighter, sBoss, tMook])), 15);
+  eq('cross-check: likelyHallowTargetAC for same setup = 10 (boss AC, highest-HP within 60ft)',
+    likelyHallowTargetAC(caster, makeBF([caster, wizard, fighter, sBoss, tMook])), 10);
 }
 
 // ============================================================
