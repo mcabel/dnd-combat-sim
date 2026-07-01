@@ -113,8 +113,8 @@ function asEnemy(c: Combatant): void { c.faction = 'enemy'; }
 console.log('\n--- 1. Metadata flag ---');
 assert('1a. lairActionBespokeDispatchV1Implemented === true',
   lairActionMetadata.lairActionBespokeDispatchV1Implemented === true);
-assert('1b. LAIR_BESPOKE_SPELL_META has 7 entries (S113 pilot 3 + S114 batch 1 4)',
-  LAIR_BESPOKE_SPELL_META.size === 7,
+assert('1b. LAIR_BESPOKE_SPELL_META has 10 entries (S113 pilot 3 + S114 batch 1 4 + batch 2 3)',
+  LAIR_BESPOKE_SPELL_META.size === 10,
   `got ${LAIR_BESPOKE_SPELL_META.size}`);
 assert('1c. fireball in meta',
   LAIR_BESPOKE_SPELL_META.has('fireball'));

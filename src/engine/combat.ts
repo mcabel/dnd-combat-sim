@@ -7975,6 +7975,22 @@ function callExecuteByPlanType(
       if (t) executePowerWordKill(caster, t, state);
       break;
     }
+    // ── S114 batch 2: 3 more spells ──
+    case 'command': {
+      const t = Array.isArray(target) ? target[0] : target;
+      if (t) executeCommand(caster, t, state);
+      break;
+    }
+    case 'sleetStorm': {
+      const targets = Array.isArray(target) ? target : [target];
+      executeSleetStorm(caster, targets, state);
+      break;
+    }
+    case 'spikeGrowth': {
+      const t = Array.isArray(target) ? target[0] : target;
+      if (t) executeSpikeGrowth(caster, t, state);
+      break;
+    }
     default:
       throw new Error(`Unknown lair-bespoke plan type: ${planType}`);
   }
@@ -8112,6 +8128,16 @@ function dispatchBespokeLairSpell(
       case 'powerWordKill':
         target = shouldCastPowerWordKill(creature, bf);
         break;
+      // ── S114 batch 2: 3 more spells ──
+      case 'command':
+        target = shouldCastCommand(creature, bf);
+        break;
+      case 'sleetStorm':
+        target = shouldCastSleetStorm(creature, bf);
+        break;
+      case 'spikeGrowth':
+        target = shouldCastSpikeGrowth(creature, bf);
+        break;
       default:
         throw new Error(`Unknown lair-bespoke plan type: ${meta.planType}`);
     }
@@ -8154,17 +8180,24 @@ function dispatchBespokeLairSpell(
       undefined);
   } finally {
     // ── 6. Post-process: concentration-suppress mode ──
-    // For 'suppress' mode spells (Fog Cloud hazard), the execute() created
-    // effects with sourceIsConcentration = true (the module's default).
-    // Since we suppressed concentration start, those effects would never
-    // be cleaned up via concentration break. Fix: flip sourceIsConcentration
-    // to false + set sourceTurnExpires for the lair-duration override.
-    if (meta.concentrationMode === 'suppress' && meta.lairDurationRounds) {
+    // For 'suppress' mode spells (Fog Cloud hazard, Sleet Storm hazard, Spike
+    // Growth hazard, etc.), the execute() created effects with
+    // sourceIsConcentration = true (the module's default). Since we suppressed
+    // concentration start, those effects would never be cleaned up via
+    // concentration break. Fix: ALWAYS flip sourceIsConcentration to false.
+    // Additionally, if lairDurationRounds is set, set sourceTurnExpires for
+    // the lair-duration override (e.g. Fog Cloud 1 round, Sleet Storm 1 round).
+    // If lairDurationRounds is undefined (e.g. Spike Growth "lasts until dragon
+    // uses lair again or dies"), the effect persists until caster death (via
+    // removeEffectsFromCaster) — no auto-expiry.
+    if (meta.concentrationMode === 'suppress') {
       for (let i = effectsBefore; i < creature.activeEffects.length; i++) {
         const eff = creature.activeEffects[i];
         if (eff.spellName === meta.canonicalName) {
           eff.sourceIsConcentration = false;
-          eff.sourceTurnExpires = bf.round + meta.lairDurationRounds - 1;
+          if (meta.lairDurationRounds) {
+            eff.sourceTurnExpires = bf.round + meta.lairDurationRounds - 1;
+          }
         }
       }
     }

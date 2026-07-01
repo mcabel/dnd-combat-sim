@@ -201,7 +201,30 @@ export const LAIR_BESPOKE_SPELL_META: Map<string, LairBespokeSpellMeta> = new Ma
     signature: 'single',
     concentrationMode: 'normal',  // Not concentration (instantaneous); 'normal' is fine
   }],
-  // ── Future expansion (S114 batch 2+) ────────────────────────────
+  // ── S114 batch 2: 3 more spells (darkness deferred — per-creature override needed) ──
+  ['command', {
+    canonicalName: 'Command',
+    planType: 'command',
+    signature: 'single',
+    concentrationMode: 'normal',  // Not concentration (1 round, no conc); Category A normal
+  }],
+  ['sleet storm', {
+    canonicalName: 'Sleet Storm',
+    planType: 'sleetStorm',
+    signature: 'aoe',
+    concentrationMode: 'suppress',  // Category B hazard: "This effect is identical to the spell"
+    lairDurationRounds: 1,          // Implicit 1-round lair duration (initiative count 20 next round)
+  }],
+  ['spike growth', {
+    canonicalName: 'Spike Growth',
+    planType: 'spikeGrowth',
+    signature: 'single',            // shouldCast returns the center-point target
+    concentrationMode: 'suppress',  // Category B hazard: "The effect is otherwise identical to the spell"
+    // lairDurationRounds undefined: "lasts until the dragon uses this lair action again or until
+    // the dragon dies" — no fixed round count. Effect persists until caster death (removeEffectsFromCaster).
+    // The "uses this lair action again" cleanup would need a separate mechanism (out of scope for S114).
+  }],
+  // ── Future expansion (S114 batch 3+) ────────────────────────────
   // command (Graz'zt) — not concentration, single-target (multi-target per lair text but v1 single)
   // darkness (Demogorgon) — Category A explicit exception, self, suppress, 1 round
   // darkness (Morkoth) — Category A normal, self, concentration
