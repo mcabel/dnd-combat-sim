@@ -659,7 +659,7 @@ import {
   executeLairDarkness,
 } from '../spells/darkness';
 import {
-  shouldCast as shouldCastGiantInsect,
+  shouldCastLairGiantInsect,
   executeLair as executeLairGiantInsect,
 } from '../spells/giant_insect';
 import {
@@ -8209,12 +8209,15 @@ function dispatchBespokeLairSpell(
       case 'darkness':
         target = shouldCastDarkness(creature, bf);
         break;
-      // ── S115: giant insect — 'cast' signature (shouldCast returns boolean) ──
-      // Convert boolean → Combatant|null so the existing `if (!target) skip`
-      // logic works. The target is the caster itself (giant insect doesn't
-      // target anyone); callExecuteByPlanType's 'giantInsect' case ignores it.
+      // ── S115/S117: giant insect — 'cast' signature ──
+      // S117 v2: uses the lair-specific shouldCastLairGiantInsect (NOT the
+      // regular shouldCastGiantInsect). The lair version does NOT check the
+      // _genericSpellActiveSpells flag, so the lair action re-fires each round
+      // (canon: "lasts until she uses this lair action again") and executeLair
+      // despawns the old spiders before summoning new ones. Returns the caster
+      // if there are living enemies; null otherwise (skip — canon-accurate).
       case 'giantInsect':
-        target = shouldCastGiantInsect(creature, bf) ? creature : null;
+        target = shouldCastLairGiantInsect(creature, bf);
         break;
       // ── S115: simulacrum — lair-specific shouldCastLair (picks humanoid) ──
       // Simulacrum uses a LAIR-SPECIFIC shouldCastLair (not the regular

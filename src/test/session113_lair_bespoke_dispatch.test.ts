@@ -32,6 +32,7 @@ import {
 import { runCombat } from '../engine/combat';
 import { Combatant, Vec3, Battlefield, LairAction } from '../types/core';
 import { lairActionMetadata, LAIR_BESPOKE_SPELL_META } from '../engine/lair_action_metadata';
+import { executeLair as executeLairGiantInsect, shouldCastLairGiantInsect } from '../spells/giant_insect';
 
 // ---- Test harness -------------------------------------------
 
@@ -207,6 +208,8 @@ assert('1ab. lairActionBespokeDispatchV2FullCoverage === true (S115: 15/15 RFC g
   (lairActionMetadata as any).lairActionBespokeDispatchV2FullCoverage === true);
 assert('1ac. lairActionBespokeDispatchV3MultiCastAndSummons === true (S116: darkness 4× + giant insect summon)',
   (lairActionMetadata as any).lairActionBespokeDispatchV3MultiCastAndSummons === true);
+assert('1ad. lairActionBespokeDispatchV4TacticalPlacementAndDespawnReuse === true (S117: darkness tactical + giant insect despawn-on-reuse)',
+  (lairActionMetadata as any).lairActionBespokeDispatchV4TacticalPlacementAndDespawnReuse === true);
 
 // ============================================================
 // 2. Fireball dispatch (Zariel MPMM Zariel::0, Category A normal, AoE)
@@ -880,6 +883,92 @@ console.log('\n--- 10. Arasta giant insect (S115 cast + S116 3× spider summon) 
   assert('10l. spiders inserted into initiative order',
     inInit.length === 3,
     `initiativeOrder: ${JSON.stringify(bf.initiativeOrder)}`);
+}
+
+// ============================================================
+// 10m. S117 v2: giant insect despawn-on-reuse (direct-call)
+//     Canon: "It lasts until she uses this lair action again or until she
+//     dies." When Arasta re-uses the lair action, the previous spiders vanish
+//     and new ones appear. S116 only despawned on caster death; S117 adds
+//     despawn-on-reuse (executeLair despawns old spiders before summoning new).
+//
+//     This is a DIRECT-CALL test (not runCombat) for determinism — the despawn
+//     logic is in executeLair itself, independent of lair-action scheduling.
+//     Also verifies shouldCastLairGiantInsect re-fires (no flag gate).
+// ============================================================
+console.log('\n--- 10m. Arasta giant insect despawn-on-reuse (S117 v2 direct-call) ---');
+{
+  const arasta2 = spawn('Arasta', { x: 0, y: 0, z: 0 }, 'MOT');
+  asParty(arasta2);
+  tankUp(arasta2);
+  noLegendary(arasta2);
+  arasta2.actions = [];  // clear regular-turn actions
+  // Attach a synthetic 'Giant Insect' action so shouldCastLairGiantInsect's
+  // action check passes (the dispatcher normally attaches this; the direct-
+  // call test attaches it manually).
+  (arasta2.actions as any).push({ name: 'Giant Insect' });
+
+  const goblin2 = spawn('Goblin', { x: 3, y: 0, z: 0 });
+  asEnemy(goblin2); tankUp(goblin2);
+  goblin2.actions = [];
+
+  const bf2 = makeBF([arasta2, goblin2]);
+  (bf2 as any).pendingInitiativeInserts = [];
+  (bf2 as any).pendingCommands = new Map();
+  const state2 = { battlefield: bf2, log: { events: [] as any[] } } as any;
+
+  // 10m0. shouldCastLairGiantInsect returns the caster (re-fire gate, S117 v2).
+  //       The lair action re-fires each round — UNLIKE the player-path shouldCast
+  //       (shared with GENERIC_SPELLS) which returns false while the flag is set.
+  //       (The flag isn't set yet here, but this confirms the lair shouldCast
+  //       returns the caster when enemies are present.)
+  const lairShouldFire = shouldCastLairGiantInsect(arasta2, bf2);
+  assert('10m0. shouldCastLairGiantInsect returns caster (re-fire gate, S117 v2)',
+    lairShouldFire === arasta2,
+    `got ${lairShouldFire?.id ?? 'null'}`);
+
+  // 1st lair-action fire: 3 spiders
+  executeLairGiantInsect(arasta2, state2);
+  const spidersAfter1 = [...bf2.combatants.values()].filter(
+    (c: Combatant) => c.isSummon === true && c.summonSpellName === 'Giant Insect'
+  );
+  assert('10m1. 1st executeLair summons 3 spiders',
+    spidersAfter1.length === 3,
+    `got ${spidersAfter1.length} spiders after 1st call`);
+  const firstBatchIds = new Set(spidersAfter1.map(s => s.id));
+
+  // 10m0b. shouldCastLairGiantInsect STILL returns the caster AFTER the flag is
+  //        set (the re-fire gate — the regular shouldCast would return false here).
+  const lairShouldFireAgain = shouldCastLairGiantInsect(arasta2, bf2);
+  assert('10m0b. shouldCastLairGiantInsect STILL returns caster after flag set (re-fire)',
+    lairShouldFireAgain === arasta2,
+    `got ${lairShouldFireAgain?.id ?? 'null'} (the regular shouldCast would return false here)`);
+
+  // 2nd lair-action fire: despawn old + summon new (still 3, not 6)
+  executeLairGiantInsect(arasta2, state2);
+  const spidersAfter2 = [...bf2.combatants.values()].filter(
+    (c: Combatant) => c.isSummon === true && c.summonSpellName === 'Giant Insect'
+  );
+  assert('10m2. 2nd executeLair leaves exactly 3 spiders (despawn-on-reuse, not 6)',
+    spidersAfter2.length === 3,
+    `got ${spidersAfter2.length} spiders after 2nd call (expected 3 — old should be despawned)`);
+  assert('10m3. 2nd-batch spiders are NEW (different IDs from 1st batch)',
+    spidersAfter2.every(s => !firstBatchIds.has(s.id)),
+    `overlap: ${spidersAfter2.filter(s => firstBatchIds.has(s.id)).map(s => s.id).join(', ')}`);
+
+  // 10m4. despawn log fires on the 2nd call ("vanish as she re-uses")
+  const despawnLog = (state2.log.events as any[]).find((e: any) =>
+    e.type === 'action' && e.actorId === arasta2.id &&
+    e.description.includes('vanish'));
+  assert('10m4. despawn log fires on re-use (S117 v2)',
+    despawnLog !== undefined,
+    `arasta2 action logs: ${(state2.log.events as any[]).filter((e:any)=>e.actorId===arasta2.id && e.type==='action').map((e:any)=>e.description.substring(0,80)).join(' || ')}`);
+
+  // 10m5. the 2nd-batch spiders were inserted into initiative (pendingInitiativeInserts)
+  //       — verifies the insert still runs after despawn.
+  assert('10m5. 2nd-batch spiders have pending initiative inserts',
+    spidersAfter2.every(s => (bf2.pendingInitiativeInserts as any[]).some((i: any) => i.combatantId === s.id)),
+    `pendingInitiativeInserts: ${JSON.stringify(bf2.pendingInitiativeInserts)}`);
 }
 
 // ============================================================

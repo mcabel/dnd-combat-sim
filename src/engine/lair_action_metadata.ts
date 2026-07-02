@@ -118,6 +118,12 @@ import { Combatant, Action, LairAction } from '../types/core';
  * insect Arasta "spiders only" → 3 giant spider summons (executeLair). All 15
  * bespoke-only spells now dispatch (RFC goal achieved). Note: lesser
  * restoration is a parser mis-tag (see RFC §2.3); antimagic field is Q2 skip.
+ * S117 enhancements: darkness Demogorgon multi-cast now places obstacles
+ * TACTICALLY on enemy clusters (v2 tactical placement, falling back to fixed
+ * offsets) + giant insect Arasta lair-action now DESPAWNS the previous spider
+ * batch before summoning a new one on re-use (v2 despawn-on-reuse, canon:
+ * "lasts until she uses this lair action again") via a lair-specific
+ * shouldCastLairGiantInsect that re-fires each round.
  */
 export const lairActionMetadata = {
   // Session 113: lair-action cast_spell now dispatches to bespoke spell
@@ -132,6 +138,11 @@ export const lairActionMetadata = {
   // giant insect Arasta 3× spider summon (executeLair) + dispatch-order flip
   // (bespoke meta checked before generic registry in handleLairCastSpell).
   lairActionBespokeDispatchV3MultiCastAndSummons: true,
+  // Session 117: darkness Demogorgon multi-cast v2 tactical placement
+  // (obstacles on enemy clusters, fallback to offsets) + giant insect Arasta
+  // v2 despawn-on-reuse (despawn old spiders before summoning new on re-cast,
+  // via lair-specific shouldCastLairGiantInsect that re-fires each round).
+  lairActionBespokeDispatchV4TacticalPlacementAndDespawnReuse: true,
 };
 
 // ---- Types --------------------------------------------------

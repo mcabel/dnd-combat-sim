@@ -44,6 +44,12 @@ export const metadata = {
   // S116: Arasta's lair-action "casts the giant insect spell (spiders only)"
   // now summons 3 giant spider combatants (was forward-compat flag only).
   giantInsectLairSummonV1Implemented: true,
+  // S117: Arasta's lair-action now despawns the previous spider batch before
+  // summoning a new one on re-use (canon: "lasts until she uses this lair
+  // action again"). The lair-specific shouldCastLairGiantInsect re-fires each
+  // round (no _genericSpellActiveSpells flag gate), so executeLair can despawn
+  // the old spiders + summon new ones.
+  giantInsectLairDespawnOnReuseV2Implemented: true,
 } as const;
 
 // ---- Local log helper ---------------------------------------
@@ -81,6 +87,35 @@ export function shouldCast(caster: Combatant, _bf: Battlefield): boolean {
   if (!hasSpellSlot(caster, 4)) return false;
   if (caster._genericSpellActiveSpells?.has('Giant Insect')) return false;
   return true;
+}
+
+/**
+ * S117 v2: Lair-specific shouldCast for Giant Insect (despawn-on-reuse).
+ *
+ * Unlike the regular `shouldCast` (above — shared with the GENERIC_SPELLS
+ * registry for the player/monster spell path), the lair version does NOT check
+ * the `_genericSpellActiveSpells` flag. This lets the lair action re-fire each
+ * round so `executeLair` can despawn the old spiders + summon new ones (canon:
+ * "lasts until she uses this lair action again").
+ *
+ * Returns the caster if there is at least one living enemy (the lair creature
+ * wouldn't waste the lair action with no one to fight); null otherwise.
+ *
+ * Used by `dispatchBespokeLairSpell`'s shouldCast switch (combat.ts ~L8217) —
+ * replaces the S116 `shouldCastGiantInsect ? creature : null` conversion.
+ */
+export function shouldCastLairGiantInsect(caster: Combatant, bf: Battlefield): Combatant | null {
+  if (!caster.actions.some(a => a.name === 'Giant Insect')) return null;
+  // No _genericSpellActiveSpells flag check — lair action re-fires each round
+  // (canon: "lasts until she uses this lair action again"). executeLair despawns
+  // the old spiders before summoning new ones.
+  for (const c of bf.combatants.values()) {
+    if (c.id === caster.id) continue;
+    if (c.faction === caster.faction) continue;
+    if (c.isDead || c.isUnconscious) continue;
+    return caster;  // at least one living enemy → fire
+  }
+  return null;  // no living enemies → skip (canon-accurate)
 }
 
 // ---- Execution ----------------------------------------------
@@ -288,12 +323,20 @@ export function createGiantSpider(caster: Combatant, index: number): Combatant {
 }
 
 /**
- * Lair-action execute for Giant Insect — Arasta "spiders only" (S116).
+ * Lair-action execute for Giant Insect — Arasta "spiders only" (S116 + S117 v2).
+ *
+ * S117 v2 despawn-on-reuse: BEFORE summoning new spiders, despawn any existing
+ * giant-insect spiders from this caster (canon: "lasts until she uses this lair
+ * action again" — when Arasta re-uses the lair action, the old spiders vanish
+ * and new ones appear). Mirrors the removeEffectsFromCaster despawn pattern
+ * (spell_effects.ts:289) but filtered to summonSpellName='Giant Insect' (not
+ * all the caster's summons — Arasta might have other summons in a future
+ * engine). S116 only despawned on caster death; S117 adds despawn-on-reuse.
  *
  * Summons 3 giant spider combatants on the caster's faction. Does NOT consume
  * a slot or start concentration (suppress mode). Sets the forward-compat flag.
- * The spiders despawn on caster death (removeEffectsFromCaster → despawn by
- * summonerId).
+ * The spiders also despawn on caster death (removeEffectsFromCaster → despawn
+ * by summonerId).
  *
  * @param caster  the lair creature (Arasta)
  * @param state   engine state
@@ -301,8 +344,38 @@ export function createGiantSpider(caster: Combatant, index: number): Combatant {
 export function executeLair(caster: Combatant, state: EngineState): void {
   const bf = state.battlefield;
 
+  // ── S117 v2: despawn existing giant-insect spiders before summoning new ──
+  // Canon: "It lasts until she uses this lair action again or until she dies."
+  // When Arasta re-uses the lair action, the previous spiders vanish + new ones
+  // appear. Filter by summonerId + summonSpellName (NOT all summons — only the
+  // Giant Insect lair-summoned spiders). Mirrors removeEffectsFromCaster's
+  // despawn loop (spell_effects.ts:294-308) but targeted.
+  const oldSpiders = [...bf.combatants.values()].filter(
+    c => c.isSummon && c.summonerId === caster.id && c.summonSpellName === 'Giant Insect'
+  );
+  for (const spider of oldSpiders) {
+    bf.combatants.delete(spider.id);
+    const initIdx = bf.initiativeOrder.indexOf(spider.id);
+    if (initIdx !== -1) bf.initiativeOrder.splice(initIdx, 1);
+    bf.pendingCommands?.delete(spider.id);
+    if (bf.pendingInitiativeInserts) {
+      bf.pendingInitiativeInserts = bf.pendingInitiativeInserts.filter(
+        i => i.combatantId !== spider.id
+      );
+    }
+  }
+  if (oldSpiders.length > 0) {
+    emit(
+      state, 'action', caster.id,
+      `${caster.name}'s previous ${oldSpiders.length} giant spider${oldSpiders.length === 1 ? '' : 's'} ` +
+      `vanish as she re-uses the lair action (canon: "lasts until she uses this lair action again").`,
+      caster.id,
+    );
+  }
+
   // Set the forward-compat flag (kept for consistency with the player spell path
-  // + so shouldCastGiantInsect returns false while an active lair-summon set exists).
+  // + tracking). NOTE: the lair path now uses shouldCastLairGiantInsect (which
+  // does NOT check this flag), so the flag no longer gates the lair re-cast.
   if (!caster._genericSpellActiveSpells) {
     caster._genericSpellActiveSpells = new Set<string>();
   }
