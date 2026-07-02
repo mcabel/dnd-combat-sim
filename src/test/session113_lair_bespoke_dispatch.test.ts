@@ -656,6 +656,31 @@ console.log('\n--- 8. Demogorgon darkness (S115 suppress + S116 4× multi-cast) 
   assert('8i2. every effect obstacleId matches a created obstacle',
     [...effectObstacleIds].every(id => obstacleIds.has(id as string)),
     `unmatched: ${[...effectObstacleIds].filter(id => !obstacleIds.has(id as string)).join(' | ')}`);
+
+  // 8j. S117 v2: tactical placement — at least one obstacle is centered on/near
+  //     an enemy (within 1 square). v2 places obstacles on enemy clusters first
+  //     (canon: "targeting different areas" — blinds enemies), falling back to
+  //     fixed offsets. The goblin is at (3, 0); a tactical obstacle centered on
+  //     it has center (3, 0) → top-left (0, -3). Obstacle center = (o.x+3, o.y+3)
+  //     (7×7 grid, radius 3 squares).
+  const R = 3;  // RADIUS_SQUARES (darkness 15-ft radius = 3 grid squares)
+  const tacticalObstacle = darkObstacles.find((o: any) => {
+    const centerX = o.x + R;
+    const centerY = o.y + R;
+    return Math.abs(centerX - goblin.pos.x) <= 1 && Math.abs(centerY - goblin.pos.y) <= 1;
+  });
+  assert('8j. at least one obstacle centered on/near the goblin (S117 v2 tactical placement)',
+    tacticalObstacle !== undefined,
+    `obstacle centers: ${darkObstacles.map((o:any)=>`(${o.x + R},${o.y + R})`).join(' | ')}; goblin at (${goblin.pos.x},${goblin.pos.y})`);
+
+  // 8k. S117 v2: the multi-cast log mentions the tactical placement note
+  //     ("placed on enemy" — appended when ≥1 obstacle was tactically placed).
+  const tacticalLog = rlog.events.find((e: any) =>
+    e.type === 'action' && e.actorId === demo.id &&
+    e.description.includes('placed on enem'));
+  assert('8k. multi-cast log mentions tactical placement (S117 v2)',
+    tacticalLog !== undefined,
+    `demo action logs: ${rlog.events.filter((e:any)=>e.actorId===demo.id && e.type==='action').map((e:any)=>e.description.substring(0,100)).join(' || ')}`);
 }
 
 // ============================================================

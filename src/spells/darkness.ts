@@ -61,6 +61,11 @@ export const metadata = {
   // S116: Demogorgon lair-action "casts four times, targeting different areas"
   // is now modelled as 4 separate obstacles at distinct offset points.
   darknessLairMultiCastV1Implemented: true,
+  // S117: Demogorgon lair-action multi-cast now places obstacles TACTICALLY on
+  // enemy clusters (nearest enemies first), falling back to fixed offset points
+  // when fewer enemies than `count` are in range. Canon-accurate "targeting
+  // different areas" — blinds the enemies rather than empty space.
+  darknessLairTacticalPlacementV2Implemented: true,
 } as const;
 
 function emit(state: EngineState, type: CombatEvent['type'], actorId: string, desc: string, targetId?: string, value?: number): void {
@@ -124,6 +129,25 @@ function nearestEnemyDistFt(caster: Combatant, bf: Battlefield): number {
     if (d < min) min = d;
   }
   return min;
+}
+
+/**
+ * Living enemies within `rangeFt` of the caster, sorted nearest-first (in ft).
+ * Used by the lair-action multi-cast tactical placement (S117) to place
+ * darkness obstacles on enemy clusters (canon: "targeting different areas").
+ */
+function enemiesWithinRangeFt(caster: Combatant, bf: Battlefield, rangeFt: number): Combatant[] {
+  const rangeSquares = rangeFt / 5;  // 1 square = 5 ft
+  const enemies: Array<{ c: Combatant; dist: number }> = [];
+  for (const c of bf.combatants.values()) {
+    if (c.id === caster.id) continue;
+    if (c.faction === caster.faction) continue;
+    if (c.isDead || c.isUnconscious) continue;
+    const d = chebyshev3D(caster.pos, c.pos);  // grid squares
+    if (d <= rangeSquares) enemies.push({ c, dist: d });
+  }
+  enemies.sort((a, b) => a.dist - b.dist);
+  return enemies.map(e => e.c);
 }
 
 /** True if caster already has a battlefield_obstacle effect (Fog Cloud/Darkness). */
@@ -232,13 +256,23 @@ export function cleanup(_c: Combatant): void { /* no-op — removeEffectsFromCas
 // (currently only Demogorgon). Morkoth's lair-action darkness (Category A
 // normal, 1 cast, concentration applies) uses the regular `execute` path.
 //
-// v1 implementation:
+// v1 implementation (S116):
 //   - Creates `count` darkness obstacles at `count` distinct FIXED offset
 //     points around the caster (N/E/S/W at 30 ft, then diagonals at ~28 ft).
 //     Canon allows Demogorgon to choose any points within the 60-ft range;
-//     fixed offsets are a v1 simplification (a future session could place
-//     them tactically on enemy clusters). The caster is NOT inside any
-//     obstacle (offsets are 30 ft out; obstacles are 15-ft radius).
+//     fixed offsets are a v1 simplification.
+// v2 implementation (S117 — tactical placement):
+//   - Places obstacles TACTICALLY on enemy clusters first (one obstacle per
+//     enemy, nearest-first), then fills remaining slots with the fixed offset
+//     fallback points. Canon-accurate "targeting different areas" — blinds the
+//     enemies rather than empty space. When no enemies are in range (or fewer
+//     than `count`), falls back to pure offset placement (S116 behavior).
+//   - Edge case: an obstacle centered on an enemy within 15 ft (3 squares) of
+//     the caster will also cover the caster (obstacle is 15-ft radius). Canon-
+//     accurate — Demogorgon has supernatural senses and the tactical tradeoff
+//     (blind the enemy + self-edge) is acceptable. The caster is never the
+//     obstacle's CENTER (tactical centers are enemy positions), so the caster
+//     is at most at an obstacle's edge.
 //   - Does NOT consume a spell slot (lair action — at-will magical effect).
 //   - Does NOT call startConcentration (suppress mode — the dispatcher sets
 //     suppressConcentration=true and post-processes the created effects to
@@ -267,12 +301,17 @@ const LAIR_OFFSETS: ReadonlyArray<{ dx: number; dy: number }> = [
 ];
 
 /**
- * Lair-action execute for Darkness — Demogorgon multi-cast (S116).
+ * Lair-action execute for Darkness — Demogorgon multi-cast (S116 v1 + S117 v2).
  *
- * Creates `count` darkness obstacles at `count` distinct offset points around
- * the caster. Does NOT consume a slot or start concentration (suppress mode).
- * The dispatcher's suppress-mode post-processing flips sourceIsConcentration
- * to false and sets sourceTurnExpires on all created effects.
+ * S117 v2 tactical placement: creates `count` darkness obstacles, placing each
+ * on an enemy cluster first (nearest enemies first — blinds them, canon-
+ * accurate "targeting different areas"), then filling remaining slots with
+ * fixed offset fallback points. Falls back to pure offset placement (S116 v1
+ * behavior) when no enemies are in range.
+ *
+ * Does NOT consume a slot or start concentration (suppress mode). The
+ * dispatcher's suppress-mode post-processing flips sourceIsConcentration to
+ * false and sets sourceTurnExpires on all created effects.
  *
  * @param caster  the lair creature (Demogorgon)
  * @param state   engine state
@@ -282,14 +321,47 @@ export function executeLairDarkness(caster: Combatant, state: EngineState, count
   const bf = state.battlefield;
   if (!bf.obstacles) bf.obstacles = [];
 
-  let placed = 0;
-  for (let i = 0; i < count && i < LAIR_OFFSETS.length; i++) {
-    const off = LAIR_OFFSETS[i];
+  // ── S117 v2: build candidate centers (tactical first, then fallback) ──
+  // (a) Tactical: center one obstacle per enemy (nearest-first), up to `count`.
+  //     Each obstacle blinds the enemy at its center (canon: "targeting
+  //     different areas"). Dedup by center coordinate (two enemies on the same
+  //     square share one obstacle).
+  const enemies = enemiesWithinRangeFt(caster, bf, 60);  // Darkness range = 60 ft
+  const usedCenters = new Set<string>();
+  const centers: Array<{ cx: number; cy: number; cz: number; tactical: boolean }> = [];
+
+  for (const enemy of enemies) {
+    if (centers.length >= count) break;
+    const cx = enemy.pos.x;
+    const cy = enemy.pos.y;
+    const cz = caster.pos.z;
+    const key = `${cx},${cy}`;
+    if (usedCenters.has(key)) continue;  // dedup (two enemies on same square)
+    usedCenters.add(key);
+    centers.push({ cx, cy, cz, tactical: true });
+  }
+
+  // (b) Fallback: fill remaining slots with fixed offset points (S116 LAIR_OFFSETS).
+  //     Dedup against tactical centers + earlier fallbacks so all `count`
+  //     obstacles end up at DISTINCT positions (the §8b2 test asserts this).
+  for (const off of LAIR_OFFSETS) {
+    if (centers.length >= count) break;
     const cx = caster.pos.x + off.dx;
     const cy = caster.pos.y + off.dy;
     const cz = caster.pos.z;
+    const key = `${cx},${cy}`;
+    if (usedCenters.has(key)) continue;
+    usedCenters.add(key);
+    centers.push({ cx, cy, cz, tactical: false });
+  }
+
+  let placed = 0;
+  let tacticalPlaced = 0;
+  for (let i = 0; i < centers.length; i++) {
+    const { cx, cy, cz, tactical } = centers[i];
     const obstacle = buildObstacleAt(cx, cy, cz, caster.id, `lair${i}`);
     bf.obstacles.push(obstacle);
+    if (tactical) tacticalPlaced++;
 
     // One ActiveEffect per obstacle (each tracks its own obstacleId so
     // removeEffectsFromCaster can remove them independently).
@@ -316,5 +388,8 @@ export function executeLairDarkness(caster: Combatant, state: EngineState, count
     `${caster.name} casts Darkness ${placed} time${placed === 1 ? '' : 's'} via lair action! ` +
     `${placed} 15-ft sphere${placed === 1 ? '' : 's'} of magical darkness appear at different areas ` +
     `(blocks vision + darkvision, enables Hide). ${caster.name} doesn't need to concentrate — ` +
-    `they end on initiative count 20 of the next round.`);
+    `they end on initiative count 20 of the next round.` +
+    (tacticalPlaced > 0
+      ? ` (${tacticalPlaced} placed on enem${tacticalPlaced === 1 ? 'y' : 'ies'} — tactical, S117 v2)`
+      : ''));
 }
