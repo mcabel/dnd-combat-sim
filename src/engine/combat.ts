@@ -8421,6 +8421,13 @@ function handleLairCastSpell(
   // dispatchBespokeLairSpell returns false and they fall through to the generic
   // path below. Regular (non-lair) monster spell casts use the `genericSpell`
   // case (line ~6284), NOT this function, so they're unaffected by this flip.
+  //
+  // S117 AUDIT NOTE (dispatch-order flip audit, S116 next-action #6): when
+  // adding a NEW bespoke entry, verify the spell isn't ALSO in GENERIC_SPELLS
+  // with a preferred lair execute. If it is, the bespoke path now wins for lair
+  // actions — which is usually intended, but confirm. See lair_action_metadata.ts
+  // §"HOW TO ADD A NEW SPELL" step 1b for the full guidance. Currently only
+  // Giant Insect is in both registries (verified safe).
   const bespokeDispatched = dispatchBespokeLairSpell(creature, action, state);
   if (bespokeDispatched) return;
 

@@ -44,6 +44,20 @@
 // ========================================
 // 1. Verify the spell has a bespoke module in src/spells/<name>.ts
 //    (if not, implement the module first — out of scope for this dispatch)
+// 1b. S116+ DISPATCH-ORDER AUDIT (important): `handleLairCastSpell` in
+//     combat.ts checks `LAIR_BESPOKE_SPELL_META` (this table) BEFORE the
+//     `GENERIC_SPELLS` registry. This means: if the spell you're adding is
+//     ALSO in GENERIC_SPELLS (like Giant Insect was — S116), the bespoke
+//     `execute`/`executeLair` will win for LAIR actions, and the generic
+//     registry's stub will only run for REGULAR monster casts (the
+//     `genericSpell` case, not `handleLairCastSpell`). This is usually the
+//     intended outcome (bespoke = lair-specific execute), but BEFORE adding
+//     the entry, verify the generic registry's execute isn't the preferred
+//     one for that spell's lair action. If it is, do NOT add a bespoke
+//     entry (let the generic path handle it). The only spell currently in
+//     both registries is Giant Insect (verified safe — bespoke wins, which
+//     is the S116 improvement). See the S116 handover §"dispatch-order flip
+//     audit" + the comment at `handleLairCastSpell` (combat.ts ~L8412).
 // 2. Determine the signature shape by reading the module's execute():
 //    - execute(caster, targets: Combatant[], state) → 'aoe'
 //    - execute(caster, target: Combatant, state)   → 'single'
